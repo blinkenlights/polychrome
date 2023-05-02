@@ -1,0 +1,66 @@
+syntax = "proto3";
+import "nanopb.proto";
+
+message Packet {
+  oneof content {
+    Config config = 1;
+    Frame frame = 2;
+  }
+}
+
+message Config {
+  uint32 on_r = 1;
+  uint32 on_g = 2;
+  uint32 on_b = 3;
+  uint32 on_w = 4;
+
+  uint32 off_r = 5;
+  uint32 off_g = 6;
+  uint32 off_b = 7;
+  uint32 off_w = 8;
+
+  uint32 easing_interval_ms = 9;
+
+  EasingMode pixel_easing = 10;
+  EasingMode brightness_easing = 11;
+
+  bool test_frame = 12;
+}
+
+message Frame {
+  bytes data = 1 [(nanopb).max_size = 1024];
+  uint32 maxval = 2;
+}
+
+enum EasingMode {
+  LINEAR = 0;
+	EASE_IN_QUAD = 1;
+	EASE_OUT_QUAD = 2;
+	EASE_IN_OUT_QUAD = 3;
+	EASE_IN_CUBIC = 4;
+	EASE_OUT_CUBIC = 5;
+	EASE_IN_OUT_CUBIC = 6;
+	EASE_IN_QUART = 7;
+	EASE_OUT_QUART = 8;
+	EASE_IN_OUT_QUART = 9;
+	EASE_IN_QUINT = 10;
+	EASE_OUT_QUINT = 11;
+	EASE_IN_OUT_QUINT = 12;
+}
+
+message ResponsePacket {
+  oneof content {
+    ClientInfo client_info = 1;
+    RemoteLog remote_log = 2;
+  }
+}
+
+message ClientInfo {
+  string hostname = 1 [(nanopb).max_length = 20];
+  string build_time = 2 [(nanopb).max_length = 20];
+  int32 panel_index = 3;
+}
+
+message RemoteLog {
+  string message = 1 [(nanopb).max_length = 100];
+}
