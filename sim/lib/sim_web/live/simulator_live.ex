@@ -14,7 +14,7 @@ defmodule SimWeb.SimulatorLive do
 
     {:ok,
      socket
-     |> assign(background_image: layout.background_image)
+     |> assign(background_image: layout.background_image, pixel_image: layout.pixel_image)
      |> push_event("layout", %{layout: layout})
      |> push_event("pixels", %{pixels: pixels})}
   end
@@ -25,7 +25,9 @@ defmodule SimWeb.SimulatorLive do
       <canvas
         id="pixels"
         phx-hook="Pixels"
-        style={"background-image: url(#{@background_image}); background-size: 100% 100%;"}
+        class="w-full h-full bg-contain bg-no-repeat bg-center"
+        data-pixel-image-url={@pixel_image}
+        style={"background-image: url(#{@background_image});"}
       >
       </canvas>
     </div>

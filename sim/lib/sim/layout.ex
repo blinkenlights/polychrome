@@ -1,5 +1,14 @@
 defmodule Sim.Layout do
-  @keys [:name, :positions, :width, :height, :pixel_size, :image_size, :background_image]
+  @keys [
+    :name,
+    :positions,
+    :width,
+    :height,
+    :pixel_size,
+    :image_size,
+    :background_image,
+    :pixel_image
+  ]
   @enforce_keys @keys
 
   defstruct @keys
@@ -21,7 +30,8 @@ defmodule Sim.Layout do
           height: integer(),
           pixel_size: size(),
           image_size: size(),
-          background_image: String.t()
+          background_image: String.t(),
+          pixel_image: String.t()
         }
 
   @callback layout() :: t()
@@ -40,8 +50,10 @@ defmodule Sim.Layout do
           positions: layout.positions |> Enum.map(&Tuple.to_list/1),
           width: layout.width,
           height: layout.height,
-          pixel_size: layout.pixel_size |> Tuple.to_list(),
-          image_size: layout.image_size |> Tuple.to_list()
+          pixelSize: layout.pixel_size |> Tuple.to_list(),
+          imageSize: layout.image_size |> Tuple.to_list(),
+          backgroundImage: layout.background_image,
+          pixelImage: layout.pixel_image
         },
         opts
       )
