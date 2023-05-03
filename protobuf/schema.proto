@@ -1,7 +1,7 @@
 syntax = "proto3";
 import "nanopb.proto";
 
-message Packet {
+message Packet {    
   oneof content {
     Config config = 1;
     Frame frame = 2;
@@ -22,7 +22,7 @@ message Config {
   uint32 easing_interval_ms = 9;
 
   EasingMode pixel_easing = 10;
-  EasingMode brightness_easing = 11;
+  EasingMode brightness_easing = 11; 
 
   bool test_frame = 12;
 }
@@ -46,6 +46,9 @@ enum EasingMode {
 	EASE_IN_QUINT = 10;
 	EASE_OUT_QUINT = 11;
 	EASE_IN_OUT_QUINT = 12;
+	EASE_IN_EXPO = 13;
+	EASE_OUT_EXPO = 14;
+	EASE_IN_OUT_EXPO = 15;
 }
 
 message ResponsePacket {
@@ -64,3 +67,4 @@ message ClientInfo {
 message RemoteLog {
   string message = 1 [(nanopb).max_length = 100];
 }
+

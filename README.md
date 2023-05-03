@@ -15,9 +15,10 @@ graph LR
 
   mixer[Mixer.Selector]-->broadcast
 
+  broadcast-->|UDP|esp32_firmware
+  esp32_firmware-->LEDS
+
   broadcast[Mixer.Broadcaster] --> |UDP| sim
   sim[Sim]-->|live_view| live[HTML]
-
-  broadcast-->|UDP|led_controller
 ```
 
