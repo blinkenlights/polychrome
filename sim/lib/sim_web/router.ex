@@ -18,7 +18,6 @@ defmodule SimWeb.Router do
     pipe_through :browser
 
     live "/", SimulatorLive
-    live "/old", SimulatorDivsLive
   end
 
   # Other scopes may use custom stacks.
