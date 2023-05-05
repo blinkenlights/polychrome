@@ -1,7 +1,7 @@
-defmodule Mixer.Protobuf do
+defmodule Octopus.Protobuf do
   require Logger
 
-  alias Mixer.Protobuf.{Frame, Packet, Config, ResponsePacket}
+  alias Octopus.Protobuf.{Frame, Packet, Config, ResponsePacket}
 
   def encode(%Frame{} = frame) do
     %Packet{content: {:frame, frame}}

@@ -1,9 +1,9 @@
-defmodule Mixer.Generator do
+defmodule Octopus.Generator do
   use GenServer
   require Logger
 
-  alias Mixer.{Broadcaster}
-  alias Mixer.Protobuf.{Config, Frame}
+  alias Octopus.{Broadcaster}
+  alias Octopus.Protobuf.{Config, Frame}
 
   @maxval 255
   @led_count 64
@@ -49,9 +49,10 @@ defmodule Mixer.Generator do
       end
 
     data =
-      0..19
-      |> Enum.map(fn _ -> 0 end)
-      |> List.update_at(19, fn _ -> b end)
+      0..(@led_count - 1)
+      |> Enum.map(fn _ -> b end)
+
+    # |> List.update_at(19, fn _ -> b end)
 
     %Frame{
       maxval: @maxval,

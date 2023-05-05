@@ -1,8 +1,8 @@
-defmodule Mixer.Selector do
+defmodule Octopus.Selector do
   use GenServer
   require Logger
 
-  alias Mixer.Protobuf.{Config, Frame}
+  alias Octopus.Protobuf.{Config, Frame}
 
   @default_config %Config{
     on_r: 50,

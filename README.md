@@ -7,18 +7,18 @@ Blinkenlights Letterbox light installation in Mildenberg, Germany
 graph LR
   external_generator_1 --> server
   external_generator_2 --> server
-  server[Mixer.UDPServer] --> stream_1
-  stream_1[Mixer.PixelStream] -->  mixer 
+  server[Octopus.UDPServer] --> stream_1
+  stream_1[Octopus.PixelStream] -->  octopus 
   
   internal_generators --> stream_2
-  stream_2[Mixer.PixelStream] --> mixer 
+  stream_2[Octopus.PixelStream] --> octopus 
 
-  mixer[Mixer.Selector]-->broadcast
+  octopus[Octopus.Selector]-->broadcast
 
   broadcast-->|UDP|esp32_firmware
   esp32_firmware-->LEDS
 
-  broadcast[Mixer.Broadcaster] --> |UDP| sim
+  broadcast[Octopus.Broadcaster] --> |UDP| sim
   sim[Sim]-->|live_view| live[HTML]
 ```
 

@@ -1,9 +1,9 @@
-defmodule Mixer.MixProject do
+defmodule Octopus.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :mixer,
+      app: :octopus,
       version: "0.1.0",
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
@@ -15,7 +15,7 @@ defmodule Mixer.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {Mixer.Application, []}
+      mod: {Octopus.Application, []}
     ]
   end
 

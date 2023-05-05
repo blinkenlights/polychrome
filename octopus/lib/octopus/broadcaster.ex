@@ -1,16 +1,17 @@
 # genserver that send udp packages to the led controller
 
-defmodule Mixer.Broadcaster do
+defmodule Octopus.Broadcaster do
   use GenServer
   require Logger
 
-  alias Mixer.Protobuf
-  alias Mixer.Protobuf.{Frame, Config, RemoteLog, ClientInfo, ResponsePacket}
+  alias Octopus.Protobuf
+  alias Octopus.Protobuf.{Frame, Config, RemoteLog, ClientInfo, ResponsePacket}
 
   defstruct [:udp, :file]
 
   # @remote_host "blinkenleds-1.fritz.box" |> to_charlist()
-  @remote_host {192, 168, 0, 255}
+  # @remote_host {192, 168, 0, 255}
+  @remote_host {192, 168, 23, 255}
   @remote_port 1337
 
   @local_port 4422
