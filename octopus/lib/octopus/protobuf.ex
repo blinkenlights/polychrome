@@ -1,7 +1,7 @@
 defmodule Octopus.Protobuf do
   require Logger
 
-  alias Octopus.Protobuf.{Frame, Packet, Config, ResponsePacket}
+  alias Octopus.Protobuf.{Frame, Packet, Config, ResponsePacket, Color}
 
   def encode(%Frame{} = frame) do
     %Packet{content: {:frame, frame}}

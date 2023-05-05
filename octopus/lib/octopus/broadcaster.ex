@@ -10,8 +10,9 @@ defmodule Octopus.Broadcaster do
   defstruct [:udp, :file]
 
   # @remote_host "blinkenleds-1.fritz.box" |> to_charlist()
+  @remote_host {192, 168, 0, 172}
   # @remote_host {192, 168, 0, 255}
-  @remote_host {192, 168, 23, 255}
+  # @remote_host {192, 168, 23, 255}
   @remote_port 1337
 
   @local_port 4422
@@ -64,7 +65,7 @@ defmodule Octopus.Broadcaster do
   end
 
   def handle_cast({:broadcast, binary}, %__MODULE__{} = state) do
-    # Logger.debug("Broadcaster: sending #{inspect(binary)}")
+    # Logger.debug("Broadcaster: sending #{inspect(byte_size(binary))} bytes #{inspect(binary)}")
     :gen_udp.send(state.udp, @remote_host, @remote_port, binary)
     {:noreply, state}
   end

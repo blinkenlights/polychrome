@@ -9,27 +9,18 @@ message Packet {
 }
 
 message Config {
-  uint32 on_r = 1;
-  uint32 on_g = 2;
-  uint32 on_b = 3;
-  uint32 on_w = 4;
+  repeated uint32 color_palette = 1 [(nanopb).max_count = 255];
 
-  uint32 off_r = 5;
-  uint32 off_g = 6;
-  uint32 off_b = 7;
-  uint32 off_w = 8;
+  uint32 easing_interval_ms = 2;
 
-  uint32 easing_interval_ms = 9;
+  EasingMode pixel_easing = 3;
+  EasingMode brightness_easing = 4; 
 
-  EasingMode pixel_easing = 10;
-  EasingMode brightness_easing = 11; 
-
-  bool test_frame = 12;
+  bool test_frame = 5;
 }
 
 message Frame {
-  bytes data = 1 [(nanopb).max_size = 1024];
-  uint32 maxval = 2;
+  bytes data = 1 [(nanopb).max_size = 640];
 }
 
 enum EasingMode {
@@ -62,6 +53,8 @@ message ClientInfo {
   string hostname = 1 [(nanopb).max_length = 20];
   string build_time = 2 [(nanopb).max_length = 20];
   int32 panel_index = 3;
+  int32 fps = 4;
+  // Config config = 5;
 }
 
 message RemoteLog {

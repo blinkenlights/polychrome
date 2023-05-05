@@ -2,26 +2,18 @@ defmodule Octopus.Generator do
   use GenServer
   require Logger
 
-  alias Octopus.{Broadcaster}
+  alias Octopus.{Broadcaster, ColorPalettes}
   alias Octopus.Protobuf.{Config, Frame}
 
-  @maxval 255
   @led_count 64
   @default_config %Config{
-    on_r: 50,
-    on_g: 0,
-    on_b: 0,
-    on_w: 255,
-    off_r: 0,
-    off_g: 0,
-    off_b: 0,
-    off_w: 0,
-    easing_interval_ms: 100,
+    color_palette: ColorPalettes.from_file("amber-crtgb.hex"),
+    easing_interval_ms: 1000,
     pixel_easing: :EASE_OUT_QUART,
     brightness_easing: :EASE_OUT_QUAD
   }
 
-  defstruct brightness: 0, config: @default_config
+  defstruct brightness: 0, config: @default_config, position: 0
 
   def start_link(_) do
     GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
@@ -32,19 +24,18 @@ defmodule Octopus.Generator do
 
     update_config(state)
 
-    send(self(), :next_brightness)
+    # send(self(), :next_color)
+    send(self(), :next_position)
 
     {:ok, state}
   end
 
-  def handle_info(:next_brightness, %__MODULE__{} = state) do
-    b = state.brightness + 64
+  def handle_info(:next_color, %__MODULE__{} = state) do
+    b = state.brightness + 1
 
     b =
       case b do
-        c when c == 256 -> 255
-        c when c > 256 -> 0
-        # c when c >= 3 -> 0
+        c when c >= length(state.config.color_palette) -> 0
         c -> c
       end
 
@@ -53,16 +44,38 @@ defmodule Octopus.Generator do
       |> Enum.map(fn _ -> b end)
 
     # |> List.update_at(19, fn _ -> b end)
+    # update_config(state)
 
     %Frame{
-      maxval: @maxval,
       data: IO.iodata_to_binary(data)
     }
     |> Broadcaster.send_frame()
 
-    :timer.send_after(5000, :next_brightness)
+    :timer.send_after(2000, :next_color)
 
     {:noreply, %__MODULE__{state | brightness: b}}
+  end
+
+  def handle_info(:next_position, %__MODULE__{} = state) do
+    position =
+      case state.position + 1 do
+        c when c >= @led_count -> 5
+        c -> c
+      end
+
+    data =
+      (Enum.map(0..(position - 1), fn _ -> 0 end) ++
+         [1, 1, 2, 2, 3, 3] ++ Enum.map((position + 6)..(@led_count - 1), fn _ -> 0 end))
+      |> IO.inspect()
+
+    %Frame{
+      data: IO.iodata_to_binary(data)
+    }
+    |> Broadcaster.send_frame()
+
+    :timer.send_after(2000, :next_position)
+
+    {:noreply, %__MODULE__{state | position: position}}
   end
 
   def update_config(%__MODULE__{} = state) do
