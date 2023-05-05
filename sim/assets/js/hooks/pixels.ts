@@ -11,7 +11,11 @@ interface Layout {
   positions: [number, number][];
 }
 
-export function setup(canvas: HTMLCanvasElement, pixelImageUrl: string) {
+export function setup(
+  id: string,
+  canvas: HTMLCanvasElement,
+  pixelImageUrl: string
+) {
   let pixels = new Uint8Array();
   let layout: Layout;
 
@@ -29,12 +33,16 @@ export function setup(canvas: HTMLCanvasElement, pixelImageUrl: string) {
 
   window.addEventListener("resize", () => resize(canvas));
 
-  this.handleEvent("layout", ({ layout: newLayout }: { layout: Layout }) => {
-    layout = newLayout;
+  [`layout:${id}`, "layout:*"].forEach((event) => {
+    this.handleEvent(event, ({ layout: newLayout }: { layout: Layout }) => {
+      layout = newLayout;
+    });
   });
 
-  this.handleEvent("pixels", ({ pixels: newPixels }: { pixels: string }) => {
-    pixels = textEncoder.encode(newPixels);
+  [`pixels:${id}`, "pixels:*"].forEach((event) => {
+    this.handleEvent(event, ({ pixels: newPixels }: { pixels: string }) => {
+      pixels = textEncoder.encode(newPixels);
+    });
   });
 
   const draw = () => {
