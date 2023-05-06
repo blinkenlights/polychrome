@@ -9,18 +9,18 @@ message Packet {
 }
 
 message Config {
-  repeated uint32 color_palette = 1 [(nanopb).max_count = 255];
+  bytes color_palette = 1 [(nanopb).max_size = 256]; // Series of RGBW values.
 
   uint32 easing_interval_ms = 2;
 
   EasingMode pixel_easing = 3;
-  EasingMode brightness_easing = 4; 
+  EasingMode brightness_easing = 4 [deprecated = true];
 
-  bool test_frame = 5;
+  bool show_test_frame = 5;
 }
 
 message Frame {
-  bytes data = 1 [(nanopb).max_size = 640];
+  bytes data = 1 [(nanopb).max_size = 640]; // Selects pixel colors from the palette. First pixel is top left. 
 }
 
 enum EasingMode {

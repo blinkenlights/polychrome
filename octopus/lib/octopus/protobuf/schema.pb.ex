@@ -37,21 +37,17 @@ defmodule Octopus.Protobuf.Config do
 
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
 
-  field :color_palette, 1,
-    repeated: true,
-    type: :uint32,
-    json_name: "colorPalette",
-    deprecated: false
-
+  field :color_palette, 1, type: :bytes, json_name: "colorPalette", deprecated: false
   field :easing_interval_ms, 2, type: :uint32, json_name: "easingIntervalMs"
   field :pixel_easing, 3, type: Octopus.Protobuf.EasingMode, json_name: "pixelEasing", enum: true
 
   field :brightness_easing, 4,
     type: Octopus.Protobuf.EasingMode,
     json_name: "brightnessEasing",
-    enum: true
+    enum: true,
+    deprecated: true
 
-  field :test_frame, 5, type: :bool, json_name: "testFrame"
+  field :show_test_frame, 5, type: :bool, json_name: "showTestFrame"
 end
 
 defmodule Octopus.Protobuf.Frame do
