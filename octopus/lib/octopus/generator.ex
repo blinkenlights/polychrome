@@ -7,7 +7,7 @@ defmodule Octopus.Generator do
 
   @led_count 64
   @default_config %Config{
-    color_palette: ColorPalette.from_file("amber-crtgb.hex"),
+    color_palette: ColorPalette.from_file("flamingo-gb.hex"),
     easing_interval_ms: 1000,
     pixel_easing: :EASE_OUT_QUART,
     brightness_easing: :EASE_OUT_QUAD,
@@ -52,7 +52,7 @@ defmodule Octopus.Generator do
     }
     |> Broadcaster.send()
 
-    :timer.send_after(2000, :next_color)
+    :timer.send_after(1000, :next_color)
 
     {:noreply, %__MODULE__{state | brightness: b}}
   end
@@ -73,7 +73,7 @@ defmodule Octopus.Generator do
     }
     |> Broadcaster.send()
 
-    :timer.send_after(2000, :next_position)
+    :timer.send_after(1000, :next_position)
 
     {:noreply, %__MODULE__{state | position: position}}
   end
