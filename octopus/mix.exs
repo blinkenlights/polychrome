@@ -23,7 +23,8 @@ defmodule Octopus.MixProject do
   defp deps do
     [
       {:protobuf, "~> 0.10"},
-      {:ex_png, "~> 1.0.0"}
+      {:ex_png, "~> 1.0.0"},
+      {:easing, "~> 0.3.1"}
     ]
   end
 end

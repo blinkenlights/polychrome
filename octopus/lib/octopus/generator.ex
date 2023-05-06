@@ -7,7 +7,7 @@ defmodule Octopus.Generator do
 
   @led_count 64
   @default_config %Config{
-    color_palette: ColorPalette.from_file("flamingo-gb.hex"),
+    color_palette: ColorPalette.generate(),
     easing_interval_ms: 1000,
     pixel_easing: :EASE_OUT_QUART,
     brightness_easing: :EASE_OUT_QUAD,
@@ -25,8 +25,8 @@ defmodule Octopus.Generator do
 
     update_config(state)
 
-    # send(self(), :next_color)
-    send(self(), :next_position)
+    send(self(), :next_color)
+    # send(self(), :next_position)
 
     {:ok, state}
   end
@@ -42,10 +42,10 @@ defmodule Octopus.Generator do
 
     data =
       0..(@led_count - 1)
-      |> Enum.map(fn _ -> b end)
+      |> Enum.with_index(fn _, i -> i end)
 
     # |> List.update_at(19, fn _ -> b end)
-    # update_config(state)
+    update_config(state)
 
     %Frame{
       data: IO.iodata_to_binary(data)

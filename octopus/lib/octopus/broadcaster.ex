@@ -7,7 +7,7 @@ defmodule Octopus.Broadcaster do
   alias Octopus.Protobuf
   alias Octopus.Protobuf.{Frame, Config, RemoteLog, ClientInfo, ResponsePacket}
 
-  defstruct [:udp, :file, :config]
+  defstruct [:udp, :file, config: %Config{}]
 
   # @remote_host "blinkenleds-1.fritz.box" |> to_charlist()
   # @remote_host {192, 168, 0, 172}
