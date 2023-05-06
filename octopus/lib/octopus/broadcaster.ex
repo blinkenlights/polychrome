@@ -11,7 +11,7 @@ defmodule Octopus.Broadcaster do
 
   # @remote_host "blinkenleds-1.fritz.box" |> to_charlist()
   # @remote_host {192, 168, 0, 172}
-  @remote_host {192, 168, 0, 255}
+  @remote_host {192, 168, 1, 255}
   # @remote_host {192, 168, 23, 255}
   @remote_port 1337
 
