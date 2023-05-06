@@ -10,7 +10,8 @@ defmodule Octopus.Generator do
     color_palette: ColorPalettes.from_file("amber-crtgb.hex"),
     easing_interval_ms: 1000,
     pixel_easing: :EASE_OUT_QUART,
-    brightness_easing: :EASE_OUT_QUAD
+    brightness_easing: :EASE_OUT_QUAD,
+    show_test_frame: false
   }
 
   defstruct brightness: 0, config: @default_config, position: 0
@@ -49,7 +50,7 @@ defmodule Octopus.Generator do
     %Frame{
       data: IO.iodata_to_binary(data)
     }
-    |> Broadcaster.send_frame()
+    |> Broadcaster.send()
 
     :timer.send_after(2000, :next_color)
 
@@ -64,14 +65,13 @@ defmodule Octopus.Generator do
       end
 
     data =
-      (Enum.map(0..(position - 1), fn _ -> 0 end) ++
-         [1, 1, 2, 2, 3, 3] ++ Enum.map((position + 6)..(@led_count - 1), fn _ -> 0 end))
-      |> IO.inspect()
+      Enum.map(0..(position - 1), fn _ -> 0 end) ++
+        [1, 1, 2, 2, 3, 3] ++ Enum.map((position + 6)..(@led_count - 1), fn _ -> 0 end)
 
     %Frame{
       data: IO.iodata_to_binary(data)
     }
-    |> Broadcaster.send_frame()
+    |> Broadcaster.send()
 
     :timer.send_after(2000, :next_position)
 
@@ -80,7 +80,7 @@ defmodule Octopus.Generator do
 
   def update_config(%__MODULE__{} = state) do
     state.config
-    |> Broadcaster.send_config()
+    |> Broadcaster.send()
 
     {:noreply, state}
   end

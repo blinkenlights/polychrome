@@ -48,6 +48,7 @@ defmodule Octopus.Protobuf.Config do
     deprecated: true
 
   field :show_test_frame, 5, type: :bool, json_name: "showTestFrame"
+  field :config_phash, 6, type: :uint32, json_name: "configPhash"
 end
 
 defmodule Octopus.Protobuf.Frame do
@@ -78,6 +79,7 @@ defmodule Octopus.Protobuf.ClientInfo do
   field :build_time, 2, type: :string, json_name: "buildTime", deprecated: false
   field :panel_index, 3, type: :int32, json_name: "panelIndex"
   field :fps, 4, type: :int32
+  field :config_phash, 5, type: :uint32, json_name: "configPhash"
 end
 
 defmodule Octopus.Protobuf.RemoteLog do

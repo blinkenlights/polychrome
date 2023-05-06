@@ -15,7 +15,7 @@ defmodule Octopus.ColorPalettes do
     |> IO.iodata_to_binary()
   end
 
-  defp color_from_hex(<<r::binary-size(2), g::binary-size(2), b::binary-size(2)>>) do
+  def color_from_hex(<<r::binary-size(2), g::binary-size(2), b::binary-size(2)>>) do
     %Color{
       r: Integer.parse(r, 16) |> elem(0),
       g: Integer.parse(g, 16) |> elem(0),

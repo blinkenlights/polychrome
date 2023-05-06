@@ -7,11 +7,11 @@ defmodule Octopus.Broadcaster do
   alias Octopus.Protobuf
   alias Octopus.Protobuf.{Frame, Config, RemoteLog, ClientInfo, ResponsePacket}
 
-  defstruct [:udp, :file]
+  defstruct [:udp, :file, :config]
 
   # @remote_host "blinkenleds-1.fritz.box" |> to_charlist()
-  @remote_host {192, 168, 0, 172}
-  # @remote_host {192, 168, 0, 255}
+  # @remote_host {192, 168, 0, 172}
+  @remote_host {192, 168, 0, 255}
   # @remote_host {192, 168, 23, 255}
   @remote_port 1337
 
@@ -21,19 +21,15 @@ defmodule Octopus.Broadcaster do
     GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
   end
 
-  def send_frame(%Frame{} = frame) do
-    Protobuf.encode(frame)
-    |> send_binary()
+  def send(%Frame{} = frame) do
+    GenServer.cast(__MODULE__, {:send_frame, frame})
   end
 
-  def send_config(%Config{} = config) do
-    # todo: catch encoding errors
-    Protobuf.encode(config)
-    |> send_binary()
+  def send(%Config{} = config) do
+    GenServer.cast(__MODULE__, {:send_config, config})
   end
 
   def send_binary(binary) when is_binary(binary) do
-    GenServer.cast(__MODULE__, {:broadcast, binary})
   end
 
   def init(:ok) do
@@ -42,20 +38,35 @@ defmodule Octopus.Broadcaster do
     )
 
     file = File.open!("remote.log", [:write])
-
     {:ok, udp} = :gen_udp.open(@local_port, [:binary, active: true, broadcast: true])
 
     {:ok, %__MODULE__{udp: udp, file: file}}
   end
 
   def handle_info({:udp, _socket, ip, _port, protobuf}, state = %__MODULE__{}) do
+    # todo: refactor
+
     case Protobuf.decode_response(protobuf) do
       %ResponsePacket{content: {:remote_log, %RemoteLog{message: message}}} ->
         IO.write(state.file, message)
-        Logger.debug("Remote log #{print_ip(ip)}: #{inspect(message)}")
+        Logger.debug("#{print_ip(ip)}: Remote log #{inspect(message)}")
 
       %ResponsePacket{content: {:client_info, %ClientInfo{} = client_info}} ->
-        Logger.info("Client info #{print_ip(ip)}: #{inspect(client_info)}")
+        # Logger.debug("#{print_ip(ip)}: Client info #{inspect(client_info)}")
+
+        %Config{config_phash: expected_phash} = state.config
+
+        case client_info do
+          %ClientInfo{config_phash: ^expected_phash} ->
+            :noop
+
+          _ ->
+            Logger.info(
+              "#{print_ip(ip)}: Config hash misstmacht expected #{expected_phash} got #{client_info.config_phash}"
+            )
+
+            send(state.config)
+        end
 
       nil ->
         :noop
@@ -64,11 +75,33 @@ defmodule Octopus.Broadcaster do
     {:noreply, state}
   end
 
-  def handle_cast({:broadcast, binary}, %__MODULE__{} = state) do
-    # Logger.debug("Broadcaster: sending #{inspect(byte_size(binary))} bytes #{inspect(binary)}")
-    :gen_udp.send(state.udp, @remote_host, @remote_port, binary)
+  def handle_cast({:send_frame, frame}, state) do
+    frame
+    |> Protobuf.encode()
+    |> send_binary(state)
+
     {:noreply, state}
   end
 
-  def print_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"
+  def handle_cast({:send_config, config}, %__MODULE__{} = state) do
+    phash =
+      config
+      |> Map.from_struct()
+      |> Map.drop([:config_phash])
+      |> :erlang.phash2()
+
+    config = %Config{config | config_phash: phash}
+
+    config
+    |> Protobuf.encode()
+    |> send_binary(state)
+
+    {:noreply, %__MODULE__{state | config: config}}
+  end
+
+  defp print_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"
+
+  defp send_binary(binary, %__MODULE__{} = state) do
+    :gen_udp.send(state.udp, @remote_host, @remote_port, binary)
+  end
 end
