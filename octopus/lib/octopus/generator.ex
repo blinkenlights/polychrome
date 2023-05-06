@@ -2,12 +2,12 @@ defmodule Octopus.Generator do
   use GenServer
   require Logger
 
-  alias Octopus.{Broadcaster, ColorPalettes}
+  alias Octopus.{Broadcaster, ColorPalette}
   alias Octopus.Protobuf.{Config, Frame}
 
   @led_count 64
   @default_config %Config{
-    color_palette: ColorPalettes.from_file("amber-crtgb.hex"),
+    color_palette: ColorPalette.from_file("amber-crtgb.hex"),
     easing_interval_ms: 1000,
     pixel_easing: :EASE_OUT_QUART,
     brightness_easing: :EASE_OUT_QUAD,

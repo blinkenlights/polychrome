@@ -1,4 +1,4 @@
-defmodule Octopus.ColorPalettes do
+defmodule Octopus.ColorPalette do
   @palette_dir "../color_palettes"
 
   defmodule Color do
