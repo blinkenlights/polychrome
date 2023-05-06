@@ -102,6 +102,7 @@ defmodule Octopus.Broadcaster do
   defp print_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"
 
   defp send_binary(binary, %__MODULE__{} = state) do
+    # Logger.info(inspect(binary))
     :gen_udp.send(state.udp, @remote_host, @remote_port, binary)
   end
 end

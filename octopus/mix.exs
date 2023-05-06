@@ -22,7 +22,8 @@ defmodule Octopus.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:protobuf, "~> 0.10"}
+      {:protobuf, "~> 0.10"},
+      {:ex_png, "~> 1.0.0"}
     ]
   end
 end

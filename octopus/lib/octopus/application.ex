@@ -5,7 +5,8 @@ defmodule Octopus.Application do
   def start(_type, _args) do
     children = [
       Octopus.Broadcaster,
-      Octopus.Generator
+      # Octopus.Generator
+      Octopus.FontTester
     ]
 
     opts = [strategy: :one_for_one, name: Octopus.Supervisor]

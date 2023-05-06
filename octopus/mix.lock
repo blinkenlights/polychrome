@@ -1,3 +1,4 @@
 %{
+  "ex_png": {:hex, :ex_png, "1.0.0", "196008a5f02eecce28c928471387c5834bb1403482fd6fa22c94c3e343399edd", [:mix], [], "hexpm", "376dfec466ac1ea1f726ba784a99575047498b350b1f4db607d9bcd756ebbc7d"},
   "protobuf": {:hex, :protobuf, "0.12.0", "58c0dfea5f929b96b5aa54ec02b7130688f09d2de5ddc521d696eec2a015b223", [:mix], [{:jason, "~> 1.2", [hex: :jason, repo: "hexpm", optional: true]}], "hexpm", "75fa6cbf262062073dd51be44dd0ab940500e18386a6c4e87d5819a58964dc45"},
 }
