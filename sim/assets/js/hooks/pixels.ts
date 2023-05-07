@@ -5,10 +5,16 @@ function resize(canvas: HTMLCanvasElement) {
   canvas.height = rect.height * dpr;
 }
 
+type RGBW = [number, number, number, number];
+
 interface Layout {
   imageSize: [number, number];
   pixelSize: [number, number];
   positions: [number, number][];
+}
+
+interface Config {
+  color_palette: RGBW[];
 }
 
 export function setup(
@@ -17,9 +23,8 @@ export function setup(
   pixelImageUrl: string
 ) {
   let pixels = new Uint8Array();
+  let colorPalette: RGBW[] = [];
   let layout: Layout;
-
-  const textEncoder = new TextEncoder();
 
   const pixelImage = new Image();
   pixelImage.src = pixelImageUrl;
@@ -40,8 +45,15 @@ export function setup(
   });
 
   [`pixels:${id}`, "pixels:*"].forEach((event) => {
-    this.handleEvent(event, ({ pixels: newPixels }: { pixels: string }) => {
-      pixels = textEncoder.encode(newPixels);
+    this.handleEvent(event, ({ pixels: newPixels }: { pixels: Uint8Array }) => {
+      pixels = newPixels;
+    });
+  });
+
+  [`config:${id}`, "config:*"].forEach((event) => {
+    this.handleEvent(event, ({ config }: { config: Config }) => {
+      colorPalette = config.color_palette;
+      console.log(colorPalette);
     });
   });
 
@@ -70,7 +82,8 @@ export function setup(
       const pixel = pixels[i];
 
       if (pixel !== undefined) {
-        ctx.fillStyle = `hsl(40, 80%, ${(95 / 8) * pixel + 5}%)`;
+        let [r, g, b, _w] = colorPalette[pixel];
+        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
       } else {
         ctx.fillStyle = "hsl(40, 80%, 5%)";
       }

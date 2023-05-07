@@ -10,14 +10,18 @@ defmodule SimWeb.SimulatorLive do
       Sim.Pixels.subscribe()
     end
 
-    pixels = Pixels.encoded_pixels()
     layout = Mildenberg.layout()
+    config = Pixels.config()
+    pixels = Pixels.pixels()
 
-    {:ok,
-     socket
-     |> assign(pixel_layout: layout)
-     |> push_layout(layout)
-     |> push_pixels(pixels), temporary_assigns: [pixel_layout: %{}]}
+    socket =
+      socket
+      |> assign(pixel_layout: layout)
+      |> push_layout(layout)
+      |> push_config(config)
+      |> push_pixels(pixels)
+
+    {:ok, socket, temporary_assigns: [pixel_layout: %{}]}
   end
 
   def render(assigns) do
@@ -28,7 +32,11 @@ defmodule SimWeb.SimulatorLive do
     """
   end
 
-  def handle_info({:pixels, pixels, _max_value}, socket) do
+  def handle_info({:pixels, pixels}, socket) do
     {:noreply, socket |> push_pixels(pixels)}
+  end
+
+  def handle_info({:config, config}, socket) do
+    {:noreply, socket |> push_config(config)}
   end
 end

@@ -23,13 +23,25 @@ defmodule SimWeb.PixelsComponent do
   end
 
   def push_pixels(socket, pixels, id \\ "*") do
-    push_event(socket, "pixels:#{id}", %{pixels: pixels, max_value: 8, target: id})
+    push_event(socket, "pixels:#{id}", %{pixels: pixels})
+  end
+
+  def push_config(socket, config, id \\ "*") do
+    push_event(socket, "config:#{id}", %{config: config})
   end
 
   defmacro __using__(_) do
     quote do
       import unquote(__MODULE__),
-        only: [push_layout: 2, push_pixels: 2, push_layout: 3, push_pixels: 3, pixels: 1]
+        only: [
+          push_layout: 2,
+          push_pixels: 2,
+          push_layout: 3,
+          push_pixels: 3,
+          push_config: 2,
+          push_config: 3,
+          pixels: 1
+        ]
     end
   end
 end

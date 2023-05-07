@@ -16,6 +16,9 @@ defmodule Sim.Protobuf.EasingMode do
   field :EASE_IN_QUINT, 10
   field :EASE_OUT_QUINT, 11
   field :EASE_IN_OUT_QUINT, 12
+  field :EASE_IN_EXPO, 13
+  field :EASE_OUT_EXPO, 14
+  field :EASE_IN_OUT_EXPO, 15
 end
 
 defmodule Sim.Protobuf.Packet do
@@ -34,23 +37,18 @@ defmodule Sim.Protobuf.Config do
 
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
 
-  field :on_r, 1, type: :uint32, json_name: "onR"
-  field :on_g, 2, type: :uint32, json_name: "onG"
-  field :on_b, 3, type: :uint32, json_name: "onB"
-  field :on_w, 4, type: :uint32, json_name: "onW"
-  field :off_r, 5, type: :uint32, json_name: "offR"
-  field :off_g, 6, type: :uint32, json_name: "offG"
-  field :off_b, 7, type: :uint32, json_name: "offB"
-  field :off_w, 8, type: :uint32, json_name: "offW"
-  field :easing_interval_ms, 9, type: :uint32, json_name: "easingIntervalMs"
-  field :pixel_easing, 10, type: Sim.Protobuf.EasingMode, json_name: "pixelEasing", enum: true
+  field :color_palette, 1, type: :bytes, json_name: "colorPalette", deprecated: false
+  field :easing_interval_ms, 2, type: :uint32, json_name: "easingIntervalMs"
+  field :pixel_easing, 3, type: Sim.Protobuf.EasingMode, json_name: "pixelEasing", enum: true
 
-  field :brightness_easing, 11,
+  field :brightness_easing, 4,
     type: Sim.Protobuf.EasingMode,
     json_name: "brightnessEasing",
-    enum: true
+    enum: true,
+    deprecated: true
 
-  field :test_frame, 12, type: :bool, json_name: "testFrame"
+  field :show_test_frame, 5, type: :bool, json_name: "showTestFrame"
+  field :config_phash, 6, type: :uint32, json_name: "configPhash"
 end
 
 defmodule Sim.Protobuf.Frame do
@@ -59,7 +57,6 @@ defmodule Sim.Protobuf.Frame do
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
 
   field :data, 1, type: :bytes, deprecated: false
-  field :maxval, 2, type: :uint32
 end
 
 defmodule Sim.Protobuf.ResponsePacket do
@@ -81,6 +78,8 @@ defmodule Sim.Protobuf.ClientInfo do
   field :hostname, 1, type: :string, deprecated: false
   field :build_time, 2, type: :string, json_name: "buildTime", deprecated: false
   field :panel_index, 3, type: :int32, json_name: "panelIndex"
+  field :fps, 4, type: :int32
+  field :config_phash, 5, type: :uint32, json_name: "configPhash"
 end
 
 defmodule Sim.Protobuf.RemoteLog do

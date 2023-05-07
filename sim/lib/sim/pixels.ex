@@ -8,26 +8,19 @@ defmodule Sim.Pixels do
   alias Sim.Protobuf.Config
 
   defmodule State do
-    defstruct pixels: [], config: %{}
+    defstruct pixels: [], config: %Config{}
 
     @type t :: %__MODULE__{
             pixels: [integer()],
-            config: %{
-              max_value: non_neg_integer()
-            }
+            config: Config.t()
           }
 
     @spec new :: t()
     def new do
       %__MODULE__{
         pixels: [],
-        config: %{max_value: 8}
+        config: %Config{}
       }
-    end
-
-    @spec update(t(), Sim.Protobuf.Frame.t()) :: any
-    def update(%State{config: %{max_value: max_value}} = state, %Frame{} = frame) do
-      %State{state | pixels: frame.data |> :binary.bin_to_list(), config: %{max_value: max_value}}
     end
   end
 
@@ -43,8 +36,12 @@ defmodule Sim.Pixels do
     Phoenix.PubSub.subscribe(Sim.PubSub, "pixels")
   end
 
-  def encoded_pixels do
-    GenServer.call(__MODULE__, :encoded_pixels)
+  def pixels do
+    GenServer.call(__MODULE__, :pixels)
+  end
+
+  def config do
+    GenServer.call(__MODULE__, :config)
   end
 
   def handle_packet(%Packet{content: {:config, config}}) do
@@ -55,25 +52,30 @@ defmodule Sim.Pixels do
     GenServer.call(__MODULE__, {:handle_frame, frame})
   end
 
-  def handle_call({:handle_config, %Config{} = _config}, _from, state) do
-    {:reply, :ok, state}
+  def handle_call({:handle_config, %Config{} = config}, _from, state) do
+    broadcast(config)
+    {:reply, :ok, %State{state | config: config}}
   end
 
   def handle_call({:handle_frame, %Frame{} = frame}, _from, state) do
-    {:reply, :ok, state |> State.update(frame) |> broadcast()}
+    pixels = frame.data |> :binary.bin_to_list()
+    broadcast(pixels)
+    {:reply, :ok, %State{state | pixels: pixels}}
   end
 
-  def handle_call(:encoded_pixels, _from, %State{} = state) do
-    {:reply, state.pixels |> :binary.list_to_bin(), state}
+  def handle_call(:config, _from, %State{} = state) do
+    {:reply, state.config, state}
   end
 
-  defp broadcast(%State{pixels: pixels, config: %{max_value: max_value}} = state) do
-    Phoenix.PubSub.broadcast(
-      Sim.PubSub,
-      "pixels",
-      {:pixels, pixels |> :binary.list_to_bin(), max_value}
-    )
+  def handle_call(:pixels, _from, %State{} = state) do
+    {:reply, state.pixels, state}
+  end
 
-    state
+  defp broadcast(%Config{} = config) do
+    Phoenix.PubSub.broadcast(Sim.PubSub, "config", {:config, config})
+  end
+
+  defp broadcast(pixels) when is_list(pixels) do
+    Phoenix.PubSub.broadcast(Sim.PubSub, "pixels", {:pixels, pixels})
   end
 end
