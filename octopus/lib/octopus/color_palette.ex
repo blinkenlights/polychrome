@@ -9,6 +9,9 @@ defmodule Octopus.ColorPalette do
     defstruct r: 0, g: 0, b: 0, w: 0
   end
 
+  @doc """
+  Reads from a file exported from lospec.com (use the hex format and save to the palette directory).
+  """
   def from_file(filename) do
     Path.join(@palette_dir, filename)
     |> File.stream!()
@@ -18,6 +21,9 @@ defmodule Octopus.ColorPalette do
     |> to_binary()
   end
 
+  @doc """
+  Reads from a binary in the protobuf format [r, g, b, w, r, g, b, w, ...].
+  """
   def from_binary(binary) do
     binary
     |> :binary.bin_to_list()
@@ -25,6 +31,9 @@ defmodule Octopus.ColorPalette do
     |> Enum.map(fn [r, g, b, w] -> %Color{r: r, g: g, b: b, w: w} end)
   end
 
+  @doc """
+  Writes a binary in the protobuf format [r, g, b, w, r, g, b, w, ...].
+  """
   def to_binary(palette) do
     palette
     |> Enum.map(fn %Color{r: r, g: g, b: b, w: w} -> [r, g, b, w] end)
@@ -40,6 +49,9 @@ defmodule Octopus.ColorPalette do
     |> IO.iodata_to_binary()
   end
 
+  @doc """
+  Applies brightness correction. This is the place were would apply our calibartion once we have it.
+  """
   def brightness_correction(palette) do
     palette
     |> Enum.map(fn %Color{r: r, g: g, b: b} ->
