@@ -17,6 +17,7 @@ defmodule Octopus.Protobuf do
 
   def encode(%Frame{palette: %ColorPalette{} = palette} = frame) do
     %Frame{frame | palette: ColorPalette.to_binary(palette)}
+    |> encode()
   end
 
   def encode(%Config{} = config) do
