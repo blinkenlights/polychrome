@@ -2,7 +2,7 @@ defmodule Octopus.Apps.SampleApp do
   use Octopus.App
   require Logger
 
-  alias Octopus.Protobuf.{Frame, Config}
+  alias Octopus.Protobuf.Frame
 
   defmodule State do
     defstruct [:index]
@@ -27,14 +27,7 @@ defmodule Octopus.Apps.SampleApp do
       |> Enum.map(fn _ -> 0 end)
       |> List.update_at(state.index, fn _ -> 3 end)
 
-    send_frame(%Frame{data: data})
-
-    Octopus.Broadcaster.send_config(%Config{
-      color_palette: @palette,
-      easing_interval_ms: 1000,
-      pixel_easing: :LINEAR,
-      show_test_frame: false
-    })
+    send_frame(%Frame{data: data, palette: @palette})
 
     {:noreply, increment_index(state)}
   end

@@ -22,11 +22,11 @@ defmodule Octopus.FontTester do
     {pixels, palette} = Font.get_char(font, char, variant)
 
     config = %Octopus.Protobuf.Config{
-      color_palette: palette |> List.flatten() |> IO.iodata_to_binary(),
-      easing_interval_ms: 300,
-      pixel_easing: :LINEAR,
-      brightness_easing: :LINEAR,
-      show_test_frame: false
+      # color_palette: palette |> List.flatten() |> IO.iodata_to_binary(),
+      # easing_interval_ms: 300,
+      # pixel_easing: :LINEAR,
+      # brightness_easing: :LINEAR,
+      # show_test_frame: false
     }
 
     frame = %Octopus.Protobuf.Frame{data: pixels |> IO.iodata_to_binary()}

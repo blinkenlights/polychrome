@@ -38,9 +38,7 @@ defmodule Octopus.Mixer do
   end
 
   # ignore frames from other apps
-  def handle_cast({:new_frame, {app_id, _frame}}, %State{selected_app: app_id} = state) do
+  def handle_cast({:new_frame, {_app_id, _frame}}, state) do
     {:noreply, state}
   end
-
-  # TODO
 end

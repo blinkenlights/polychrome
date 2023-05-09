@@ -30,12 +30,6 @@ defmodule Octopus.Broadcaster do
     GenServer.cast(__MODULE__, {:send_config, config})
   end
 
-  # deprecated. Do the encoding in the app process
-  def send_frame(%Frame{} = frame) do
-    binary = Protobuf.encode(frame)
-    GenServer.cast(__MODULE__, {:send_binary, binary})
-  end
-
   def init(:ok) do
     Logger.info(
       "Broadcasting UPD to #{inspect(@remote_host)} port #{@remote_port}. Listening on #{@local_port}"

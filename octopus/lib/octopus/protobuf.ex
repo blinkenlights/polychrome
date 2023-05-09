@@ -1,18 +1,22 @@
 defmodule Octopus.Protobuf do
   require Logger
 
-  alias Octopus.Protobuf.{Frame, Packet, Config, ResponsePacket, Color}
+  alias Octopus.ColorPalette
+  alias Octopus.Protobuf.{Frame, Packet, Config, ResponsePacket}
 
-  def encode(%Frame{data: bytes} = frame) when is_binary(bytes) do
+  def encode(%Frame{data: data, palette: palette} = frame)
+      when is_binary(data) and is_binary(palette) do
     %Packet{content: {:frame, frame}}
     |> Packet.encode()
   end
 
   def encode(%Frame{data: list} = frame) when is_list(list) do
-    frame = %Frame{frame | data: IO.iodata_to_binary(list)}
+    %Frame{frame | data: IO.iodata_to_binary(list)}
+    |> encode()
+  end
 
-    %Packet{content: {:frame, frame}}
-    |> Packet.encode()
+  def encode(%Frame{palette: %ColorPalette{} = palette} = frame) do
+    %Frame{frame | palette: ColorPalette.to_binary(palette)}
   end
 
   def encode(%Config{} = config) do

@@ -32,11 +32,11 @@ defmodule Octopus.SpriteTester do
       |> Enum.map(&Enum.find_index(state.palette, fn value -> value == &1 end))
 
     config = %Octopus.Protobuf.Config{
-      color_palette: state.palette |> Enum.map(&(&1 ++ [0])) |> IO.iodata_to_binary(),
-      easing_interval_ms: 500,
-      pixel_easing: :LINEAR,
-      brightness_easing: :LINEAR,
-      show_test_frame: false
+      # color_palette: state.palette |> Enum.map(&(&1 ++ [0])) |> IO.iodata_to_binary(),
+      # easing_interval_ms: 500,
+      # pixel_easing: :LINEAR,
+      # brightness_easing: :LINEAR,
+      # show_test_frame: false
     }
 
     frame = %Octopus.Protobuf.Frame{data: pixels |> IO.iodata_to_binary()}

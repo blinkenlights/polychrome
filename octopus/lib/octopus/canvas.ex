@@ -58,8 +58,8 @@ defmodule Octopus.Canvas do
   When the canvas is wider than 80 pixels, we assume that the canvas contains pixels inbetween
   the windows. Those pixels will be omitted.
   """
-  def to_frame(%Canvas{pixels: pixels, width: width}) do
-    %Frame{data: pixels |> rearrange(width) |> IO.iodata_to_binary()}
+  def to_frame(%Canvas{pixels: pixels, width: width, palette: palette}) do
+    %Frame{data: pixels |> rearrange(width) |> IO.iodata_to_binary(), palette: palette}
   end
 
   defp rearrange(pixels, width) do

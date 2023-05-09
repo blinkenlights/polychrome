@@ -37,18 +37,11 @@ defmodule Octopus.Protobuf.Config do
 
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
 
-  field :color_palette, 1, type: :bytes, json_name: "colorPalette", deprecated: false
+  field :luminance, 1, type: :uint32
   field :easing_interval_ms, 2, type: :uint32, json_name: "easingIntervalMs"
-  field :pixel_easing, 3, type: Octopus.Protobuf.EasingMode, json_name: "pixelEasing", enum: true
-
-  field :brightness_easing, 4,
-    type: Octopus.Protobuf.EasingMode,
-    json_name: "brightnessEasing",
-    enum: true,
-    deprecated: true
-
-  field :show_test_frame, 5, type: :bool, json_name: "showTestFrame"
-  field :config_phash, 6, type: :uint32, json_name: "configPhash"
+  field :easing_mode, 3, type: Octopus.Protobuf.EasingMode, json_name: "easingMode", enum: true
+  field :show_test_frame, 4, type: :bool, json_name: "showTestFrame"
+  field :config_phash, 5, type: :uint32, json_name: "configPhash"
 end
 
 defmodule Octopus.Protobuf.Frame do
@@ -57,6 +50,7 @@ defmodule Octopus.Protobuf.Frame do
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
 
   field :data, 1, type: :bytes, deprecated: false
+  field :palette, 2, type: :bytes, deprecated: false
 end
 
 defmodule Octopus.Protobuf.ResponsePacket do
@@ -77,8 +71,8 @@ defmodule Octopus.Protobuf.ClientInfo do
 
   field :hostname, 1, type: :string, deprecated: false
   field :build_time, 2, type: :string, json_name: "buildTime", deprecated: false
-  field :panel_index, 3, type: :int32, json_name: "panelIndex"
-  field :fps, 4, type: :int32
+  field :panel_index, 3, type: :uint32, json_name: "panelIndex"
+  field :fps, 4, type: :uint32
   field :config_phash, 5, type: :uint32, json_name: "configPhash"
 end
 
