@@ -46,8 +46,8 @@ defmodule Octopus.FontTester do
 
     frame = %Octopus.Protobuf.Frame{data: pixels |> IO.iodata_to_binary()}
 
-    Broadcaster.send(config)
-    Broadcaster.send(frame)
+    Broadcaster.send_config(config)
+    Broadcaster.send_frame(frame)
 
     {:noreply, state}
   end

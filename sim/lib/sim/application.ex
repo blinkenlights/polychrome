@@ -11,7 +11,7 @@ defmodule Sim.Application do
       # Start the Telemetry supervisor
       SimWeb.Telemetry,
       # Start the Ecto repository
-      Sim.Repo,
+      # Sim.Repo,
       # Start the PubSub system
       {Phoenix.PubSub, name: Sim.PubSub},
       # Start Finch

@@ -3,7 +3,14 @@ defmodule Octopus.Protobuf do
 
   alias Octopus.Protobuf.{Frame, Packet, Config, ResponsePacket, Color}
 
-  def encode(%Frame{} = frame) do
+  def encode(%Frame{data: bytes} = frame) when is_binary(bytes) do
+    %Packet{content: {:frame, frame}}
+    |> Packet.encode()
+  end
+
+  def encode(%Frame{data: list} = frame) when is_list(list) do
+    frame = %Frame{frame | data: IO.iodata_to_binary(list)}
+
     %Packet{content: {:frame, frame}}
     |> Packet.encode()
   end

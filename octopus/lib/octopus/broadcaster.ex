@@ -11,7 +11,8 @@ defmodule Octopus.Broadcaster do
 
   # @remote_host "blinkenleds-1.fritz.box" |> to_charlist()
   # @remote_host {192, 168, 0, 172}
-  @remote_host {192, 168, 1, 255}
+  # @remote_host {192, 168, 1, 255}
+  @remote_host {192, 168, 0, 255}
   # @remote_host {192, 168, 23, 255}
   @remote_port 1337
 
@@ -21,15 +22,18 @@ defmodule Octopus.Broadcaster do
     GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
   end
 
-  def send(%Frame{} = frame) do
-    GenServer.cast(__MODULE__, {:send_frame, frame})
+  def send_binary(binary) when is_binary(binary) do
+    GenServer.cast(__MODULE__, {:send_binary, binary})
   end
 
-  def send(%Config{} = config) do
+  def send_config(%Config{} = config) do
     GenServer.cast(__MODULE__, {:send_config, config})
   end
 
-  def send_binary(binary) when is_binary(binary) do
+  # deprecated. Do the encoding in the app process
+  def send_frame(%Frame{} = frame) do
+    binary = Protobuf.encode(frame)
+    GenServer.cast(__MODULE__, {:send_binary, binary})
   end
 
   def init(:ok) do
@@ -65,7 +69,7 @@ defmodule Octopus.Broadcaster do
               "#{print_ip(ip)}: Config hash misstmacht expected #{expected_phash} got #{client_info.config_phash}"
             )
 
-            send(state.config)
+            send_config(state.config)
         end
 
       nil ->
@@ -75,9 +79,8 @@ defmodule Octopus.Broadcaster do
     {:noreply, state}
   end
 
-  def handle_cast({:send_frame, frame}, state) do
+  def handle_cast({:send_binary, frame}, state) do
     frame
-    |> Protobuf.encode()
     |> send_binary(state)
 
     {:noreply, state}
@@ -102,7 +105,7 @@ defmodule Octopus.Broadcaster do
   defp print_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"
 
   defp send_binary(binary, %__MODULE__{} = state) do
-    # Logger.info(inspect(binary))
+    # Logger.debug("Sending UDP Packet: #{inspect(binary)}")
     :gen_udp.send(state.udp, @remote_host, @remote_port, binary)
   end
 end

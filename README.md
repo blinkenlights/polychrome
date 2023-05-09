@@ -5,15 +5,15 @@ Blinkenlights Letterbox light installation in Mildenberg, Germany
 # Architecture
 ```mermaid
 graph LR
-  external_generator_1 --> server
-  external_generator_2 --> server
-  server[Octopus.UDPServer] --> stream_1
-  stream_1[Octopus.PixelStream] -->  octopus 
+  external_source_1 --> udp_server
+  external_source_2 --> udp_server
   
-  internal_generators --> stream_2
-  stream_2[Octopus.PixelStream] --> octopus 
+  udp_server[Octopus.UDPServer] --> mixer
 
-  octopus[Octopus.Selector]-->broadcast
+  app_1[Octopus.Apps.Foo] --> mixer
+  app_2[Octopus.Apps.Baa] --> mixer
+  
+  mixer[Octopus.Mixer]-->broadcast
 
   broadcast-->|UDP|esp32_firmware
   esp32_firmware-->LEDS
