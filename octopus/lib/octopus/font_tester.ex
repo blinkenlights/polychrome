@@ -12,23 +12,8 @@ defmodule Octopus.FontTester do
     {:ok, %{fonts: %{}}}
   end
 
-  def animate do
-    "ALL YOUR BASE ARE BELONG TO US"
-    |> String.to_charlist()
-    |> Stream.cycle()
-    |> Stream.map(fn c ->
-      Process.sleep(1000)
-      Octopus.FontTester.display_char(c, "zwing-Zero Wing (Toaplan).png", 0)
-    end)
-    |> Stream.run()
-  end
-
   def display_char(char, font, variant \\ 0) do
     GenServer.cast(__MODULE__, {:display_char, char, font, variant})
-  end
-
-  def animate_char(char, font, variant \\ 0) do
-    GenServer.cast(__MODULE__, {:animate, char, font, variant})
   end
 
   def handle_cast({:display_char, char, font, variant}, state) do

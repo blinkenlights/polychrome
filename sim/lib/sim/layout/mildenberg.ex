@@ -26,7 +26,7 @@ defmodule Sim.Layout.Mildenberg do
       height: @height,
       pixel_size: {@pixel_width, @pixel_height},
       image_size: {@image_width, @image_height},
-      background_image: "/images/mildenberg.jpg",
+      background_image: "/images/mildenberg-dark.webp",
       pixel_image: "/images/mildenberg-pixel.png"
     }
   end

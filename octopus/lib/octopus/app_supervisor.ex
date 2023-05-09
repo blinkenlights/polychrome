@@ -29,7 +29,7 @@ defmodule Octopus.AppSupervisor do
   """
   def start_app(module) when is_atom(module) do
     name = {:via, Registry, {Octopus.AppRegistry, generate_app_id()}}
-    DynamicSupervisor.start_child(__MODULE__, {Octopus.Apps.SampleApp, name: name})
+    DynamicSupervisor.start_child(__MODULE__, {module, name: name})
   end
 
   @doc """
