@@ -38,8 +38,7 @@ defmodule Octopus.Mixer do
   end
 
   # ignore frames from other apps
-  def handle_cast({:new_frame, {app_id, frame}}, %State{selected_app: app_id} = state) do
-    Broadcaster.send_binary(frame)
+  def handle_cast({:new_frame, {app_id, _frame}}, %State{selected_app: app_id} = state) do
     {:noreply, state}
   end
 
