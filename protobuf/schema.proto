@@ -9,19 +9,18 @@ message Packet {
 }
 
 message Config {
-  bytes color_palette = 1 [(nanopb).max_size = 256]; // Series of RGBW values.
+  uint32 luminance = 1;
 
   uint32 easing_interval_ms = 2;
+  EasingMode easing_mode = 3;
 
-  EasingMode pixel_easing = 3;
-  EasingMode brightness_easing = 4 [deprecated = true];
-
-  bool show_test_frame = 5;
-  uint32 config_phash = 6;
+  bool show_test_frame = 4;
+  uint32 config_phash = 5;
 }
 
 message Frame {
   bytes data = 1 [(nanopb).max_size = 640]; // Selects pixel colors from the palette. First pixel is top left. 
+  bytes palette = 2 [(nanopb).max_size = 256]; // Series of RGB values. 8bit per color.
 }
 
 enum EasingMode {
@@ -53,8 +52,8 @@ message ResponsePacket {
 message ClientInfo {
   string hostname = 1 [(nanopb).max_length = 20];
   string build_time = 2 [(nanopb).max_length = 20];
-  int32 panel_index = 3;
-  int32 fps = 4;
+  uint32 panel_index = 3;
+  uint32 fps = 4;
   uint32 config_phash = 5;
 }
 

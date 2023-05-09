@@ -2,71 +2,71 @@ defmodule Octopus.ColorPalette do
   @moduledoc """
   A ColorPalette is a list of colors.
   """
-
-  @palette_dir "../color_palettes"
+  alias Octopus.ColorPalette
 
   defmodule Color do
-    defstruct r: 0, g: 0, b: 0, w: 0
+    defstruct r: 0, g: 0, b: 0
   end
+
+  defstruct colors: []
 
   @doc """
   Reads from a file exported from lospec.com (use the hex format and save to the palette directory).
   """
   def from_file(filename) do
-    Path.join(@palette_dir, filename)
-    |> File.stream!()
-    |> Enum.map(&String.trim/1)
-    |> Enum.reject(&match?("", &1))
-    |> Enum.map(&color_from_hex/1)
-    |> to_binary()
+    colors =
+      Path.join([:code.priv_dir(:octopus), "color_palettes", filename])
+      |> File.stream!()
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&match?("", &1))
+      |> Enum.map(&color_from_hex/1)
+
+    %ColorPalette{colors: colors}
   end
 
   @doc """
-  Reads from a binary in the protobuf format [r, g, b, w, r, g, b, w, ...].
+  Reads from a binary in the protobuf format [r, g, b, r, g, b, ...].
   """
-  def from_binary(binary) do
-    binary
-    |> :binary.bin_to_list()
-    |> Enum.chunk_every(4)
-    |> Enum.map(fn [r, g, b, w] -> %Color{r: r, g: g, b: b, w: w} end)
+  def from_binary(binary) when is_binary(binary) do
+    colors =
+      binary
+      |> :binary.bin_to_list()
+      |> Enum.chunk_every(4)
+      |> Enum.map(fn [r, g, b] -> %Color{r: r, g: g, b: b} end)
+
+    %ColorPalette{colors: colors}
   end
 
   @doc """
-  Writes a binary in the protobuf format [r, g, b, w, r, g, b, w, ...].
+  Writes a binary in the protobuf format [r, g, b, r, g, b, ...].
   """
-  def to_binary(palette) do
+  def to_binary(%__MODULE__{} = palette) do
     palette
-    |> Enum.map(fn %Color{r: r, g: g, b: b, w: w} -> [r, g, b, w] end)
-    |> IO.iodata_to_binary()
-  end
-
-  # only for testing
-  def generate() do
-    0..63
-    # |> Enum.flat_map(fn i -> [%Color{r: i}, %Color{g: i}, %Color{b: i}, %Color{w: i}] end)
-    |> Enum.map(fn i -> %Color{r: i * 4} end)
-    |> Enum.flat_map(fn %Color{r: r, g: g, b: b, w: w} -> [r, g, b, w] end)
+    |> Enum.map(fn %Color{r: r, g: g, b: b} -> [r, g, b] end)
     |> IO.iodata_to_binary()
   end
 
   @doc """
   Applies brightness correction. This is the place were would apply our calibartion once we have it.
   """
-  def brightness_correction(palette) do
-    palette
-    |> Enum.map(fn %Color{r: r, g: g, b: b} ->
-      min_value = min(r, min(g, b)) / 2
-      %Color{r: r - min_value, g: g - min_value, b: b - min_value, w: min_value}
-    end)
-    |> Enum.map(fn color ->
-      vals =
-        color
-        |> Map.from_struct()
-        |> Enum.map(fn {c, v} -> {c, round(ease(v / 255, 2) * 255)} end)
-        |> Enum.into(%{})
+  def brightness_correction(%__MODULE__{} = palette) do
+    colors =
+      palette.colors
+      # |> Enum.map(fn %Color{r: r, g: g, b: b} ->
+      #   min_value = min(r, min(g, b)) / 2
+      #   %Color{r: r - min_value, g: g - min_value, b: b - min_value, w: min_value}
+      # end)
+      |> Enum.map(fn color ->
+        vals =
+          color
+          |> Map.from_struct()
+          |> Enum.map(fn {c, v} -> {c, round(ease(v / 255, 2) * 255)} end)
+          |> Enum.into(%{})
 
-      struct(Color, vals)
-    end)
+        struct(Color, vals)
+      end)
+
+    %ColorPalette{colors: colors}
   end
 
   defp ease(val, index) do
@@ -83,8 +83,7 @@ defmodule Octopus.ColorPalette do
     %Color{
       r: Integer.parse(r, 16) |> elem(0),
       g: Integer.parse(g, 16) |> elem(0),
-      b: Integer.parse(b, 16) |> elem(0),
-      w: 0
+      b: Integer.parse(b, 16) |> elem(0)
     }
   end
 end
