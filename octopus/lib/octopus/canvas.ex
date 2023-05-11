@@ -59,7 +59,7 @@ defmodule Octopus.Canvas do
   the windows. Those pixels will be omitted.
   """
   def to_frame(%Canvas{pixels: pixels, width: width, palette: palette}) do
-    %Frame{data: pixels |> rearrange(width) |> IO.iodata_to_binary(), palette: palette}
+    %Frame{data: pixels |> rearrange(width), palette: palette}
   end
 
   defp rearrange(pixels, width) do
