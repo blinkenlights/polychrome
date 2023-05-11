@@ -102,13 +102,12 @@ defmodule Octopus.Broadcaster do
 
     config = %Config{config | config_phash: phash}
 
-    Phoenix.PubSub.broadcast(Octopus.PubSub, "mixer", {:config, config})
+    # TODO: this should probably be done somewhere else
+    Phoenix.PubSub.broadcast(Octopus.PubSub, "mixer", {:mixer, {:config, config}})
 
     config
     |> Protobuf.encode()
     |> send_binary(state)
-
-    Phoenix.PubSub.broadcast(Octopus.PubSub, "mixer", {:config, config})
 
     {:noreply, %__MODULE__{state | config: config}}
   end

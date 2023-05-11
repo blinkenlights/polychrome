@@ -15,6 +15,17 @@ defmodule Octopus.AppSupervisor do
   end
 
   @doc """
+  Subscribes to the apps topic.
+
+  Published messages:
+  * `{:apps, {:started, app_id, module}}` - an app was started
+  * `{:apps, {:stopped, app_id}}` - an app was stopped
+  """
+  def subscribe do
+    Phoenix.PubSub.subscribe(Octopus.PubSub, "apps")
+  end
+
+  @doc """
   Lists all avaiable apps. An app is available if it uses the `Octopus.App` behaviour.
   """
   def available_apps() do
@@ -29,8 +40,11 @@ defmodule Octopus.AppSupervisor do
   Starts an app and assigns a unique app_id. It is possible to start multiple instances of the same app.
   """
   def start_app(module) when is_atom(module) do
-    name = {:via, Registry, {Octopus.AppRegistry, generate_app_id()}}
-    DynamicSupervisor.start_child(__MODULE__, {module, name: name})
+    app_id = generate_app_id()
+    name = {:via, Registry, {Octopus.AppRegistry, app_id}}
+    {:ok, pid} = DynamicSupervisor.start_child(__MODULE__, {module, name: name})
+    Phoenix.PubSub.broadcast(Octopus.PubSub, "apps", {:apps, {:started, app_id, module}})
+    {:ok, pid}
   end
 
   @doc """
@@ -48,6 +62,8 @@ defmodule Octopus.AppSupervisor do
   Stops an specific instance of an app.
   """
   def stop_app(app_id) when is_binary(app_id) do
+    Phoenix.PubSub.broadcast(Octopus.PubSub, "apps", {:apps, {:stopped, app_id}})
+
     case Registry.lookup(Octopus.AppRegistry, app_id) do
       [{pid, _}] ->
         DynamicSupervisor.terminate_child(__MODULE__, pid)

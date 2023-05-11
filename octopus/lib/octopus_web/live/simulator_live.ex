@@ -2,37 +2,13 @@ defmodule OctopusWeb.SimulatorLive do
   use OctopusWeb, :live_view
   use OctopusWeb.PixelsComponent
 
-  alias Octopus.{ColorPalette, Mixer}
-  alias Octopus.Layout.Mildenberg
-  alias Octopus.Protobuf.{Config, Frame, InputEvent}
-
-  @default_config %Config{
-    easing_interval_ms: 1000,
-    easing_mode: :LINEAR,
-    show_test_frame: false
-  }
+  alias OctopusWeb.PixelsComponent
+  alias Octopus.Mixer
+  alias Octopus.Protobuf.InputEvent
 
   def mount(_params, _session, socket) do
-    if connected?(socket) do
-      Octopus.Mixer.subscribe()
-    end
-
-    layout = Mildenberg.layout()
-    config = @default_config
-
-    frame = %Frame{
-      data: List.duplicate(0, layout.width * layout.height),
-      palette: ColorPalette.from_file("pico-8")
-    }
-
-    socket =
-      socket
-      |> assign(pixel_layout: layout)
-      |> push_layout(layout)
-      |> push_config(config)
-      |> push_frame(frame)
-
-    {:ok, socket, temporary_assigns: [pixel_layout: %{}]}
+    socket = PixelsComponent.mount(socket)
+    {:ok, socket, temporary_assigns: PixelsComponent.temporary_assigns()}
   end
 
   def render(assigns) do
@@ -43,11 +19,11 @@ defmodule OctopusWeb.SimulatorLive do
     """
   end
 
-  def handle_info({:frame, frame}, socket) do
+  def handle_info({:mixer, {:frame, frame}}, socket) do
     {:noreply, socket |> push_frame(frame)}
   end
 
-  def handle_info({:config, config}, socket) do
+  def handle_info({:mixer, {:config, config}}, socket) do
     {:noreply, socket |> push_config(config)}
   end
 

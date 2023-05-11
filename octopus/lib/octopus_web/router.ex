@@ -18,6 +18,7 @@ defmodule OctopusWeb.Router do
     pipe_through :browser
 
     live "/", SimulatorLive
+    live "/manager", ManagerLive
   end
 
   # Other scopes may use custom stacks.

@@ -28,6 +28,7 @@ export function setup(
   let pixels = new Uint8Array();
   let colorPalette: RGB[] = [];
   let layout: Layout;
+  let lastCanvasBoundingClientRect = canvas.getBoundingClientRect();
 
   const pixelImage = new Image();
   pixelImage.src = pixelImageUrl;
@@ -62,6 +63,12 @@ export function setup(
     if (!layout) {
       window.requestAnimationFrame(draw);
       return;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    if (rect !== lastCanvasBoundingClientRect) {
+      resize(canvas);
+      lastCanvasBoundingClientRect = rect;
     }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
