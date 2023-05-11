@@ -2,8 +2,8 @@ defmodule Octopus.Mixer do
   use GenServer
   require Logger
 
-  alias Octopus.{Broadcaster, Protobuf}
-  alias Octopus.Protobuf.Frame
+  alias Octopus.{Broadcaster, Protobuf, AppSupervisor}
+  alias Octopus.Protobuf.{Frame, InputEvent}
 
   defmodule State do
     defstruct selected_app: nil
@@ -18,6 +18,11 @@ defmodule Octopus.Mixer do
     binary = Protobuf.encode(frame)
     Phoenix.PubSub.broadcast(Octopus.PubSub, "mixer", {:frame, frame})
     GenServer.cast(__MODULE__, {:new_frame, {app_id, binary}})
+  end
+
+  def handle_input(%InputEvent{} = input_event) do
+    app_id = get_selected_app()
+    AppSupervisor.send_input(app_id, input_event)
   end
 
   def subscribe do

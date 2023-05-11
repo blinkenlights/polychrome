@@ -2,10 +2,9 @@ defmodule OctopusWeb.SimulatorLive do
   use OctopusWeb, :live_view
   use OctopusWeb.PixelsComponent
 
-  alias Octopus.ColorPalette
+  alias Octopus.{ColorPalette, Mixer}
   alias Octopus.Layout.Mildenberg
-  alias Octopus.Protobuf.Config
-  alias Octopus.Protobuf.Frame
+  alias Octopus.Protobuf.{Config, Frame, InputEvent}
 
   @default_config %Config{
     easing_interval_ms: 1000,
@@ -38,7 +37,7 @@ defmodule OctopusWeb.SimulatorLive do
 
   def render(assigns) do
     ~H"""
-    <div class="flex w-full h-full justify-center bg-black">
+    <div class="flex w-full h-full justify-center bg-black" phx-window-keydown="keydown-event">
       <.pixels id="pixels" pixel_layout={@pixel_layout} />
     </div>
     """
@@ -50,5 +49,25 @@ defmodule OctopusWeb.SimulatorLive do
 
   def handle_info({:config, config}, socket) do
     {:noreply, socket |> push_config(config)}
+  end
+
+  def handle_event("keydown-event", %{"key" => key}, socket)
+      when key in ~w(0 1 2 3 4 5 6 7 8 9) do
+    key
+    |> key_to_input_event()
+    |> Octopus.Mixer.handle_input()
+
+    {:noreply, socket}
+  end
+
+  def handle_event("keydown-event", %{"key" => _other_key}, socket) do
+    {:noreply, socket}
+  end
+
+  defp key_to_input_event(key) do
+    %InputEvent{
+      type: :BUTTON,
+      value: String.to_integer(key)
+    }
   end
 end

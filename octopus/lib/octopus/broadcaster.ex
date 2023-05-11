@@ -5,7 +5,7 @@ defmodule Octopus.Broadcaster do
   require Logger
 
   alias Octopus.Protobuf
-  alias Octopus.Protobuf.{Config, RemoteLog, ClientInfo, ResponsePacket}
+  alias Octopus.Protobuf.{Config, RemoteLog, ClientInfo, ClientPacket}
 
   @default_config %Config{
     luminance: 255,
@@ -57,12 +57,12 @@ defmodule Octopus.Broadcaster do
   def handle_info({:udp, _socket, ip, _port, protobuf}, state = %__MODULE__{}) do
     # todo: refactor
 
-    case Protobuf.decode_response(protobuf) do
-      %ResponsePacket{content: {:remote_log, %RemoteLog{message: message}}} ->
+    case Protobuf.decode_client_packet(protobuf) do
+      %ClientPacket{content: {:remote_log, %RemoteLog{message: message}}} ->
         IO.write(state.file, message)
         Logger.debug("#{print_ip(ip)}: Remote log #{inspect(message)}")
 
-      %ResponsePacket{content: {:client_info, %ClientInfo{} = client_info}} ->
+      %ClientPacket{content: {:client_info, %ClientInfo{} = client_info}} ->
         # Logger.debug("#{print_ip(ip)}: Client info #{inspect(client_info)}")
 
         %Config{config_phash: expected_phash} = state.config

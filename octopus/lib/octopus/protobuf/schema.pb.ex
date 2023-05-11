@@ -21,12 +21,21 @@ defmodule Octopus.Protobuf.EasingMode do
   field :EASE_IN_OUT_EXPO, 15
 end
 
+defmodule Octopus.Protobuf.EventType do
+  @moduledoc false
+
+  use Protobuf, enum: true, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+
+  field :BUTTON, 0
+  field :DIRECTION, 1
+end
+
 defmodule Octopus.Protobuf.Packet do
   @moduledoc false
 
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
 
-  oneof(:content, 0)
+  oneof :content, 0
 
   field :config, 1, type: Octopus.Protobuf.Config, oneof: 0
   field :frame, 2, type: Octopus.Protobuf.Frame, oneof: 0
@@ -53,12 +62,21 @@ defmodule Octopus.Protobuf.Frame do
   field :palette, 2, type: :bytes, deprecated: false
 end
 
-defmodule Octopus.Protobuf.ResponsePacket do
+defmodule Octopus.Protobuf.InputEvent do
   @moduledoc false
 
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
 
-  oneof(:content, 0)
+  field :type, 1, type: Octopus.Protobuf.EventType, enum: true
+  field :value, 2, type: :uint32
+end
+
+defmodule Octopus.Protobuf.ClientPacket do
+  @moduledoc false
+
+  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+
+  oneof :content, 0
 
   field :client_info, 1, type: Octopus.Protobuf.ClientInfo, json_name: "clientInfo", oneof: 0
   field :remote_log, 2, type: Octopus.Protobuf.RemoteLog, json_name: "remoteLog", oneof: 0

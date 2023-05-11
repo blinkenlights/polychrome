@@ -42,7 +42,17 @@ enum EasingMode {
 	EASE_IN_OUT_EXPO = 15;
 }
 
-message ResponsePacket {
+message InputEvent {
+  EventType type = 1;
+  uint32 value = 2;
+}
+
+enum EventType {
+  BUTTON = 0;
+  DIRECTION = 1;
+}
+
+message ClientPacket {
   oneof content {
     ClientInfo client_info = 1;
     RemoteLog remote_log = 2;

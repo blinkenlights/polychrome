@@ -2,7 +2,7 @@ defmodule Octopus.Protobuf do
   require Logger
 
   alias Octopus.ColorPalette
-  alias Octopus.Protobuf.{Frame, Packet, Config, ResponsePacket}
+  alias Octopus.Protobuf.{Frame, Packet, Config, ClientPacket}
 
   def encode(%Frame{data: data, palette: palette} = frame)
       when is_binary(data) and is_binary(palette) do
@@ -25,8 +25,8 @@ defmodule Octopus.Protobuf do
     |> Packet.encode()
   end
 
-  def decode_response(protobuf) when is_binary(protobuf) do
-    ResponsePacket.decode(protobuf)
+  def decode_client_packet(protobuf) when is_binary(protobuf) do
+    ClientPacket.decode(protobuf)
   rescue
     error ->
       Logger.error("Could not decode protobuf: #{inspect(error)} Binary: #{inspect(protobuf)} ")

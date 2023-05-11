@@ -1,7 +1,8 @@
 defmodule Octopus.AppSupervisor do
   use DynamicSupervisor
-
   require Logger
+
+  alias Octopus.Protobuf.{InputEvent}
 
   @moduledoc """
   The AppRegistry is a DynamicSupervisor that keeps track of all running apps.
@@ -72,6 +73,16 @@ defmodule Octopus.AppSupervisor do
     case Registry.keys(Octopus.AppRegistry, pid) do
       [app_id] -> app_id
       [] -> raise "Process has no app_id"
+    end
+  end
+
+  @doc """
+  Sends a message to an app.
+  """
+  def send_input(app_id, %InputEvent{} = input_event) do
+    case Registry.lookup(Octopus.AppRegistry, app_id) do
+      [{pid, _}] -> send(pid, {:input, input_event})
+      [] -> :noop
     end
   end
 

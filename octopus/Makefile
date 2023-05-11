@@ -7,5 +7,5 @@ protobuf_generate:
 		schema.proto
 
 run:
-	iex -S mix
+	iex -S mix phx.server
 

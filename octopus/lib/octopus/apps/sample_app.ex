@@ -2,10 +2,10 @@ defmodule Octopus.Apps.SampleApp do
   use Octopus.App
   require Logger
 
-  alias Octopus.Protobuf.Frame
+  alias Octopus.Protobuf.{Frame, InputEvent}
 
   defmodule State do
-    defstruct [:index]
+    defstruct [:index, :delay]
   end
 
   @palette Octopus.ColorPalette.from_file("lava-gb")
@@ -16,9 +16,9 @@ defmodule Octopus.Apps.SampleApp do
   def name(), do: "Sample App"
 
   def init(_args) do
-    state = %State{index: 0}
+    state = %State{index: 0, delay: 100}
 
-    :timer.send_interval(100, self(), :tick)
+    send(self(), :tick)
 
     {:ok, state}
   end
@@ -30,10 +30,28 @@ defmodule Octopus.Apps.SampleApp do
       |> List.update_at(state.index, fn _ -> 3 end)
 
     send_frame(%Frame{data: data, palette: @palette})
+    :timer.send_after(state.delay, self(), :tick)
 
     {:noreply, increment_index(state)}
   end
 
-  defp increment_index(%State{index: index}) when index >= @pixel_count, do: %State{index: 0}
-  defp increment_index(%State{index: index}), do: %State{index: index + 1}
+  def handle_input(%InputEvent{type: :BUTTON, value: 0}, state) do
+    {:noreply, %State{state | delay: state.delay + 10}}
+  end
+
+  def handle_input(%InputEvent{type: :BUTTON, value: 1}, state) do
+    {:noreply, %State{state | delay: max(10, state.delay - 10)}}
+  end
+
+  def handle_input(_input_event, state) do
+    {:noreply, state}
+  end
+
+  defp increment_index(%State{index: index} = state) when index >= @pixel_count do
+    %State{state | index: 0}
+  end
+
+  defp increment_index(%State{index: index} = state) do
+    %State{state | index: index + 1}
+  end
 end
