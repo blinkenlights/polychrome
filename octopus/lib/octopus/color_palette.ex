@@ -13,15 +13,25 @@ defmodule Octopus.ColorPalette do
   @doc """
   Reads from a file exported from lospec.com (use the hex format and save to the palette directory).
   """
-  def from_file(filename) do
+  def from_file(name) do
     colors =
-      Path.join([:code.priv_dir(:octopus), "color_palettes", filename])
+      Path.join([:code.priv_dir(:octopus), "color_palettes", "#{name}.hex"])
       |> File.stream!()
       |> Enum.map(&String.trim/1)
       |> Enum.reject(&match?("", &1))
       |> Enum.map(&color_from_hex/1)
 
     %ColorPalette{colors: colors}
+  end
+
+  @doc """
+  List available palettes
+  """
+  def list_available() do
+    Path.join([:code.priv_dir(:octopus), "color_palettes"])
+    |> File.ls!()
+    |> Enum.filter(&String.ends_with?(&1, ".hex"))
+    |> Enum.map(fn file_name -> String.replace(file_name, ".hex", "") end)
   end
 
   @doc """

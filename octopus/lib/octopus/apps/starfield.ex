@@ -23,7 +23,7 @@ defmodule Octopus.Apps.Starfield do
       width: width,
       height: height,
       velocity: {0.05, 0.07},
-      canvas: Canvas.new(8 * 10 + 9 * 18, 8, "pico-8.hex")
+      canvas: Canvas.new(8 * 10 + 9 * 18, 8, "pico-8")
     }
 
     state = state |> generate_stars(512)

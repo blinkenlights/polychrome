@@ -8,8 +8,10 @@ defmodule Octopus.Apps.SampleApp do
     defstruct [:index]
   end
 
-  @palette Octopus.ColorPalette.from_file("lava-gb.hex")
+  @palette Octopus.ColorPalette.from_file("lava-gb")
   @pixel_count 640
+
+  # TODO: use the new canvas module
 
   def name(), do: "Sample App"
 

@@ -24,7 +24,7 @@ defmodule Octopus.Canvas do
   @doc """
   Creates a new canvas. The canvas is initialized with all pixels set to 0.
   """
-  def new(width, height, palette_name \\ "pico-8.hex") do
+  def new(width, height, palette_name \\ "pico-8") do
     %Canvas{
       width: width,
       height: height,

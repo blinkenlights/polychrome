@@ -7,6 +7,13 @@ defmodule Octopus.Broadcaster do
   alias Octopus.Protobuf
   alias Octopus.Protobuf.{Config, RemoteLog, ClientInfo, ResponsePacket}
 
+  @default_config %Config{
+    luminance: 255,
+    easing_interval_ms: 500,
+    easing_mode: :EASE_OUT_QUART,
+    show_test_frame: false
+  }
+
   defstruct [:udp, :file, config: %Config{}]
 
   # @remote_host "blinkenleds-1.fritz.box" |> to_charlist()
@@ -30,6 +37,10 @@ defmodule Octopus.Broadcaster do
     GenServer.cast(__MODULE__, {:send_config, config})
   end
 
+  def set_luminance(luminance) when luminance < 256 do
+    GenServer.cast(__MODULE__, {:set_luminance, luminance})
+  end
+
   def init(:ok) do
     Logger.info(
       "Broadcasting UPD to #{inspect(@remote_host)} port #{@remote_port}. Listening on #{@local_port}"
@@ -37,6 +48,8 @@ defmodule Octopus.Broadcaster do
 
     file = File.open!("remote.log", [:write])
     {:ok, udp} = :gen_udp.open(@local_port, [:binary, active: true, broadcast: true])
+
+    send_config(@default_config)
 
     {:ok, %__MODULE__{udp: udp, file: file}}
   end
@@ -98,6 +111,13 @@ defmodule Octopus.Broadcaster do
     Phoenix.PubSub.broadcast(Octopus.PubSub, "mixer", {:config, config})
 
     {:noreply, %__MODULE__{state | config: config}}
+  end
+
+  def handle_cast({:set_luminance, luminance}, %__MODULE__{} = state) do
+    %Config{state.config | luminance: luminance}
+    |> send_config()
+
+    {:noreply, state}
   end
 
   defp print_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"
