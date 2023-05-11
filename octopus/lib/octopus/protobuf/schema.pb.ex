@@ -26,7 +26,7 @@ defmodule Octopus.Protobuf.Packet do
 
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
 
-  oneof :content, 0
+  oneof(:content, 0)
 
   field :config, 1, type: Octopus.Protobuf.Config, oneof: 0
   field :frame, 2, type: Octopus.Protobuf.Frame, oneof: 0
@@ -58,7 +58,7 @@ defmodule Octopus.Protobuf.ResponsePacket do
 
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
 
-  oneof :content, 0
+  oneof(:content, 0)
 
   field :client_info, 1, type: Octopus.Protobuf.ClientInfo, json_name: "clientInfo", oneof: 0
   field :remote_log, 2, type: Octopus.Protobuf.RemoteLog, json_name: "remoteLog", oneof: 0
