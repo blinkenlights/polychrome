@@ -20,8 +20,6 @@ if System.get_env("PHX_SERVER") do
   config :octopus, OctopusWeb.Endpoint, server: true
 end
 
-config :octopus, :udp_port, String.to_integer(System.get_env("UDP_PORT") || "1337")
-
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

@@ -27,17 +27,6 @@ defmodule Octopus.Application do
       Octopus.AppSupervisor
     ]
 
-    # children =
-    #   if Mix.env() != :test do
-    #     children ++
-    #       [
-    #         {Octopus.UdpServer,
-    #          port: Application.get_env(:octopus, :udp_port), name: Octopus.UdpServer}
-    #       ]
-    #   else
-    #     children
-    #   end
-
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Octopus.Supervisor]
