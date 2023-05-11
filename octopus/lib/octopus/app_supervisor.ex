@@ -77,7 +77,7 @@ defmodule Octopus.AppSupervisor do
   end
 
   @doc """
-  Sends a message to an app.
+  Sends an input_event to an app. Ignores the event if the app is not running.
   """
   def send_input(app_id, %InputEvent{} = input_event) do
     case Registry.lookup(Octopus.AppRegistry, app_id) do

@@ -53,21 +53,16 @@ defmodule OctopusWeb.SimulatorLive do
 
   def handle_event("keydown-event", %{"key" => key}, socket)
       when key in ~w(0 1 2 3 4 5 6 7 8 9) do
-    key
-    |> key_to_input_event()
-    |> Octopus.Mixer.handle_input()
+    %InputEvent{
+      type: :BUTTON,
+      value: String.to_integer(key)
+    }
+    |> Mixer.handle_input()
 
     {:noreply, socket}
   end
 
   def handle_event("keydown-event", %{"key" => _other_key}, socket) do
     {:noreply, socket}
-  end
-
-  defp key_to_input_event(key) do
-    %InputEvent{
-      type: :BUTTON,
-      value: String.to_integer(key)
-    }
   end
 end
