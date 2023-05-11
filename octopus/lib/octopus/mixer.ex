@@ -2,8 +2,8 @@ defmodule Octopus.Mixer do
   use GenServer
   require Logger
 
-  alias Octopus.{AppSupervisor, Broadcaster, Protobuf}
-  alias Octopus.Protobuf.{Config, Frame}
+  alias Octopus.{Broadcaster, Protobuf}
+  alias Octopus.Protobuf.Frame
 
   defmodule State do
     defstruct selected_app: nil
@@ -16,7 +16,12 @@ defmodule Octopus.Mixer do
   def handle_frame(app_id, %Frame{} = frame) when is_binary(app_id) do
     # we encode the frame in the app process, so any encoding errors get raised there
     binary = Protobuf.encode(frame)
+    Phoenix.PubSub.broadcast(Octopus.PubSub, "mixer", {:frame, frame})
     GenServer.cast(__MODULE__, {:new_frame, {app_id, binary}})
+  end
+
+  def subscribe do
+    Phoenix.PubSub.subscribe(Octopus.PubSub, "mixer")
   end
 
   def init(:ok) do

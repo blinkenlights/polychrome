@@ -5,7 +5,7 @@ defmodule Octopus.Broadcaster do
   require Logger
 
   alias Octopus.Protobuf
-  alias Octopus.Protobuf.{Frame, Config, RemoteLog, ClientInfo, ResponsePacket}
+  alias Octopus.Protobuf.{Config, RemoteLog, ClientInfo, ResponsePacket}
 
   defstruct [:udp, :file, config: %Config{}]
 
@@ -89,9 +89,13 @@ defmodule Octopus.Broadcaster do
 
     config = %Config{config | config_phash: phash}
 
+    Phoenix.PubSub.broadcast(Octopus.PubSub, "mixer", {:config, config})
+
     config
     |> Protobuf.encode()
     |> send_binary(state)
+
+    Phoenix.PubSub.broadcast(Octopus.PubSub, "mixer", {:config, config})
 
     {:noreply, %__MODULE__{state | config: config}}
   end

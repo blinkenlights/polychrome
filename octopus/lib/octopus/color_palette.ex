@@ -40,7 +40,7 @@ defmodule Octopus.ColorPalette do
   @doc """
   Writes a binary in the protobuf format [r, g, b, r, g, b, ...].
   """
-  def to_binary(%__MODULE__{colors: colors} = palette) do
+  def to_binary(%__MODULE__{colors: colors} = _palette) do
     colors
     |> Enum.map(fn %Color{r: r, g: g, b: b} -> [r, g, b] end)
     |> IO.iodata_to_binary()
@@ -85,5 +85,13 @@ defmodule Octopus.ColorPalette do
       g: Integer.parse(g, 16) |> elem(0),
       b: Integer.parse(b, 16) |> elem(0)
     }
+  end
+
+  defimpl Jason.Encoder, for: __MODULE__ do
+    def encode(%Octopus.ColorPalette{colors: colors}, opts) do
+      colors
+      |> Enum.map(fn %Color{r: r, g: g, b: b} -> [r, g, b] end)
+      |> Jason.Encode.list(opts)
+    end
   end
 end
