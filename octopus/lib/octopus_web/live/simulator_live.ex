@@ -27,6 +27,11 @@ defmodule OctopusWeb.SimulatorLive do
     {:noreply, socket |> push_config(config)}
   end
 
+  # Ignore other mixer events. We are only interested in the mixer output.
+  def handle_info({:mixer, _}, socket) do
+    {:noreply, socket}
+  end
+
   def handle_event("keydown-event", %{"key" => key}, socket)
       when key in ~w(0 1 2 3 4 5 6 7 8 9) do
     %InputEvent{
