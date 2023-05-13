@@ -1,10 +1,10 @@
 defmodule OctopusWeb.ManagerLive do
+  use OctopusWeb, :live_view
   use OctopusWeb.PixelsComponent
 
+  alias Octopus.{Mixer, AppSupervisor}
+  alias Octopus.Protobuf.InputEvent
   alias OctopusWeb.PixelsComponent
-  alias Octopus.Mixer
-  alias Octopus.AppSupervisor
-  use OctopusWeb, :live_view
 
   def mount(_params, _session, socket) do
     if connected?(socket) do
@@ -19,7 +19,7 @@ defmodule OctopusWeb.ManagerLive do
 
   def render(assigns) do
     ~H"""
-    <div class="w-full">
+    <div class="w-full" phx-window-keydown="keydown-event">
       <div class="flex w-full h-full justify-center bg-black">
         <.pixels id="pixels" pixel_layout={@pixel_layout} />
       </div>
@@ -120,6 +120,18 @@ defmodule OctopusWeb.ManagerLive do
       Mixer.select_app(app_id)
     end
 
+    {:noreply, socket}
+  end
+
+  def handle_event("keydown-event", %{"key" => key}, socket)
+      when key in ~w(0 1 2 3 4 5 6 7 8 9) do
+    %InputEvent{type: :BUTTON, value: String.to_integer(key)}
+    |> Mixer.handle_input()
+
+    {:noreply, socket}
+  end
+
+  def handle_event("keydown-event", %{"key" => _other_key}, socket) do
     {:noreply, socket}
   end
 

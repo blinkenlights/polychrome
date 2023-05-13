@@ -67,20 +67,23 @@ defmodule Octopus.Mixer do
 
   # no app selected, automatically select the first app that sends a frame
   def handle_cast({:new_frame, {app_id, binary, frame}}, %State{selected_app: nil} = state) do
-    Phoenix.PubSub.broadcast(Octopus.PubSub, "mixer", {:mixer, {:frame, frame}})
-    Broadcaster.send_binary(binary)
+    send_frame(binary, frame)
     {:noreply, %State{state | selected_app: app_id}}
   end
 
   # broadcast frame from selected app
   def handle_cast({:new_frame, {app_id, binary, frame}}, %State{selected_app: app_id} = state) do
-    Phoenix.PubSub.broadcast(Octopus.PubSub, "mixer", {:mixer, {:frame, frame}})
-    Broadcaster.send_binary(binary)
+    send_frame(binary, frame)
     {:noreply, state}
   end
 
   # ignore frames from other apps
   def handle_cast({:new_frame, {_app_id, _binary, _frame}}, state) do
     {:noreply, state}
+  end
+
+  defp send_frame(binary, %Frame{} = frame) when is_binary(binary) do
+    Phoenix.PubSub.broadcast(Octopus.PubSub, "mixer", {:mixer, {:frame, frame}})
+    Broadcaster.send_binary(binary)
   end
 end
