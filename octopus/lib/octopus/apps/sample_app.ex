@@ -2,13 +2,13 @@ defmodule Octopus.Apps.SampleApp do
   use Octopus.App
   require Logger
 
+  alias Octopus.ColorPalette
   alias Octopus.Protobuf.{Frame, InputEvent}
 
   defmodule State do
-    defstruct [:index, :delay]
+    defstruct [:index, :delay, :palette]
   end
 
-  @palette Octopus.ColorPalette.load("lava-gb")
   @pixel_count 640
 
   # TODO: use the new canvas module
@@ -16,7 +16,11 @@ defmodule Octopus.Apps.SampleApp do
   def name(), do: "Sample App"
 
   def init(_args) do
-    state = %State{index: 0, delay: 100}
+    state = %State{
+      index: 0,
+      delay: 100,
+      palette: ColorPalette.load("pico-8")
+    }
 
     send(self(), :tick)
 
@@ -29,7 +33,7 @@ defmodule Octopus.Apps.SampleApp do
       |> Enum.map(fn _ -> 0 end)
       |> List.update_at(state.index, fn _ -> 3 end)
 
-    send_frame(%Frame{data: data, palette: @palette})
+    send_frame(%Frame{data: data, palette: state.palette})
     :timer.send_after(state.delay, self(), :tick)
 
     {:noreply, increment_index(state)}

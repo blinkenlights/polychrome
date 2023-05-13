@@ -1,12 +1,20 @@
-defmodule Font do
+defmodule Octopus.Font do
+  alias Octopus.{ColorPalette, Canvas}
+
+  @doc """
+  A selection of 8x8 fonts from https://nfggames.com/games/fontmaker/lister.php.
+
+  Each font has multiple variants with different colors.
+  """
+
   defstruct [:name, :variants]
 
   defmodule Variant do
     defstruct [:pixels, :palette]
 
-    def from_rgba(rgba) do
-      pixels =
-        rgba
+    def from_rgba(rgba_pixels) do
+      rbg_pixels =
+        rgba_pixels
         |> :binary.bin_to_list()
         |> Enum.chunk_every(4)
         |> Enum.map(fn
@@ -14,34 +22,57 @@ defmodule Font do
           [r, g, b, _] -> [r, g, b]
         end)
 
-      palette_rgb = Enum.uniq(pixels)
+      palette = Enum.uniq(rbg_pixels)
 
-      pixels =
-        pixels
-        |> Enum.map(&Enum.find_index(palette_rgb, fn value -> value == &1 end))
-
-      palette = Enum.map(palette_rgb, &to_rgbw/1)
+      pixels = Enum.map(rbg_pixels, &Enum.find_index(palette, fn value -> value == &1 end))
 
       %__MODULE__{
         pixels: pixels,
-        palette: palette
+        palette: palette |> List.flatten() |> ColorPalette.from_binary()
       }
     end
-
-    defp to_rgbw([r, g, b]) do
-      min_value = min(r, min(g, b))
-      [r - min_value, g - min_value, b - min_value, min_value]
-    end
   end
 
-  def load_fonts do
-    {:ok, file_names} = Path.join(:code.priv_dir(:font), "fonts") |> File.ls()
-
-    file_names
-    |> Enum.map(&load_font/1)
+  @doc """
+  Lists all available fonts in the priv/fonts directory.
+  """
+  def list_available() do
+    Path.join(:code.priv_dir(:octopus), "fonts")
+    |> File.ls!()
+    |> Enum.filter(&String.ends_with?(&1, ".png"))
+    |> Enum.map(fn file_name -> String.replace(file_name, ".png", "") end)
   end
 
-  def get_char(font, char, variant \\ 0) when char >= 32 do
+  @doc """
+  Loads a font with all variants. Fonts are cached lazily, so the file system is only accessed on first read.
+  """
+  def load(name) do
+    Cachex.fetch!(__MODULE__, name, fn _ ->
+      path = Path.join([:code.priv_dir(:octopus), "fonts", "#{name}.png"])
+
+      if File.exists?(path) do
+        {:ok, %ExPng.Image{pixels: pixels}} = ExPng.Image.from_file(path)
+
+        variants_rgba =
+          pixels
+          |> Enum.chunk_every(8)
+          |> Enum.map(&List.flatten/1)
+          |> Enum.map(&Enum.join/1)
+
+        variants = variants_rgba |> Enum.map(&Variant.from_rgba/1)
+
+        {:commit, %__MODULE__{name: name, variants: variants}}
+      else
+        raise "Font #{path} not found"
+      end
+    end)
+  end
+
+  @doc """
+  Renders a single character.
+  Returns the binary format for the protobuf [r, g, b, ...] and the color palette of the variant.
+  """
+  def render_char(%__MODULE__{} = font, char, variant) when char >= 32 do
     char_index = char - 32
     pixel_index = 8 * char_index
     variant = font.variants |> Enum.at(variant)
@@ -52,27 +83,6 @@ defmodule Font do
       |> Enum.reverse()
       |> List.flatten()
 
-    # pixels = Enum.slice(variant.pixels, pixel_index, 8 * 8)
     {pixels, variant.palette}
-  end
-
-  def load_font(file_name) do
-    %{"name" => name} = Regex.named_captures(~r/\w+-(?<name>(.(?!\())+)/, file_name)
-    path = Path.join(:code.priv_dir(:octopus), ["fonts/", file_name])
-    {:ok, image} = ExPng.Image.from_file(path)
-
-    variants_rgba =
-      image.pixels
-      # |> IO.inspect()
-      |> Enum.chunk_every(8)
-      |> Enum.map(&List.flatten/1)
-      |> Enum.map(&Enum.join/1)
-
-    variants = variants_rgba |> Enum.map(&Variant.from_rgba/1)
-
-    %__MODULE__{
-      name: name,
-      variants: variants
-    }
   end
 end

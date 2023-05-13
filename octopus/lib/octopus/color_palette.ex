@@ -1,7 +1,8 @@
 defmodule Octopus.ColorPalette do
   @moduledoc """
-  A ColorPalette is a list of colors.
+  A ColorPalette is a list of RGB colors.
   """
+
   alias Octopus.ColorPalette
 
   defmodule Color do
@@ -17,18 +18,18 @@ defmodule Octopus.ColorPalette do
   """
   def load(name) do
     Cachex.fetch!(__MODULE__, name, fn _ ->
-      filename = Path.join([:code.priv_dir(:octopus), "color_palettes", "#{name}.hex"])
+      path = Path.join([:code.priv_dir(:octopus), "color_palettes", "#{name}.hex"])
 
-      if File.exists?(filename) do
+      if File.exists?(path) do
         colors =
-          File.stream!(filename)
+          File.stream!(path)
           |> Enum.map(&String.trim/1)
           |> Enum.reject(&match?("", &1))
           |> Enum.map(&color_from_hex/1)
 
-        {:commit, %ColorPalette{colors: colors}}
+        {:commit, %__MODULE__{colors: colors}}
       else
-        raise "Palette #{name}.hex not found"
+        raise "Palette #{path} not found"
       end
     end)
   end
@@ -46,11 +47,17 @@ defmodule Octopus.ColorPalette do
   @doc """
   Reads from a binary in the protobuf format [r, g, b, r, g, b, ...].
   """
+  def from_binary(io_list) when is_list(io_list) do
+    io_list
+    |> IO.iodata_to_binary()
+    |> from_binary()
+  end
+
   def from_binary(binary) when is_binary(binary) do
     colors =
       binary
       |> :binary.bin_to_list()
-      |> Enum.chunk_every(4)
+      |> Enum.chunk_every(3)
       |> Enum.map(fn [r, g, b] -> %Color{r: r, g: g, b: b} end)
 
     %ColorPalette{colors: colors}
