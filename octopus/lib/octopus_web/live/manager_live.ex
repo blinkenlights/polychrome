@@ -135,35 +135,12 @@ defmodule OctopusWeb.ManagerLive do
     {:noreply, socket}
   end
 
-  def handle_info({:mixer, {:selected_app, selected_app_id}}, socket) do
-    running_apps =
-      socket.assigns.running_apps
-      |> Enum.map(fn {app_id, app} ->
-        {app_id, %{app | selected: app_id == selected_app_id}}
-      end)
-      |> Map.new()
-
-    {:noreply, socket |> assign(running_apps: running_apps)}
+  def handle_info({:apps, _}, socket) do
+    {:noreply, socket |> assign_apps()}
   end
 
-  def handle_info({:apps, {:started, app_id, module}}, socket) do
-    name = apply(module, :name, [])
-
-    running_apps =
-      socket.assigns.running_apps
-      |> Map.put(app_id, %{
-        module: module,
-        name: name,
-        selected: false
-      })
-
-    {:noreply, socket |> assign(running_apps: running_apps)}
-  end
-
-  def handle_info({:apps, {:stopped, app_id}}, socket) do
-    running_apps = Map.delete(socket.assigns.running_apps, app_id)
-
-    {:noreply, socket |> assign(running_apps: running_apps)}
+  def handle_info({:mixer, {:selected_app, _selected_app_id}}, socket) do
+    {:noreply, socket |> assign_apps()}
   end
 
   def handle_info({:mixer, {:frame, frame}}, socket) do
