@@ -76,7 +76,7 @@ defmodule OctopusWeb.PixelsComponent do
 
     frame = %Frame{
       data: List.duplicate(0, layout.width * layout.height),
-      palette: ColorPalette.from_file("pico-8")
+      palette: ColorPalette.load("pico-8")
     }
 
     socket

@@ -29,7 +29,7 @@ defmodule Octopus.Canvas do
       width: width,
       height: height,
       pixels: List.duplicate(0, width * height),
-      palette: ColorPalette.from_file(palette_name)
+      palette: ColorPalette.load(palette_name)
     }
   end
 

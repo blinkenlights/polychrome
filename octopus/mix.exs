@@ -52,7 +52,8 @@ defmodule Octopus.MixProject do
       {:plug_cowboy, "~> 2.5"},
       {:protobuf, "~> 0.12.0"},
       {:ex_png, "~> 1.0.0"},
-      {:easing, "~> 0.3.1"}
+      {:easing, "~> 0.3.1"},
+      {:cachex, "~> 3.6"}
     ]
   end
 

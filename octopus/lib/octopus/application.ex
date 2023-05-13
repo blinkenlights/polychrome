@@ -5,26 +5,26 @@ defmodule Octopus.Application do
 
   use Application
 
+  alias Octopus.{ColorPalette, Font}
+
   @impl true
   def start(_type, _args) do
     children = [
-      # Start the Telemetry supervisor
-      OctopusWeb.Telemetry,
-      # Start the Ecto repository
-      # Octopus.Repo,
-      # Start the PubSub system
+      # Core
       {Phoenix.PubSub, name: Octopus.PubSub},
-      # Start Finch
-      {Finch, name: Octopus.Finch},
-      # Start the Endpoint (http/https)
-      OctopusWeb.Endpoint,
-      # Start a worker by calling: Octopus.Worker.start_link(arg)
-      # {Octopus.Worker, arg}
-      # {Octopus.Pixels, name: Octopus.Pixels},
       Octopus.Broadcaster,
       Octopus.Mixer,
       {Registry, keys: :unique, name: Octopus.AppRegistry},
-      Octopus.AppSupervisor
+      Octopus.AppSupervisor,
+
+      # Caches
+      Supervisor.child_spec({Cachex, name: ColorPalette}, id: make_ref()),
+      Supervisor.child_spec({Cachex, name: Font}, id: make_ref()),
+
+      # WebApp
+      OctopusWeb.Telemetry,
+      {Finch, name: Octopus.Finch},
+      OctopusWeb.Endpoint
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

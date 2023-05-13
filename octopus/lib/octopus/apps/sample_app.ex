@@ -8,7 +8,7 @@ defmodule Octopus.Apps.SampleApp do
     defstruct [:index, :delay]
   end
 
-  @palette Octopus.ColorPalette.from_file("lava-gb")
+  @palette Octopus.ColorPalette.load("lava-gb")
   @pixel_count 640
 
   # TODO: use the new canvas module

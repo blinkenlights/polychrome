@@ -11,21 +11,30 @@ defmodule Octopus.ColorPalette do
   defstruct colors: []
 
   @doc """
-  Reads from a file exported from lospec.com (use the hex format and save to the palette directory).
-  """
-  def from_file(name) do
-    colors =
-      Path.join([:code.priv_dir(:octopus), "color_palettes", "#{name}.hex"])
-      |> File.stream!()
-      |> Enum.map(&String.trim/1)
-      |> Enum.reject(&match?("", &1))
-      |> Enum.map(&color_from_hex/1)
+  Loads a color palette from a file. Palettes are cached lazily, so the file system is only accessed on first read.
 
-    %ColorPalette{colors: colors}
+  The palette files are exported from lospec.com (use the hex format and save to the priv/color_palette directory).
+  """
+  def load(name) do
+    Cachex.fetch!(__MODULE__, name, fn _ ->
+      filename = Path.join([:code.priv_dir(:octopus), "color_palettes", "#{name}.hex"])
+
+      if File.exists?(filename) do
+        colors =
+          File.stream!(filename)
+          |> Enum.map(&String.trim/1)
+          |> Enum.reject(&match?("", &1))
+          |> Enum.map(&color_from_hex/1)
+
+        {:commit, %ColorPalette{colors: colors}}
+      else
+        raise "Palette #{name}.hex not found"
+      end
+    end)
   end
 
   @doc """
-  List available palettes
+  List available palettes. Palettes are loaded from the priv/color_palette directory.
   """
   def list_available() do
     Path.join([:code.priv_dir(:octopus), "color_palettes"])

@@ -23,7 +23,7 @@ defmodule Octopus.Apps.PaletteTester do
   end
 
   def handle_info(:tick, %State{} = state) do
-    current_palette = Enum.at(@palettes, state.index) |> ColorPalette.from_file()
+    current_palette = Enum.at(@palettes, state.index) |> ColorPalette.load()
 
     data = current_palette.colors |> Enum.with_index(fn _, i -> i end)
     fill = List.duplicate(0, 640 - Enum.count(data))
