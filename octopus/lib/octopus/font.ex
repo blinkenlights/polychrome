@@ -80,7 +80,6 @@ defmodule Octopus.Font do
     pixels =
       0..8
       |> Enum.map(&Enum.slice(variant.pixels, &1 * 760 + pixel_index, 8))
-      |> Enum.reverse()
       |> List.flatten()
 
     {pixels, variant.palette}

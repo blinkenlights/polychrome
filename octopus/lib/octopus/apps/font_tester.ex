@@ -9,7 +9,7 @@ defmodule Octopus.Apps.FontTester do
     defstruct [:index, :variant, :current_font]
   end
 
-  @fonts Font.list_available()
+  @fonts Font.list_available() |> Enum.sort()
   @max_index Enum.count(@fonts) - 1
 
   @text "AllUrBase"
@@ -45,12 +45,12 @@ defmodule Octopus.Apps.FontTester do
     {:noreply, state}
   end
 
-  # def handle_input(%InputEvent{type: :BUTTON, value: 0}, state) do
-  #   {:noreply, increment_index(state)}
-  # end
-
   def handle_input(%InputEvent{type: :BUTTON, value: 1}, state) do
     {:noreply, next_font(state)}
+  end
+
+  def handle_input(%InputEvent{type: :BUTTON, value: 2}, state) do
+    {:noreply, next_variant(state)}
   end
 
   def handle_input(_input_event, state) do
@@ -66,7 +66,14 @@ defmodule Octopus.Apps.FontTester do
   defp next_font(%State{index: index}) do
     index = index + 1
 
-    font = Enum.at(@fonts, index) |> Font.load()
+    font = Enum.at(@fonts, index) |> IO.inspect() |> Font.load()
     %State{index: index, variant: 0, current_font: font}
+  end
+
+  defp next_variant(%State{variant: variant, current_font: %Font{} = font} = state) do
+    case Enum.count(font.variants) do
+      n when variant + 1 >= n -> %State{state | variant: 0}
+      _ -> %State{state | variant: variant + 1}
+    end
   end
 end
