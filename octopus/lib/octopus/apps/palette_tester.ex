@@ -3,7 +3,7 @@ defmodule Octopus.Apps.PaletteTester do
   require Logger
 
   alias Octopus.ColorPalette
-  alias Octopus.Protobuf.Frame
+  alias Octopus.Protobuf.{Frame, InputEvent}
 
   defmodule State do
     defstruct [:index]
@@ -23,8 +23,7 @@ defmodule Octopus.Apps.PaletteTester do
   end
 
   def handle_info(:tick, %State{} = state) do
-    # current_palette = Enum.at(@palettes, state.index) |> ColorPalette.from_file()
-    current_palette = ColorPalette.from_file("pico-8")
+    current_palette = Enum.at(@palettes, state.index) |> ColorPalette.from_file()
 
     data = current_palette.colors |> Enum.with_index(fn _, i -> i end)
     fill = List.duplicate(0, 640 - Enum.count(data))
@@ -35,11 +34,24 @@ defmodule Octopus.Apps.PaletteTester do
     }
     |> send_frame()
 
-    # Logger.info("Showing palette #{Enum.at(@palettes, state.index)}")
-
     :timer.send_after(100, self(), :tick)
 
-    {:noreply, increment_index(state)}
+    {:noreply, state}
+  end
+
+  # def handle_input(%InputEvent{type: :BUTTON, value: 0}, state) do
+  #   {:noreply, increment_index(state)}
+  # end
+
+  def handle_input(%InputEvent{type: :BUTTON, value: 1}, state) do
+    state = increment_index(state)
+
+    Enum.at(@palettes, state.index) |> IO.inspect()
+    {:noreply, state}
+  end
+
+  def handle_input(_input_event, state) do
+    {:noreply, state}
   end
 
   defp increment_index(%State{index: index}) when index >= @max_index, do: %State{index: 0}
