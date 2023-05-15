@@ -2,6 +2,7 @@ defmodule Octopus.AppSupervisor do
   use DynamicSupervisor
   require Logger
 
+  alias Octopus.Mixer
   alias Octopus.Protobuf.{InputEvent}
 
   @moduledoc """
@@ -42,8 +43,14 @@ defmodule Octopus.AppSupervisor do
   def start_app(module) when is_atom(module) do
     app_id = generate_app_id()
     name = {:via, Registry, {Octopus.AppRegistry, app_id}}
+    # select app in mixer if there is no other app running
+    if running_apps() == [] do
+      Mixer.select_app(app_id)
+    end
+
     {:ok, pid} = DynamicSupervisor.start_child(__MODULE__, {module, name: name})
     Phoenix.PubSub.broadcast(Octopus.PubSub, "apps", {:apps, {:started, app_id, module}})
+
     {:ok, pid}
   end
 

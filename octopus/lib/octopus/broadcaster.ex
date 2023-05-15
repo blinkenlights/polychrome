@@ -11,7 +11,8 @@ defmodule Octopus.Broadcaster do
     luminance: 255,
     easing_interval_ms: 500,
     easing_mode: :EASE_OUT_QUART,
-    show_test_frame: false
+    show_test_frame: false,
+    enable_calibration: true
   }
 
   defstruct [:udp, :file, config: %Config{}]
@@ -41,6 +42,10 @@ defmodule Octopus.Broadcaster do
     GenServer.cast(__MODULE__, {:set_luminance, luminance})
   end
 
+  def set_calibration(set_calibration) when is_boolean(set_calibration) do
+    GenServer.cast(__MODULE__, {:set_corrections, set_calibration})
+  end
+
   def init(:ok) do
     Logger.info(
       "Broadcasting UPD to #{inspect(@remote_host)} port #{@remote_port}. Listening on #{@local_port}"
@@ -60,7 +65,8 @@ defmodule Octopus.Broadcaster do
     case Protobuf.decode_client_packet(protobuf) do
       %ClientPacket{content: {:remote_log, %RemoteLog{message: message}}} ->
         IO.write(state.file, message)
-        Logger.debug("#{print_ip(ip)}: Remote log #{inspect(message)}")
+
+      # Logger.info("#{print_ip(ip)}: Remote log #{inspect(message)}")
 
       %ClientPacket{content: {:client_info, %ClientInfo{} = client_info}} ->
         # Logger.debug("#{print_ip(ip)}: Client info #{inspect(client_info)}")
@@ -114,6 +120,13 @@ defmodule Octopus.Broadcaster do
 
   def handle_cast({:set_luminance, luminance}, %__MODULE__{} = state) do
     %Config{state.config | luminance: luminance}
+    |> send_config()
+
+    {:noreply, state}
+  end
+
+  def handle_cast({:set_calibration, set_calibration}, %__MODULE__{} = state) do
+    %Config{state.config | enable_calibration: set_calibration}
     |> send_config()
 
     {:noreply, state}

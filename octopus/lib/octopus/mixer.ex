@@ -65,12 +65,6 @@ defmodule Octopus.Mixer do
     {:noreply, %State{state | selected_app: app_id}}
   end
 
-  # no app selected, automatically select the first app that sends a frame
-  def handle_cast({:new_frame, {app_id, binary, frame}}, %State{selected_app: nil} = state) do
-    send_frame(binary, frame)
-    {:noreply, %State{state | selected_app: app_id}}
-  end
-
   # broadcast frame from selected app
   def handle_cast({:new_frame, {app_id, binary, frame}}, %State{selected_app: app_id} = state) do
     send_frame(binary, frame)
