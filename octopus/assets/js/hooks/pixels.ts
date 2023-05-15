@@ -13,7 +13,7 @@ interface Layout {
   positions: [number, number][];
 }
 
-interface Config {}
+interface Config { }
 
 interface Frame {
   data: Uint8Array;
@@ -56,7 +56,7 @@ export function setup(
   });
 
   [`config:${id}`, "config:*"].forEach((event) => {
-    this.handleEvent(event, ({ config: _ }: { config: Config }) => {});
+    this.handleEvent(event, ({ config: _ }: { config: Config }) => { });
   });
 
   const draw = () => {
@@ -89,7 +89,7 @@ export function setup(
     layout.positions.forEach(([x, y], i) => {
       const pixel = pixels[i];
 
-      if (pixel !== undefined) {
+      if (pixel !== undefined && colorPalette[pixel] !== undefined) {
         let [r, g, b] = colorPalette[pixel];
         ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
       } else {
