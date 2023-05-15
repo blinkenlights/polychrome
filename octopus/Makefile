@@ -1,3 +1,6 @@
+run:
+	iex -S mix phx.server
+
 protobuf_generate:
 	protoc \
 		-I../protobuf \
@@ -5,7 +8,3 @@ protobuf_generate:
 		--plugin=../protobuf/protoc-gen-elixir \
 		--elixir_opt=package_prefix=octopus.protobuf \
 		schema.proto
-
-run:
-	iex -S mix phx.server
-

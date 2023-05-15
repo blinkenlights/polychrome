@@ -51,6 +51,7 @@ defmodule Octopus.Protobuf.Config do
   field :easing_mode, 3, type: Octopus.Protobuf.EasingMode, json_name: "easingMode", enum: true
   field :show_test_frame, 4, type: :bool, json_name: "showTestFrame"
   field :config_phash, 5, type: :uint32, json_name: "configPhash"
+  field :enable_calibration, 6, type: :bool, json_name: "enableCalibration"
 end
 
 defmodule Octopus.Protobuf.Frame do

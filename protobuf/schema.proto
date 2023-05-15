@@ -16,6 +16,8 @@ message Config {
 
   bool show_test_frame = 4;
   uint32 config_phash = 5;
+
+  bool enable_calibration = 6;
 }
 
 message Frame {

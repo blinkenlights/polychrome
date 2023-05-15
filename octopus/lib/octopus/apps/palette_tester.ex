@@ -6,7 +6,7 @@ defmodule Octopus.Apps.PaletteTester do
   alias Octopus.Protobuf.{Frame, InputEvent}
 
   defmodule State do
-    defstruct [:index]
+    defstruct [:index, :color]
   end
 
   @palettes ColorPalette.list_available()
@@ -15,9 +15,9 @@ defmodule Octopus.Apps.PaletteTester do
   def name(), do: "Palette Tester"
 
   def init(_args) do
-    state = %State{index: 0}
+    state = %State{index: 0, color: 0}
 
-    send(self(), :tick)
+    :timer.send_interval(100, :tick)
 
     {:ok, state}
   end
@@ -25,28 +25,30 @@ defmodule Octopus.Apps.PaletteTester do
   def handle_info(:tick, %State{} = state) do
     current_palette = Enum.at(@palettes, state.index) |> ColorPalette.load()
 
-    data = current_palette.colors |> Enum.with_index(fn _, i -> i end)
-    fill = List.duplicate(0, 640 - Enum.count(data))
+    # data = current_palette.colors |> Enum.with_index(fn _, i -> i end)
+    # fill = List.duplicate(0, 640 - Enum.count(data))
+    data =
+      List.duplicate(16, 64)
+      |> List.update_at(6, fn _ -> state.color end)
 
     %Frame{
-      data: data ++ fill,
+      data: data ++ List.duplicate(state.color, 640 - Enum.count(data)),
       palette: current_palette
     }
     |> send_frame()
 
-    :timer.send_after(100, self(), :tick)
-
     {:noreply, state}
   end
 
-  # def handle_input(%InputEvent{type: :BUTTON, value: 0}, state) do
-  #   {:noreply, increment_index(state)}
-  # end
-
   def handle_input(%InputEvent{type: :BUTTON, value: 1}, state) do
-    state = increment_index(state)
-
+    state = next_palette(state)
     Enum.at(@palettes, state.index) |> IO.inspect()
+    {:noreply, state}
+  end
+
+  def handle_input(%InputEvent{type: :BUTTON, value: 2}, state) do
+    state = next_color(state)
+    IO.inspect(state.color)
     {:noreply, state}
   end
 
@@ -54,6 +56,15 @@ defmodule Octopus.Apps.PaletteTester do
     {:noreply, state}
   end
 
-  defp increment_index(%State{index: index}) when index >= @max_index, do: %State{index: 0}
-  defp increment_index(%State{index: index}), do: %State{index: index + 1}
+  defp next_palette(%State{index: i} = state) when i >= @max_index,
+    do: %State{state | index: 0, color: 0}
+
+  defp next_palette(%State{index: i} = state), do: %State{state | index: i + 1, color: 0}
+
+  defp next_color(%State{color: color, index: index} = state) do
+    %ColorPalette{colors: colors} = Enum.at(@palettes, index) |> ColorPalette.load()
+
+    color = rem(color + 1, Enum.count(colors))
+    %State{state | color: color}
+  end
 end
