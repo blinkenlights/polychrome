@@ -43,7 +43,7 @@ defmodule Octopus.Broadcaster do
   end
 
   def set_calibration(set_calibration) when is_boolean(set_calibration) do
-    GenServer.cast(__MODULE__, {:set_corrections, set_calibration})
+    GenServer.cast(__MODULE__, {:set_calibration, set_calibration})
   end
 
   def init(:ok) do
