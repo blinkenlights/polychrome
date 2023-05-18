@@ -15,7 +15,6 @@ A simple audio player for playing samples on specified output channels asynchron
 ### How to build
 
 - clone the repo `https://github.com/gueldenstone/MultiChannelSampler.git`
-- configure cmake `cmake -B build -S . -GNinja`
-- build `cmake --build build`
+- configure cmake `make -B build -S . -G"Ninja Multi-Config"`
+- build `cmake --build build --config Release`
 - you can find the binary inside the `build` folder
-

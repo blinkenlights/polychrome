@@ -85,7 +85,7 @@ target_include_directories(${TARGET_NAME}
 
 target_compile_options(${TARGET_NAME}
   PRIVATE
-  -Werror -Wall -Wextra -Wpedantic
+  -Werror -Wall -Wextra
 )
 
 target_compile_definitions(${TARGET_NAME}
