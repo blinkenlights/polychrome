@@ -1,0 +1,3 @@
+[submodule "sonartacle/lib/juce"]
+	path = sonartacle/lib/juce
+	url = https://github.com/juce-framework/JUCE.git
