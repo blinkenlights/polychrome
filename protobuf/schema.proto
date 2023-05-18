@@ -120,3 +120,21 @@ message RemoteLog {
   string message = 1 [(nanopb).max_length = 100];
 }
 
+message AudioPacket {
+  oneof content {
+    AudioConfig config = 1;
+    SamplePlayMessage playMessage = 2;
+  }
+}
+
+message AudioConfig {
+  string deviceName = 1;
+  int32 numInputs = 2;
+  int32 numOutputs = 3;
+}
+
+message SamplePlayMessage {
+  string uri = 1;
+  uint32 channel = 2;
+  bool start = 3;
+}
