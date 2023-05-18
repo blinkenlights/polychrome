@@ -12,14 +12,11 @@ class MainApp : public juce::ConsoleApplication
   MainApp();
   ~MainApp();
 
-  /* -------------------------------- commands -------------------------------
-   */
  private:
-  [[nodiscard]] Error listDevices() const;
-  [[nodiscard]] Error playSound(juce::File const &file, int channel);
+  static void listCmd(juce::ArgumentList const &args);
+  static void playCmd(juce::ArgumentList const &args);
+  static void runCmd(juce::ArgumentList const &args);
 
-  /* --------------------------------- members --------------------------------
-   */
  private:
   shared_ptr<juce::AudioDeviceManager> m_deviceManager;
 };
