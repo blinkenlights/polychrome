@@ -1,19 +1,17 @@
 #pragma once
-#include <JuceHeader.h>
-
 #include <map>
 #include <string>
 
 class Cache : public juce::URL::DownloadTaskListener
 {
-  typedef std::shared_ptr<juce::AudioFormatReaderSource> DataType;
+  typedef std::unique_ptr<juce::AudioFormatReaderSource> CacheDataType;
+  typedef std::unique_ptr<juce::File> InternalDataType;
 
  public:
   explicit Cache(std::string const& cachePath) : m_cachePath(juce::File(cachePath)) {}
 
-  Error initialize()
+  Error configure()
   {
-    m_fmtManager.registerBasicFormats();
     if (!m_cachePath.isDirectory())
     {
       if (!m_cachePath.createDirectory()) return Error("could not cre");
@@ -21,7 +19,7 @@ class Cache : public juce::URL::DownloadTaskListener
     return Error();
   }
 
-  std::optional<DataType> get(std::string const& uri)
+  std::optional<juce::File> get(std::string const& uri)
   {
     if (m_ressourceMap.contains(uri))
     {
@@ -40,15 +38,37 @@ class Cache : public juce::URL::DownloadTaskListener
       {
         // wait for download
       }
-      if (task->hadError())
+      if (task->hadError() || task->statusCode() != 200)
       {
         return std::nullopt;
       }
 
-      m_ressourceMap[uri] = std::make_shared<juce::AudioFormatReaderSource>(
-          m_fmtManager.createReaderFor(destination), true);
-      return m_ressourceMap.at(uri);
+      m_ressourceMap[uri] = destination;
+      return destination;
     }
+  }
+
+  void progress(juce::URL::DownloadTask* /*task*/, int64 bytesDownloaded,
+                int64 totalLength) override
+  {
+    double progress = bytesDownloaded / totalLength;
+    int barWidth = 70;
+
+    std::cout << "[";
+    int pos = barWidth * progress;
+    for (int i = 0; i < barWidth; ++i)
+    {
+      if (i < pos)
+        std::cout << "=";
+      else if (i == pos)
+        std::cout << ">";
+      else
+        std::cout << " ";
+    }
+    std::cout << "] " << int(progress * 100.0) << " %\r";
+    std::cout.flush();
+
+    if (progress >= 1.0) std::cout << std::endl;
   }
 
   void finished(juce::URL::DownloadTask* task, bool success) override
@@ -68,7 +88,6 @@ class Cache : public juce::URL::DownloadTaskListener
   }
 
  private:
-  juce::AudioFormatManager m_fmtManager;
   juce::File m_cachePath;
-  std::map<std::string, DataType> m_ressourceMap;
+  std::map<std::string, juce::File> m_ressourceMap;
 };

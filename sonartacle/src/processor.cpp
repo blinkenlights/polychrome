@@ -20,8 +20,8 @@ ProcessorBase::ProcessorBase(int inputs, int outputs) :
  * @param file
  */
 MonoFilePlayerProcessor::MonoFilePlayerProcessor(
-    std::shared_ptr<juce::AudioFormatReaderSource> src) :
-  ProcessorBase(1, 1), m_readerSource(src)
+    std::unique_ptr<juce::AudioFormatReaderSource> src) :
+  ProcessorBase(1, 1), m_readerSource(std::move(src))
 {
   m_source.setSource(m_readerSource.get());
 }

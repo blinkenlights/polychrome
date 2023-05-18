@@ -9,20 +9,15 @@
  * @param deviceName name of the device we want to use
  * @param outputs number of outputs
  */
-Engine::Engine(std::shared_ptr<juce::AudioDeviceManager> devMngr,
-               juce::String const &deviceName, int outputs) :
-  m_deviceManager(devMngr),
+Engine::Engine() :
   m_mainProcessor(new juce::AudioProcessorGraph()),
-  m_player(new juce::AudioProcessorPlayer()),
-  m_outputs(outputs),
-  m_sampleRate(48000),
-  m_deviceName(deviceName)
+  m_player(new juce::AudioProcessorPlayer())
 {
 }
 
 Engine::~Engine()
 {
-  m_deviceManager->removeAudioCallback(m_player.get());
+  m_deviceManager.removeAudioCallback(m_player.get());
   m_mainProcessor->releaseResources();
 }
 
@@ -30,14 +25,15 @@ Engine::~Engine()
  * @brief Initializes the audio engine which is a AudioGraph.
  *
  */
-Error Engine::initializeEngine()
+Error Engine::configureGraph(Config const &config)
 {
-  auto device = m_deviceManager->getCurrentAudioDevice();
-  auto sampleRate = device->getCurrentSampleRate();
-  auto samplesPerBlock = device->getCurrentBufferSizeSamples();
+  juce::AudioIODevice *device = m_deviceManager.getCurrentAudioDevice();
+  uint32_t sampleRate = device->getCurrentSampleRate();
+  int samplesPerBlock = device->getCurrentBufferSizeSamples();
 
   if (!m_mainProcessor->enableAllBuses()) return Error("could not enable buses");
-  m_mainProcessor->setPlayConfigDetails(0, m_outputs, sampleRate, samplesPerBlock);
+  m_mainProcessor->setPlayConfigDetails(config.inputs(), config.outputs(), sampleRate,
+                                        samplesPerBlock);
   m_mainProcessor->prepareToPlay(sampleRate, samplesPerBlock);
 
   m_mainProcessor->clear();
@@ -45,7 +41,7 @@ Error Engine::initializeEngine()
       std::make_unique<AudioGraphIOProcessor>(AudioGraphIOProcessor::audioOutputNode));
   if (!audioOutputNode) return Error("could not add output node");
   m_player->setProcessor(m_mainProcessor.get());
-  m_deviceManager->addAudioCallback(m_player.get());
+  m_deviceManager.addAudioCallback(m_player.get());
   return Error();
 }
 
@@ -53,20 +49,21 @@ Error Engine::initializeEngine()
  * @brief Initializes the device manager with number of outputs and sample rate.
  *
  */
-Error Engine::initializeDeviceManager()
+Error Engine::configureDeviceManager(Config const &config)
 {
-  if (m_deviceName.isEmpty())
+  if (config.deviceName().isEmpty())
   {
-    m_deviceManager->initialiseWithDefaultDevices(m_outputs, m_outputs);
+    m_deviceManager.initialiseWithDefaultDevices(config.inputs(), config.outputs());
     return Error();
   }
-  auto setup = m_deviceManager->getAudioDeviceSetup();
-  setup.outputDeviceName = m_deviceName;
-  setup.outputChannels = m_outputs;
-  setup.inputChannels = m_outputs;
-  setup.sampleRate = m_sampleRate;
+  auto setup = m_deviceManager.getAudioDeviceSetup();
+  setup.outputDeviceName = config.deviceName();
+  setup.outputChannels = config.outputs();
+  setup.inputChannels = config.inputs();
+  setup.sampleRate = config.sampleRate();
 
-  auto err = m_deviceManager->initialise(m_outputs, m_outputs, nullptr, true, "", &setup);
+  auto err = m_deviceManager.initialise(config.inputs(), config.outputs(), nullptr, false,
+                                        "", &setup);
   if (err.isNotEmpty())
   {
     return Error("initializing deviceManager: " + err);
@@ -78,10 +75,10 @@ Error Engine::initializeDeviceManager()
  * @brief Initializes the device manager and the audio engine
  *
  */
-Error Engine::initialize()
+Error Engine::configure(Config const &config)
 {
-  if (auto err = initializeDeviceManager()) return err;
-  if (auto err = initializeEngine()) return err;
+  if (auto err = configureDeviceManager(config)) return err;
+  if (auto err = configureGraph(config)) return err;
   return Error();
 }
 
@@ -91,11 +88,12 @@ Error Engine::initialize()
  * @param file
  * @param channel
  */
-Error Engine::playSound(std::shared_ptr<AudioFormatReaderSource> src, int channel)
+Error Engine::playSound(std::unique_ptr<AudioFormatReaderSource> src, int channel)
 {
   // cout << "Playing " << uri << " on channel " << channel << endl;
   Error err;
-  auto node = m_mainProcessor->addNode(make_unique<MonoFilePlayerProcessor>(src));
+  auto node =
+      m_mainProcessor->addNode(make_unique<MonoFilePlayerProcessor>(std::move(src)));
   auto conn = Connection{{node->nodeID, 0}, {audioOutputNode->nodeID, channel - 1}};
   m_mainProcessor->addConnection(conn);
   if (auto proc = dynamic_cast<MonoFilePlayerProcessor *>(node->getProcessor()))

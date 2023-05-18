@@ -32,15 +32,18 @@ MainApp::MainApp() : m_deviceManager(new juce::AudioDeviceManager())
       "play",
       "Plays an audio file on a specified channel",
       "",
-      [this](juce::ArgumentList const &args)
+      [](juce::ArgumentList const &args)
       {
-        auto file = args.getExistingFileForOption("--file");
-        auto channel = args.getValueForOption("--channel").getIntValue();
-        auto device = args.getValueForOption("--device");
-        auto outputs = args.getValueForOption("--outputs").getIntValue();
+        juce::String device = args.getValueForOption("--device|-d");
+        uint32_t outputs = args.getValueForOption("--outputs|-o").getIntValue();
+        juce::File file = args.getExistingFileForOption("--file|-f");
+        uint32_t channel = args.getValueForOption("--channel|-c").getIntValue();
 
-        Engine engine(m_deviceManager, device, outputs);
-        if (auto err = engine.initialize(); err) fail(static_cast<juce::String>(err));
+        Engine engine;
+        if (auto err = engine.configure(
+                Engine::Config().WithDeviceName(device).WithOutputs(outputs));
+            err)
+          juce::ConsoleApplication::fail(static_cast<juce::String>(err));
 
         if (auto err = engine.playSound(file, channel); err)
           juce::ConsoleApplication::fail(static_cast<juce::String>(err));
@@ -51,41 +54,44 @@ MainApp::MainApp() : m_deviceManager(new juce::AudioDeviceManager())
       "run",
       "Run the server",
       "",
-      [this](juce::ArgumentList const &args)
+      [](juce::ArgumentList const &args)
       {
-        auto port = args.getValueForOption("--port").getIntValue();
+        // parse arguments
+        uint32_t port = args.getValueForOption("--port|-p").getIntValue();
+        uint32_t outputs = args.getValueForOption("--outputs|-o").getIntValue();
+        juce::String device = args.getValueForOption("--device|-d");
+        port = port != 0 ? port : 60000;  // default port
 
+        // setup chaching
         Cache cache("/Users/lukas/tmp");
-        cache.initialize();
+        cache.configure();
 
-        Engine sampler(m_deviceManager, "MacBook Pro Speakers", 2);
-
-        if (auto err = sampler.initialize())
+        // setup aduio engine
+        Engine engine;
+        if (auto err = engine.configure(
+                Engine::Config().WithDeviceName(device).WithOutputs(outputs)))
           juce::ConsoleApplication::fail(static_cast<juce::String>(err));
         try
         {
           asio::io_context ioCtx;
           Server server(ioCtx, port);
+
+          // register callback to play a sample
           server.registerCallback(
               AudioPacket::kPlayMessage,
-              [&sampler, &cache](std::shared_ptr<AudioPacket> packet)
+              [&engine, &cache](std::shared_ptr<AudioPacket> packet)
               {
-                std::cout << "play message: " << std::endl;
-                std::cout << "uri: " << packet->playmessage().uri() << " ";
-                std::cout << "start: " << packet->playmessage().start();
-                std::cout << std::endl;
-
                 if (juce::File::isAbsolutePath(packet->playmessage().uri()))
                 {  // is local file
                   auto file = juce::File(packet->playmessage().uri());
-                  if (auto err = sampler.playSound(file, packet->playmessage().channel()))
+                  if (auto err = engine.playSound(file, packet->playmessage().channel()))
                     std::cerr << err << std::endl;
                 }
                 else if (auto file = cache.get(packet->playmessage().uri());
                          file.has_value())
                 {
-                  if (auto err = sampler.playSound(file.value(),
-                                                   packet->playmessage().channel()))
+                  if (auto err = engine.playSound(std::move(file.value()),
+                                                  packet->playmessage().channel()))
                     std::cerr << err << std::endl;
                 }
                 else
@@ -93,6 +99,7 @@ MainApp::MainApp() : m_deviceManager(new juce::AudioDeviceManager())
                   std::cerr << "not an local or remote file" << std::endl;
                 }
               });
+          // run the server
           ioCtx.run();
         }
         catch (std::exception &e)
