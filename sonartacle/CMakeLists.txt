@@ -71,6 +71,7 @@ target_sources(${TARGET_NAME}
   src/processor.cpp
   src/app.cpp
   src/server.cpp
+  src/engine.cpp
 )
 target_sources(${TARGET_NAME}
   PRIVATE

@@ -40,7 +40,8 @@ class ProcessorBase : public juce::AudioProcessor
 class MonoFilePlayerProcessor : public ProcessorBase
 {
  public:
-  MonoFilePlayerProcessor(juce::File file);
+  MonoFilePlayerProcessor(std::shared_ptr<juce::AudioFormatReaderSource> src);
+  MonoFilePlayerProcessor(juce::File const &file);
 
   void prepareToPlay(double sampleRate, int samplesPerBlock) override;
 
@@ -50,16 +51,13 @@ class MonoFilePlayerProcessor : public ProcessorBase
   void start() { m_source.start(); }
   bool isPlaying() const { return m_source.isPlaying(); }
 
-  const juce::String getName() const override
-  {
-    return "File: " + m_inputFile.getFullPathName();
-  }
+  const juce::String getName() const override { return juce::String(m_name); }
 
   void releaseResources() override;
 
  private:
   juce::AudioFormatManager m_formatManager;
-  std::unique_ptr<juce::AudioFormatReaderSource> m_readerSource;
+  std::shared_ptr<juce::AudioFormatReaderSource> m_readerSource;
   juce::AudioTransportSource m_source;
-  juce::File m_inputFile;
+  std::string m_name;
 };
