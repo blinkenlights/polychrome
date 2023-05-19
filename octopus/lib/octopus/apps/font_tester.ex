@@ -12,12 +12,12 @@ defmodule Octopus.Apps.FontTester do
   @fonts Font.list_available() |> Enum.sort()
   @max_index Enum.count(@fonts) - 1
 
-  @text "AllUrBase!"
+  @text "MILDENBERG"
 
   def name(), do: "Font Tester"
 
   def init(_args) do
-    state = %State{index: 0} |> next_font()
+    state = set_font(@max_index)
 
     send(self(), :tick)
 
@@ -46,11 +46,15 @@ defmodule Octopus.Apps.FontTester do
     {:noreply, state}
   end
 
-  def handle_input(%InputEvent{button: :BUTTON_1, pressed: true}, state) do
+  def handle_input(%InputEvent{type: :BUTTON, value: 1}, state) do
+    {:noreply, prev_font(state)}
+  end
+
+  def handle_input(%InputEvent{type: :BUTTON, value: 2}, state) do
     {:noreply, next_font(state)}
   end
 
-  def handle_input(%InputEvent{button: :BUTTON_2, pressed: true}, state) do
+  def handle_input(%InputEvent{type: :BUTTON, value: 0}, state) do
     {:noreply, next_variant(state)}
   end
 
@@ -58,15 +62,23 @@ defmodule Octopus.Apps.FontTester do
     {:noreply, state}
   end
 
+  defp prev_font(%State{index: index}) when index == 0 do
+    set_font(@max_index)
+  end
+
+  defp prev_font(%State{index: index}) do
+    set_font(index - 1)
+  end
+
   defp next_font(%State{index: index}) when index >= @max_index do
-    index = 0
-    font = Enum.at(@fonts, index) |> Font.load()
-    %State{index: index, variant: 0, current_font: font}
+    set_font(0)
   end
 
   defp next_font(%State{index: index}) do
-    index = index + 1
+    set_font(index + 1)
+  end
 
+  defp set_font(index) do
     font = Enum.at(@fonts, index) |> IO.inspect() |> Font.load()
     %State{index: index, variant: 0, current_font: font}
   end
