@@ -8,6 +8,7 @@ project(${TARGET_NAME} VERSION 0.0.1)
 # ALSA for Linux (needs to be found up here)
 if(UNIX AND NOT APPLE)
   find_package(ALSA REQUIRED)
+  find_package(CURL REQUIRED)
 endif()
 
 # threads
@@ -41,6 +42,7 @@ set(DONT_SET_USING_JUCE_NAMESPACE ON)
 add_subdirectory(lib/juce)
 juce_add_console_app(${TARGET_NAME}
   PRODUCT_NAME "sonartacle"
+  NEEDS_CURL TRUE
 )
 
 juce_generate_juce_header(${TARGET_NAME})
@@ -92,7 +94,7 @@ target_compile_options(${TARGET_NAME}
 target_compile_definitions(${TARGET_NAME}
   PRIVATE
   JUCE_WEB_BROWSER=0
-  JUCE_USE_CURL=0
+  JUCE_USE_CURL=1
   DONT_SET_USING_JUCE_NAMESPACE=0
   cxx_std_17
 )

@@ -32,13 +32,13 @@ class Engine
     Config WithInputs(uint32_t inputs)
     {
       auto retval = *this;
-      retval.m_inputs = inputs == 0 ? m_defaultInputs : inputs;
+      retval.m_inputs = inputs;
       return retval;
     }
     Config WithOutputs(uint32_t outputs)
     {
       auto retval = *this;
-      retval.m_outputs = outputs == 0 ? m_defaultOutputs : outputs;
+      retval.m_outputs = outputs;
       return retval;
     }
     Config WithSampleRate(uint32_t sampleRate)
