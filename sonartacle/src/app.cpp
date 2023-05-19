@@ -81,16 +81,20 @@ void MainApp::runCmd(juce::ArgumentList const &args)
   uint32_t port = args.getValueForOption("--port|-p").getIntValue();
   uint32_t outputs = args.getValueForOption("--outputs|-o").getIntValue();
   juce::String device = args.getValueForOption("--device|-d");
+  juce::String cacheDir = args.getValueForOption("--cache|-c");
   port = port != 0 ? port : 60000;  // default port
-
+  cacheDir = cacheDir.isEmpty() ? "/home/gueldi/tmp" : cacheDir;
   // setup chaching
-  Cache cache("/Users/lukas/tmp");
-  cache.configure();
+  Cache cache(cacheDir);
+  if (auto err = cache.configure()) juce::ConsoleApplication::fail(err.what());
 
   // setup aduio engine
   Engine engine;
-  if (auto err =
-          engine.configure(Engine::Config().WithDeviceName(device).WithOutputs(outputs)))
+  if (auto err = engine.configure(Engine::Config()
+                                      .WithDeviceName(device)
+                                      .WithInputs(0)
+                                      .WithOutputs(outputs)
+                                      .WithSampleRate(48000)))
     juce::ConsoleApplication::fail(static_cast<juce::String>(err));
   try
   {
@@ -108,7 +112,7 @@ void MainApp::runCmd(juce::ArgumentList const &args)
             if (auto err = engine.playSound(file, packet->playmessage().channel()))
               std::cerr << err << std::endl;
           }
-          else if (auto file = cache.get(packet->playmessage().uri()); file.has_value())
+          else if (auto [file, err] = cache.get(packet->playmessage().uri()); !err)
           {
             if (auto err = engine.playSound(std::move(file.value()),
                                             packet->playmessage().channel()))
@@ -116,7 +120,7 @@ void MainApp::runCmd(juce::ArgumentList const &args)
           }
           else
           {
-            std::cerr << "not an local or remote file" << std::endl;
+            std::cerr << err.what() << std::endl;
           }
         });
     // run the server

@@ -57,9 +57,10 @@ Error Engine::configureDeviceManager(Config const &config)
     return Error();
   }
   auto setup = m_deviceManager.getAudioDeviceSetup();
+  setup.inputDeviceName = config.deviceName();
+  setup.inputChannels = config.inputs();
   setup.outputDeviceName = config.deviceName();
   setup.outputChannels = config.outputs();
-  setup.inputChannels = config.inputs();
   setup.sampleRate = config.sampleRate();
 
   auto err = m_deviceManager.initialise(config.inputs(), config.outputs(), nullptr, false,
