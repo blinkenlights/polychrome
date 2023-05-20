@@ -1,15 +1,21 @@
 defmodule OctopusWeb.PixelsComponent do
   @moduledoc """
-  A component for displaying pixels.
+  A component for displaying pixels using a Phoenix Hook.
 
   ## Examples
 
       defmodule ExampleWeb.ExampleLive do
-        use OctopusWeb.PixelsComponent
+        alias OctopusWeb.PixelsComponent
+
+        import PixelsComponent, only: [pixels: 1]
 
         def mount(_params, _session, socket) do
-          socket = PixelsComponent.mount(socket)
-          {:ok, socket, temporary_assigns: PixelsComponent.temporary_assigns()}
+          pixel_layout = Octopus.Layout.Mildenberg.layout()
+          socket =
+            socket
+            |> PixelsComponent.mount(socket)
+            |> assign(pixel_layout: pixel_layout)
+          {:ok, socket, temporary_assigns: [pixel_layout: nil]}
         end
 
         def render(assigns) do
@@ -19,11 +25,45 @@ defmodule OctopusWeb.PixelsComponent do
         end
 
         def handle_info({:mixer, {:frame, frame}}, socket) do
-          {:noreply, socket |> push_frame(frame)}
+          {:noreply, socket |> PixelsComponent.push_frame(frame)}
         end
 
         def handle_info({:mixer, {:config, config}}, socket) do
-          {:noreply, socket |> push_config(config)}
+          {:noreply, socket |> PixelsComponent.push_config(config)}
+        end
+      end
+
+  ## Multiple pixel components in one liveview
+
+  The component supports multiple instances in the same live view
+  which can be updated individually or all at one.
+  `push_frame/3`, `push_config/3` and `push_layout/3` take an optional
+  third `id` parameter which refers to the id given to the component
+  in the heex template.
+
+      defmodule ExampleWeb.ExampleLive do
+        alias OctopusWeb.PixelsComponent
+
+        import PixelsComponent, only: [pixels: 1]
+
+        def mount(socket) do
+          layout = Octopus.Layout.Mildenberg.layout()
+          socket =
+            socket
+            |> PixelsComponent.mount(socket)
+            |> push_frame(%Frame{}, "foo")
+            |> push_frame(%Frame{}, "bar")
+            # No ID given here, the config will be sent to both components
+            |> push_config(%Config{})
+            |> assign(pixel_layout: pixel_layout)
+            {:ok, socket, temporary_assigns: [pixel_layout: nil]}
+        end
+
+        def render(assigns) do
+          ~\"""
+            <.pixels id="foo" />
+            <.pixels id="bar" />
+          \"""
         end
       end
   """
@@ -33,7 +73,6 @@ defmodule OctopusWeb.PixelsComponent do
   import Phoenix.LiveView, only: [push_event: 3, connected?: 1]
 
   alias Octopus.ColorPalette
-  alias Octopus.Layout.Mildenberg
   alias Octopus.Mixer
   alias Octopus.Protobuf.{Config, Frame}
 
@@ -62,39 +101,33 @@ defmodule OctopusWeb.PixelsComponent do
   end
 
   @doc """
-  Mounts the component.
-
   Sets up the layout, config, and pubsub subscribptions.
+
+  Should be called in the `Phoenix.LiveView.mount/3` callback.
   """
-  def mount(socket) do
+  def setup(socket) do
     if connected?(socket) do
       Mixer.subscribe()
+
+      layout = socket.assigns.pixel_layout
+      config = @default_config
+
+      frame = %Frame{
+        data: List.duplicate(0, layout.width * layout.height),
+        palette: ColorPalette.load("pico-8")
+      }
+
+      socket
+      |> push_layout(layout)
+      |> push_config(config)
+      |> push_frame(frame)
+    else
+      socket
     end
-
-    layout = Mildenberg.layout()
-    config = @default_config
-
-    frame = %Frame{
-      data: List.duplicate(0, layout.width * layout.height),
-      palette: ColorPalette.load("pico-8")
-    }
-
-    socket
-    |> assign(pixel_layout: layout)
-    |> push_layout(layout)
-    |> push_config(config)
-    |> push_frame(frame)
   end
 
   @doc """
-  Returns the temporary assigns that should be passed to the parent live view.
-  """
-  def temporary_assigns do
-    [pixel_layout: %{}]
-  end
-
-  @doc """
-  Pushes a layout to the client.
+  Pushes a layout to the client using push_event/3.
   """
   def push_layout(socket, layout, id \\ "*") do
     push_event(socket, "layout:#{id}", %{layout: layout})
@@ -112,11 +145,5 @@ defmodule OctopusWeb.PixelsComponent do
   """
   def push_config(socket, config, id \\ "*") do
     push_event(socket, "config:#{id}", %{config: config})
-  end
-
-  defmacro __using__(_) do
-    quote do
-      import unquote(__MODULE__), except: [mount: 1, temporary_assigns: 0]
-    end
   end
 end

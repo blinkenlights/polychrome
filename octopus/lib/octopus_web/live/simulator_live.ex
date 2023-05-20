@@ -1,12 +1,18 @@
 defmodule OctopusWeb.SimulatorLive do
   use OctopusWeb, :live_view
-  use OctopusWeb.PixelsComponent
 
+  alias Octopus.Layout.Mildenberg
   alias OctopusWeb.PixelsComponent
 
+  import PixelsComponent, only: [pixels: 1]
+
   def mount(_params, _session, socket) do
-    socket = PixelsComponent.mount(socket)
-    {:ok, socket, temporary_assigns: PixelsComponent.temporary_assigns()}
+    socket =
+      socket
+      |> assign(pixel_layout: Mildenberg.layout())
+      |> PixelsComponent.setup()
+
+    {:ok, socket, temporary_assigns: [pixel_layout: nil]}
   end
 
   def render(assigns) do
@@ -18,11 +24,11 @@ defmodule OctopusWeb.SimulatorLive do
   end
 
   def handle_info({:mixer, {:frame, frame}}, socket) do
-    {:noreply, socket |> push_frame(frame)}
+    {:noreply, socket |> PixelsComponent.push_frame(frame)}
   end
 
   def handle_info({:mixer, {:config, config}}, socket) do
-    {:noreply, socket |> push_config(config)}
+    {:noreply, socket |> PixelsComponent.push_config(config)}
   end
 
   # Ignore other mixer events. We are only interested in the mixer output.

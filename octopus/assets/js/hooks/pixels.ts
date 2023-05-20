@@ -11,27 +11,24 @@ interface Layout {
   imageSize: [number, number];
   pixelSize: [number, number];
   positions: [number, number][];
+  pixelImage: string;
 }
 
-interface Config { }
+interface Config {}
 
 interface Frame {
   data: Uint8Array;
   palette: RGB[];
 }
 
-export function setup(
-  id: string,
-  canvas: HTMLCanvasElement,
-  pixelImageUrl: string
-) {
+export function setup(canvas: HTMLCanvasElement) {
+  const id = canvas.id;
+  const pixelImage = new Image();
+
+  let layout: Layout;
   let pixels = new Uint8Array();
   let colorPalette: RGB[] = [];
-  let layout: Layout;
   let lastCanvasBoundingClientRect = canvas.getBoundingClientRect();
-
-  const pixelImage = new Image();
-  pixelImage.src = pixelImageUrl;
 
   const ctx = canvas.getContext("2d");
   if (!ctx) {
@@ -45,6 +42,7 @@ export function setup(
   [`layout:${id}`, "layout:*"].forEach((event) => {
     this.handleEvent(event, ({ layout: newLayout }: { layout: Layout }) => {
       layout = newLayout;
+      pixelImage.src = layout.pixelImage;
     });
   });
 
@@ -56,7 +54,7 @@ export function setup(
   });
 
   [`config:${id}`, "config:*"].forEach((event) => {
-    this.handleEvent(event, ({ config: _ }: { config: Config }) => { });
+    this.handleEvent(event, ({ config: _ }: { config: Config }) => {});
   });
 
   const draw = () => {

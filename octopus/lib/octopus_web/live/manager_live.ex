@@ -1,10 +1,13 @@
 defmodule OctopusWeb.ManagerLive do
   use OctopusWeb, :live_view
-  use OctopusWeb.PixelsComponent
 
-  alias Octopus.{Mixer, AppSupervisor}
+  alias Octopus.Layout.Mildenberg
   alias Octopus.Protobuf.InputEvent
+  alias Octopus.{Mixer, AppSupervisor}
   alias OctopusWeb.PixelsComponent
+  alias OctopusWeb.PixelsComponent
+
+  import PixelsComponent, only: [pixels: 1]
 
   def mount(_params, _session, socket) do
     if connected?(socket) do
@@ -12,9 +15,13 @@ defmodule OctopusWeb.ManagerLive do
       AppSupervisor.subscribe()
     end
 
-    socket = PixelsComponent.mount(socket)
+    socket =
+      socket
+      |> assign(pixel_layout: Mildenberg.layout())
+      |> assign_apps()
+      |> PixelsComponent.setup()
 
-    {:ok, socket |> assign_apps()}
+    {:ok, socket, temporary_assigns: [pixel_layout: nil]}
   end
 
   def render(assigns) do
@@ -144,11 +151,11 @@ defmodule OctopusWeb.ManagerLive do
   end
 
   def handle_info({:mixer, {:frame, frame}}, socket) do
-    {:noreply, socket |> push_frame(frame)}
+    {:noreply, socket |> PixelsComponent.push_frame(frame)}
   end
 
   def handle_info({:mixer, {:config, config}}, socket) do
-    {:noreply, socket |> push_config(config)}
+    {:noreply, socket |> PixelsComponent.push_config(config)}
   end
 
   defp assign_apps(socket) do
