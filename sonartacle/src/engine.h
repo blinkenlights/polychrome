@@ -4,13 +4,14 @@
 #include <memory>
 
 #include "error.h"
+#include "processor.h"
 
 using AudioGraphIOProcessor = juce::AudioProcessorGraph::AudioGraphIOProcessor;
 using Node = juce::AudioProcessorGraph::Node;
 using NodeID = juce::AudioProcessorGraph::NodeID;
 using Connection = juce::AudioProcessorGraph::Connection;
 
-class Engine
+class Engine : public juce::HighResolutionTimer
 {
  public:
   struct Config
@@ -81,10 +82,14 @@ class Engine
   [[nodiscard]] Error configureGraph(Config const &config);
 
  private:
+  void hiResTimerCallback() override;
+
+ private:
   juce::AudioDeviceManager m_deviceManager;
   std::unique_ptr<juce::AudioProcessorGraph> m_mainProcessor;
   std::unique_ptr<juce::AudioProcessorPlayer> m_player;
   Node::Ptr audioOutputNode;
+  std::mutex mut;
 
  private:
  private:

@@ -1,6 +1,8 @@
 #pragma once
 #include <JuceHeader.h>
 
+#include <cassert>
+
 class ProcessorBase : public juce::AudioProcessor
 {
  public:
@@ -37,11 +39,15 @@ class ProcessorBase : public juce::AudioProcessor
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ProcessorBase)
 };
 
+using NodeID = juce::AudioProcessorGraph::NodeID;
+
 class MonoFilePlayerProcessor : public ProcessorBase
 {
  public:
   MonoFilePlayerProcessor(std::unique_ptr<juce::AudioFormatReaderSource> src);
+
   MonoFilePlayerProcessor(juce::File const &file);
+  ~MonoFilePlayerProcessor();
 
   void prepareToPlay(double sampleRate, int samplesPerBlock) override;
 
@@ -49,15 +55,18 @@ class MonoFilePlayerProcessor : public ProcessorBase
 
   void reset() override { m_source.stop(); }
   void start() { m_source.start(); }
-  bool isPlaying() const { return m_source.isPlaying(); }
+  void stop() { m_source.stop(); }
+  bool isPlaying() const { return m_source.isPlaying() && m_source.hasStreamFinished(); }
 
   const juce::String getName() const override { return juce::String(m_name); }
 
   void releaseResources() override;
+  void setNodeID(NodeID const &nodeID) { m_nodeID = nodeID; }
 
  private:
   juce::AudioFormatManager m_formatManager;
   std::shared_ptr<juce::AudioFormatReaderSource> m_readerSource;
   juce::AudioTransportSource m_source;
   std::string m_name;
+  NodeID m_nodeID;
 };
