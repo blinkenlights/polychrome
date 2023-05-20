@@ -103,19 +103,19 @@ void MainApp::runCmd(juce::ArgumentList const &args)
 
     // register callback to play a sample
     server.registerCallback(
-        AudioPacket::kPlayMessage,
+        AudioPacket::kPlaySample,
         [&engine, &cache](std::shared_ptr<AudioPacket> packet)
         {
-          if (juce::File::isAbsolutePath(packet->playmessage().uri()))
+          if (juce::File::isAbsolutePath(packet->playsample().uri()))
           {  // is local file
-            auto file = juce::File(packet->playmessage().uri());
-            if (auto err = engine.playSound(file, packet->playmessage().channel()))
+            auto file = juce::File(packet->playsample().uri());
+            if (auto err = engine.playSound(file, packet->playsample().channel()))
               std::cerr << err << std::endl;
           }
-          else if (auto [file, err] = cache.get(packet->playmessage().uri()); !err)
+          else if (auto [file, err] = cache.get(packet->playsample().uri()); !err)
           {
             if (auto err =
-                    engine.playSound(std::move(file.value()), packet->playmessage().channel()))
+                    engine.playSound(std::move(file.value()), packet->playsample().channel()))
               std::cerr << err << std::endl;
           }
           else
