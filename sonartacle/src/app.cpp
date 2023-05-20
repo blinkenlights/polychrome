@@ -102,27 +102,31 @@ void MainApp::runCmd(juce::ArgumentList const &args)
     Server server(ioCtx, port);
 
     // register callback to play a sample
-    server.registerCallback(
-        AudioPacket::kPlaySample,
-        [&engine, &cache](std::shared_ptr<AudioPacket> packet)
-        {
-          if (juce::File::isAbsolutePath(packet->playsample().uri()))
-          {  // is local file
-            auto file = juce::File(packet->playsample().uri());
-            if (auto err = engine.playSound(file, packet->playsample().channel()))
-              std::cerr << err << std::endl;
-          }
-          else if (auto [file, err] = cache.get(packet->playsample().uri()); !err)
-          {
-            if (auto err =
-                    engine.playSound(std::move(file.value()), packet->playsample().channel()))
-              std::cerr << err << std::endl;
-          }
-          else
-          {
-            std::cerr << err.what() << std::endl;
-          }
-        });
+    server.registerCallback(AudioPacket::kPlaySample,
+                            [&engine, &cache](std::shared_ptr<AudioPacket> packet)
+                            {
+                              if (auto [file, err] = cache.get(packet->playsample().uri()); !err)
+                              {
+                                if (auto err = engine.playSound(std::move(file.value()),
+                                                                packet->playsample().channel()))
+                                  std::cerr << err << std::endl;
+                              }
+                              else
+                              {
+                                std::cerr << err.what() << std::endl;
+                              }
+                            });
+    // register callback to cache samples
+    server.registerCallback(AudioPacket::kCacheSamples,
+                            [&cache](std::shared_ptr<AudioPacket> packet)
+                            {
+                              for (int i = 0; i < packet->cachesamples().uri_size(); ++i)
+                              {
+                                if (Error err = cache.cacheFile(
+                                        static_cast<juce::String>(packet->cachesamples().uri(i))))
+                                  std::cerr << err.what() << std::endl;
+                              }
+                            });
     // run the server
     ioCtx.run();
   }

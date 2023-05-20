@@ -13,14 +13,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var file string
-var channel uint32
+var files []string
 
-// playMessageCmd represents the playMessage command
-var playMessageCmd = &cobra.Command{
-	Use:   "playMessage",
-	Short: "Sends a play message",
-	Long:  ``,
+// cacheMessageCmd represents the cacheMessage command
+var cacheMessageCmd = &cobra.Command{
+	Use:   "cacheMessage",
+	Short: "A brief description of your command",
+	Long: `A longer description that spans multiple lines and likely contains examples
+and usage of using your command. For example:
+
+Cobra is a CLI library for Go that empowers applications.
+This application is a tool to generate the needed files
+to quickly create a Cobra application.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		endpoint := fmt.Sprintf("%s:%d", address, port)
 		fmt.Println(endpoint)
@@ -41,13 +45,12 @@ var playMessageCmd = &cobra.Command{
 		}
 
 		// Send a message to the server
-		msg := &PlaySample{
-			Uri:     file,
-			Channel: channel,
+		msg := &CacheSamples{
+			Uri: files,
 		}
 		data, err := proto.Marshal(&AudioPacket{
-			Content: &AudioPacket_PlaySample{
-				PlaySample: msg,
+			Content: &AudioPacket_CacheSamples{
+				CacheSamples: msg,
 			},
 		})
 
@@ -65,16 +68,16 @@ var playMessageCmd = &cobra.Command{
 }
 
 func init() {
-	sendCmd.AddCommand(playMessageCmd)
+	sendCmd.AddCommand(cacheMessageCmd)
 
 	// Here you will define your flags and configuration settings.
 
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
-	// playMessageCmd.PersistentFlags().String("foo", "", "A help for foo")
+	// cacheMessageCmd.PersistentFlags().String("foo", "", "A help for foo")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
-	playMessageCmd.Flags().StringVarP(&file, "file", "f", "/Users/lukas/dev/letterbox/sonartacle/resources/pew.wav", "the file to play")
-	playMessageCmd.Flags().Uint32VarP(&channel, "channel", "c", 1, "the channel to play the sample on")
+	// cacheMessageCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	cacheMessageCmd.Flags().StringArrayVarP(&files, "files", "f", []string{"https://github.com/gueldenstone/MultiChannelSampler/raw/main/resources/arcade-notification.wav"}, "the file to play")
 }
