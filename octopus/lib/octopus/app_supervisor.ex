@@ -41,6 +41,15 @@ defmodule Octopus.AppSupervisor do
   Starts an app and assigns a unique app_id. It is possible to start multiple instances of the same app.
   """
   def start_app(module) when is_atom(module) do
+    if module in available_apps() do
+      do_start_app(module)
+    else
+      Logger.error("App #{module} not found")
+      {:error, :app_not_found}
+    end
+  end
+
+  defp do_start_app(module) when is_atom(module) do
     app_id = generate_app_id()
     name = {:via, Registry, {Octopus.AppRegistry, app_id}}
 

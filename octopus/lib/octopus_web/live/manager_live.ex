@@ -42,7 +42,7 @@ defmodule OctopusWeb.ManagerLive do
                 </tr>
               </thead>
               <tbody>
-                <tr :for={{module, %{name: name}} <- @available_apps}>
+                <tr :for={%{module: module, name: name} <- @available_apps}>
                   <td><%= name %></td>
                   <td>
                     <button
@@ -69,7 +69,7 @@ defmodule OctopusWeb.ManagerLive do
               </thead>
               <tbody>
                 <tr :for={
-                  {app_id, %{module: module, name: name, selected: selected}} <- @running_apps
+                  %{module: module, app_id: app_id, name: name, selected: selected} <- @running_apps
                 }>
                   <td><%= name %></td>
                   <td><%= app_id %></td>
@@ -104,28 +104,19 @@ defmodule OctopusWeb.ManagerLive do
   end
 
   def handle_event("start", %{"module" => module_string}, socket) do
-    case Map.get(socket.assigns.available_apps, module_string) do
-      %{module: module} ->
-        {:ok, _} = AppSupervisor.start_app(module)
-        {:noreply, socket}
-
-      _ ->
-        {:noreply, socket}
-    end
+    module = String.to_existing_atom(module_string)
+    {:ok, _} = AppSupervisor.start_app(module)
+    {:noreply, socket}
   end
 
   def handle_event("stop", %{"app-id" => app_id}, socket) do
-    if Map.has_key?(socket.assigns.running_apps, app_id) do
-      AppSupervisor.stop_app(app_id)
-    end
+    AppSupervisor.stop_app(app_id)
 
     {:noreply, socket}
   end
 
   def handle_event("select", %{"app-id" => app_id}, socket) do
-    if Map.has_key?(socket.assigns.running_apps, app_id) do
-      Mixer.select_app(app_id)
-    end
+    Mixer.select_app(app_id)
 
     {:noreply, socket}
   end
@@ -160,19 +151,21 @@ defmodule OctopusWeb.ManagerLive do
 
   defp assign_apps(socket) do
     available_apps =
-      AppSupervisor.available_apps()
-      |> Enum.map(&{to_string(&1), %{module: &1, name: apply(&1, :name, [])}})
-      |> Map.new()
+      for module <- AppSupervisor.available_apps() do
+        %{module: module, name: apply(module, :name, [])}
+      end
 
     selected_app = Mixer.selected_app()
 
     running_apps =
-      AppSupervisor.running_apps()
-      |> Enum.map(fn {module, app_id} ->
-        {app_id,
-         %{module: app_id, name: apply(module, :name, []), selected: app_id == selected_app}}
-      end)
-      |> Map.new()
+      for {module, app_id} <- AppSupervisor.running_apps() do
+        %{
+          module: module,
+          app_id: app_id,
+          name: apply(module, :name, []),
+          selected: app_id == selected_app
+        }
+      end
 
     socket |> assign(available_apps: available_apps, running_apps: running_apps)
   end
