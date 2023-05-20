@@ -10,6 +10,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var address string
+var port uint
+
 // sendCmd represents the send command
 var sendCmd = &cobra.Command{
 	Use:   "send",
@@ -28,8 +31,8 @@ func init() {
 
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
-	sendCmd.PersistentFlags().StringP("address", "a", "127.0.0.1", "udp address")
-	sendCmd.PersistentFlags().IntP("port", "p", 60000, "udp port")
+	sendCmd.PersistentFlags().StringVarP(&address, "address", "a", "127.0.0.1", "udp address")
+	sendCmd.PersistentFlags().UintVarP(&port, "port", "p", 60000, "udp port")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
