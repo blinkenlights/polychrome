@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 set(CMAKE_CXX_STANDARD 20)
-set(TARGET_NAME sonartacle)
+set(TARGET_NAME beak)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(${TARGET_NAME} VERSION 0.0.1)
@@ -74,7 +74,7 @@ endif()
 set(DONT_SET_USING_JUCE_NAMESPACE ON)
 CPMAddPackage("gh:juce-framework/JUCE#7.0.5@7.0.5")
 juce_add_console_app(${TARGET_NAME}
-  PRODUCT_NAME "sonartacle"
+  PRODUCT_NAME "beak"
   NEEDS_CURL TRUE
 )
 
