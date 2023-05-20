@@ -73,9 +73,9 @@ class Engine : public juce::HighResolutionTimer
 
  public:
   [[nodiscard]] Error configure(Config const &config);
-  [[nodiscard]] Error playSound(std::unique_ptr<juce::AudioFormatReaderSource> src,
-                                int channel);
+  [[nodiscard]] Error playSound(std::unique_ptr<juce::AudioFormatReaderSource> src, int channel);
   [[nodiscard]] Error playSound(const juce::File &file, int channel);
+  [[nodiscard]] Error playSound(std::unique_ptr<juce::MemoryAudioSource> src, int channel);
 
  private:
   [[nodiscard]] Error configureDeviceManager(Config const &config);

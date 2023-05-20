@@ -10,8 +10,7 @@
  * @param outputs number of outputs
  */
 Engine::Engine() :
-  m_mainProcessor(new juce::AudioProcessorGraph()),
-  m_player(new juce::AudioProcessorPlayer(true))
+  m_mainProcessor(new juce::AudioProcessorGraph()), m_player(new juce::AudioProcessorPlayer(true))
 {
 }
 
@@ -40,8 +39,7 @@ Error Engine::configureGraph(Config const &config)
 
   m_mainProcessor->clear();
   audioOutputNode = m_mainProcessor->addNode(
-      std::make_unique<AudioGraphIOProcessor>(AudioGraphIOProcessor::audioOutputNode),
-      NodeID{}, juce::AudioProcessorGraph::UpdateKind::sync);
+      std::make_unique<AudioGraphIOProcessor>(AudioGraphIOProcessor::audioOutputNode));
   if (!audioOutputNode) return Error("could not add output node");
   m_player->setProcessor(m_mainProcessor.get());
   m_deviceManager.addAudioCallback(m_player.get());
@@ -66,8 +64,8 @@ Error Engine::configureDeviceManager(Config const &config)
   setup.outputChannels = config.outputs();
   setup.sampleRate = config.sampleRate();
 
-  auto err = m_deviceManager.initialise(config.inputs(), config.outputs(), nullptr, false,
-                                        "", &setup);
+  auto err =
+      m_deviceManager.initialise(config.inputs(), config.outputs(), nullptr, false, "", &setup);
   if (err.isNotEmpty())
   {
     return Error("initializing deviceManager: " + err);
@@ -93,12 +91,36 @@ Error Engine::configure(Config const &config)
  * @param file
  * @param channel
  */
+Error Engine::playSound(std::unique_ptr<juce::MemoryAudioSource> src, int channel)
+{
+  Error err;
+  std::scoped_lock<std::mutex> lock(mut);
+  auto node = m_mainProcessor->addNode(make_unique<MonoFilePlayerProcessor>(std::move(src)));
+  auto conn = Connection{{node->nodeID, 0}, {audioOutputNode->nodeID, channel - 1}};
+  m_mainProcessor->addConnection(conn);
+  if (auto proc = dynamic_cast<MonoFilePlayerProcessor *>(node->getProcessor()))
+  {
+    proc->setNodeID(node->nodeID);
+    proc->start();
+  }
+  else
+  {
+    err = Error("not a MonoFilePlayerProcessor");
+  }
+  return err;
+}
+
+/**
+ * @brief Plays back a single file
+ *
+ * @param file
+ * @param channel
+ */
 Error Engine::playSound(std::unique_ptr<AudioFormatReaderSource> src, int channel)
 {
   Error err;
   std::scoped_lock<std::mutex> lock(mut);
-  auto node =
-      m_mainProcessor->addNode(make_unique<MonoFilePlayerProcessor>(std::move(src)));
+  auto node = m_mainProcessor->addNode(make_unique<MonoFilePlayerProcessor>(std::move(src)));
   auto conn = Connection{{node->nodeID, 0}, {audioOutputNode->nodeID, channel - 1}};
   m_mainProcessor->addConnection(conn);
   if (auto proc = dynamic_cast<MonoFilePlayerProcessor *>(node->getProcessor()))
@@ -146,11 +168,10 @@ void Engine::hiResTimerCallback()
     if (!node) return;
     if (auto proc = dynamic_cast<MonoFilePlayerProcessor *>(node->getProcessor()))
     {
-      if (!proc->isPlaying())
+      if (!proc->isFinished())
       {
         proc->releaseResources();
-        m_mainProcessor->removeNode(node->nodeID,
-                                    juce::AudioProcessorGraph::UpdateKind::async);
+        m_mainProcessor->removeNode(node, juce::AudioProcessorGraph::UpdateKind::async);
       }
     }
   }
