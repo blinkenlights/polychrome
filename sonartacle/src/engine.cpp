@@ -11,7 +11,7 @@
  */
 Engine::Engine() :
   m_mainProcessor(new juce::AudioProcessorGraph()),
-  m_player(new juce::AudioProcessorPlayer())
+  m_player(new juce::AudioProcessorPlayer(true))
 {
 }
 
@@ -19,6 +19,7 @@ Engine::~Engine()
 {
   m_deviceManager.removeAudioCallback(m_player.get());
   m_mainProcessor->releaseResources();
+  m_mainProcessor->clear();
 }
 
 /**
@@ -27,6 +28,7 @@ Engine::~Engine()
  */
 Error Engine::configureGraph(Config const &config)
 {
+  std::scoped_lock<std::mutex> lock(mut);
   juce::AudioIODevice *device = m_deviceManager.getCurrentAudioDevice();
   uint32_t sampleRate = device->getCurrentSampleRate();
   int samplesPerBlock = device->getCurrentBufferSizeSamples();
@@ -38,7 +40,8 @@ Error Engine::configureGraph(Config const &config)
 
   m_mainProcessor->clear();
   audioOutputNode = m_mainProcessor->addNode(
-      std::make_unique<AudioGraphIOProcessor>(AudioGraphIOProcessor::audioOutputNode));
+      std::make_unique<AudioGraphIOProcessor>(AudioGraphIOProcessor::audioOutputNode),
+      NodeID{}, juce::AudioProcessorGraph::UpdateKind::sync);
   if (!audioOutputNode) return Error("could not add output node");
   m_player->setProcessor(m_mainProcessor.get());
   m_deviceManager.addAudioCallback(m_player.get());
@@ -80,6 +83,7 @@ Error Engine::configure(Config const &config)
 {
   if (auto err = configureDeviceManager(config)) return err;
   if (auto err = configureGraph(config)) return err;
+  startTimer(200);
   return Error();
 }
 
@@ -91,14 +95,15 @@ Error Engine::configure(Config const &config)
  */
 Error Engine::playSound(std::unique_ptr<AudioFormatReaderSource> src, int channel)
 {
-  // cout << "Playing " << uri << " on channel " << channel << endl;
   Error err;
+  std::scoped_lock<std::mutex> lock(mut);
   auto node =
       m_mainProcessor->addNode(make_unique<MonoFilePlayerProcessor>(std::move(src)));
   auto conn = Connection{{node->nodeID, 0}, {audioOutputNode->nodeID, channel - 1}};
   m_mainProcessor->addConnection(conn);
   if (auto proc = dynamic_cast<MonoFilePlayerProcessor *>(node->getProcessor()))
   {
+    proc->setNodeID(node->nodeID);
     proc->start();
   }
   else
@@ -122,6 +127,7 @@ Error Engine::playSound(const juce::File &file, int channel)
   m_mainProcessor->addConnection(conn);
   if (auto proc = dynamic_cast<MonoFilePlayerProcessor *>(node->getProcessor()))
   {
+    proc->setNodeID(node->nodeID);
     proc->start();
   }
   else
@@ -129,4 +135,23 @@ Error Engine::playSound(const juce::File &file, int channel)
     err = Error("not a MonoFilePlayerProcessor");
   }
   return err;
+}
+
+void Engine::hiResTimerCallback()
+{
+  std::scoped_lock<std::mutex> lock(mut);
+  if (!m_mainProcessor) return;
+  for (const auto node : m_mainProcessor->getNodes())
+  {
+    if (!node) return;
+    if (auto proc = dynamic_cast<MonoFilePlayerProcessor *>(node->getProcessor()))
+    {
+      if (!proc->isPlaying())
+      {
+        proc->releaseResources();
+        m_mainProcessor->removeNode(node->nodeID,
+                                    juce::AudioProcessorGraph::UpdateKind::async);
+      }
+    }
+  }
 }

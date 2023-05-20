@@ -37,11 +37,13 @@ MonoFilePlayerProcessor::MonoFilePlayerProcessor(juce::File const &file) :
   m_source.setSource(m_readerSource.get());
 }
 
+MonoFilePlayerProcessor::~MonoFilePlayerProcessor() { releaseResources(); }
+
 /**
  * @brief
  *
  */
-void MonoFilePlayerProcessor::releaseResources() {}
+void MonoFilePlayerProcessor::releaseResources() { m_source.releaseResources(); }
 
 /**
  * @brief
