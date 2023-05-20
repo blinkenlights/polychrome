@@ -49,11 +49,11 @@ void MainApp::listCmd(juce::ArgumentList const & /*args*/)
   deviceManager.createAudioDeviceTypes(devTypes);
   for (const auto &type : devTypes)
   {
-    cout << "[[ " << type->getTypeName() << " ]]" << endl;
+    std::cout << "[[ " << type->getTypeName() << " ]]" << std::endl;
     type->scanForDevices();
     for (const auto &dev : type->getDeviceNames())
     {
-      cout << "  - " << dev << endl;
+      std::cout << "  - " << dev << std::endl;
     }
   }
 }
@@ -80,6 +80,7 @@ void MainApp::runCmd(juce::ArgumentList const &args)
   // parse arguments
   uint32_t port = args.getValueForOption("--port|-p").getIntValue();
   uint32_t outputs = args.getValueForOption("--outputs|-o").getIntValue();
+  uint32_t inputs = args.getValueForOption("--inputs|-i").getIntValue();
   juce::String device = args.getValueForOption("--device|-d");
   juce::String cacheDir = args.getValueForOption("--cache|-c");
   port = port != 0 ? port : 60000;  // default port
@@ -92,7 +93,7 @@ void MainApp::runCmd(juce::ArgumentList const &args)
   Engine engine;
   if (auto err = engine.configure(Engine::Config()
                                       .WithDeviceName(device)
-                                      .WithInputs(0)
+                                      .WithInputs(inputs)
                                       .WithOutputs(outputs)
                                       .WithSampleRate(48000)))
     juce::ConsoleApplication::fail(static_cast<juce::String>(err));
