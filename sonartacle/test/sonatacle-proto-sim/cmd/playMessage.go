@@ -14,7 +14,6 @@ import (
 )
 
 var file, address string
-var start bool
 var port uint
 var channel uint32
 
@@ -43,14 +42,13 @@ var playMessageCmd = &cobra.Command{
 		}
 
 		// Send a message to the server
-		msg := &SamplePlayMessage{
+		msg := &PlaySample{
 			Uri:     file,
 			Channel: channel,
-			Start:   start,
 		}
 		data, err := proto.Marshal(&AudioPacket{
-			Content: &AudioPacket_PlayMessage{
-				PlayMessage: msg,
+			Content: &AudioPacket_PlaySample{
+				PlaySample: msg,
 			},
 		})
 
@@ -82,5 +80,4 @@ func init() {
 	sendCmd.Flags().UintVarP(&port, "port", "p", 60000, "udp port")
 	playMessageCmd.Flags().StringVarP(&file, "file", "f", "/Users/lukas/dev/letterbox/sonartacle/resources/pew.wav", "the file to play")
 	playMessageCmd.Flags().Uint32VarP(&channel, "channel", "c", 1, "the channel to play the sample on")
-	playMessageCmd.Flags().BoolVarP(&start, "start", "s", true, "if the sample should be played")
 }
