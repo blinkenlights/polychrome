@@ -10,9 +10,9 @@ Server::Server(asio::io_context &ioCtx, uint16_t port) :
 
 void Server::startReceive()
 {
-  m_socket.async_receive_from(asio::buffer(m_recvBuffer), m_remoteEndpoint,
-                              std::bind(&Server::handleReceive, this,
-                                        std::placeholders::_1, std::placeholders::_2));
+  m_socket.async_receive_from(
+      asio::buffer(m_recvBuffer), m_remoteEndpoint,
+      std::bind(&Server::handleReceive, this, std::placeholders::_1, std::placeholders::_2));
 }
 
 void Server::handleReceive(const asio::error_code &error, std::size_t sz)
@@ -51,9 +51,9 @@ void Server::handleSend(std::shared_ptr<std::string> msg, const asio::error_code
 
 void Server::send(std::shared_ptr<std::string> msg, std::size_t /*sz*/)
 {
-  m_socket.async_send_to(asio::buffer(*msg), m_remoteEndpoint,
-                         std::bind(&Server::handleSend, this, msg, std::placeholders::_1,
-                                   std::placeholders::_2));
+  m_socket.async_send_to(
+      asio::buffer(*msg), m_remoteEndpoint,
+      std::bind(&Server::handleSend, this, msg, std::placeholders::_1, std::placeholders::_2));
 }
 
 void Server::send(std::shared_ptr<Packet> packet, std::size_t /*sz*/)

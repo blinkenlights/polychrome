@@ -47,6 +47,7 @@ class MonoFilePlayerProcessor : public ProcessorBase
   MonoFilePlayerProcessor(std::unique_ptr<juce::AudioFormatReaderSource> src);
 
   MonoFilePlayerProcessor(juce::File const &file);
+  MonoFilePlayerProcessor(std::unique_ptr<juce::MemoryAudioSource> src);
   ~MonoFilePlayerProcessor();
 
   void prepareToPlay(double sampleRate, int samplesPerBlock) override;
@@ -57,6 +58,7 @@ class MonoFilePlayerProcessor : public ProcessorBase
   void start() { m_source.start(); }
   void stop() { m_source.stop(); }
   bool isPlaying() const { return m_source.isPlaying() && m_source.hasStreamFinished(); }
+  bool isFinished() const { return m_source.getCurrentPosition() < m_source.getLengthInSeconds(); }
 
   const juce::String getName() const override { return juce::String(m_name); }
 
@@ -65,7 +67,7 @@ class MonoFilePlayerProcessor : public ProcessorBase
 
  private:
   juce::AudioFormatManager m_formatManager;
-  std::shared_ptr<juce::AudioFormatReaderSource> m_readerSource;
+  std::unique_ptr<juce::PositionableAudioSource> m_readerSource;
   juce::AudioTransportSource m_source;
   std::string m_name;
   NodeID m_nodeID;

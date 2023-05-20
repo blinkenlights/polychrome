@@ -66,8 +66,7 @@ void MainApp::playCmd(juce::ArgumentList const &args)
   uint32_t channel = args.getValueForOption("--channel|-c").getIntValue();
 
   Engine engine;
-  if (auto err =
-          engine.configure(Engine::Config().WithDeviceName(device).WithOutputs(outputs));
+  if (auto err = engine.configure(Engine::Config().WithDeviceName(device).WithOutputs(outputs));
       err)
     juce::ConsoleApplication::fail(static_cast<juce::String>(err));
 
@@ -115,8 +114,8 @@ void MainApp::runCmd(juce::ArgumentList const &args)
           }
           else if (auto [file, err] = cache.get(packet->playmessage().uri()); !err)
           {
-            if (auto err = engine.playSound(std::move(file.value()),
-                                            packet->playmessage().channel()))
+            if (auto err =
+                    engine.playSound(std::move(file.value()), packet->playmessage().channel()))
               std::cerr << err << std::endl;
           }
           else
