@@ -39,7 +39,7 @@ endif()
 
 # include JUCE framework
 set(DONT_SET_USING_JUCE_NAMESPACE ON)
-add_subdirectory(lib/juce)
+CPMAddPackage("gh:juce-framework/JUCE#7.0.5@7.0.5")
 juce_add_console_app(${TARGET_NAME}
   PRODUCT_NAME "sonartacle"
   NEEDS_CURL TRUE
