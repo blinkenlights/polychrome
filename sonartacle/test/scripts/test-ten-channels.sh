@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 
-TEST_APP=./sonartacle-proto-sim
+APP=${APP:-"build/protobuf-sim"}
+if [! -x foo ]; then
+  echo "${APP} is not executable"
+fi
 
-CMD="${TEST_APP} send playMessage"
+CMD="${APP} send playMessage"
 
 $CMD -f https://github.com/gueldenstone/MultiChannelSampler/raw/main/resources/pew.wav -c 1
 sleep 0.1

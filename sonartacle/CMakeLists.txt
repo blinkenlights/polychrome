@@ -5,6 +5,39 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(${TARGET_NAME} VERSION 0.0.1)
 
+set(PROTOCOL_BUFFER_FILES
+  "${CMAKE_CURRENT_LIST_DIR}/../protobuf/nanopb.proto"
+  "${CMAKE_CURRENT_LIST_DIR}/../protobuf/schema.proto"
+)
+set(PROTOCOL_BUFFER_FOLDER
+  "${CMAKE_CURRENT_LIST_DIR}/../protobuf"
+)
+
+# --------------------- go ---------------------------- #
+# compile protobufs
+file(GLOB_RECURSE GO_SRCS CONFIGURE_DEPENDS *.go)
+
+set(GO_BIN_NAME protobuf-sim)
+
+add_custom_command(OUTPUT ${GO_BIN_NAME}-proto
+  DEPENDS ${PROTOCOL_BUFFERS_FILES}
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND protoc -I=${PROTOCOL_BUFFER_FOLDER} --go_opt=Mschema.proto=./cmd --go_opt=Mnanopb.proto=./cmd --go_out=test ${PROTOCOL_BUFFER_FILES}
+  COMMENT "Generating protobufs for golang"
+)
+message(STATUS "Golang sources: " ${GO_SRCS})
+
+add_custom_command(OUTPUT ${GO_BIN_NAME}
+  DEPENDS ${GO_SRCS} ${GO_BIN_NAME}-proto
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/test
+  COMMAND go build -o "${CMAKE_CURRENT_BINARY_DIR}/${GO_BIN_NAME}" .
+  COMMENT "Building Test App with go"
+)
+
+# Add a custom target for the library.
+add_custom_target(test-app DEPENDS ${GO_BIN_NAME})
+
+# --------------------- c++ ---------------------------- #
 # ALSA for Linux (needs to be found up here)
 if(UNIX AND NOT APPLE)
   find_package(ALSA REQUIRED)
