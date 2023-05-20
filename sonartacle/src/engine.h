@@ -82,7 +82,7 @@ class Engine
 
  private:
   juce::AudioDeviceManager m_deviceManager;
-  std::unique_ptr<juce::AudioProcessorGraph> m_mainProcessor;  // needs to be pointer?
+  std::unique_ptr<juce::AudioProcessorGraph> m_mainProcessor;
   std::unique_ptr<juce::AudioProcessorPlayer> m_player;
   Node::Ptr audioOutputNode;
 

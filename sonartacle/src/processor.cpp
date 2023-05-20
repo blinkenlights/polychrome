@@ -15,7 +15,8 @@ ProcessorBase::ProcessorBase(int inputs, int outputs) :
 }
 
 /**
- * @brief Construct a new Mono File Player Processor:: Mono File Player Processor object
+ * @brief Construct a new Mono File Player Processor:: Mono File Player
+ * Processor object
  *
  * @param file
  */
