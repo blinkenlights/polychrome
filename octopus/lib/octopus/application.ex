@@ -11,6 +11,7 @@ defmodule Octopus.Application do
   def start(_type, _args) do
     children = [
       # Core
+      OctopusWeb.Telemetry,
       {Phoenix.PubSub, name: Octopus.PubSub},
       Octopus.Broadcaster,
       Octopus.Mixer,
@@ -22,7 +23,6 @@ defmodule Octopus.Application do
       Supervisor.child_spec({Cachex, name: Font}, id: make_ref()),
 
       # WebApp
-      OctopusWeb.Telemetry,
       {Finch, name: Octopus.Finch},
       OctopusWeb.Endpoint
     ]

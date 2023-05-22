@@ -31,11 +31,10 @@ defmodule Octopus.Mixer do
     GenServer.cast(__MODULE__, {:select_app, app_id})
   end
 
-  @spec selected_app :: any
   @doc """
   Returns the currently selected app.
   """
-  def selected_app do
+  def selected_app() do
     GenServer.call(__MODULE__, :selected_app)
   end
 

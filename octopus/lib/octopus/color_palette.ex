@@ -72,39 +72,6 @@ defmodule Octopus.ColorPalette do
     |> IO.iodata_to_binary()
   end
 
-  @doc """
-  Applies brightness correction. This is the place were would apply our calibartion once we have it.
-  """
-  def brightness_correction(%__MODULE__{} = palette) do
-    colors =
-      palette.colors
-      # |> Enum.map(fn %Color{r: r, g: g, b: b} ->
-      #   min_value = min(r, min(g, b)) / 2
-      #   %Color{r: r - min_value, g: g - min_value, b: b - min_value, w: min_value}
-      # end)
-      |> Enum.map(fn color ->
-        vals =
-          color
-          |> Map.from_struct()
-          |> Enum.map(fn {c, v} -> {c, round(ease(v / 255, 2) * 255)} end)
-          |> Enum.into(%{})
-
-        struct(Color, vals)
-      end)
-
-    %ColorPalette{colors: colors}
-  end
-
-  defp ease(val, index) do
-    case index do
-      0 -> val
-      1 -> Easing.quadratic_in(val)
-      2 -> Easing.cubic_in(val)
-      3 -> Easing.quartic_in(val)
-      4 -> Easing.exponential_in(val)
-    end
-  end
-
   defp color_from_hex(<<r::binary-size(2), g::binary-size(2), b::binary-size(2)>>) do
     %Color{
       r: Integer.parse(r, 16) |> elem(0),

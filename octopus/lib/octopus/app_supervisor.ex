@@ -22,7 +22,7 @@ defmodule Octopus.AppSupervisor do
   * `{:apps, {:started, app_id, module}}` - an app was started
   * `{:apps, {:stopped, app_id}}` - an app was stopped
   """
-  def subscribe do
+  def subscribe() do
     Phoenix.PubSub.subscribe(Octopus.PubSub, "apps")
   end
 
@@ -43,6 +43,7 @@ defmodule Octopus.AppSupervisor do
   def start_app(module) when is_atom(module) do
     app_id = generate_app_id()
     name = {:via, Registry, {Octopus.AppRegistry, app_id}}
+
     # select app in mixer if there is no other app running
     if running_apps() == [] do
       Mixer.select_app(app_id)

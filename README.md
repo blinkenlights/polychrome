@@ -21,4 +21,6 @@ graph LR
   broadcast[Octopus.Broadcaster] --> |UDP| sim
   sim[Sim]-->|live_view| live[HTML]
 ```
+Missing: AppSupervisor, InputEvents, 
+
 
