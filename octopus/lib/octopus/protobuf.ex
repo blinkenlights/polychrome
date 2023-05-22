@@ -2,7 +2,7 @@ defmodule Octopus.Protobuf do
   require Logger
 
   alias Octopus.ColorPalette
-  alias Octopus.Protobuf.{Frame, Packet, Config, ClientPacket}
+  alias Octopus.Protobuf.{Frame, Packet, Config, FirmwarePacket, InputEvent}
 
   def encode(%Frame{data: data, palette: palette} = frame)
       when is_binary(data) and is_binary(palette) do
@@ -20,16 +20,38 @@ defmodule Octopus.Protobuf do
     |> encode()
   end
 
+  def encode(%InputEvent{} = event) do
+    %Packet{content: {:input_event, event}}
+    |> Packet.encode()
+  end
+
   def encode(%Config{} = config) do
     %Packet{content: {:config, config}}
     |> Packet.encode()
   end
 
-  def decode_client_packet(protobuf) when is_binary(protobuf) do
-    ClientPacket.decode(protobuf)
+  def decode_firmware_packet(protobuf) when is_binary(protobuf) do
+    FirmwarePacket.decode(protobuf)
   rescue
     error ->
-      Logger.error("Could not decode protobuf: #{inspect(error)} Binary: #{inspect(protobuf)} ")
-      nil
+      Logger.warn("Could not decode protobuf: #{inspect(error)} Binary: #{inspect(protobuf)} ")
+      :error
+  end
+
+  def decode_packet(protobuf) when is_binary(protobuf) do
+    case Packet.decode(protobuf) do
+      %Packet{content: {:frame, %Frame{palette: palette} = frame}} ->
+        {:ok, %Frame{frame | palette: ColorPalette.from_binary(palette)}}
+
+      %Packet{content: {:config, %Config{} = config}} ->
+        {:ok, config}
+
+      _ ->
+        {:error, :unexpected_content}
+    end
+  rescue
+    error ->
+      Logger.warn("Could not decode protobuf: #{inspect(error)} Binary: #{inspect(protobuf)} ")
+      {:error, :decode_error}
   end
 end

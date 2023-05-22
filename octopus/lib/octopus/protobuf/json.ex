@@ -10,8 +10,8 @@ defimpl Jason.Encoder, for: Config do
 end
 
 defimpl Jason.Encoder, for: Frame do
-  def encode(%Frame{} = frame, opts) do
-    frame
+  def encode(%Frame{data: data} = frame, opts) do
+    %Frame{frame | data: to_charlist(data)}
     |> Map.from_struct()
     |> Jason.Encode.map(opts)
   end

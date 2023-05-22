@@ -1,15 +1,13 @@
-# genserver that send udp packages to the led controller
-
 defmodule Octopus.Broadcaster do
   use GenServer
   require Logger
 
   alias Octopus.Protobuf
-  alias Octopus.Protobuf.{Config, RemoteLog, ClientInfo, ClientPacket}
+  alias Octopus.Protobuf.{Config, RemoteLog, FirmwareInfo, FirmwarePacket}
 
   @default_config %Config{
     luminance: 255,
-    easing_interval_ms: 500,
+    easing_interval_ms: 0,
     easing_mode: :EASE_OUT_QUART,
     show_test_frame: false,
     enable_calibration: true
@@ -21,7 +19,7 @@ defmodule Octopus.Broadcaster do
   # @remote_host {192, 168, 0, 172}
   # @remote_host {192, 168, 1, 255}
   @remote_host {192, 168, 0, 255}
-  # @remote_host {192, 168, 23, 255}
+  # @remote_host {192, 168, 43, 158}
   @remote_port 1337
 
   @local_port 4422
@@ -62,24 +60,24 @@ defmodule Octopus.Broadcaster do
   def handle_info({:udp, _socket, ip, _port, protobuf}, state = %__MODULE__{}) do
     # todo: refactor
 
-    case Protobuf.decode_client_packet(protobuf) do
-      %ClientPacket{content: {:remote_log, %RemoteLog{message: message}}} ->
+    case Protobuf.decode_firmware_packet(protobuf) do
+      %FirmwarePacket{content: {:remote_log, %RemoteLog{message: message}}} ->
         IO.write(state.file, message)
 
       # Logger.info("#{print_ip(ip)}: Remote log #{inspect(message)}")
 
-      %ClientPacket{content: {:client_info, %ClientInfo{} = client_info}} ->
+      %FirmwarePacket{content: {:client_info, %FirmwareInfo{} = client_info}} ->
         # Logger.debug("#{print_ip(ip)}: Client info #{inspect(client_info)}")
 
         %Config{config_phash: expected_phash} = state.config
 
         case client_info do
-          %ClientInfo{config_phash: ^expected_phash} ->
+          %FirmwareInfo{config_phash: ^expected_phash} ->
             :noop
 
           _ ->
             Logger.info(
-              "#{print_ip(ip)}: Config hash misstmacht expected #{expected_phash} got #{client_info.config_phash}"
+              "#{print_ip(ip)}: Config hash misstmatch expected #{expected_phash} got #{client_info.config_phash}"
             )
 
             send_config(state.config)

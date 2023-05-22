@@ -26,8 +26,16 @@ defmodule Octopus.Protobuf.EventType do
 
   use Protobuf, enum: true, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
 
-  field :BUTTON, 0
-  field :DIRECTION, 1
+  field :BUTTON_1, 0
+  field :BUTTON_2, 1
+  field :BUTTON_3, 2
+  field :BUTTON_4, 3
+  field :BUTTON_5, 4
+  field :BUTTON_6, 5
+  field :BUTTON_7, 6
+  field :BUTTON_8, 7
+  field :BUTTON_9, 8
+  field :BUTTON_10, 9
 end
 
 defmodule Octopus.Protobuf.Packet do
@@ -37,8 +45,37 @@ defmodule Octopus.Protobuf.Packet do
 
   oneof :content, 0
 
-  field :config, 1, type: Octopus.Protobuf.Config, oneof: 0
   field :frame, 2, type: Octopus.Protobuf.Frame, oneof: 0
+  field :w_frame, 3, type: Octopus.Protobuf.WFrame, json_name: "wFrame", oneof: 0
+  field :rgb_frame, 4, type: Octopus.Protobuf.RGBFrame, json_name: "rgbFrame", oneof: 0
+  field :input_event, 6, type: Octopus.Protobuf.InputEvent, json_name: "inputEvent", oneof: 0
+  field :config, 1, type: Octopus.Protobuf.Config, oneof: 0
+end
+
+defmodule Octopus.Protobuf.Frame do
+  @moduledoc false
+
+  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+
+  field :data, 1, type: :bytes, deprecated: false
+  field :palette, 2, type: :bytes, deprecated: false
+end
+
+defmodule Octopus.Protobuf.WFrame do
+  @moduledoc false
+
+  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+
+  field :data, 1, type: :bytes, deprecated: false
+  field :palette, 2, type: :bytes, deprecated: false
+end
+
+defmodule Octopus.Protobuf.RGBFrame do
+  @moduledoc false
+
+  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+
+  field :data, 1, type: :bytes, deprecated: false
 end
 
 defmodule Octopus.Protobuf.Config do
@@ -54,15 +91,6 @@ defmodule Octopus.Protobuf.Config do
   field :enable_calibration, 6, type: :bool, json_name: "enableCalibration"
 end
 
-defmodule Octopus.Protobuf.Frame do
-  @moduledoc false
-
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
-
-  field :data, 1, type: :bytes, deprecated: false
-  field :palette, 2, type: :bytes, deprecated: false
-end
-
 defmodule Octopus.Protobuf.InputEvent do
   @moduledoc false
 
@@ -72,18 +100,18 @@ defmodule Octopus.Protobuf.InputEvent do
   field :value, 2, type: :uint32
 end
 
-defmodule Octopus.Protobuf.ClientPacket do
+defmodule Octopus.Protobuf.FirmwarePacket do
   @moduledoc false
 
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
 
   oneof :content, 0
 
-  field :client_info, 1, type: Octopus.Protobuf.ClientInfo, json_name: "clientInfo", oneof: 0
+  field :client_info, 1, type: Octopus.Protobuf.FirmwareInfo, json_name: "clientInfo", oneof: 0
   field :remote_log, 2, type: Octopus.Protobuf.RemoteLog, json_name: "remoteLog", oneof: 0
 end
 
-defmodule Octopus.Protobuf.ClientInfo do
+defmodule Octopus.Protobuf.FirmwareInfo do
   @moduledoc false
 
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
