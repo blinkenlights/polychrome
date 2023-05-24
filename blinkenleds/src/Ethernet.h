@@ -8,7 +8,7 @@ public:
   static void setup();
   static void loop();
   static void remote_log(String message);
-  static void send_client_info();
+  static void send_firmware_info();
 
 private:
 };

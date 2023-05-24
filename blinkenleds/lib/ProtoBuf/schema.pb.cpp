@@ -9,19 +9,25 @@
 PB_BIND(Packet, Packet, 2)
 
 
-PB_BIND(Config, Config, AUTO)
-
-
 PB_BIND(Frame, Frame, 2)
+
+
+PB_BIND(WFrame, WFrame, 2)
+
+
+PB_BIND(RGBFrame, RGBFrame, 2)
+
+
+PB_BIND(Config, Config, AUTO)
 
 
 PB_BIND(InputEvent, InputEvent, AUTO)
 
 
-PB_BIND(ClientPacket, ClientPacket, AUTO)
+PB_BIND(FirmwarePacket, FirmwarePacket, AUTO)
 
 
-PB_BIND(ClientInfo, ClientInfo, AUTO)
+PB_BIND(FirmwareInfo, FirmwareInfo, AUTO)
 
 
 PB_BIND(RemoteLog, RemoteLog, AUTO)

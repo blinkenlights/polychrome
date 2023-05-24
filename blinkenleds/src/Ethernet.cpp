@@ -59,7 +59,7 @@ void wifi_event_callback(WiFiEvent_t event)
     Serial.println("  Speed : " + String(ETH.linkSpeed()) + " Mbps");
 
     udp_setup();
-    Ethernet::send_client_info();
+    Ethernet::send_firmware_info();
     eth_connected = true;
     break;
   case ARDUINO_EVENT_ETH_DISCONNECTED:
@@ -179,7 +179,7 @@ void Ethernet::loop()
 
     if (millis() - last_metrics_send > METRICS_INTERVAL)
     {
-      Ethernet::send_client_info();
+      Ethernet::send_firmware_info();
     }
   }
 }
@@ -198,35 +198,35 @@ void Ethernet::remote_log(String message)
 {
   if (eth_connected)
   {
-    ClientPacket packet = ClientPacket_init_default;
-    packet.which_content = ClientPacket_remote_log_tag;
+    FirmwarePacket packet = FirmwarePacket_init_default;
+    packet.which_content = FirmwarePacket_remote_log_tag;
     packet.content.remote_log = (RemoteLog)RemoteLog_init_default;
     message.toCharArray(packet.content.remote_log.message, 100);
 
     pb_ostream_t stream = pb_ostream_from_buffer(udp_buffer, UDP_BUFFER_SIZE);
-    pb_encode(&stream, ClientPacket_fields, &packet);
+    pb_encode(&stream, FirmwarePacket_fields, &packet);
 
     send_udp_packet(stream.bytes_written);
   }
 }
 
-void Ethernet::send_client_info()
+void Ethernet::send_firmware_info()
 {
-  ClientPacket packet = ClientPacket_init_default;
-  packet.which_content = ClientPacket_client_info_tag;
-  packet.content.client_info = (ClientInfo)ClientInfo_init_default;
+  FirmwarePacket packet = FirmwarePacket_init_default;
+  packet.which_content = FirmwarePacket_firmware_info_tag;
+  packet.content.firmware_info = (FirmwareInfo)FirmwareInfo_init_default;
 
   String version = String(VERSION);
-  version.toCharArray(packet.content.client_info.build_time, 20);
-  hostname.toCharArray(packet.content.client_info.hostname, 20);
-  packet.content.client_info.panel_index = PANEL_INDEX;
-  packet.content.client_info.config_phash = Display::get_config_phash();
+  version.toCharArray(packet.content.firmware_info.build_time, 20);
+  hostname.toCharArray(packet.content.firmware_info.hostname, 20);
+  packet.content.firmware_info.panel_index = PANEL_INDEX;
+  packet.content.firmware_info.config_phash = Display::get_config_phash();
 
-  packet.content.client_info.fps = framecount * 1000 / (millis() - last_metrics_send);
+  packet.content.firmware_info.fps = framecount * 1000 / (millis() - last_metrics_send);
   framecount = 0;
 
   pb_ostream_t stream = pb_ostream_from_buffer(udp_buffer, UDP_BUFFER_SIZE);
-  pb_encode(&stream, ClientPacket_fields, &packet);
+  pb_encode(&stream, FirmwarePacket_fields, &packet);
 
   send_udp_packet(stream.bytes_written);
 

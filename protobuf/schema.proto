@@ -91,7 +91,7 @@ enum EventType {
 // From Firmware to Octopus, internal use only
 message FirmwarePacket {
   oneof content {
-    FirmwareInfo client_info = 1;
+    FirmwareInfo firmware_info = 1;
     RemoteLog remote_log = 2;
   }
 }
