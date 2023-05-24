@@ -8,3 +8,9 @@ protobuf_generate:
 		--plugin=../protobuf/protoc-gen-elixir \
 		--elixir_opt=package_prefix=octopus.protobuf \
 		schema.proto
+
+deploy:
+	fly deploy
+
+remote-shell:
+	fly ssh console --pty -C "/app/bin/octopus remote"

@@ -22,7 +22,7 @@ defmodule Octopus.Apps.UdpReceiver do
   def init(_args) do
     Logger.info("#{__MODULE__}: Listening on UDP port #{inspect(@port)} for protobuf packets.")
 
-    {:ok, udp} = :gen_udp.open(@port, [:binary, active: true])
+    {:ok, udp} = :gen_udp.open(@port, [:binary, active: true, ip: bind_address()])
 
     state = %State{
       udp: udp
@@ -54,5 +54,18 @@ defmodule Octopus.Apps.UdpReceiver do
     binary = Protobuf.encode(event)
     :gen_udp.send(state.udp, state.remote_ip, state.remote_port, binary)
     {:noreply, state}
+  end
+
+  # special case for fly.io
+  defp bind_address() do
+    case System.fetch_env("FLY_APP_NAME") do
+      {:ok, _} ->
+        {:ok, fly_global_ip} = :inet.getaddr(~c"fly-global-services", :inet)
+        Logger.info("#{__MODULE__}: On fly.io, binding to #{inspect(fly_global_ip)}")
+        fly_global_ip
+
+      :error ->
+        {0, 0, 0, 0}
+    end
   end
 end

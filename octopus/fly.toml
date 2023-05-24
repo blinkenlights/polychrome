@@ -1,0 +1,35 @@
+# fly.toml app configuration file generated for remote-octopus on 2023-05-24T10:22:49+02:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = "remote-octopus"
+primary_region = "ams"
+kill_signal = "SIGTERM"
+
+[deploy]
+  strategy = "immediate"
+
+[env]
+  PHX_HOST = "remote-octopus.fly.dev"
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 1000
+    soft_limit = 1000
+
+[[services]]
+  internal_port = 2342
+  protocol = "udp"
+  [[services.ports]]
+    handlers = []
+    port = 2342
+
+  
