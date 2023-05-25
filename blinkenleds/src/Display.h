@@ -12,6 +12,7 @@ public:
   static void loop();
   static void handle_packet(Packet packet);
   static RgbwColor color_from_palette(Frame_palette_t palette, uint8_t index);
+  static RgbwColor color_from_palette(WFrame_palette_t palette, uint8_t index);
   static uint32_t get_config_phash();
 
 private:

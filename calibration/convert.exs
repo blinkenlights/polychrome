@@ -310,23 +310,23 @@ blues_with_corrections =
     Enum.at(blues, b)
   end)
 
-file = File.open!("Pixel_corrections.h", [:write])
+file = File.open!("Pixel_calibrations.h", [:write])
 
 IO.write(file, "#include \"Pixel.h\"\n\n")
 
 IO.write(
   file,
-  "const uint8_t Pixel::corrections_table_r[256] = { #{Enum.join(reds_with_correction, ", ")} };\n"
+  "const uint8_t Pixel::calibration_table_r[256] = { #{Enum.join(reds_with_correction, ", ")} };\n"
 )
 
 IO.write(
   file,
-  "const uint8_t Pixel::corrections_table_g[256] = { #{Enum.join(greens_with_corrections, ", ")} };\n"
+  "const uint8_t Pixel::calibration_table_g[256] = { #{Enum.join(greens_with_corrections, ", ")} };\n"
 )
 
 IO.write(
   file,
-  "const uint8_t Pixel::corrections_table_b[256] = { #{Enum.join(blues_with_corrections, ", ")} };\n"
+  "const uint8_t Pixel::calibration_table_b[256] = { #{Enum.join(blues_with_corrections, ", ")} };\n"
 )
 
 File.close(file)

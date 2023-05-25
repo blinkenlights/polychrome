@@ -13,7 +13,7 @@ defmodule Octopus.App do
 
   """
 
-  alias Octopus.Protobuf.{Frame, InputEvent}
+  alias Octopus.Protobuf.{Frame, WFrame, InputEvent}
   alias Octopus.{Mixer, AppSupervisor}
 
   @doc """
@@ -51,7 +51,7 @@ defmodule Octopus.App do
   @doc """
   Send a frame to the mixer.
   """
-  def send_frame(%Frame{} = frame) do
+  def send_frame(%frame_type{} = frame) when frame_type in [Frame, WFrame] do
     app_id = AppSupervisor.lookup_app_id(self())
     Mixer.handle_frame(app_id, frame)
   end

@@ -107,7 +107,11 @@ defmodule Octopus.Protobuf.FirmwarePacket do
 
   oneof :content, 0
 
-  field :client_info, 1, type: Octopus.Protobuf.FirmwareInfo, json_name: "clientInfo", oneof: 0
+  field :firmware_info, 1,
+    type: Octopus.Protobuf.FirmwareInfo,
+    json_name: "firmwareInfo",
+    oneof: 0
+
   field :remote_log, 2, type: Octopus.Protobuf.RemoteLog, json_name: "remoteLog", oneof: 0
 end
 

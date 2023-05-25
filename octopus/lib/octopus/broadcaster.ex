@@ -64,20 +64,20 @@ defmodule Octopus.Broadcaster do
       %FirmwarePacket{content: {:remote_log, %RemoteLog{message: message}}} ->
         IO.write(state.file, message)
 
-      # Logger.info("#{print_ip(ip)}: Remote log #{inspect(message)}")
+        Logger.info("#{print_ip(ip)}: Remote log #{inspect(message)}")
 
-      %FirmwarePacket{content: {:client_info, %FirmwareInfo{} = client_info}} ->
-        # Logger.debug("#{print_ip(ip)}: Client info #{inspect(client_info)}")
+      %FirmwarePacket{content: {:firmware_info, %FirmwareInfo{} = firmware_info}} ->
+        # Logger.debug("#{print_ip(ip)}: Client info #{inspect(firmware_info)}")
 
         %Config{config_phash: expected_phash} = state.config
 
-        case client_info do
+        case firmware_info do
           %FirmwareInfo{config_phash: ^expected_phash} ->
             :noop
 
           _ ->
             Logger.info(
-              "#{print_ip(ip)}: Config hash misstmatch expected #{expected_phash} got #{client_info.config_phash}"
+              "#{print_ip(ip)}: Config hash misstmatch expected #{expected_phash} got #{firmware_info.config_phash}"
             )
 
             send_config(state.config)

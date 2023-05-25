@@ -70,6 +70,15 @@ void Display::handle_packet(Packet packet)
     }
 
     break;
+
+  case Packet_w_frame_tag:
+
+    for (int i = 0; i < min(PIXEL_COUNT, int(packet.content.w_frame.data.size)); i++)
+    {
+      pixel[i].set_color(color_from_palette(packet.content.w_frame.palette, packet.content.w_frame.data.bytes[i]));
+    }
+
+    break;
   }
 }
 
@@ -82,6 +91,23 @@ RgbwColor Display::color_from_palette(Frame_palette_t palette, uint8_t index)
     uint8_t b = palette.bytes[index * 3 + 2];
 
     return RgbwColor(r, g, b, 0);
+  }
+  else
+  {
+    return RgbwColor(0, 0, 0, 0);
+  }
+}
+
+RgbwColor Display::color_from_palette(WFrame_palette_t palette, uint8_t index)
+{
+  if (index < palette.size / 4)
+  {
+    uint8_t r = palette.bytes[index * 4];
+    uint8_t g = palette.bytes[index * 4 + 1];
+    uint8_t b = palette.bytes[index * 4 + 2];
+    uint8_t w = palette.bytes[index * 4 + 3];
+
+    return RgbwColor(r, g, b, w);
   }
   else
   {

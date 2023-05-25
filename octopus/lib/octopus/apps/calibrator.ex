@@ -3,8 +3,7 @@ defmodule Octopus.Apps.Calibrator do
   require Logger
 
   alias Octopus.{ColorPalette, Broadcaster}
-  alias Octopus.ColorPalette.Color
-  alias Octopus.Protobuf.{Frame, Config}
+  alias Octopus.Protobuf.{WFrame, Config}
 
   @moduledoc """
   This app is used to calibrate the display. It reads colors from DisplayCal and renders them on the pixels.
@@ -14,6 +13,14 @@ defmodule Octopus.Apps.Calibrator do
 
   defmodule State do
     defstruct [:color, :data]
+  end
+
+  defmodule RGBW do
+    defstruct [:r, :g, :b, :w]
+  end
+
+  defmodule RGB do
+    defstruct [:r, :g, :b]
   end
 
   @pixel_index 6
@@ -26,7 +33,7 @@ defmodule Octopus.Apps.Calibrator do
   @first_color "808080"
   @display_cal_endpoint "http://localhost:8080/ajax/messages"
   @red_correction 1.0
-  @green_correction 0.92
+  @green_correction 0.945
   @blue_correction 0.44
   @gamma_lookup [
     0,
@@ -294,6 +301,7 @@ defmodule Octopus.Apps.Calibrator do
       0..(640 - 1)
       |> Enum.map(fn _ -> 0 end)
       |> List.update_at(@pixel_index, fn _ -> 1 end)
+      |> IO.iodata_to_binary()
 
     state = %State{
       color: color_from_hex(@first_color),
@@ -310,14 +318,16 @@ defmodule Octopus.Apps.Calibrator do
   def handle_info(:tick, %State{} = state) do
     state = set_next_color(state)
 
-    palette = %ColorPalette{
-      colors: [
-        %Color{r: 0, g: 0, b: 0},
-        state.color
-      ]
-    }
+    palette =
+      %ColorPalette{
+        colors: [
+          %RGBW{r: 0, g: 0, b: 0, w: 0},
+          state.color |> apply_corrections()
+        ]
+      }
+      |> encode_palette()
 
-    send_frame(%Frame{data: state.data, palette: palette})
+    send_frame(%WFrame{data: state.data, palette: palette})
 
     {:noreply, state}
   end
@@ -327,10 +337,10 @@ defmodule Octopus.Apps.Calibrator do
     {g, ""} = Integer.parse(g, 16)
     {b, ""} = Integer.parse(b, 16)
 
-    %Color{r: r, g: g, b: b}
+    %RGB{r: r, g: g, b: b}
   end
 
-  def set_next_color(%State{color: color = %Color{}} = state) do
+  def set_next_color(%State{color: color = %RGB{}} = state) do
     query = URI.encode("rgb(#{color.r}, #{color.g}, #{color.b}) 0.5")
 
     Finch.build(:get, "#{@display_cal_endpoint}?" <> query)
@@ -340,8 +350,6 @@ defmodule Octopus.Apps.Calibrator do
         color =
           color_from_hex(new_color)
           |> tap(fn c -> Logger.info("Got new color from DisplayCal: #{inspect(c)}") end)
-          |> apply_corrections()
-          |> tap(fn c -> Logger.info("After corrections: #{inspect(c)}") end)
 
         %State{state | color: color}
 
@@ -351,12 +359,31 @@ defmodule Octopus.Apps.Calibrator do
     end
   end
 
-  def apply_corrections(%Color{r: r, g: g, b: b}) do
+  def apply_corrections(%RGB{r: r, g: g, b: b}) do
     # first gamma, then corrections
-    %Color{
+    # %RGBW{
+    #   r: round(Enum.at(@gamma_lookup, 180)),
+    #   g: round(Enum.at(@gamma_lookup, 255)),
+    #   b: round(Enum.at(@gamma_lookup, 180)),
+    #   w: round(Enum.at(@gamma_lookup, 255))
+    # }
+    %RGBW{
       r: round(Enum.at(@gamma_lookup, r) * @red_correction),
       g: round(Enum.at(@gamma_lookup, g) * @green_correction),
-      b: round(Enum.at(@gamma_lookup, b) * @blue_correction)
+      b: round(Enum.at(@gamma_lookup, b) * @blue_correction),
+      w: 0
     }
+    |> IO.inspect()
+
+    # %RGBW{r: 0, g: 0, b: 30, w: 255}
+  end
+
+  def encode_palette(%ColorPalette{colors: colors}) do
+    colors
+    |> Enum.flat_map(fn
+      %RGB{r: r, g: g, b: b} -> [r, g, b]
+      %RGBW{r: r, g: g, b: b, w: w} -> [r, g, b, w]
+    end)
+    |> IO.iodata_to_binary()
   end
 end
