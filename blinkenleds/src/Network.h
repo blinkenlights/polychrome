@@ -1,7 +1,7 @@
-#ifndef __ETHERNET_H_INCLUDED__
-#define __ETHERNET_H_INCLUDED__
+#ifndef __NETWORK_H_INCLUDED__
+#define __NETWORK_H_INCLUDED__
 
-class Ethernet
+class Network
 {
 
 public:
@@ -13,4 +13,4 @@ public:
 private:
 };
 
-#endif // __ETHERNET_H_INCLUDED__
+#endif // __NETWORK_H_INCLUDED__

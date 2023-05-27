@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <schema.pb.h>
 #include <Display.h>
-#include <Ethernet.h>
+#include <Network.h>
 
 void setup()
 {
@@ -15,13 +15,13 @@ void setup()
   delay(50);
 
   Display::setup();
-  Ethernet::setup();
+  Network::setup();
 
   Serial.println("Setup done");
 }
 
 void loop()
 {
-  Ethernet::loop();
+  Network::loop();
   Display::loop();
 }

@@ -1,7 +1,9 @@
 #include <Arduino.h>
-#include <Ethernet.h>
+#include <Network.h>
 #include <ETH.h>
+#include <ESPmDNS.h>
 #include <ArduinoOTA.h>
+
 #include <schema.pb.h>
 #include <pb_decode.h>
 #include <pb_encode.h>
@@ -31,17 +33,14 @@ void udp_setup()
   Serial.println("Listening on UDP port " + String(UDP_PORT));
 }
 
-void wifi_event_callback(WiFiEvent_t event)
+void network_event_callback(WiFiEvent_t event)
 {
   switch (event)
   {
   case ARDUINO_EVENT_ETH_START:
-    char hostname_c[32];
-    hostname.toCharArray(hostname_c, 32);
-
-    Serial.println("ETH Started");
-    Serial.println("Setting hostname: " + String(hostname));
-    ETH.setHostname(hostname_c);
+    // Serial.println("ETH Started");
+    // Serial.println("Setting hostname: " + String(hostname));
+    // ETH.setHostname(hostname.c_str());
 
     break;
   case ARDUINO_EVENT_ETH_CONNECTED:
@@ -59,7 +58,7 @@ void wifi_event_callback(WiFiEvent_t event)
     Serial.println("  Speed : " + String(ETH.linkSpeed()) + " Mbps");
 
     udp_setup();
-    Ethernet::send_firmware_info();
+    Network::send_firmware_info();
     eth_connected = true;
     break;
   case ARDUINO_EVENT_ETH_DISCONNECTED:
@@ -80,6 +79,8 @@ void ota_setup()
 
   Serial.println("Setting up OTA");
   ArduinoOTA
+      .setHostname(hostname.c_str())
+      .setMdnsEnabled(true)
       .onStart([]()
                {
                  String type;
@@ -123,20 +124,32 @@ void ota_handle()
   ArduinoOTA.handle();
 }
 
-void Ethernet::setup()
+void Network::setup()
 {
-  Serial.println("Starting ethernet");
-  WiFi.onEvent(wifi_event_callback);
+  Serial.println("Ethernet setup.");
+  WiFi.onEvent(network_event_callback);
 
   Serial.println("ETH begin.");
   // from: https://quinled.info/quinled-esp32-ethernet/
-  bool res = ETH.begin(0, 5, 23, 18, ETH_PHY_LAN8720, ETH_CLOCK_GPIO17_OUT);
+  ETH.begin(0, 5, 23, 18, ETH_PHY_LAN8720, ETH_CLOCK_GPIO17_OUT);
 
   ota_setup();
+
+  // MDNS
+  if (MDNS.begin(hostname.c_str()))
+  {
+    Serial.println("MDNS started");
+    MDNS.addService("blinkenleds", "udp", 1337);
+  }
+  else
+  {
+    Serial.println("MDNS");
+  }
+
   Serial.println("Ethernet setup done");
 }
 
-void Ethernet::loop()
+void Network::loop()
 {
   int bytes;
 
@@ -179,7 +192,7 @@ void Ethernet::loop()
 
     if (millis() - last_metrics_send > METRICS_INTERVAL)
     {
-      Ethernet::send_firmware_info();
+      Network::send_firmware_info();
     }
   }
 }
@@ -194,7 +207,7 @@ void send_udp_packet(uint16_t length)
   }
 }
 
-void Ethernet::remote_log(String message)
+void Network::remote_log(String message)
 {
   if (eth_connected)
   {
@@ -210,7 +223,7 @@ void Ethernet::remote_log(String message)
   }
 }
 
-void Ethernet::send_firmware_info()
+void Network::send_firmware_info()
 {
   FirmwarePacket packet = FirmwarePacket_init_default;
   packet.which_content = FirmwarePacket_firmware_info_tag;
