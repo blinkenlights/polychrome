@@ -9,8 +9,8 @@ message Packet {
     WFrame w_frame = 3;
     RGBFrame rgb_frame = 4;
 
-    // Frames for audio output
-    // AudioFrame audio_frame = 5;
+    // From Apps/UDP to Octopus.Mixer to beak
+    AudioFrame audio_frame = 5;
 
     // Events from the input controllers
     InputEvent input_event = 6;
@@ -120,16 +120,7 @@ message RemoteLog {
   string message = 1 [(nanopb).max_length = 100];
 }
 
-message AudioPacket {
-  oneof content {
-    CacheSamples cacheSamples = 1;
-    PlaySample playSample = 2;
-  }
-}
-message CacheSamples {
-  repeated string uri = 1;
-}
-message PlaySample {
+message AudioFrame {
   string uri = 1;
   uint32 channel = 2;
 }

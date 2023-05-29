@@ -19,14 +19,14 @@ void Server::handleReceive(const asio::error_code &error, std::size_t sz)
 {
   if (!error)
   {
-    std::shared_ptr<AudioPacket> packet(new AudioPacket());
+    std::shared_ptr<Packet> packet(new Packet());
     if (!packet->ParseFromArray(&m_recvBuffer, sz))
     {
       std::cerr << "received malformed packet, not a protobuf message" << std::endl;
       return;
     }
 
-    AudioPacket::ContentCase type = packet->content_case();
+    Packet::ContentCase type = packet->content_case();
     if (!m_callBackFns.contains(type))
     {
       std::cerr << "no callback registered for " << type << std::endl;
@@ -62,7 +62,7 @@ void Server::send(std::shared_ptr<Packet> packet, std::size_t /*sz*/)
   send(payload, static_cast<std::size_t>(packet->ByteSizeLong()));
 }
 
-void Server::registerCallback(AudioPacket::ContentCase type, msgRecvCallbackFn fn)
+void Server::registerCallback(Packet::ContentCase type, msgRecvCallbackFn fn)
 {
   m_callBackFns[type] = fn;
 }

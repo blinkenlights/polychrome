@@ -101,11 +101,11 @@ void MainApp::runCmd(juce::ArgumentList const &args)
 
     // register callback to play a sample
     server.registerCallback(
-        AudioPacket::kPlaySample,
-        [&engine, &cache](std::shared_ptr<AudioPacket> packet)
+        Packet::kAudioFrame,
+        [&engine, &cache](std::shared_ptr<Packet> packet)
         {
-          auto uri = packet->playsample().uri();
-          auto channel = packet->playsample().channel();
+          auto uri = packet->audio_frame().uri();
+          auto channel = packet->audio_frame().channel();
           if (auto [file, err] = cache.get(uri); !err)
           {
             if (auto err = engine.playSound(std::move(file.value()), channel, uri))
@@ -117,16 +117,16 @@ void MainApp::runCmd(juce::ArgumentList const &args)
           }
         });
     // register callback to cache samples
-    server.registerCallback(AudioPacket::kCacheSamples,
-                            [&cache](std::shared_ptr<AudioPacket> packet)
-                            {
-                              for (int i = 0; i < packet->cachesamples().uri_size(); ++i)
-                              {
-                                if (Error err = cache.cacheFile(
-                                        static_cast<juce::String>(packet->cachesamples().uri(i))))
-                                  std::cerr << err.what() << std::endl;
-                              }
-                            });
+    // server.registerCallback(AudioPacket::kCacheSamples,
+    //                         [&cache](std::shared_ptr<AudioFrame> packet)
+    //                         {
+    //                           for (int i = 0; i < packet->cachesamples().uri_size(); ++i)
+    //                           {
+    //                             if (Error err = cache.cacheFile(
+    //                                     static_cast<juce::String>(packet->cachesamples().uri(i))))
+    //                               std::cerr << err.what() << std::endl;
+    //                           }
+    //                         });
     // run the server
     ioCtx.run();
   }

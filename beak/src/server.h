@@ -5,7 +5,7 @@
 #include "proto.h"
 
 using asio::ip::udp;
-typedef std::function<void(std::shared_ptr<AudioPacket>)> msgRecvCallbackFn;
+typedef std::function<void(std::shared_ptr<Packet>)> msgRecvCallbackFn;
 class Server
 {
  public:
@@ -14,7 +14,7 @@ class Server
  public:
   void send(std::shared_ptr<std::string> msg, std::size_t sz);
   void send(std::shared_ptr<Packet> msg, std::size_t sz);
-  void registerCallback(AudioPacket::ContentCase type, msgRecvCallbackFn fn);
+  void registerCallback(Packet::ContentCase type, msgRecvCallbackFn fn);
 
  private:
   void startReceive();
@@ -26,5 +26,5 @@ class Server
   udp::socket m_socket;
   udp::endpoint m_remoteEndpoint;
   std::array<char, 1024> m_recvBuffer;
-  std::map<AudioPacket::ContentCase, msgRecvCallbackFn> m_callBackFns;
+  std::map<Packet::ContentCase, msgRecvCallbackFn> m_callBackFns;
 };

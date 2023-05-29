@@ -41,13 +41,13 @@ var playMessageCmd = &cobra.Command{
 		}
 
 		// Send a message to the server
-		msg := &PlaySample{
+		msg := &AudioFrame{
 			Uri:     file,
 			Channel: channel,
 		}
-		data, err := proto.Marshal(&AudioPacket{
-			Content: &AudioPacket_PlaySample{
-				PlaySample: msg,
+		data, err := proto.Marshal(&Packet{
+			Content: &Packet_AudioFrame{
+				AudioFrame: msg,
 			},
 		})
 
