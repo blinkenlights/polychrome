@@ -81,7 +81,6 @@ Error Engine::configure(Config const &config)
 {
   if (auto err = configureDeviceManager(config)) return err;
   if (auto err = configureGraph(config)) return err;
-  startTimer(200);
   return Error();
 }
 
@@ -91,17 +90,20 @@ Error Engine::configure(Config const &config)
  * @param file
  * @param channel
  */
-Error Engine::playSound(std::unique_ptr<juce::MemoryAudioSource> src, int channel)
+Error Engine::playSound(std::unique_ptr<juce::MemoryAudioSource> src, int channel,
+                        juce::String const &name)
 {
   Error err;
   std::scoped_lock<std::mutex> lock(mut);
-  auto node = m_mainProcessor->addNode(make_unique<MonoFilePlayerProcessor>(std::move(src)));
+  auto node = m_mainProcessor->addNode(make_unique<MonoFilePlayerProcessor>(std::move(src), name));
   auto conn = Connection{{node->nodeID, 0}, {audioOutputNode->nodeID, channel - 1}};
   m_mainProcessor->addConnection(conn);
   if (auto proc = dynamic_cast<MonoFilePlayerProcessor *>(node->getProcessor()))
   {
     proc->setNodeID(node->nodeID);
     proc->start();
+    const juce::MessageManagerLock mmLock;
+    proc->addChangeListener(this);
   }
   else
   {
@@ -116,17 +118,20 @@ Error Engine::playSound(std::unique_ptr<juce::MemoryAudioSource> src, int channe
  * @param file
  * @param channel
  */
-Error Engine::playSound(std::unique_ptr<AudioFormatReaderSource> src, int channel)
+Error Engine::playSound(std::unique_ptr<AudioFormatReaderSource> src, int channel,
+                        juce::String const &name)
 {
   Error err;
   std::scoped_lock<std::mutex> lock(mut);
-  auto node = m_mainProcessor->addNode(make_unique<MonoFilePlayerProcessor>(std::move(src)));
+  auto node = m_mainProcessor->addNode(make_unique<MonoFilePlayerProcessor>(std::move(src), name));
   auto conn = Connection{{node->nodeID, 0}, {audioOutputNode->nodeID, channel - 1}};
   m_mainProcessor->addConnection(conn);
   if (auto proc = dynamic_cast<MonoFilePlayerProcessor *>(node->getProcessor()))
   {
     proc->setNodeID(node->nodeID);
     proc->start();
+    const juce::MessageManagerLock mmLock;
+    proc->addChangeListener(this);
   }
   else
   {
@@ -151,6 +156,8 @@ Error Engine::playSound(const juce::File &file, int channel)
   {
     proc->setNodeID(node->nodeID);
     proc->start();
+    const juce::MessageManagerLock mmLock;
+    proc->addChangeListener(this);
   }
   else
   {
@@ -159,20 +166,12 @@ Error Engine::playSound(const juce::File &file, int channel)
   return err;
 }
 
-void Engine::hiResTimerCallback()
+void Engine::changeListenerCallback(ChangeBroadcaster *source)
 {
-  std::scoped_lock<std::mutex> lock(mut);
-  if (!m_mainProcessor) return;
-  for (const auto node : m_mainProcessor->getNodes())
-  {
-    if (!node) return;
-    if (auto proc = dynamic_cast<MonoFilePlayerProcessor *>(node->getProcessor()))
+  if (source)
+    if (auto proc = dynamic_cast<MonoFilePlayerProcessor *>(source))
     {
-      if (!proc->isFinished())
-      {
-        proc->releaseResources();
-        m_mainProcessor->removeNode(node, juce::AudioProcessorGraph::UpdateKind::async);
-      }
+      std::scoped_lock<std::mutex> lock(mut);
+      m_mainProcessor->removeNode(proc->getNodeID(), juce::AudioProcessorGraph::UpdateKind::async);
     }
-  }
 }

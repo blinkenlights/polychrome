@@ -19,9 +19,9 @@ ProcessorBase::ProcessorBase(int inputs, int outputs) :
  *
  * @param file
  */
-MonoFilePlayerProcessor::MonoFilePlayerProcessor(
-    std::unique_ptr<juce::AudioFormatReaderSource> src) :
-  ProcessorBase(1, 1), m_readerSource(std::move(src))
+MonoFilePlayerProcessor::MonoFilePlayerProcessor(std::unique_ptr<juce::AudioFormatReaderSource> src,
+                                                 juce::String const &name) :
+  ProcessorBase(1, 1), m_readerSource(std::move(src)), m_name(name)
 {
   m_source.setSource(m_readerSource.get());
 }
@@ -32,13 +32,15 @@ MonoFilePlayerProcessor::MonoFilePlayerProcessor(
  *
  * @param file
  */
-MonoFilePlayerProcessor::MonoFilePlayerProcessor(std::unique_ptr<juce::MemoryAudioSource> src) :
-  ProcessorBase(1, 1), m_readerSource(std::move(src))
+MonoFilePlayerProcessor::MonoFilePlayerProcessor(std::unique_ptr<juce::MemoryAudioSource> src,
+                                                 juce::String const &name) :
+  ProcessorBase(1, 1), m_readerSource(std::move(src)), m_name(name)
 {
   m_source.setSource(m_readerSource.get());
 }
 
-MonoFilePlayerProcessor::MonoFilePlayerProcessor(juce::File const &file) : ProcessorBase(1, 1)
+MonoFilePlayerProcessor::MonoFilePlayerProcessor(juce::File const &file) :
+  ProcessorBase(1, 1), m_name(file.getFullPathName())
 {
   m_formatManager.registerBasicFormats();
 

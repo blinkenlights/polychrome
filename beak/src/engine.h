@@ -11,7 +11,7 @@ using Node = juce::AudioProcessorGraph::Node;
 using NodeID = juce::AudioProcessorGraph::NodeID;
 using Connection = juce::AudioProcessorGraph::Connection;
 
-class Engine : public juce::HighResolutionTimer
+class Engine : public juce::ChangeListener
 {
  public:
   struct Config
@@ -73,16 +73,18 @@ class Engine : public juce::HighResolutionTimer
 
  public:
   [[nodiscard]] Error configure(Config const &config);
-  [[nodiscard]] Error playSound(std::unique_ptr<juce::AudioFormatReaderSource> src, int channel);
+  [[nodiscard]] Error playSound(std::unique_ptr<juce::AudioFormatReaderSource> src, int channel,
+                                juce::String const &name);
   [[nodiscard]] Error playSound(const juce::File &file, int channel);
-  [[nodiscard]] Error playSound(std::unique_ptr<juce::MemoryAudioSource> src, int channel);
+  [[nodiscard]] Error playSound(std::unique_ptr<juce::MemoryAudioSource> src, int channel,
+                                juce::String const &name);
+
+ public:
+  void changeListenerCallback(ChangeBroadcaster *source) override;
 
  private:
   [[nodiscard]] Error configureDeviceManager(Config const &config);
   [[nodiscard]] Error configureGraph(Config const &config);
-
- private:
-  void hiResTimerCallback() override;
 
  private:
   juce::AudioDeviceManager m_deviceManager;

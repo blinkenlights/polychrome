@@ -123,7 +123,8 @@ Error Cache::storeBufferFor(juce::String const& key, juce::File const& file,
 
   std::unique_ptr<AudioSampleBuffer> buf(new AudioSampleBuffer());
   buf->setSize((int)reader->numChannels, (int)reader->lengthInSamples);
-  reader->read(buf.get(), 0, static_cast<int>(reader->lengthInSamples), 0, true, true);
+  if (!reader->read(buf.get(), 0, static_cast<int>(reader->lengthInSamples), 0, true, true))
+    return Error("could not read into buffer");
   m_ressourceMap[key] = {
       std::move(buf),
       etag,

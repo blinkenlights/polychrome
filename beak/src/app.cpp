@@ -4,11 +4,8 @@
 #include "resource.h"
 #include "server.h"
 
-MainApp::MainApp() : m_deviceManager(new juce::AudioDeviceManager())
+MainApp::MainApp() : Thread("beak"), m_deviceManager(new juce::AudioDeviceManager())
 {
-  using namespace juce;
-  juce::MessageManager::getInstance();
-
   // declare commands to be used
   addHelpCommand("--help|-h", "Usage:", true);
   addVersionCommand("--version|-v", "Multi channel sampler 0.0.1");
@@ -56,6 +53,7 @@ void MainApp::listCmd(juce::ArgumentList const & /*args*/)
       std::cout << "  - " << dev << std::endl;
     }
   }
+  juce::JUCEApplication::getInstance()->systemRequestedQuit();
 }
 
 void MainApp::playCmd(juce::ArgumentList const &args)
@@ -102,20 +100,22 @@ void MainApp::runCmd(juce::ArgumentList const &args)
     Server server(ioCtx, port);
 
     // register callback to play a sample
-    server.registerCallback(AudioPacket::kPlaySample,
-                            [&engine, &cache](std::shared_ptr<AudioPacket> packet)
-                            {
-                              if (auto [file, err] = cache.get(packet->playsample().uri()); !err)
-                              {
-                                if (auto err = engine.playSound(std::move(file.value()),
-                                                                packet->playsample().channel()))
-                                  std::cerr << err << std::endl;
-                              }
-                              else
-                              {
-                                std::cerr << err.what() << std::endl;
-                              }
-                            });
+    server.registerCallback(
+        AudioPacket::kPlaySample,
+        [&engine, &cache](std::shared_ptr<AudioPacket> packet)
+        {
+          auto uri = packet->playsample().uri();
+          auto channel = packet->playsample().channel();
+          if (auto [file, err] = cache.get(uri); !err)
+          {
+            if (auto err = engine.playSound(std::move(file.value()), channel, uri))
+              std::cerr << err << std::endl;
+          }
+          else
+          {
+            std::cerr << err.what() << std::endl;
+          }
+        });
     // register callback to cache samples
     server.registerCallback(AudioPacket::kCacheSamples,
                             [&cache](std::shared_ptr<AudioPacket> packet)
@@ -135,3 +135,4 @@ void MainApp::runCmd(juce::ArgumentList const &args)
     juce::ConsoleApplication::fail(e.what());
   }
 }
+START_JUCE_APPLICATION(MainApp)
