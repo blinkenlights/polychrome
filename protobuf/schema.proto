@@ -121,6 +121,6 @@ message RemoteLog {
 }
 
 message AudioFrame {
-  string uri = 1;
+  string uri = 1; // supports file://<path>, http(s)://<url> with .wav or .aiff files
   uint32 channel = 2;
 }
