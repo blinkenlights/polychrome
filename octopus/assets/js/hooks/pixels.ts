@@ -1,15 +1,9 @@
-function resize(canvas: HTMLCanvasElement) {
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  canvas.width = rect.width * dpr;
-  canvas.height = rect.height * dpr;
-}
-
 type RGB = [number, number, number];
 
 interface Layout {
   imageSize: [number, number];
   pixelSize: [number, number];
+  pixelMargin: [number, number, number, number];
   positions: [number, number][];
   pixelImage: string;
 }
@@ -21,9 +15,35 @@ interface Frame {
   palette: RGB[];
 }
 
+function resize(canvas: HTMLCanvasElement) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+}
+
+function desaturate([r, g, b]: RGB, amount: number): RGB {
+  amount = 1.0 - amount;
+  const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return [l + (r - l) * amount, l + (g - l) * amount, l + (b - l) * amount];
+}
+
+function brighten([r, g, b]: RGB, amount: number): RGB {
+  const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return [
+    r + (255 - r) * amount,
+    g + (255 - g) * amount,
+    b + (255 - b) * amount,
+  ];
+}
+
+const DESATURATION_AMOUNT = 0.1;
+const BRIGHTEN_AMOUNT = 0.05;
+
 export function setup(canvas: HTMLCanvasElement) {
   const id = canvas.id;
   const pixelImage = new Image();
+  let pixelOffset = 0;
 
   let layout: Layout;
   let pixels = new Uint8Array();
@@ -57,6 +77,12 @@ export function setup(canvas: HTMLCanvasElement) {
     this.handleEvent(event, ({ config: _ }: { config: Config }) => {});
   });
 
+  ["pixel_offset", "pixel_offset:*"].forEach((event) => {
+    this.handleEvent(event, ({ offset: newOffset }: { offset: number }) => {
+      pixelOffset = newOffset;
+    });
+  });
+
   const draw = () => {
     if (!layout) {
       window.requestAnimationFrame(draw);
@@ -84,18 +110,35 @@ export function setup(canvas: HTMLCanvasElement) {
     ctx.translate(offsetX, offsetY);
     ctx.scale(scale, scale);
 
-    layout.positions.forEach(([x, y], i) => {
-      const pixel = pixels[i];
+    const positionsWithPixels: [[number, number], number | undefined][] =
+      layout.positions.map((pos, i) => [pos, pixels[i + pixelOffset]]);
+
+    positionsWithPixels.forEach(([[x, y], pixel], i) => {
+      let rgb: RGB = [0, 0, 0];
 
       if (pixel !== undefined && colorPalette[pixel] !== undefined) {
-        let [r, g, b] = colorPalette[pixel];
-        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-      } else {
-        ctx.fillStyle = "hsl(40, 80%, 5%)";
+        rgb = colorPalette[pixel];
       }
 
-      ctx.fillRect(x, y, layout.pixelSize[0], layout.pixelSize[1]);
+      let [r, g, b] = brighten(
+        desaturate(rgb, DESATURATION_AMOUNT),
+        BRIGHTEN_AMOUNT
+      );
+      ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
 
+      ctx.fillRect(
+        x + layout.pixelMargin[0],
+        y + layout.pixelMargin[1],
+        layout.pixelSize[0] - layout.pixelMargin[0] - layout.pixelMargin[2],
+        layout.pixelSize[1] - layout.pixelMargin[1] - layout.pixelMargin[3]
+      );
+    });
+
+    ctx.globalCompositeOperation = "screen";
+    ctx.globalAlpha = 0.5;
+
+    positionsWithPixels.forEach(([[x, y], _pixel]) => {
+      console.log(layout.pixelMargin);
       ctx.drawImage(pixelImage, x, y, layout.pixelSize[0], layout.pixelSize[1]);
     });
 

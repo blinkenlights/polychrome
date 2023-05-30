@@ -94,7 +94,6 @@ defmodule OctopusWeb.PixelsComponent do
       id={@id}
       phx-hook="Pixels"
       class="w-full h-full bg-contain bg-no-repeat bg-center"
-      data-pixel-image-url={@pixel_layout.pixel_image}
       style={"background-image: url(#{@pixel_layout.background_image});"}
     />
     """
@@ -145,5 +144,15 @@ defmodule OctopusWeb.PixelsComponent do
   """
   def push_config(socket, config, id \\ "*") do
     push_event(socket, "config:#{id}", %{config: config})
+  end
+
+  @doc """
+  Pushes a pixel offset to the client.
+
+  Used to "paginate" windows when using a layout which is
+  zoomed in on a subset of the pixels.
+  """
+  def push_pixel_offset(socket, offset, id \\ "*") do
+    push_event(socket, "pixel_offset:#{id}", %{offset: offset})
   end
 end

@@ -20,14 +20,15 @@ defmodule Octopus.Layout.Mildenberg do
   @impl true
   def layout do
     %Octopus.Layout{
-      name: "Mildenberg",
+      name: "Default",
       positions: @positions,
       width: @width,
       height: @height,
       pixel_size: {@pixel_width, @pixel_height},
+      pixel_margin: {0, 0, 0, 0},
       image_size: {@image_width, @image_height},
       background_image: "/images/mildenberg-dark.webp",
-      pixel_image: "/images/mildenberg-pixel.png"
+      pixel_image: "/images/mildenberg-pixel.webp"
     }
   end
 end

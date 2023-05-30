@@ -5,6 +5,7 @@ defmodule Octopus.Layout do
     :width,
     :height,
     :pixel_size,
+    :pixel_margin,
     :image_size,
     :background_image,
     :pixel_image
@@ -29,6 +30,7 @@ defmodule Octopus.Layout do
           width: integer(),
           height: integer(),
           pixel_size: size(),
+          pixel_margin: {integer(), integer(), integer(), integer()},
           image_size: size(),
           background_image: String.t(),
           pixel_image: String.t()
@@ -51,6 +53,7 @@ defmodule Octopus.Layout do
           width: layout.width,
           height: layout.height,
           pixelSize: layout.pixel_size |> Tuple.to_list(),
+          pixelMargin: layout.pixel_margin |> Tuple.to_list(),
           imageSize: layout.image_size |> Tuple.to_list(),
           backgroundImage: layout.background_image,
           pixelImage: layout.pixel_image
