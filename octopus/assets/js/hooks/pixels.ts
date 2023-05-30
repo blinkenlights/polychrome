@@ -138,7 +138,6 @@ export function setup(canvas: HTMLCanvasElement) {
     ctx.globalAlpha = 0.5;
 
     positionsWithPixels.forEach(([[x, y], _pixel]) => {
-      console.log(layout.pixelMargin);
       ctx.drawImage(pixelImage, x, y, layout.pixelSize[0], layout.pixelSize[1]);
     });
 
