@@ -13,8 +13,10 @@ defmodule Octopus.App do
 
   """
 
-  alias Octopus.Protobuf.{Frame, WFrame, InputEvent}
+  alias Octopus.Protobuf.{Frame, WFrame, AudioFrame, InputEvent}
   alias Octopus.{Mixer, AppSupervisor}
+
+  @supported_frames [Frame, WFrame, AudioFrame]
 
   @doc """
   Human readable name of the app. It will be used in the UI and other places to identify the app.
@@ -51,7 +53,7 @@ defmodule Octopus.App do
   @doc """
   Send a frame to the mixer.
   """
-  def send_frame(%frame_type{} = frame) when frame_type in [Frame, WFrame] do
+  def send_frame(%frame_type{} = frame) when frame_type in @supported_frames do
     app_id = AppSupervisor.lookup_app_id(self())
     Mixer.handle_frame(app_id, frame)
   end

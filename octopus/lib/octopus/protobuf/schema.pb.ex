@@ -56,6 +56,7 @@ defmodule Octopus.Protobuf.Packet do
   field :frame, 2, type: Octopus.Protobuf.Frame, oneof: 0
   field :w_frame, 3, type: Octopus.Protobuf.WFrame, json_name: "wFrame", oneof: 0
   field :rgb_frame, 4, type: Octopus.Protobuf.RGBFrame, json_name: "rgbFrame", oneof: 0
+  field :audio_frame, 5, type: Octopus.Protobuf.AudioFrame, json_name: "audioFrame", oneof: 0
   field :input_event, 6, type: Octopus.Protobuf.InputEvent, json_name: "inputEvent", oneof: 0
 
   field :firmware_config, 1,
@@ -147,4 +148,13 @@ defmodule Octopus.Protobuf.RemoteLog do
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
 
   field :message, 1, type: :string, deprecated: false
+end
+
+defmodule Octopus.Protobuf.AudioFrame do
+  @moduledoc false
+
+  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+
+  field :uri, 1, type: :string
+  field :channel, 2, type: :uint32
 end

@@ -3,7 +3,9 @@ defmodule Octopus.Mixer do
   require Logger
 
   alias Octopus.{Broadcaster, Protobuf, AppSupervisor}
-  alias Octopus.Protobuf.{Frame, WFrame, InputEvent}
+  alias Octopus.Protobuf.{Frame, WFrame, AudioFrame, InputEvent}
+
+  @supported_frames [Frame, WFrame, AudioFrame]
 
   defmodule State do
     defstruct selected_app: nil
@@ -13,7 +15,7 @@ defmodule Octopus.Mixer do
     GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
   end
 
-  def handle_frame(app_id, %frame_type{} = frame) when frame_type in [Frame, WFrame] do
+  def handle_frame(app_id, %frame_type{} = frame) when frame_type in @supported_frames do
     # encode the frame in the app process, so any encoding errors get raised there
     binary = Protobuf.encode(frame)
     GenServer.cast(__MODULE__, {:new_frame, {app_id, binary, frame}})
@@ -80,7 +82,7 @@ defmodule Octopus.Mixer do
     Broadcaster.send_binary(binary)
   end
 
-  # we don't broadcast WFrames because the sim does not support them yet
+  # we only send Frames to pubsub because the sim does not support them yet
   defp send_frame(binary, _) when is_binary(binary) do
     Broadcaster.send_binary(binary)
   end
