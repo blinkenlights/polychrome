@@ -28,7 +28,7 @@ defmodule Octopus.Layout.Mildenberg do
       pixel_margin: {0, 0, 0, 0},
       image_size: {@image_width, @image_height},
       background_image: "/images/mildenberg-dark.webp",
-      pixel_image: "/images/mildenberg-pixel.webp"
+      pixel_image: "/images/mildenberg-pixel-overlay.webp"
     }
   end
 end

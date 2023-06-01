@@ -27,7 +27,7 @@ defmodule Octopus.Layout.MildenbergZoom2 do
       pixel_margin: {4, 4, 0, 0},
       image_size: {@image_width, @image_height},
       background_image: "/images/mildenberg-zoom2.webp",
-      pixel_image: "/images/mildenberg-zoom2-pixel.webp"
+      pixel_image: "/images/mildenberg-zoom2-pixel-overlay.webp"
     }
   end
 end

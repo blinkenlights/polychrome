@@ -57,7 +57,7 @@ defmodule OctopusWeb.SimulatorLive do
   def render(assigns) do
     ~H"""
     <div class="flex w-full h-full justify-center bg-black">
-      <div class="fixed top-4 flex flex-col gap-2">
+      <div class="fixed top-4 flex flex-col gap-2 z-10">
         <form id="view-form" phx-change="view-changed">
           <.input type="select" name="view" options={@view_options} value={@view} />
         </form>

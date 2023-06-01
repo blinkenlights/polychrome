@@ -5,7 +5,6 @@ interface Layout {
   pixelSize: [number, number];
   pixelMargin: [number, number, number, number];
   positions: [number, number][];
-  pixelImage: string;
 }
 
 interface Config {}
@@ -37,18 +36,16 @@ function brighten([r, g, b]: RGB, amount: number): RGB {
   ];
 }
 
-const DESATURATION_AMOUNT = 0.1;
-const BRIGHTEN_AMOUNT = 0.05;
+const DESATURATION_AMOUNT = 0.15;
+const BRIGHTEN_AMOUNT = 0.1;
 
 export function setup(canvas: HTMLCanvasElement) {
   const id = canvas.id;
-  const pixelImage = new Image();
   let pixelOffset = 0;
 
   let layout: Layout;
   let pixels = new Uint8Array();
   let colorPalette: RGB[] = [];
-  let lastCanvasBoundingClientRect = canvas.getBoundingClientRect();
 
   const ctx = canvas.getContext("2d");
   if (!ctx) {
@@ -62,7 +59,6 @@ export function setup(canvas: HTMLCanvasElement) {
   [`layout:${id}`, "layout:*"].forEach((event) => {
     this.handleEvent(event, ({ layout: newLayout }: { layout: Layout }) => {
       layout = newLayout;
-      pixelImage.src = layout.pixelImage;
     });
   });
 
@@ -89,11 +85,7 @@ export function setup(canvas: HTMLCanvasElement) {
       return;
     }
 
-    const rect = canvas.getBoundingClientRect();
-    if (rect !== lastCanvasBoundingClientRect) {
-      resize(canvas);
-      lastCanvasBoundingClientRect = rect;
-    }
+    resize(canvas);
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -113,7 +105,7 @@ export function setup(canvas: HTMLCanvasElement) {
     const positionsWithPixels: [[number, number], number | undefined][] =
       layout.positions.map((pos, i) => [pos, pixels[i + pixelOffset]]);
 
-    positionsWithPixels.forEach(([[x, y], pixel], i) => {
+    positionsWithPixels.forEach(([[x, y], pixel]) => {
       let rgb: RGB = [0, 0, 0];
 
       if (pixel !== undefined && colorPalette[pixel] !== undefined) {
@@ -132,13 +124,6 @@ export function setup(canvas: HTMLCanvasElement) {
         layout.pixelSize[0] - layout.pixelMargin[0] - layout.pixelMargin[2],
         layout.pixelSize[1] - layout.pixelMargin[1] - layout.pixelMargin[3]
       );
-    });
-
-    ctx.globalCompositeOperation = "screen";
-    ctx.globalAlpha = 0.5;
-
-    positionsWithPixels.forEach(([[x, y], _pixel]) => {
-      ctx.drawImage(pixelImage, x, y, layout.pixelSize[0], layout.pixelSize[1]);
     });
 
     ctx.restore();

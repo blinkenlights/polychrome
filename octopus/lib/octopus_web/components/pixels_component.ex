@@ -90,12 +90,18 @@ defmodule OctopusWeb.PixelsComponent do
   """
   def pixels(assigns) do
     ~H"""
-    <canvas
-      id={@id}
-      phx-hook="Pixels"
-      class="w-full h-full bg-contain bg-no-repeat bg-center"
-      style={"background-image: url(#{@pixel_layout.background_image});"}
-    />
+    <div class="w-full h-full">
+      <canvas
+        id={@id}
+        phx-hook="Pixels"
+        class="absolute w-full h-full bg-contain bg-no-repeat bg-center"
+        style={"background-image: url(#{@pixel_layout.background_image});"}
+      />
+      <img
+        src={@pixel_layout.pixel_image}
+        class="w-full h-full object-contain mix-blend-multiply pointer-events-none"
+      />
+    </div>
     """
   end
 
