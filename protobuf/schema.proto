@@ -1,18 +1,21 @@
 syntax = "proto3";
 import "nanopb.proto";
 
+// wrapper for all messages
 message Packet {    
   oneof content {
-    // From Apps/UDP to Octopus.Mixer to Firmware 
+    // Frames with pixel data.
     Frame frame = 2;
     WFrame w_frame = 3;
     RGBFrame rgb_frame = 4;
-    // AudioFrame audio_frame = 5;
 
-    // From joystick controller to Octopus to  app/UDP
+    // Frames for audio output
+    AudioFrame audio_frame = 5;
+
+    // Events from the input controllers
     InputEvent input_event = 6;
 
-    // Configures firmware, not forwarded by the mixer
+    // Configures firmware, for internal use only
     Config config = 1; 
   }
 }
@@ -24,16 +27,36 @@ message Frame {
 }
 
 // The same as the frame but with access to the white component in the palette (RGBW).
-// Not yet implemented
 message WFrame {
   bytes data = 1 [(nanopb).max_size = 640]; // Selects pixel colors from the palette. First pixel is top left. One panel after the other.
   bytes palette = 2 [(nanopb).max_size = 256]; // Series of RGBW values. 8bit per color.
 }
 
-// Frame with 3 bytes per pixel (RGB).
+// Frame with 3 bytes per pixel (RGB) and no color palette
 // not yet implemented
 message RGBFrame {
   bytes data = 1 [(nanopb).max_size = 1920]; // Series of RGB values. 8bit per color. First pixel is top left. One panel after the other.
+}
+
+// This is likely to change
+message InputEvent {
+  EventType type = 1;
+  uint32 value = 2;  // 1: pressed, 0: released
+}
+
+enum EventType {
+  BUTTON_1 = 0;
+  BUTTON_2 = 1;
+  BUTTON_3 = 2;
+  BUTTON_4 = 3;
+  BUTTON_5 = 4;
+  BUTTON_6 = 5;
+  BUTTON_7 = 6;
+  BUTTON_8 = 7;
+  BUTTON_9 = 8;
+  BUTTON_10 = 9;
+
+  // todo: direction
 }
 
 message Config {
@@ -67,26 +90,6 @@ enum EasingMode {
 	EASE_IN_OUT_EXPO = 15;
 }
 
-// This is not ideal and might change
-message InputEvent {
-  EventType type = 1;
-  uint32 value = 2;  // 1: pressed, 0: released
-}
-
-enum EventType {
-  BUTTON_1 = 0;
-  BUTTON_2 = 1;
-  BUTTON_3 = 2;
-  BUTTON_4 = 3;
-  BUTTON_5 = 4;
-  BUTTON_6 = 5;
-  BUTTON_7 = 6;
-  BUTTON_8 = 7;
-  BUTTON_9 = 8;
-  BUTTON_10 = 9;
-
-  // todo: direction
-}
 
 // From Firmware to Octopus, internal use only
 message FirmwarePacket {

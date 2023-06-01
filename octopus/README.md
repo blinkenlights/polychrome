@@ -1,31 +1,20 @@
 # Octopus
 
-## Architecture
+Central hub for the project. 
+Manages apps, mixes pixel streams, shows previews.
 
-```mermaid
-graph LR
-  generator[PixelGenerator] -->|udp packet| udp
-  udp[Octopus.UdpServer] -->|push frame| pixels
-  pixels[Octopus.Pixels] -->|pubsub broadcast| live
-  live[OctopusWeb.SimulatorLive] -->|push_event| hook
-  hook[JS Pixels Hook] -->|draw| canvas[HTML Canvas]
-```
+You can reach a hosted version here: https://remote-octopus.fly.dev
 
 ## Setup
 
-To start your Phoenix server:
+To start octopus locally: 
 
+- Install elixir: https://elixir-lang.org/install.html
 - Run `mix setup` to install and setup dependencies
-- Start Phoenix endpoint with `mix phx.server` or inside IEx with `iex -S mix phx.server`
+- Start the server with `iex -S mix phx.server`
 
-Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
+Octopus should now be reachable on [`localhost:4000`](http://localhost:4000). 
 
-Ready to run in production? Please [check our deployment guides](https://hexdocs.pm/phoenix/deployment.html).
+Start the "UDP Server" app to receive external frames on UDP port 2342
 
-## Learn more
 
-- Official website: https://www.phoenixframework.org/
-- Guides: https://hexdocs.pm/phoenix/overview.html
-- Docs: https://hexdocs.pm/phoenix
-- Forum: https://elixirforum.com/c/phoenix-forum
-- Source: https://github.com/phoenixframework/phoenix
