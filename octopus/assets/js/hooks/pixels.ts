@@ -117,6 +117,8 @@ export function setup(canvas: HTMLCanvasElement) {
         BRIGHTEN_AMOUNT
       );
       ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+      ctx.shadowColor = ctx.fillStyle;
+      ctx.shadowBlur = layout.pixelSize[0] / 3;
 
       ctx.fillRect(
         x + layout.pixelMargin[0],

@@ -28,7 +28,7 @@ defmodule Octopus.Canvas do
     %Canvas{
       width: width,
       height: height,
-      pixels: List.duplicate(0, width * height),
+      pixels: %{},
       palette: ColorPalette.load(palette_name)
     }
   end
@@ -36,8 +36,8 @@ defmodule Octopus.Canvas do
   @doc """
   Clears the canvas by setting all pixels to the given color.
   """
-  def clear(canvas, color \\ 0) do
-    %{canvas | pixels: List.duplicate(color, canvas.width * canvas.height)}
+  def clear(canvas) do
+    %Canvas{canvas | pixels: %{}}
   end
 
   @doc """
@@ -45,12 +45,8 @@ defmodule Octopus.Canvas do
   If the position is outside the canvas, the canvas is returned unchanged.
   """
   def put_pixel(canvas, x, y, color) do
-    if x < 0 || x >= canvas.width || y < 0 || y >= canvas.height do
-      canvas
-    else
-      index = y * canvas.width + x
-      %{canvas | pixels: List.replace_at(canvas.pixels, index, color)}
-    end
+    pixels = Map.put(canvas.pixels, {x, y}, color)
+    %Canvas{canvas | pixels: pixels}
   end
 
   @doc """
@@ -63,24 +59,9 @@ defmodule Octopus.Canvas do
   end
 
   defp rearrange(pixels, width) do
-    pixels
-    |> Enum.chunk_every(width)
-    |> Enum.map(&Enum.chunk_every(&1, @window_size + @gap_size))
-    |> transpose()
-    |> Enum.map(&Enum.take(&1, @window_size))
-    |> remove_gaps(width > @window_size * @windows)
-    |> List.flatten()
-  end
-
-  defp remove_gaps(pixels, false), do: pixels
-
-  defp remove_gaps(pixels, true) do
-    pixels |> Enum.map(fn row -> Enum.map(row, &Enum.take(&1, 8)) end)
-  end
-
-  defp transpose(rows) do
-    rows
-    |> List.zip()
-    |> Enum.map(&Tuple.to_list/1)
+    for x <- 0..(width - 1),
+        y <- 0..7,
+        into: [],
+        do: Map.get(pixels, {x, y}, 0)
   end
 end
