@@ -1,13 +1,8 @@
 # Octopus
 
-Central hub for the project. 
-Manages apps, mixes pixel streams, shows previews.
-
 You can reach a hosted version here: https://remote-octopus.fly.dev
 
-## Setup
-
-To start octopus locally: 
+## Local setup
 
 - Install elixir: https://elixir-lang.org/install.html
 - Run `mix setup` to install and setup dependencies

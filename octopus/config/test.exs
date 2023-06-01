@@ -20,9 +20,6 @@ config :octopus, OctopusWeb.Endpoint,
   secret_key_base: "GPsqaLYP3ua3vzfYDZ66FLNCEOWWjwSKhAQVgZR41PF8d/xO0SScDfsEVPbj1vhM",
   server: false
 
-# In test we don't send emails.
-config :octopus, Octopus.Mailer, adapter: Swoosh.Adapters.Test
-
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
 
