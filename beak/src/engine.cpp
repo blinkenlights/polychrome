@@ -5,15 +5,16 @@
 /**
  * @brief Construct a new Multi Channel Sampler:: Multi Channel Sampler object
  *
- * @param devMngr pointer to the device manager
- * @param deviceName name of the device we want to use
- * @param outputs number of outputs
  */
 Engine::Engine() :
   m_mainProcessor(new juce::AudioProcessorGraph()), m_player(new juce::AudioProcessorPlayer(true))
 {
 }
 
+/**
+ * @brief Destroy the Engine:: Engine object
+ *
+ */
 Engine::~Engine()
 {
   m_deviceManager.removeAudioCallback(m_player.get());
@@ -22,8 +23,10 @@ Engine::~Engine()
 }
 
 /**
- * @brief Initializes the audio engine which is a AudioGraph.
+ * @brief Initialise the audio engine which is a AudioGraph.
  *
+ * @param config  Configuration struct
+ * @return Error  Custom error type to signal an error
  */
 Error Engine::configureGraph(Config const &config)
 {
@@ -49,6 +52,8 @@ Error Engine::configureGraph(Config const &config)
 /**
  * @brief Initializes the device manager with number of outputs and sample rate.
  *
+ * @param config  Configuration struct
+ * @return Error  Custom error type to signal an error
  */
 Error Engine::configureDeviceManager(Config const &config)
 {
@@ -76,6 +81,8 @@ Error Engine::configureDeviceManager(Config const &config)
 /**
  * @brief Initializes the device manager and the audio engine
  *
+ * @param config  Configuration struct
+ * @return Error  Custom error type to signal an error
  */
 Error Engine::configure(Config const &config)
 {
@@ -85,12 +92,14 @@ Error Engine::configure(Config const &config)
 }
 
 /**
- * @brief Plays back a single file
+ * @brief Play a sound from a MemorySource
  *
- * @param file
- * @param channel
+ * @param src     AudioSource to be used
+ * @param channel Channel to play the sample back on
+ * @param name    Name of the sample
+ * @return Error  Custom error to signal a failure
  */
-Error Engine::playSound(std::unique_ptr<juce::MemoryAudioSource> src, int channel,
+Error Engine::playSound(std::unique_ptr<juce::PositionableAudioSource> src, int channel,
                         juce::String const &name)
 {
   Error err;
@@ -113,38 +122,11 @@ Error Engine::playSound(std::unique_ptr<juce::MemoryAudioSource> src, int channe
 }
 
 /**
- * @brief Plays back a single file
+ * @brief Plays back a sample from a file
  *
- * @param file
- * @param channel
- */
-Error Engine::playSound(std::unique_ptr<AudioFormatReaderSource> src, int channel,
-                        juce::String const &name)
-{
-  Error err;
-  std::scoped_lock<std::mutex> lock(mut);
-  auto node = m_mainProcessor->addNode(make_unique<MonoFilePlayerProcessor>(std::move(src), name));
-  auto conn = Connection{{node->nodeID, 0}, {audioOutputNode->nodeID, channel - 1}};
-  m_mainProcessor->addConnection(conn);
-  if (auto proc = dynamic_cast<MonoFilePlayerProcessor *>(node->getProcessor()))
-  {
-    proc->setNodeID(node->nodeID);
-    proc->start();
-    const juce::MessageManagerLock mmLock;
-    proc->addChangeListener(this);
-  }
-  else
-  {
-    err = Error("not a MonoFilePlayerProcessor");
-  }
-  return err;
-}
-
-/**
- * @brief Plays back a single file
- *
- * @param file
- * @param channel
+ * @param file      The file to be played back
+ * @param channel   The channel to play the sample back on
+ * @return Error    Custom error to signal a failure
  */
 Error Engine::playSound(const juce::File &file, int channel)
 {
@@ -166,6 +148,14 @@ Error Engine::playSound(const juce::File &file, int channel)
   return err;
 }
 
+/**
+ * @brief Reimplemented from ChangeListener
+ *
+ * Called if a node signals taht it is finished playing.
+ * It will remove the Processor from the AudioProcessorGraph
+ *
+ * @param source Emitter source should be castable into a Processor
+ */
 void Engine::changeListenerCallback(ChangeBroadcaster *source)
 {
   if (source)

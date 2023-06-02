@@ -9,23 +9,15 @@ class MainApp : public juce::ConsoleApplication, public juce::JUCEApplication, p
 
   const juce::String getApplicationVersion() override { return "0.0.1"; }
   const juce::String getApplicationName() override { return "beak"; }
-  void initialise(const juce::String &args) override
-  {
-    m_args = args;
-    startThread();
-  }
-  void shutdown() override
-  {
-    std::cout << "shutting down..." << std::endl;
-    signalThreadShouldExit();
-  }
+  void initialise(const juce::String &args) override;
+  void shutdown() override;
 
-  void run() override { findAndRunCommand(juce::ArgumentList("beak", m_args), false); }
+  void run() override;
 
  private:
   static void listCmd(juce::ArgumentList const &args);
   static void playCmd(juce::ArgumentList const &args);
-  static void runCmd(juce::ArgumentList const &args);
+  static void serverCmd(juce::ArgumentList const &args);
 
  private:
   std::shared_ptr<juce::AudioDeviceManager> m_deviceManager;

@@ -19,7 +19,7 @@ ProcessorBase::ProcessorBase(int inputs, int outputs) :
  *
  * @param file
  */
-MonoFilePlayerProcessor::MonoFilePlayerProcessor(std::unique_ptr<juce::AudioFormatReaderSource> src,
+MonoFilePlayerProcessor::MonoFilePlayerProcessor(std::unique_ptr<juce::PositionableAudioSource> src,
                                                  juce::String const &name) :
   ProcessorBase(1, 1), m_readerSource(std::move(src)), m_name(name)
 {
@@ -27,18 +27,10 @@ MonoFilePlayerProcessor::MonoFilePlayerProcessor(std::unique_ptr<juce::AudioForm
 }
 
 /**
- * @brief Construct a new Mono File Player Processor:: Mono File Player
- * Processor object
+ * @brief Construct a new Mono File Player Processor:: Mono File Player Processor object
  *
  * @param file
  */
-MonoFilePlayerProcessor::MonoFilePlayerProcessor(std::unique_ptr<juce::MemoryAudioSource> src,
-                                                 juce::String const &name) :
-  ProcessorBase(1, 1), m_readerSource(std::move(src)), m_name(name)
-{
-  m_source.setSource(m_readerSource.get());
-}
-
 MonoFilePlayerProcessor::MonoFilePlayerProcessor(juce::File const &file) :
   ProcessorBase(1, 1), m_name(file.getFullPathName())
 {
@@ -49,16 +41,39 @@ MonoFilePlayerProcessor::MonoFilePlayerProcessor(juce::File const &file) :
   m_source.setSource(m_readerSource.get());
 }
 
+/**
+ * @brief Destroy the Mono File Player Processor:: Mono File Player Processor object
+ *
+ */
 MonoFilePlayerProcessor::~MonoFilePlayerProcessor() { releaseResources(); }
 
+void MonoFilePlayerProcessor::reset() { m_source.stop(); }
+
 /**
- * @brief
+ * @brief Start the playback
+ *
+ */
+void MonoFilePlayerProcessor::start()
+{
+  m_source.start();
+  startTimer(200);
+}
+
+/**
+ * @brief Reimplemented to release the resources of the transport source
  *
  */
 void MonoFilePlayerProcessor::releaseResources() { m_source.releaseResources(); }
 
 /**
  * @brief
+ *
+ * @return const juce::String
+ */
+const juce::String MonoFilePlayerProcessor::getName() const { return m_name; }
+
+/**
+ * @brief Reimplemented to prepare playback of the transport source
  *
  * @param sampleRate
  * @param samplesPerBlock
@@ -69,11 +84,39 @@ void MonoFilePlayerProcessor::prepareToPlay(double sampleRate, int samplesPerBlo
 }
 
 /**
- * @brief
+ * @brief Callback for AudioProcessorGraph
  *
- * @param buffer
+ * @param buffer buffer to write audio to
  */
 void MonoFilePlayerProcessor::processBlock(juce::AudioSampleBuffer &buffer, juce::MidiBuffer &)
 {
   m_source.getNextAudioBlock(juce::AudioSourceChannelInfo(buffer));
 }
+
+/**
+ * @brief Callback of the Timer to check if playback has finished
+ *
+ */
+void MonoFilePlayerProcessor::timerCallback()
+{
+  bool playing = (m_readerSource->getNextReadPosition() < m_readerSource->getTotalLength());
+  if (!playing)
+  {
+    stopTimer();
+    juce::ChangeBroadcaster::sendChangeMessage();
+  }
+}
+
+/**
+ * @brief Sets the nodeID for this processor as part of an AudioProcessorGraph
+ *
+ * @param nodeID The id of the node
+ */
+void MonoFilePlayerProcessor::setNodeID(NodeID const &nodeID) { m_nodeID = nodeID; }
+
+/**
+ * @brief Returns the nodeID of this processor as part of an AudioProcessorGraph
+ *
+ * @return NodeID
+ */
+NodeID MonoFilePlayerProcessor::getNodeID() const { return m_nodeID; }

@@ -3,6 +3,11 @@
 #include <filesystem>
 #include <sstream>
 
+/**
+ * @brief Configure the cache
+ *
+ * @return Error  Custom error type to signal an error
+ */
 Error Cache::configure()
 {
   m_fmtManager.registerBasicFormats();
@@ -14,6 +19,12 @@ Error Cache::configure()
   return Error();
 }
 
+/**
+ * @brief Get a resource from the cache from an uri
+ *
+ * @param uri   The uri to fetch the resource from
+ * @return std::tuple<std::optional<Cache::DataType>, Error> Optionally the return data and an Error
+ */
 std::tuple<std::optional<Cache::DataType>, Error> Cache::get(juce::String const& uri)
 {
   juce::URL url(uri);
@@ -44,6 +55,13 @@ std::tuple<std::optional<Cache::DataType>, Error> Cache::get(juce::String const&
 }
 
 namespace fs = std::filesystem;
+/**
+ * @brief Cache a file from a remote url
+ *
+ * @param url           The remote URL
+ * @param checkVersion  Flag to signal if the version should be checked
+ * @return Error        Custom error type to signal an error
+ */
 Error Cache::cacheFile(juce::URL const& url, bool checkVersion)
 {
   // check if file is supported
@@ -133,6 +151,12 @@ Error Cache::storeBufferFor(juce::String const& key, juce::File const& file,
   return Error();
 }
 
+/**
+ * @brief Render the progress to stdout
+ *
+ * @param bytesDownloaded   Bytes already downloaded
+ * @param totalLength       Length of the file in bytes
+ */
 void Cache::progress(juce::URL::DownloadTask*, int64 bytesDownloaded, int64 totalLength)
 {
   double progress = static_cast<double>(bytesDownloaded) / static_cast<double>(totalLength);
@@ -155,6 +179,12 @@ void Cache::progress(juce::URL::DownloadTask*, int64 bytesDownloaded, int64 tota
   if (progress >= 1.0) std::cout << std::endl;
 }
 
+/**
+ * @brief Reimplemented callback if a download has finished
+ *
+ * @param task      Pointer to the download task
+ * @param success   boolean to signal if the download was successful
+ */
 void Cache::finished(juce::URL::DownloadTask* task, bool success)
 {
   std::cout << std::endl;

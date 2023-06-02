@@ -73,10 +73,8 @@ class Engine : public juce::ChangeListener
 
  public:
   [[nodiscard]] Error configure(Config const &config);
-  [[nodiscard]] Error playSound(std::unique_ptr<juce::AudioFormatReaderSource> src, int channel,
-                                juce::String const &name);
   [[nodiscard]] Error playSound(const juce::File &file, int channel);
-  [[nodiscard]] Error playSound(std::unique_ptr<juce::MemoryAudioSource> src, int channel,
+  [[nodiscard]] Error playSound(std::unique_ptr<juce::PositionableAudioSource> src, int channel,
                                 juce::String const &name);
 
  public:
@@ -93,7 +91,6 @@ class Engine : public juce::ChangeListener
   Node::Ptr audioOutputNode;
   std::mutex mut;
 
- private:
  private:
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Engine)
 };

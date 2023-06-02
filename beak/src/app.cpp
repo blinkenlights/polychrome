@@ -4,6 +4,10 @@
 #include "resource.h"
 #include "server.h"
 
+/**
+ * @brief Construct a new Main App:: Main App object
+ *
+ */
 MainApp::MainApp() : Thread("beak"), m_deviceManager(new juce::AudioDeviceManager())
 {
   // declare commands to be used
@@ -24,21 +28,59 @@ MainApp::MainApp() : Thread("beak"), m_deviceManager(new juce::AudioDeviceManage
       playCmd,
   });
   addDefaultCommand({
-      "run",
-      "run",
-      "Runs the server",
+      "server",
+      "server",
+      "Starts the udp server",
       "This command runs a udp server with an protobuf api.",
-      runCmd,
+      serverCmd,
   });
 }
 
+/**
+ * @brief Destroy the Main App:: Main App object
+ *
+ */
 MainApp::~MainApp()
 {
   juce::MessageManager::deleteInstance();
   DeletedAtShutdown::deleteAll();
 }
 
+/**
+ * @brief Reimplemented to initialise JUCEApplication
+ *
+ * @param args
+ */
+void MainApp::initialise(const juce::String &args)
+{
+  m_args = args;
+  startThread();
+}
+
+/**
+ * @brief Reimplemented to shutdown the JUCEApplication
+ *
+ */
+void MainApp::shutdown()
+{
+  std::cout << "shutting down..." << std::endl;
+  signalThreadShouldExit();
+}
+
+/**
+ * @brief Reimplemented to run the thread for the main app
+ *
+ * Run the command in a seperate thread, because the event loop will be run in the main thread.
+ *
+ */
+void MainApp::run() { findAndRunCommand(juce::ArgumentList("beak", m_args), false); }
+
 /* -------------------------------- commands -------------------------------- */
+
+/**
+ * @brief Command to list the available devices
+ *
+ */
 void MainApp::listCmd(juce::ArgumentList const & /*args*/)
 {
   juce::OwnedArray<juce::AudioIODeviceType> devTypes;
@@ -56,6 +98,11 @@ void MainApp::listCmd(juce::ArgumentList const & /*args*/)
   juce::JUCEApplication::getInstance()->systemRequestedQuit();
 }
 
+/**
+ * @brief Command to play one sample
+ *
+ * @param args Command line arguments
+ */
 void MainApp::playCmd(juce::ArgumentList const &args)
 {
   juce::String device = args.getValueForOption("--device|-d");
@@ -72,7 +119,12 @@ void MainApp::playCmd(juce::ArgumentList const &args)
     juce::ConsoleApplication::fail(static_cast<juce::String>(err));
 }
 
-void MainApp::runCmd(juce::ArgumentList const &args)
+/**
+ * @brief Command to run the udp server
+ *
+ * @param args Command line arguments
+ */
+void MainApp::serverCmd(juce::ArgumentList const &args)
 {
   // parse arguments
   uint32_t port = args.getValueForOption("--port|-p").getIntValue();
@@ -116,17 +168,6 @@ void MainApp::runCmd(juce::ArgumentList const &args)
             std::cerr << err.what() << std::endl;
           }
         });
-    // register callback to cache samples
-    // server.registerCallback(AudioPacket::kCacheSamples,
-    //                         [&cache](std::shared_ptr<AudioFrame> packet)
-    //                         {
-    //                           for (int i = 0; i < packet->cachesamples().uri_size(); ++i)
-    //                           {
-    //                             if (Error err = cache.cacheFile(
-    //                                     static_cast<juce::String>(packet->cachesamples().uri(i))))
-    //                               std::cerr << err.what() << std::endl;
-    //                           }
-    //                         });
     // run the server
     ioCtx.run();
   }
@@ -135,4 +176,9 @@ void MainApp::runCmd(juce::ArgumentList const &args)
     juce::ConsoleApplication::fail(e.what());
   }
 }
+
+/**
+ *
+ * Start the JUCEApplication, int main() is here.
+ */
 START_JUCE_APPLICATION(MainApp)
