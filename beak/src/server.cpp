@@ -29,7 +29,8 @@ void Server::handleReceive(const asio::error_code &error, std::size_t sz)
     Packet::ContentCase type = packet->content_case();
     if (!m_callBackFns.contains(type))
     {
-      std::cerr << "no callback registered for " << type << std::endl;
+      // std::cerr << "no callback registered for " << type << std::endl;
+      startReceive();
       return;
     }
 
