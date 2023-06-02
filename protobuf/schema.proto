@@ -24,21 +24,21 @@ message Packet {
 message Frame {
   bytes data = 1 [(nanopb).max_size = 640]; // Selects pixel colors from the palette. First pixel is top left. One panel after the other.
   bytes palette = 2 [(nanopb).max_size = 192]; // Series of RGB values. 8bit per color.
-  uint32 easing_interval = 3;
+  uint32 easing_interval = 3; // Optional. In milliseconds. Fade this frame over the previous one with an easing curve. Colors are blended in gamma corrected RGB space.
 }
 
 // The same as the frame but with access to the white component in the palette (RGBW).
 message WFrame {
   bytes data = 1 [(nanopb).max_size = 640]; // Selects pixel colors from the palette. First pixel is top left. One panel after the other.
   bytes palette = 2 [(nanopb).max_size = 256]; // Series of RGBW values. 8bit per color.
-  uint32 easing_interval = 3;
+  uint32 easing_interval = 3; // Optional. In milliseconds. Fade this frame over the previous one with an easing curve. Colors are blended in gamma corrected RGB space.
 }
 
 // Frame with 3 bytes per pixel (RGB) and no color palette
 // not yet implemented
 message RGBFrame {
   bytes data = 1 [(nanopb).max_size = 1920]; // Series of RGB values. 8bit per color. First pixel is top left. One panel after the other.
-  uint32 easing_interval = 2;
+  uint32 easing_interval = 2; // Optional. In milliseconds. Fade this frame over the previous one with an easing curve. Colors are blended in gamma corrected RGB space.
 }
 
 message InputEvent {
