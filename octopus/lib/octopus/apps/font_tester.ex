@@ -45,11 +45,11 @@ defmodule Octopus.Apps.FontTester do
     {:noreply, state}
   end
 
-  def handle_input(%InputEvent{type: :BUTTON, value: 1}, state) do
+  def handle_input(%InputEvent{button: :BUTTON_1, pressed: true}, state) do
     {:noreply, next_font(state)}
   end
 
-  def handle_input(%InputEvent{type: :BUTTON, value: 2}, state) do
+  def handle_input(%InputEvent{button: :BUTTON_2, pressed: true}, state) do
     {:noreply, next_variant(state)}
   end
 

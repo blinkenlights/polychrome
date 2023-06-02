@@ -3,7 +3,7 @@ defmodule Octopus.Protobuf do
 
   alias Octopus.Protobuf.WFrame
   alias Octopus.ColorPalette
-  alias Octopus.Protobuf.{Frame, Packet, Config, FirmwarePacket, InputEvent}
+  alias Octopus.Protobuf.{Frame, Packet, FirmwareConfig, FirmwarePacket, InputEvent}
 
   def encode(%Frame{data: data, palette: palette} = frame)
       when is_binary(data) and is_binary(palette) do
@@ -32,8 +32,8 @@ defmodule Octopus.Protobuf do
     |> Packet.encode()
   end
 
-  def encode(%Config{} = config) do
-    %Packet{content: {:config, config}}
+  def encode(%FirmwareConfig{} = config) do
+    %Packet{content: {:firmware_config, config}}
     |> Packet.encode()
   end
 
@@ -50,7 +50,7 @@ defmodule Octopus.Protobuf do
       %Packet{content: {:frame, %Frame{palette: palette} = frame}} ->
         {:ok, %Frame{frame | palette: ColorPalette.from_binary(palette)}}
 
-      %Packet{content: {:config, %Config{} = config}} ->
+      %Packet{content: {:config, %FirmwareConfig{} = config}} ->
         {:ok, config}
 
       _ ->

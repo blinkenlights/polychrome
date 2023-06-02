@@ -74,10 +74,10 @@ defmodule OctopusWeb.PixelsComponent do
 
   alias Octopus.ColorPalette
   alias Octopus.Mixer
-  alias Octopus.Protobuf.{Config, Frame}
+  alias Octopus.Protobuf.{FirmwareConfig, Frame}
 
-  @default_config %Config{
-    easing_interval_ms: 1000,
+  # This can very likely be removed
+  @default_config %FirmwareConfig{
     easing_mode: :LINEAR,
     show_test_frame: false
   }

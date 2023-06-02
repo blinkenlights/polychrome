@@ -1,8 +1,8 @@
-alias Octopus.Protobuf.Config
+alias Octopus.Protobuf.FirmwareConfig
 alias Octopus.Protobuf.Frame
 
-defimpl Jason.Encoder, for: Config do
-  def encode(%Config{} = config, opts) do
+defimpl Jason.Encoder, for: FirmwareConfig do
+  def encode(%FirmwareConfig{} = config, opts) do
     config
     |> Map.from_struct()
     |> Jason.Encode.map(opts)

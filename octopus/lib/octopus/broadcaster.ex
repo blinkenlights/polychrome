@@ -2,18 +2,20 @@ defmodule Octopus.Broadcaster do
   use GenServer
   require Logger
 
+  alias Phoenix.Tracker.State
   alias Octopus.Protobuf
-  alias Octopus.Protobuf.{Config, RemoteLog, FirmwareInfo, FirmwarePacket}
+  alias Octopus.Protobuf.{FirmwareConfig, RemoteLog, FirmwareInfo, FirmwarePacket}
 
-  @default_config %Config{
+  @default_config %FirmwareConfig{
     luminance: 255,
-    easing_interval_ms: 0,
     easing_mode: :EASE_OUT_QUART,
     show_test_frame: false,
     enable_calibration: true
   }
 
-  defstruct [:udp, :file, config: %Config{}]
+  defmodule State do
+    defstruct [:udp, :file, :config]
+  end
 
   # @remote_host "blinkenleds-1.fritz.box" |> to_charlist()
   # @remote_host {192, 168, 0, 172}
@@ -32,10 +34,6 @@ defmodule Octopus.Broadcaster do
     GenServer.cast(__MODULE__, {:send_binary, binary})
   end
 
-  def send_config(%Config{} = config) do
-    GenServer.cast(__MODULE__, {:send_config, config})
-  end
-
   def set_luminance(luminance) when luminance < 256 do
     GenServer.cast(__MODULE__, {:set_luminance, luminance})
   end
@@ -52,24 +50,29 @@ defmodule Octopus.Broadcaster do
     file = File.open!("remote.log", [:write])
     {:ok, udp} = :gen_udp.open(@local_port, [:binary, active: true, broadcast: true])
 
-    send_config(@default_config)
+    state = %State{
+      udp: udp,
+      file: file,
+      config: @default_config
+    }
 
-    {:ok, %__MODULE__{udp: udp, file: file}}
+    send_config(@default_config, state)
+
+    {:ok, state}
   end
 
-  def handle_info({:udp, _socket, ip, _port, protobuf}, state = %__MODULE__{}) do
+  def handle_info({:udp, _socket, ip, _port, protobuf}, state = %State{}) do
     # todo: refactor
 
     case Protobuf.decode_firmware_packet(protobuf) do
       %FirmwarePacket{content: {:remote_log, %RemoteLog{message: message}}} ->
         IO.write(state.file, message)
-
         Logger.info("#{print_ip(ip)}: Remote log #{inspect(message)}")
 
       %FirmwarePacket{content: {:firmware_info, %FirmwareInfo{} = firmware_info}} ->
         # Logger.debug("#{print_ip(ip)}: Client info #{inspect(firmware_info)}")
 
-        %Config{config_phash: expected_phash} = state.config
+        %FirmwareConfig{config_phash: expected_phash} = state.config
 
         case firmware_info do
           %FirmwareInfo{config_phash: ^expected_phash} ->
@@ -80,7 +83,7 @@ defmodule Octopus.Broadcaster do
               "#{print_ip(ip)}: Config hash misstmatch expected #{expected_phash} got #{firmware_info.config_phash}"
             )
 
-            send_config(state.config)
+            send_config(state.config, state)
         end
 
       nil ->
@@ -97,42 +100,41 @@ defmodule Octopus.Broadcaster do
     {:noreply, state}
   end
 
-  def handle_cast({:send_config, config}, %__MODULE__{} = state) do
-    phash =
-      config
-      |> Map.from_struct()
-      |> Map.drop([:config_phash])
-      |> :erlang.phash2()
-
-    config = %Config{config | config_phash: phash}
-
-    # TODO: this should probably be done somewhere else
-    Phoenix.PubSub.broadcast(Octopus.PubSub, "mixer", {:mixer, {:config, config}})
-
-    config
-    |> Protobuf.encode()
-    |> send_binary(state)
-
-    {:noreply, %__MODULE__{state | config: config}}
-  end
-
-  def handle_cast({:set_luminance, luminance}, %__MODULE__{} = state) do
-    %Config{state.config | luminance: luminance}
-    |> send_config()
+  def handle_cast({:set_luminance, luminance}, %State{} = state) do
+    state =
+      %FirmwareConfig{state.config | luminance: luminance}
+      |> send_config(state)
 
     {:noreply, state}
   end
 
-  def handle_cast({:set_calibration, set_calibration}, %__MODULE__{} = state) do
-    %Config{state.config | enable_calibration: set_calibration}
-    |> send_config()
+  def handle_cast({:set_calibration, set_calibration}, %State{} = state) do
+    state =
+      %FirmwareConfig{state.config | enable_calibration: set_calibration}
+      |> send_config(state)
 
     {:noreply, state}
   end
 
   defp print_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"
 
-  defp send_binary(binary, %__MODULE__{} = state) do
+  defp send_config(%FirmwareConfig{} = config, %State{} = state) do
+    phash =
+      config
+      |> Map.from_struct()
+      |> Map.drop([:config_phash])
+      |> :erlang.phash2()
+
+    config = %FirmwareConfig{config | config_phash: phash}
+
+    config
+    |> Protobuf.encode()
+    |> send_binary(state)
+
+    %State{state | config: config}
+  end
+
+  defp send_binary(binary, %State{} = state) do
     # Logger.debug("Sending UDP Packet: #{inspect(binary)}")
     :gen_udp.send(state.udp, @remote_host, @remote_port, binary)
   end

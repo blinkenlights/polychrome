@@ -1,3 +1,28 @@
+defmodule Octopus.Protobuf.Button do
+  @moduledoc false
+
+  use Protobuf, enum: true, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+
+  field :BUTTON_1, 0
+  field :BUTTON_2, 1
+  field :BUTTON_3, 2
+  field :BUTTON_4, 3
+  field :BUTTON_5, 4
+  field :BUTTON_6, 5
+  field :BUTTON_7, 6
+  field :BUTTON_8, 7
+  field :BUTTON_9, 8
+  field :BUTTON_10, 9
+  field :DIRECTION_1_UP, 10
+  field :DIRECTION_1_DOWN, 11
+  field :DIRECTION_1_LEFT, 12
+  field :DIRECTION_1_RIGHT, 13
+  field :DIRECTION_2_UP, 14
+  field :DIRECTION_2_DOWN, 15
+  field :DIRECTION_2_LEFT, 16
+  field :DIRECTION_2_RIGHT, 17
+end
+
 defmodule Octopus.Protobuf.EasingMode do
   @moduledoc false
 
@@ -21,23 +46,6 @@ defmodule Octopus.Protobuf.EasingMode do
   field :EASE_IN_OUT_EXPO, 15
 end
 
-defmodule Octopus.Protobuf.EventType do
-  @moduledoc false
-
-  use Protobuf, enum: true, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
-
-  field :BUTTON_1, 0
-  field :BUTTON_2, 1
-  field :BUTTON_3, 2
-  field :BUTTON_4, 3
-  field :BUTTON_5, 4
-  field :BUTTON_6, 5
-  field :BUTTON_7, 6
-  field :BUTTON_8, 7
-  field :BUTTON_9, 8
-  field :BUTTON_10, 9
-end
-
 defmodule Octopus.Protobuf.Packet do
   @moduledoc false
 
@@ -49,7 +57,11 @@ defmodule Octopus.Protobuf.Packet do
   field :w_frame, 3, type: Octopus.Protobuf.WFrame, json_name: "wFrame", oneof: 0
   field :rgb_frame, 4, type: Octopus.Protobuf.RGBFrame, json_name: "rgbFrame", oneof: 0
   field :input_event, 6, type: Octopus.Protobuf.InputEvent, json_name: "inputEvent", oneof: 0
-  field :config, 1, type: Octopus.Protobuf.Config, oneof: 0
+
+  field :firmware_config, 1,
+    type: Octopus.Protobuf.FirmwareConfig,
+    json_name: "firmwareConfig",
+    oneof: 0
 end
 
 defmodule Octopus.Protobuf.Frame do
@@ -59,6 +71,7 @@ defmodule Octopus.Protobuf.Frame do
 
   field :data, 1, type: :bytes, deprecated: false
   field :palette, 2, type: :bytes, deprecated: false
+  field :easing_interval, 3, type: :uint32, json_name: "easingInterval"
 end
 
 defmodule Octopus.Protobuf.WFrame do
@@ -68,6 +81,7 @@ defmodule Octopus.Protobuf.WFrame do
 
   field :data, 1, type: :bytes, deprecated: false
   field :palette, 2, type: :bytes, deprecated: false
+  field :easing_interval, 3, type: :uint32, json_name: "easingInterval"
 end
 
 defmodule Octopus.Protobuf.RGBFrame do
@@ -76,19 +90,7 @@ defmodule Octopus.Protobuf.RGBFrame do
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
 
   field :data, 1, type: :bytes, deprecated: false
-end
-
-defmodule Octopus.Protobuf.Config do
-  @moduledoc false
-
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
-
-  field :luminance, 1, type: :uint32
-  field :easing_interval_ms, 2, type: :uint32, json_name: "easingIntervalMs"
-  field :easing_mode, 3, type: Octopus.Protobuf.EasingMode, json_name: "easingMode", enum: true
-  field :show_test_frame, 4, type: :bool, json_name: "showTestFrame"
-  field :config_phash, 5, type: :uint32, json_name: "configPhash"
-  field :enable_calibration, 6, type: :bool, json_name: "enableCalibration"
+  field :easing_interval, 2, type: :uint32, json_name: "easingInterval"
 end
 
 defmodule Octopus.Protobuf.InputEvent do
@@ -96,8 +98,20 @@ defmodule Octopus.Protobuf.InputEvent do
 
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
 
-  field :type, 1, type: Octopus.Protobuf.EventType, enum: true
-  field :value, 2, type: :uint32
+  field :button, 1, type: Octopus.Protobuf.Button, enum: true
+  field :pressed, 2, type: :bool
+end
+
+defmodule Octopus.Protobuf.FirmwareConfig do
+  @moduledoc false
+
+  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+
+  field :luminance, 1, type: :uint32
+  field :easing_mode, 2, type: Octopus.Protobuf.EasingMode, json_name: "easingMode", enum: true
+  field :show_test_frame, 3, type: :bool, json_name: "showTestFrame"
+  field :config_phash, 4, type: :uint32, json_name: "configPhash"
+  field :enable_calibration, 5, type: :bool, json_name: "enableCalibration"
 end
 
 defmodule Octopus.Protobuf.FirmwarePacket do

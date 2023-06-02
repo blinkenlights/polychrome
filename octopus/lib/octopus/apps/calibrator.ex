@@ -3,7 +3,7 @@ defmodule Octopus.Apps.Calibrator do
   require Logger
 
   alias Octopus.{ColorPalette, Broadcaster}
-  alias Octopus.Protobuf.{WFrame, Config}
+  alias Octopus.Protobuf.{WFrame}
 
   @moduledoc """
   This app is used to calibrate the display. It reads colors from DisplayCal and renders them on the pixels.
@@ -24,12 +24,7 @@ defmodule Octopus.Apps.Calibrator do
   end
 
   @pixel_index 6
-  @config %Config{
-    luminance: 255,
-    easing_interval_ms: 0,
-    show_test_frame: false,
-    enable_calibration: false
-  }
+
   @first_color "808080"
   @display_cal_endpoint "http://localhost:8080/ajax/messages"
   @red_correction 1.0
@@ -308,7 +303,7 @@ defmodule Octopus.Apps.Calibrator do
       data: data
     }
 
-    Broadcaster.send_config(@config)
+    Broadcaster.set_calibration(false)
 
     :timer.send_interval(200, :tick)
 
