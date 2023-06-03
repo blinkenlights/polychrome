@@ -41,3 +41,19 @@ The code is documented using doxygen.
 - set the `BUILD_DOC` option to `TRUE`
 - `cmake -B build -S . -GNinja -DBUILD_DOC=TRUE`
 - documentation can be found in `docs`
+
+### Usage
+
+Run beak from the `build/beak_artefacts/Debug`. The following commands with options are available:
+
+#### Run the engine
+
+`./beak run -p <port_numer> -c <absolute_path_to_cache_dir> -d <device name> -o <number_of_output_channels> -i <number_of_input_channels>`.
+
+#### List available devices
+
+`./beak run list-devices`
+
+#### Test playback
+
+`./beak play -f <absolute_path_to_sample.wav> -c <channel_number> -d <device name> -o <number_of_output_channels> -i <number_of_input_channels>`.
