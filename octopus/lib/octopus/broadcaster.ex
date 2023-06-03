@@ -14,16 +14,10 @@ defmodule Octopus.Broadcaster do
   }
 
   defmodule State do
-    defstruct [:udp, :file, :config]
+    defstruct [:udp, :file, :config, :remote_ip]
   end
 
-  # @remote_host "blinkenleds-1.fritz.box" |> to_charlist()
-  # @remote_host {192, 168, 0, 172}
-  # @remote_host {192, 168, 1, 255}
-  @remote_host {192, 168, 0, 255}
-  # @remote_host {192, 168, 43, 158}
   @remote_port 1337
-
   @local_port 4422
 
   def start_link(_) do
@@ -43,9 +37,26 @@ defmodule Octopus.Broadcaster do
   end
 
   def init(:ok) do
-    Logger.info(
-      "Broadcasting UPD to #{inspect(@remote_host)} port #{@remote_port}. Listening on #{@local_port}"
-    )
+    {:ok, ifaddrs} = :inet.getifaddrs()
+
+    broadast_ip =
+      ifaddrs
+      |> Enum.map(fn {_ifname, ifprops} -> Keyword.get(ifprops, :broadaddr) end)
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+      |> case do
+        [] ->
+          Logger.error("No broadcast IP found.")
+          {127, 0, 0, 1}
+
+        [ip] ->
+          Logger.info("Using #{inspect(ip)} as broadcast address. Port #{@local_port}")
+          ip
+
+        [ip, _ | _] ->
+          Logger.warn("Multiple broadcast IPs found. Using the first one: #{inspect(ip)}")
+          ip
+      end
 
     file = File.open!("remote.log", [:write])
     {:ok, udp} = :gen_udp.open(@local_port, [:binary, active: true, broadcast: true])
@@ -53,7 +64,8 @@ defmodule Octopus.Broadcaster do
     state = %State{
       udp: udp,
       file: file,
-      config: @default_config
+      config: @default_config,
+      remote_ip: broadast_ip
     }
 
     send_config(@default_config, state)
@@ -62,8 +74,6 @@ defmodule Octopus.Broadcaster do
   end
 
   def handle_info({:udp, _socket, ip, _port, protobuf}, state = %State{}) do
-    # todo: refactor
-
     case Protobuf.decode_firmware_packet(protobuf) do
       %FirmwarePacket{content: {:remote_log, %RemoteLog{message: message}}} ->
         IO.write(state.file, message)
@@ -86,7 +96,7 @@ defmodule Octopus.Broadcaster do
             send_config(state.config, state)
         end
 
-      nil ->
+      _ ->
         :noop
     end
 
@@ -136,6 +146,6 @@ defmodule Octopus.Broadcaster do
 
   defp send_binary(binary, %State{} = state) do
     # Logger.debug("Sending UDP Packet: #{inspect(binary)}")
-    :gen_udp.send(state.udp, @remote_host, @remote_port, binary)
+    :gen_udp.send(state.udp, state.remote_ip, @remote_port, binary)
   end
 end
