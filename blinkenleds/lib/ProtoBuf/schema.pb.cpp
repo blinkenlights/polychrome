@@ -18,10 +18,10 @@ PB_BIND(WFrame, WFrame, 2)
 PB_BIND(RGBFrame, RGBFrame, 2)
 
 
-PB_BIND(Config, Config, AUTO)
-
-
 PB_BIND(InputEvent, InputEvent, AUTO)
+
+
+PB_BIND(FirmwareConfig, FirmwareConfig, AUTO)
 
 
 PB_BIND(FirmwarePacket, FirmwarePacket, AUTO)

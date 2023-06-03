@@ -10,6 +10,27 @@
 #endif
 
 /* Enum definitions */
+typedef enum _Button {
+    Button_BUTTON_1 = 0,
+    Button_BUTTON_2 = 1,
+    Button_BUTTON_3 = 2,
+    Button_BUTTON_4 = 3,
+    Button_BUTTON_5 = 4,
+    Button_BUTTON_6 = 5,
+    Button_BUTTON_7 = 6,
+    Button_BUTTON_8 = 7,
+    Button_BUTTON_9 = 8,
+    Button_BUTTON_10 = 9,
+    Button_DIRECTION_1_UP = 10,
+    Button_DIRECTION_1_DOWN = 11,
+    Button_DIRECTION_1_LEFT = 12,
+    Button_DIRECTION_1_RIGHT = 13,
+    Button_DIRECTION_2_UP = 14,
+    Button_DIRECTION_2_DOWN = 15,
+    Button_DIRECTION_2_LEFT = 16,
+    Button_DIRECTION_2_RIGHT = 17
+} Button;
+
 typedef enum _EasingMode {
     EasingMode_LINEAR = 0,
     EasingMode_EASE_IN_QUAD = 1,
@@ -29,19 +50,6 @@ typedef enum _EasingMode {
     EasingMode_EASE_IN_OUT_EXPO = 15
 } EasingMode;
 
-typedef enum _EventType {
-    EventType_BUTTON_1 = 0,
-    EventType_BUTTON_2 = 1,
-    EventType_BUTTON_3 = 2,
-    EventType_BUTTON_4 = 3,
-    EventType_BUTTON_5 = 4,
-    EventType_BUTTON_6 = 5,
-    EventType_BUTTON_7 = 6,
-    EventType_BUTTON_8 = 7,
-    EventType_BUTTON_9 = 8,
-    EventType_BUTTON_10 = 9
-} EventType;
-
 /* Struct definitions */
 typedef PB_BYTES_ARRAY_T(640) Frame_data_t;
 typedef PB_BYTES_ARRAY_T(192) Frame_palette_t;
@@ -49,49 +57,50 @@ typedef PB_BYTES_ARRAY_T(192) Frame_palette_t;
 typedef struct _Frame {
     Frame_data_t data; /* Selects pixel colors from the palette. First pixel is top left. One panel after the other. */
     Frame_palette_t palette; /* Series of RGB values. 8bit per color. */
+    uint32_t easing_interval; /* Optional. In milliseconds. Fade this frame over the previous one with an easing curve. Colors are blended in gamma corrected RGB space. */
 } Frame;
 
 typedef PB_BYTES_ARRAY_T(640) WFrame_data_t;
 typedef PB_BYTES_ARRAY_T(256) WFrame_palette_t;
-/* The same as the frame but with access to the white component in the palette (RGBW).
- Not yet implemented */
+/* The same as the frame but with access to the white component in the palette (RGBW). */
 typedef struct _WFrame {
     WFrame_data_t data; /* Selects pixel colors from the palette. First pixel is top left. One panel after the other. */
     WFrame_palette_t palette; /* Series of RGBW values. 8bit per color. */
+    uint32_t easing_interval; /* Optional. In milliseconds. Fade this frame over the previous one with an easing curve. Colors are blended in gamma corrected RGB space. */
 } WFrame;
 
 typedef PB_BYTES_ARRAY_T(1920) RGBFrame_data_t;
-/* Frame with 3 bytes per pixel (RGB).
+/* Frame with 3 bytes per pixel (RGB) and no color palette
  not yet implemented */
 typedef struct _RGBFrame {
     RGBFrame_data_t data; /* Series of RGB values. 8bit per color. First pixel is top left. One panel after the other. */
+    uint32_t easing_interval; /* Optional. In milliseconds. Fade this frame over the previous one with an easing curve. Colors are blended in gamma corrected RGB space. */
 } RGBFrame;
 
-typedef struct _Config {
+typedef struct _InputEvent {
+    Button button;
+    bool pressed;
+} InputEvent;
+
+typedef struct _FirmwareConfig {
     uint32_t luminance;
-    uint32_t easing_interval_ms;
     EasingMode easing_mode;
     bool show_test_frame;
     uint32_t config_phash;
     bool enable_calibration;
-} Config;
+} FirmwareConfig;
 
-/* This is not ideal and might change */
-typedef struct _InputEvent {
-    EventType type;
-    uint32_t value; /* 1: pressed, 0: released */
-} InputEvent;
-
+/* wrapper for all messages */
 typedef struct _Packet {
     pb_size_t which_content;
     union {
-        /* Configures firmware, not forwarded by the mixer */
-        Config config;
-        /* From Apps/UDP to Octopus.Mixer to Firmware */
+        /* Configures firmware, for internal use only */
+        FirmwareConfig firmware_config;
+        /* Frames with pixel data. */
         Frame frame;
         WFrame w_frame;
-        RGBFrame rgb_frame; /* AudioFrame audio_frame = 5; */
-        /* From joystick controller to Octopus to  app/UDP */
+        RGBFrame rgb_frame;
+        /* Events from the input controllers */
         InputEvent input_event;
     } content;
 } Packet;
@@ -123,42 +132,42 @@ extern "C" {
 #endif
 
 /* Helper constants for enums */
+#define _Button_MIN Button_BUTTON_1
+#define _Button_MAX Button_DIRECTION_2_RIGHT
+#define _Button_ARRAYSIZE ((Button)(Button_DIRECTION_2_RIGHT+1))
+
 #define _EasingMode_MIN EasingMode_LINEAR
 #define _EasingMode_MAX EasingMode_EASE_IN_OUT_EXPO
 #define _EasingMode_ARRAYSIZE ((EasingMode)(EasingMode_EASE_IN_OUT_EXPO+1))
 
-#define _EventType_MIN EventType_BUTTON_1
-#define _EventType_MAX EventType_BUTTON_10
-#define _EventType_ARRAYSIZE ((EventType)(EventType_BUTTON_10+1))
 
 
 
 
+#define InputEvent_button_ENUMTYPE Button
 
-#define Config_easing_mode_ENUMTYPE EasingMode
-
-#define InputEvent_type_ENUMTYPE EventType
+#define FirmwareConfig_easing_mode_ENUMTYPE EasingMode
 
 
 
 
 
 /* Initializer values for message structs */
-#define Packet_init_default                      {0, {Config_init_default}}
-#define Frame_init_default                       {{0, {0}}, {0, {0}}}
-#define WFrame_init_default                      {{0, {0}}, {0, {0}}}
-#define RGBFrame_init_default                    {{0, {0}}}
-#define Config_init_default                      {0, 0, _EasingMode_MIN, 0, 0, 0}
-#define InputEvent_init_default                  {_EventType_MIN, 0}
+#define Packet_init_default                      {0, {FirmwareConfig_init_default}}
+#define Frame_init_default                       {{0, {0}}, {0, {0}}, 0}
+#define WFrame_init_default                      {{0, {0}}, {0, {0}}, 0}
+#define RGBFrame_init_default                    {{0, {0}}, 0}
+#define InputEvent_init_default                  {_Button_MIN, 0}
+#define FirmwareConfig_init_default              {0, _EasingMode_MIN, 0, 0, 0}
 #define FirmwarePacket_init_default              {0, {FirmwareInfo_init_default}}
 #define FirmwareInfo_init_default                {"", "", 0, 0, 0}
 #define RemoteLog_init_default                   {""}
-#define Packet_init_zero                         {0, {Config_init_zero}}
-#define Frame_init_zero                          {{0, {0}}, {0, {0}}}
-#define WFrame_init_zero                         {{0, {0}}, {0, {0}}}
-#define RGBFrame_init_zero                       {{0, {0}}}
-#define Config_init_zero                         {0, 0, _EasingMode_MIN, 0, 0, 0}
-#define InputEvent_init_zero                     {_EventType_MIN, 0}
+#define Packet_init_zero                         {0, {FirmwareConfig_init_zero}}
+#define Frame_init_zero                          {{0, {0}}, {0, {0}}, 0}
+#define WFrame_init_zero                         {{0, {0}}, {0, {0}}, 0}
+#define RGBFrame_init_zero                       {{0, {0}}, 0}
+#define InputEvent_init_zero                     {_Button_MIN, 0}
+#define FirmwareConfig_init_zero                 {0, _EasingMode_MIN, 0, 0, 0}
 #define FirmwarePacket_init_zero                 {0, {FirmwareInfo_init_zero}}
 #define FirmwareInfo_init_zero                   {"", "", 0, 0, 0}
 #define RemoteLog_init_zero                      {""}
@@ -166,18 +175,20 @@ extern "C" {
 /* Field tags (for use in manual encoding/decoding) */
 #define Frame_data_tag                           1
 #define Frame_palette_tag                        2
+#define Frame_easing_interval_tag                3
 #define WFrame_data_tag                          1
 #define WFrame_palette_tag                       2
+#define WFrame_easing_interval_tag               3
 #define RGBFrame_data_tag                        1
-#define Config_luminance_tag                     1
-#define Config_easing_interval_ms_tag            2
-#define Config_easing_mode_tag                   3
-#define Config_show_test_frame_tag               4
-#define Config_config_phash_tag                  5
-#define Config_enable_calibration_tag            6
-#define InputEvent_type_tag                      1
-#define InputEvent_value_tag                     2
-#define Packet_config_tag                        1
+#define RGBFrame_easing_interval_tag             2
+#define InputEvent_button_tag                    1
+#define InputEvent_pressed_tag                   2
+#define FirmwareConfig_luminance_tag             1
+#define FirmwareConfig_easing_mode_tag           2
+#define FirmwareConfig_show_test_frame_tag       3
+#define FirmwareConfig_config_phash_tag          4
+#define FirmwareConfig_enable_calibration_tag    5
+#define Packet_firmware_config_tag               1
 #define Packet_frame_tag                         2
 #define Packet_w_frame_tag                       3
 #define Packet_rgb_frame_tag                     4
@@ -193,14 +204,14 @@ extern "C" {
 
 /* Struct field encoding specification for nanopb */
 #define Packet_FIELDLIST(X, a) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (content,config,content.config),   1) \
+X(a, STATIC,   ONEOF,    MESSAGE,  (content,firmware_config,content.firmware_config),   1) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (content,frame,content.frame),   2) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (content,w_frame,content.w_frame),   3) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (content,rgb_frame,content.rgb_frame),   4) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (content,input_event,content.input_event),   6)
 #define Packet_CALLBACK NULL
 #define Packet_DEFAULT NULL
-#define Packet_content_config_MSGTYPE Config
+#define Packet_content_firmware_config_MSGTYPE FirmwareConfig
 #define Packet_content_frame_MSGTYPE Frame
 #define Packet_content_w_frame_MSGTYPE WFrame
 #define Packet_content_rgb_frame_MSGTYPE RGBFrame
@@ -208,36 +219,38 @@ X(a, STATIC,   ONEOF,    MESSAGE,  (content,input_event,content.input_event),   
 
 #define Frame_FIELDLIST(X, a) \
 X(a, STATIC,   SINGULAR, BYTES,    data,              1) \
-X(a, STATIC,   SINGULAR, BYTES,    palette,           2)
+X(a, STATIC,   SINGULAR, BYTES,    palette,           2) \
+X(a, STATIC,   SINGULAR, UINT32,   easing_interval,   3)
 #define Frame_CALLBACK NULL
 #define Frame_DEFAULT NULL
 
 #define WFrame_FIELDLIST(X, a) \
 X(a, STATIC,   SINGULAR, BYTES,    data,              1) \
-X(a, STATIC,   SINGULAR, BYTES,    palette,           2)
+X(a, STATIC,   SINGULAR, BYTES,    palette,           2) \
+X(a, STATIC,   SINGULAR, UINT32,   easing_interval,   3)
 #define WFrame_CALLBACK NULL
 #define WFrame_DEFAULT NULL
 
 #define RGBFrame_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, BYTES,    data,              1)
+X(a, STATIC,   SINGULAR, BYTES,    data,              1) \
+X(a, STATIC,   SINGULAR, UINT32,   easing_interval,   2)
 #define RGBFrame_CALLBACK NULL
 #define RGBFrame_DEFAULT NULL
 
-#define Config_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UINT32,   luminance,         1) \
-X(a, STATIC,   SINGULAR, UINT32,   easing_interval_ms,   2) \
-X(a, STATIC,   SINGULAR, UENUM,    easing_mode,       3) \
-X(a, STATIC,   SINGULAR, BOOL,     show_test_frame,   4) \
-X(a, STATIC,   SINGULAR, UINT32,   config_phash,      5) \
-X(a, STATIC,   SINGULAR, BOOL,     enable_calibration,   6)
-#define Config_CALLBACK NULL
-#define Config_DEFAULT NULL
-
 #define InputEvent_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UENUM,    type,              1) \
-X(a, STATIC,   SINGULAR, UINT32,   value,             2)
+X(a, STATIC,   SINGULAR, UENUM,    button,            1) \
+X(a, STATIC,   SINGULAR, BOOL,     pressed,           2)
 #define InputEvent_CALLBACK NULL
 #define InputEvent_DEFAULT NULL
+
+#define FirmwareConfig_FIELDLIST(X, a) \
+X(a, STATIC,   SINGULAR, UINT32,   luminance,         1) \
+X(a, STATIC,   SINGULAR, UENUM,    easing_mode,       2) \
+X(a, STATIC,   SINGULAR, BOOL,     show_test_frame,   3) \
+X(a, STATIC,   SINGULAR, UINT32,   config_phash,      4) \
+X(a, STATIC,   SINGULAR, BOOL,     enable_calibration,   5)
+#define FirmwareConfig_CALLBACK NULL
+#define FirmwareConfig_DEFAULT NULL
 
 #define FirmwarePacket_FIELDLIST(X, a) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (content,firmware_info,content.firmware_info),   1) \
@@ -265,8 +278,8 @@ extern const pb_msgdesc_t Packet_msg;
 extern const pb_msgdesc_t Frame_msg;
 extern const pb_msgdesc_t WFrame_msg;
 extern const pb_msgdesc_t RGBFrame_msg;
-extern const pb_msgdesc_t Config_msg;
 extern const pb_msgdesc_t InputEvent_msg;
+extern const pb_msgdesc_t FirmwareConfig_msg;
 extern const pb_msgdesc_t FirmwarePacket_msg;
 extern const pb_msgdesc_t FirmwareInfo_msg;
 extern const pb_msgdesc_t RemoteLog_msg;
@@ -276,22 +289,22 @@ extern const pb_msgdesc_t RemoteLog_msg;
 #define Frame_fields &Frame_msg
 #define WFrame_fields &WFrame_msg
 #define RGBFrame_fields &RGBFrame_msg
-#define Config_fields &Config_msg
 #define InputEvent_fields &InputEvent_msg
+#define FirmwareConfig_fields &FirmwareConfig_msg
 #define FirmwarePacket_fields &FirmwarePacket_msg
 #define FirmwareInfo_fields &FirmwareInfo_msg
 #define RemoteLog_fields &RemoteLog_msg
 
 /* Maximum encoded size of messages (where known) */
-#define Config_size                              24
+#define FirmwareConfig_size                      18
 #define FirmwareInfo_size                        62
 #define FirmwarePacket_size                      104
-#define Frame_size                               838
-#define InputEvent_size                          8
-#define Packet_size                              1926
-#define RGBFrame_size                            1923
+#define Frame_size                               844
+#define InputEvent_size                          4
+#define Packet_size                              1932
+#define RGBFrame_size                            1929
 #define RemoteLog_size                           102
-#define WFrame_size                              902
+#define WFrame_size                              908
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -309,30 +322,23 @@ struct MessageDescriptor<Packet> {
 };
 template <>
 struct MessageDescriptor<Frame> {
-    static PB_INLINE_CONSTEXPR const pb_size_t fields_array_length = 2;
+    static PB_INLINE_CONSTEXPR const pb_size_t fields_array_length = 3;
     static inline const pb_msgdesc_t* fields() {
         return &Frame_msg;
     }
 };
 template <>
 struct MessageDescriptor<WFrame> {
-    static PB_INLINE_CONSTEXPR const pb_size_t fields_array_length = 2;
+    static PB_INLINE_CONSTEXPR const pb_size_t fields_array_length = 3;
     static inline const pb_msgdesc_t* fields() {
         return &WFrame_msg;
     }
 };
 template <>
 struct MessageDescriptor<RGBFrame> {
-    static PB_INLINE_CONSTEXPR const pb_size_t fields_array_length = 1;
+    static PB_INLINE_CONSTEXPR const pb_size_t fields_array_length = 2;
     static inline const pb_msgdesc_t* fields() {
         return &RGBFrame_msg;
-    }
-};
-template <>
-struct MessageDescriptor<Config> {
-    static PB_INLINE_CONSTEXPR const pb_size_t fields_array_length = 6;
-    static inline const pb_msgdesc_t* fields() {
-        return &Config_msg;
     }
 };
 template <>
@@ -340,6 +346,13 @@ struct MessageDescriptor<InputEvent> {
     static PB_INLINE_CONSTEXPR const pb_size_t fields_array_length = 2;
     static inline const pb_msgdesc_t* fields() {
         return &InputEvent_msg;
+    }
+};
+template <>
+struct MessageDescriptor<FirmwareConfig> {
+    static PB_INLINE_CONSTEXPR const pb_size_t fields_array_length = 5;
+    static inline const pb_msgdesc_t* fields() {
+        return &FirmwareConfig_msg;
     }
 };
 template <>

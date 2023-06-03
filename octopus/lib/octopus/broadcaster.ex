@@ -68,7 +68,7 @@ defmodule Octopus.Broadcaster do
       remote_ip: broadast_ip
     }
 
-    send_config(@default_config, state)
+    state = send_config(@default_config, state)
 
     {:ok, state}
   end
@@ -90,7 +90,7 @@ defmodule Octopus.Broadcaster do
 
           _ ->
             Logger.info(
-              "#{print_ip(ip)}: Config hash misstmatch expected #{expected_phash} got #{firmware_info.config_phash}"
+              "#{print_ip(ip)}: Config hash missmatch expected #{expected_phash} got #{firmware_info.config_phash}"
             )
 
             send_config(state.config, state)

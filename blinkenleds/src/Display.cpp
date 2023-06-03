@@ -2,7 +2,7 @@
 #include <Display.h>
 #include <NeoPixelBus.h>
 #include <Pixel.h>
-#include <Ethernet.h>
+#include <Network.h>
 #include <schema.pb.h>
 
 #define PIXEL_COUNT 64
@@ -50,15 +50,12 @@ void Display::handle_packet(Packet packet)
 {
   switch (packet.which_content)
   {
-  case Packet_config_tag:
-
-    // todo: set luminance
-    // strip.SetLuminance(packet.content.config.luminance);
-    // Dim Function: https://github.com/Makuna/NeoPixelBus/blob/b1b71920f088809f32293169eb143ec27347b3f9/src/internal/colors/RgbwColor.h#L280
-
-    show_test_frame = packet.content.config.show_test_frame;
-    config_phash = packet.content.config.config_phash;
-    Pixel::set_params(packet.content.config.easing_interval_ms, EasingMode(packet.content.config.easing_mode), packet.content.config.enable_calibration);
+  case Packet_firmware_config_tag:
+    show_test_frame = packet.content.firmware_config.show_test_frame;
+    config_phash = packet.content.firmware_config.config_phash;
+    Pixel::set_easing_mode(EasingMode(packet.content.firmware_config.easing_mode));
+    Pixel::set_enable_calibration(packet.content.firmware_config.enable_calibration);
+    Pixel::set_luminance(packet.content.firmware_config.luminance);
 
     break;
 
@@ -69,6 +66,8 @@ void Display::handle_packet(Packet packet)
       pixel[i].set_color(color_from_palette(packet.content.frame.palette, packet.content.frame.data.bytes[i]));
     }
 
+    Pixel::set_easing_interval(packet.content.frame.easing_interval);
+
     break;
 
   case Packet_w_frame_tag:
@@ -77,6 +76,8 @@ void Display::handle_packet(Packet packet)
     {
       pixel[i].set_color(color_from_palette(packet.content.w_frame.palette, packet.content.w_frame.data.bytes[i]));
     }
+
+    Pixel::set_easing_interval(packet.content.frame.easing_interval);
 
     break;
   }

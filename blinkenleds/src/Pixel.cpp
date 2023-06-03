@@ -2,10 +2,11 @@
 #include <NeoPixelBus.h>
 #include <Pixel.h>
 #include <Pixel_calibrations.h>
-#include <Ethernet.h>
+#include <Network.h>
 
 EasingMode easing_mode;
 uint32_t easing_interval_ms;
+uint8_t luminance = 255;
 bool enable_calibration = false;
 NeoGamma<NeoGammaTableMethod> colorGamma;
 
@@ -16,16 +17,33 @@ Pixel::Pixel()
 	easing_active = false;
 }
 
-void Pixel::set_params(uint32_t new_interval_ms, EasingMode new_mode, bool new_enable_calibration)
+void Pixel::set_easing_interval(uint32_t interval_ms)
 {
-	easing_interval_ms = new_interval_ms;
-	easing_mode = new_mode;
-	enable_calibration = new_enable_calibration;
+	easing_interval_ms = interval_ms;
+}
+
+void Pixel::set_easing_mode(EasingMode mode)
+{
+	easing_mode = mode;
+}
+
+void Pixel::set_enable_calibration(bool enable)
+{
+	enable_calibration = enable;
+}
+
+void Pixel::set_luminance(uint8_t new_luminance)
+{
+
+	// todo: implement luminance
+	// Dim Function: https://github.com/Makuna/NeoPixelBus/blob/b1b71920f088809f32293169eb143ec27347b3f9/src/internal/colors/RgbwColor.h#L280
+
+	luminance = new_luminance;
 }
 
 void Pixel::set_color(RgbwColor color)
 {
-	// we apply gamma correction and calibration here so all color operations inside this class are done in the the corrected color space
+	// we apply gamma correction and calibration at the start so all color operations inside this class are done in the the corrected color space
 	if (enable_calibration)
 	{
 		target_color = RgbwColor(calibration_table_r[color.R], calibration_table_g[color.G], calibration_table_b[color.B], color.W);

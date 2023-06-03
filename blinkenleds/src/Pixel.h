@@ -16,7 +16,10 @@ public:
 	RgbwColor get_display_color();
 
 	// Set easing parameters
-	static void set_params(uint32_t interval_ms, EasingMode mode, bool disable_corrections);
+	static void set_easing_interval(uint32_t interval_ms);
+	static void set_easing_mode(EasingMode mode);
+	static void set_enable_calibration(bool enable);
+	static void set_luminance(uint8_t luminance);
 
 private:
 	int32_t start_time_ms;

@@ -36,7 +36,8 @@ defmodule Octopus.Apps.FontTester do
 
     %Frame{
       data: data,
-      palette: palette
+      palette: palette,
+      easing_interval: 2000
     }
     |> send_frame()
 
