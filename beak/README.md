@@ -1,41 +1,43 @@
-# Multi Channel Sampler
+# Beak
 
-A simple audio player for playing samples on specified output channels asynchronously.
+Audio Engine component of letterbox.
 
 ## Build
 
 ### Prerequisites
 
-#### MacOS
-
 - cmake v3.22
-- c++17
+- c++20
 - ninja
 - protoc
 - libcurl
-- everything to build juce framework:
+- [JUCE Dependencies](https://github.com/juce-framework/JUCE/blob/master/docs/Linux%20Dependencies.md)
+- golang (optional)
 
-### How to build
+### Build Steps
+
+All build steps can be carried out by cmake. Commands should be run from `<PATH_TO_REPO>/beak`.
+
+#### Build beak
 
 - hint: this project uses [CPM](https://github.com/cpm-cmake/CPM.cmake) to fetch [juce](https://github.com/juce-framework/JUCE) and [asio](https://github.com/chriskohlhoff/asio). set `export CPM_SOURCE_CACHE=$HOME/.cache/CPM` to avoid refetching after deleting the build folder
 - clone the repo `https://github.com/gueldenstone/MultiChannelSampler.git`
-- configure cmake `make -B build -S . -G"Ninja Multi-Config"`
-- build `cmake --build build`
-- you can find the binary inside the `build` folder
+- configure cmake (specifying the generator is optional) `cmake -B build -S . -GNinja`
+- build `cmake --build build --config Debug`
+- you can find the binary here: `build/beak_artefacts/Debug/beak`
 
+#### Build test application
 
-## Current status
+There is a test application build in golang to simply test the UDP protobuf API.
 
-### What's working?
-- Sample playback from local and remote files in mono wav format:
-    - `file://path/to/local/file.wav` (must be absolute)
-    - `https://myserver.net/file.wav`
-- Caching of remote and local files in memory
-- Protobuf API to preload samples into cache and trigger playback
+- set the `BUILD_TEST_APP` option to `TRUE`
+- `cmake -B build -S . -GNinja -DBUILD_TEST_APP=TRUE`
+- for convenience there are test scripts under `test/scripts`
 
+#### Build documentation
 
-### Todo
-- Refactor caching:
-    - make use of etags (or another mechanism) to check if a locally found file is up to date
-    - limit the amount of samples and/or the used memory of the cache
+The code is documented using doxygen.
 
+- set the `BUILD_DOC` option to `TRUE`
+- `cmake -B build -S . -GNinja -DBUILD_DOC=TRUE`
+- documentation can be found in `docs`
