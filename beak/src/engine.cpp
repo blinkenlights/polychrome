@@ -2,6 +2,10 @@
 
 #include "processor.h"
 
+using AudioGraphIOProcessor = juce::AudioProcessorGraph::AudioGraphIOProcessor;
+using Connection = juce::AudioProcessorGraph::Connection;
+namespace beak
+{
 /**
  * @brief Construct a new Multi Channel Sampler:: Multi Channel Sampler object
  *
@@ -30,12 +34,15 @@ Engine::~Engine()
  */
 Error Engine::configureGraph(Config const &config)
 {
-  std::scoped_lock<std::mutex> lock(mut);
+  std::scoped_lock<std::mutex> const lock(mut);
   juce::AudioIODevice *device = m_deviceManager.getCurrentAudioDevice();
-  uint32_t sampleRate = device->getCurrentSampleRate();
-  int samplesPerBlock = device->getCurrentBufferSizeSamples();
+  double const sampleRate = device->getCurrentSampleRate();
+  int const samplesPerBlock = device->getCurrentBufferSizeSamples();
 
-  if (!m_mainProcessor->enableAllBuses()) return Error("could not enable buses");
+  if (!m_mainProcessor->enableAllBuses())
+  {
+    return Error("could not enable buses");
+  }
   m_mainProcessor->setPlayConfigDetails(config.inputs(), config.outputs(), sampleRate,
                                         samplesPerBlock);
   m_mainProcessor->prepareToPlay(sampleRate, samplesPerBlock);
@@ -43,7 +50,10 @@ Error Engine::configureGraph(Config const &config)
   m_mainProcessor->clear();
   audioOutputNode = m_mainProcessor->addNode(
       std::make_unique<AudioGraphIOProcessor>(AudioGraphIOProcessor::audioOutputNode));
-  if (!audioOutputNode) return Error("could not add output node");
+  if (!audioOutputNode)
+  {
+    return Error("could not add output node");
+  }
   m_player->setProcessor(m_mainProcessor.get());
   m_deviceManager.addAudioCallback(m_player.get());
   return Error();
@@ -86,8 +96,14 @@ Error Engine::configureDeviceManager(Config const &config)
  */
 Error Engine::configure(Config const &config)
 {
-  if (auto err = configureDeviceManager(config)) return err;
-  if (auto err = configureGraph(config)) return err;
+  if (auto err = configureDeviceManager(config))
+  {
+    return err;
+  }
+  if (auto err = configureGraph(config))
+  {
+    return err;
+  }
   return Error();
 }
 
@@ -103,7 +119,7 @@ Error Engine::playSound(std::unique_ptr<juce::PositionableAudioSource> src, int 
                         juce::String const &name)
 {
   Error err;
-  std::scoped_lock<std::mutex> lock(mut);
+  std::scoped_lock<std::mutex> const lock(mut);
   auto node = m_mainProcessor->addNode(make_unique<MonoFilePlayerProcessor>(std::move(src), name));
   auto conn = Connection{{node->nodeID, 0}, {audioOutputNode->nodeID, channel - 1}};
   m_mainProcessor->addConnection(conn);
@@ -156,12 +172,15 @@ Error Engine::playSound(const juce::File &file, int channel)
  *
  * @param source Emitter source should be castable into a Processor
  */
-void Engine::changeListenerCallback(ChangeBroadcaster *source)
+void Engine::changeListenerCallback(juce::ChangeBroadcaster *source)
 {
   if (source)
+  {
     if (auto proc = dynamic_cast<MonoFilePlayerProcessor *>(source))
     {
-      std::scoped_lock<std::mutex> lock(mut);
+      std::scoped_lock<std::mutex> const lock(mut);
       m_mainProcessor->removeNode(proc->getNodeID(), juce::AudioProcessorGraph::UpdateKind::async);
     }
+  }
 }
+}  // namespace beak

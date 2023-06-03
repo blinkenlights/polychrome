@@ -1,75 +1,73 @@
 #pragma once
-#include <JuceHeader.h>
+#include <juce_audio_utils/juce_audio_utils.h>
 
 #include <memory>
 
 #include "error.h"
 #include "processor.h"
 
-using AudioGraphIOProcessor = juce::AudioProcessorGraph::AudioGraphIOProcessor;
-using Node = juce::AudioProcessorGraph::Node;
-using NodeID = juce::AudioProcessorGraph::NodeID;
-using Connection = juce::AudioProcessorGraph::Connection;
-
+namespace beak
+{
 class Engine : public juce::ChangeListener
 {
  public:
   struct Config
   {
     explicit Config() :
-      m_deviceName(m_defaultDevice),
-      m_inputs(m_defaultInputs),
-      m_outputs(m_defaultOutputs),
-      m_sampleRate(m_defaultSampleRate)
+      m_deviceName(defaultDevice),
+      m_inputs(defaultInputs),
+      m_outputs(defaultOutputs),
+      m_sampleRate(defaultSampleRate)
     {
     }
 
     Config WithDeviceName(juce::String const &deviceName)
     {
       auto retval = *this;
-      retval.m_deviceName = deviceName.isEmpty() ? m_defaultDevice : deviceName;
+      retval.m_deviceName = deviceName.isEmpty() ? defaultDevice : deviceName;
       return retval;
     }
-    Config WithInputs(uint32_t inputs)
+    Config WithInputs(int inputs)
     {
       auto retval = *this;
       retval.m_inputs = inputs;
       return retval;
     }
-    Config WithOutputs(uint32_t outputs)
+    Config WithOutputs(int outputs)
     {
       auto retval = *this;
       retval.m_outputs = outputs;
       return retval;
     }
-    Config WithSampleRate(uint32_t sampleRate)
+    Config WithSampleRate(int sampleRate)
     {
       auto retval = *this;
-      retval.m_sampleRate = sampleRate == 0 ? m_defaultSampleRate : sampleRate;
+      retval.m_sampleRate = sampleRate == 0 ? defaultSampleRate : sampleRate;
       return retval;
     }
     juce::String deviceName() const { return m_deviceName; }
-    uint32_t inputs() const { return m_inputs; }
-    uint32_t outputs() const { return m_outputs; }
-    uint32_t sampleRate() const { return m_sampleRate; }
+    int inputs() const { return m_inputs; }
+    int outputs() const { return m_outputs; }
+    int sampleRate() const { return m_sampleRate; }
 
    private:
     juce::String m_deviceName;
-    uint32_t m_inputs;
-    uint32_t m_outputs;
-    uint32_t m_sampleRate;
+    int m_inputs;
+    int m_outputs;
+    int m_sampleRate;
 
-   private:
-    static constexpr const char *m_defaultDevice = "MacBook Pro Speakers";
-    static constexpr uint32_t m_defaultInputs = 2;
-    static constexpr uint32_t m_defaultOutputs = 2;
-    static constexpr uint32_t m_defaultSampleRate = 44100;
+   public:
+    static constexpr const char *defaultDevice = "MacBook Pro Speakers";
+    static constexpr uint32_t defaultInputs = 2;
+    static constexpr uint32_t defaultOutputs = 2;
+    static constexpr int defaultSampleRate = 44100;
   };
 
  public:
   Engine();
-
-  ~Engine();
+  ~Engine() override;
+  Engine(Engine &&) = delete;
+  Engine &operator=(Engine &&) = delete;
 
  public:
   [[nodiscard]] Error configure(Config const &config);
@@ -78,7 +76,7 @@ class Engine : public juce::ChangeListener
                                 juce::String const &name);
 
  public:
-  void changeListenerCallback(ChangeBroadcaster *source) override;
+  void changeListenerCallback(juce::ChangeBroadcaster *source) override;
 
  private:
   [[nodiscard]] Error configureDeviceManager(Config const &config);
@@ -88,9 +86,10 @@ class Engine : public juce::ChangeListener
   juce::AudioDeviceManager m_deviceManager;
   std::unique_ptr<juce::AudioProcessorGraph> m_mainProcessor;
   std::unique_ptr<juce::AudioProcessorPlayer> m_player;
-  Node::Ptr audioOutputNode;
+  juce::AudioProcessorGraph::Node::Ptr audioOutputNode;
   std::mutex mut;
 
  private:
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Engine)
 };
+}  // namespace beak

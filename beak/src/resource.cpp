@@ -3,6 +3,9 @@
 #include <filesystem>
 #include <sstream>
 
+namespace beak
+{
+constexpr uint32_t statusOk = 200;
 /**
  * @brief Configure the cache
  *
@@ -14,7 +17,9 @@ Error Cache::configure()
   if (!m_cachePath.isDirectory())
   {
     if (auto res = m_cachePath.createDirectory(); res.failed())
+    {
       return Error("could not create cache directory");
+    }
   }
   return Error();
 }
@@ -27,7 +32,7 @@ Error Cache::configure()
  */
 std::tuple<std::optional<Cache::DataType>, Error> Cache::get(juce::String const& uri)
 {
-  juce::URL url(uri);
+  juce::URL const url(uri);
 
   // check if already cached in memory
   if (m_ressourceMap.contains(url.toString(false)))
@@ -39,7 +44,10 @@ std::tuple<std::optional<Cache::DataType>, Error> Cache::get(juce::String const&
   else
   {
     // cache the file
-    if (Error err = cacheFile(url); err) return std::make_tuple(std::nullopt, err);
+    if (Error const err = cacheFile(url); err)
+    {
+      return std::make_tuple(std::nullopt, err);
+    }
 
     // create source
     if (!m_ressourceMap.contains(url.toString(false)))
@@ -76,17 +84,26 @@ Error Cache::cacheFile(juce::URL const& url, bool checkVersion)
   if (url.isLocalFile())
   {
     // cache local file
-    if (Error err = storeBufferFor(url.toString(false), url.getLocalFile()); err) return err;
+    if (Error err = storeBufferFor(url.toString(false), url.getLocalFile()); err)
+    {
+      return err;
+    }
   }
   else if (url.isWellFormed())
   {
     // cache remote file
-    juce::File destination = juce::File(m_cachePath.getFullPathName() +
-                                        juce::File::getSeparatorChar() + url.getFileName());
+    juce::File const destination = juce::File(m_cachePath.getFullPathName() +
+                                              juce::File::getSeparatorChar() + url.getFileName());
 
     auto [etag, err] = download(url, destination, checkVersion);
-    if (err) return err;
-    if (Error err = storeBufferFor(url.toString(false), destination, etag); err) return err;
+    if (err)
+    {
+      return err;
+    }
+    if (Error err = storeBufferFor(url.toString(false), destination, etag); err)
+    {
+      return err;
+    }
   }
   return Error();
 }
@@ -97,10 +114,12 @@ std::tuple<juce::String, Error> Cache::download(juce::URL url, juce::File const&
   juce::URL::DownloadTaskOptions downloadOptions;
   downloadOptions = downloadOptions.withListener(this);
   if (m_ressourceMap.contains(url.toString(false)) && checkVersion)
+  {
     downloadOptions = downloadOptions.withExtraHeaders("If-None-Match: " +
                                                        m_ressourceMap.at(url.toString(false)).etag);
+  }
 
-  juce::String etag;  //!< todo implement etags
+  juce::String const etag;  //!< todo implement etags
   std::unique_ptr<juce::URL::DownloadTask> task = url.downloadToFile(destination, downloadOptions);
   if (!task)
   {
@@ -110,7 +129,7 @@ std::tuple<juce::String, Error> Cache::download(juce::URL url, juce::File const&
   {
     // wait for download
   }
-  if (task->hadError() || task->statusCode() != 200)
+  if (task->hadError() || task->statusCode() != statusOk)
   {
     std::stringstream err;
     err << "download failed, status: " << task->statusCode();
@@ -139,10 +158,12 @@ Error Cache::storeBufferFor(juce::String const& key, juce::File const& file,
     return Error(err.str());
   }
 
-  std::unique_ptr<AudioSampleBuffer> buf(new AudioSampleBuffer());
+  std::unique_ptr<juce::AudioSampleBuffer> buf(new juce::AudioSampleBuffer());
   buf->setSize((int)reader->numChannels, (int)reader->lengthInSamples);
   if (!reader->read(buf.get(), 0, static_cast<int>(reader->lengthInSamples), 0, true, true))
+  {
     return Error("could not read into buffer");
+  }
   m_ressourceMap[key] = {
       std::move(buf),
       etag,
@@ -157,26 +178,35 @@ Error Cache::storeBufferFor(juce::String const& key, juce::File const& file,
  * @param bytesDownloaded   Bytes already downloaded
  * @param totalLength       Length of the file in bytes
  */
-void Cache::progress(juce::URL::DownloadTask*, int64 bytesDownloaded, int64 totalLength)
+void Cache::progress(juce::URL::DownloadTask*, juce::int64 bytesDownloaded, juce::int64 totalLength)
 {
-  double progress = static_cast<double>(bytesDownloaded) / static_cast<double>(totalLength);
-  int barWidth = 70;
+  double const progress = static_cast<double>(bytesDownloaded) / static_cast<double>(totalLength);
+  int const barWidth = 70;
 
   std::cout << "[";
-  int pos = barWidth * progress;
+  int const pos = static_cast<int>(barWidth * progress);
   for (int i = 0; i < barWidth; ++i)
   {
     if (i < pos)
+    {
       std::cout << "=";
+    }
     else if (i == pos)
+    {
       std::cout << ">";
+    }
     else
+    {
       std::cout << " ";
+    }
   }
   std::cout << "] " << int(progress * 100.0) << " %\r";
   std::cout.flush();
 
-  if (progress >= 1.0) std::cout << std::endl;
+  if (progress >= 1.0)
+  {
+    std::cout << std::endl;
+  }
 }
 
 /**
@@ -200,3 +230,4 @@ void Cache::finished(juce::URL::DownloadTask* task, bool success)
     std::cout << "Downloaded '" << task->getTargetLocation().getFullPathName() << "'" << std::endl;
   }
 }
+}  // namespace beak

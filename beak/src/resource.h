@@ -1,5 +1,7 @@
 #pragma once
-#include <JuceHeader.h>
+#include <juce_audio_basics/juce_audio_basics.h>
+#include <juce_audio_formats/juce_audio_formats.h>
+#include <juce_core/juce_core.h>
 
 #include <map>
 #include <optional>
@@ -7,6 +9,8 @@
 
 #include "error.h"
 
+namespace beak
+{
 class Cache : public juce::URL::DownloadTaskListener
 {
   typedef std::unique_ptr<juce::MemoryAudioSource> DataType;
@@ -20,7 +24,6 @@ class Cache : public juce::URL::DownloadTaskListener
 
  public:
   explicit Cache(juce::String const& cachePath) : m_cachePath(juce::File(cachePath)) {}
-  ~Cache() {}
 
   [[nodiscard]] Error configure();
 
@@ -35,7 +38,8 @@ class Cache : public juce::URL::DownloadTaskListener
                                      juce::String const& etag = "");
 
   // download status
-  void progress(juce::URL::DownloadTask*, int64 bytesDownloaded, int64 totalLength) override;
+  void progress(juce::URL::DownloadTask*, juce::int64 bytesDownloaded,
+                juce::int64 totalLength) override;
   void finished(juce::URL::DownloadTask* task, bool success) override;
 
  private:
@@ -44,3 +48,4 @@ class Cache : public juce::URL::DownloadTaskListener
   std::map<juce::String, InternalDataType> m_ressourceMap;
   static constexpr double m_fileLengthLimitSeconds = 20;
 };
+}  // namespace beak

@@ -80,7 +80,6 @@ include_directories(SYSTEM ${Protobuf_INCLUDE_DIRS})
 include_directories(SYSTEM ${CMAKE_CURRENT_BINARY_DIR})
 
 # JUCE framework
-set(DONT_SET_USING_JUCE_NAMESPACE ON)
 CPMAddPackage("gh:juce-framework/JUCE#7.0.5@7.0.5")
 
 juce_add_console_app(${TARGET_NAME}
@@ -88,7 +87,6 @@ juce_add_console_app(${TARGET_NAME}
   NEEDS_CURL TRUE
   CATCH_UNHANDLED_EXCEPTIONS TRUE
 )
-juce_generate_juce_header(${TARGET_NAME})
 
 # project sources
 target_sources(${TARGET_NAME}
@@ -125,8 +123,6 @@ target_link_libraries(${TARGET_NAME}
   juce::juce_audio_formats
   juce::juce_audio_basics
   juce::juce_audio_utils
-  juce::juce_dsp
-  juce::juce_events
   juce::juce_recommended_config_flags
   asio
   ${Protobuf_LIBRARIES}

@@ -2,6 +2,8 @@
 
 #include <iostream>
 
+namespace beak::net
+{
 Server::Server(asio::io_context &ioCtx, uint16_t port) :
   m_socket(ioCtx, udp::endpoint(udp::v4(), static_cast<asio::ip::port_type>(port)))
 {
@@ -19,14 +21,14 @@ void Server::handleReceive(const asio::error_code &error, std::size_t sz)
 {
   if (!error)
   {
-    std::shared_ptr<Packet> packet(new Packet());
-    if (!packet->ParseFromArray(&m_recvBuffer, sz))
+    std::shared_ptr<Packet> const packet(new Packet());
+    if (!packet->ParseFromArray(&m_recvBuffer, static_cast<int>(sz)))
     {
       std::cerr << "received malformed packet, not a protobuf message" << std::endl;
       return;
     }
 
-    Packet::ContentCase type = packet->content_case();
+    Packet::ContentCase const type = packet->content_case();
     if (!m_callBackFns.contains(type))
     {
       // std::cerr << "no callback registered for " << type << std::endl;
@@ -34,7 +36,7 @@ void Server::handleReceive(const asio::error_code &error, std::size_t sz)
       return;
     }
 
-    msgRecvCallbackFn fn = m_callBackFns.at(packet->content_case());
+    msgRecvCallbackFn const fn = m_callBackFns.at(packet->content_case());
     if (fn)
     {
       fn.operator()(packet);
@@ -67,3 +69,4 @@ void Server::registerCallback(Packet::ContentCase type, msgRecvCallbackFn fn)
 {
   m_callBackFns[type] = fn;
 }
+}  // namespace beak::net

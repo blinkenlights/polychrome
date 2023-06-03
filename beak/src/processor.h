@@ -1,12 +1,19 @@
 #pragma once
-#include <JuceHeader.h>
+#include <juce_audio_devices/juce_audio_devices.h>
+#include <juce_audio_formats/juce_audio_formats.h>
+#include <juce_audio_processors/juce_audio_processors.h>
 
 #include <cassert>
 
+namespace beak
+{
 class ProcessorBase : public juce::AudioProcessor
 {
  public:
   ProcessorBase(int inputs, int outputs);
+  ~ProcessorBase() override {}
+  ProcessorBase(ProcessorBase &&) = delete;
+  ProcessorBase &operator=(ProcessorBase &&) = delete;
 
   juce::AudioProcessorEditor *createEditor() override { return nullptr; }
   bool hasEditor() const override { return false; }
@@ -31,6 +38,8 @@ class ProcessorBase : public juce::AudioProcessor
 
 using NodeID = juce::AudioProcessorGraph::NodeID;
 
+constexpr int defaultCleanupInterval = 200;
+
 class MonoFilePlayerProcessor : public ProcessorBase,
                                 public juce::ChangeBroadcaster,
                                 public juce::Timer
@@ -39,7 +48,9 @@ class MonoFilePlayerProcessor : public ProcessorBase,
   MonoFilePlayerProcessor(juce::File const &file);
   MonoFilePlayerProcessor(std::unique_ptr<juce::PositionableAudioSource> src,
                           juce::String const &name);
-  ~MonoFilePlayerProcessor();
+  ~MonoFilePlayerProcessor() override;
+  MonoFilePlayerProcessor(MonoFilePlayerProcessor &&) = delete;
+  MonoFilePlayerProcessor &operator=(MonoFilePlayerProcessor &&) = delete;
 
   void prepareToPlay(double sampleRate, int samplesPerBlock) override;
   void processBlock(juce::AudioSampleBuffer &buffer, juce::MidiBuffer &) override;
@@ -59,4 +70,8 @@ class MonoFilePlayerProcessor : public ProcessorBase,
   juce::AudioTransportSource m_source;
   juce::String m_name;
   NodeID m_nodeID;
+
+ private:
+  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MonoFilePlayerProcessor)
 };
+}  // namespace beak

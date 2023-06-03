@@ -4,6 +4,8 @@
 #include "resource.h"
 #include "server.h"
 
+namespace beak
+{
 /**
  * @brief Construct a new Main App:: Main App object
  *
@@ -43,7 +45,7 @@ MainApp::MainApp() : Thread("beak"), m_deviceManager(new juce::AudioDeviceManage
 MainApp::~MainApp()
 {
   juce::MessageManager::deleteInstance();
-  DeletedAtShutdown::deleteAll();
+  juce::DeletedAtShutdown::deleteAll();
 }
 
 /**
@@ -105,18 +107,22 @@ void MainApp::listCmd(juce::ArgumentList const & /*args*/)
  */
 void MainApp::playCmd(juce::ArgumentList const &args)
 {
-  juce::String device = args.getValueForOption("--device|-d");
-  uint32_t outputs = args.getValueForOption("--outputs|-o").getIntValue();
-  juce::File file = args.getExistingFileForOption("--file|-f");
-  uint32_t channel = args.getValueForOption("--channel|-c").getIntValue();
+  juce::String const device = args.getValueForOption("--device|-d");
+  int const outputs = args.getValueForOption("--outputs|-o").getIntValue();
+  juce::File const file = args.getExistingFileForOption("--file|-f");
+  int const channel = args.getValueForOption("--channel|-c").getIntValue();
 
   Engine engine;
   if (auto err = engine.configure(Engine::Config().WithDeviceName(device).WithOutputs(outputs));
       err)
+  {
     juce::ConsoleApplication::fail(static_cast<juce::String>(err));
+  }
 
   if (auto err = engine.playSound(file, channel); err)
+  {
     juce::ConsoleApplication::fail(static_cast<juce::String>(err));
+  }
 }
 
 /**
@@ -128,15 +134,18 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
 {
   // parse arguments
   uint32_t port = args.getValueForOption("--port|-p").getIntValue();
-  uint32_t outputs = args.getValueForOption("--outputs|-o").getIntValue();
-  uint32_t inputs = args.getValueForOption("--inputs|-i").getIntValue();
-  juce::String device = args.getValueForOption("--device|-d");
+  int const outputs = args.getValueForOption("--outputs|-o").getIntValue();
+  int const inputs = args.getValueForOption("--inputs|-i").getIntValue();
+  juce::String const device = args.getValueForOption("--device|-d");
   juce::String cacheDir = args.getValueForOption("--cache|-c");
-  port = port != 0 ? port : 60000;  // default port
+  port = port != 0 ? port : defaultPort;  // default port
   cacheDir = cacheDir.isEmpty() ? "/home/gueldi/tmp" : cacheDir;
   // setup chaching
   Cache cache(cacheDir);
-  if (auto err = cache.configure()) juce::ConsoleApplication::fail(err.what());
+  if (auto err = cache.configure())
+  {
+    juce::ConsoleApplication::fail(err.what());
+  }
 
   // setup aduio engine
   Engine engine;
@@ -144,12 +153,14 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
                                       .WithDeviceName(device)
                                       .WithInputs(inputs)
                                       .WithOutputs(outputs)
-                                      .WithSampleRate(48000)))
+                                      .WithSampleRate(Engine::Config::defaultSampleRate)))
+  {
     juce::ConsoleApplication::fail(static_cast<juce::String>(err));
+  }
   try
   {
     asio::io_context ioCtx;
-    Server server(ioCtx, port);
+    net::Server server(ioCtx, port);
 
     // register callback to play a sample
     server.registerCallback(
@@ -157,11 +168,13 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
         [&engine, &cache](std::shared_ptr<Packet> packet)
         {
           auto uri = packet->audio_frame().uri();
-          auto channel = packet->audio_frame().channel();
+          auto channel = static_cast<int>(packet->audio_frame().channel());
           if (auto [file, err] = cache.get(uri); !err)
           {
             if (auto err = engine.playSound(std::move(file.value()), channel, uri))
+            {
               std::cerr << err << std::endl;
+            }
           }
           else
           {
@@ -176,9 +189,10 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
     juce::ConsoleApplication::fail(e.what());
   }
 }
+}  // namespace beak
 
 /**
  *
  * Start the JUCEApplication, int main() is here.
  */
-START_JUCE_APPLICATION(MainApp)
+START_JUCE_APPLICATION(beak::MainApp)

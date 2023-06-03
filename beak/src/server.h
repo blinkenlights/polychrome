@@ -3,7 +3,9 @@
 #include <asio.hpp>
 
 #include "proto.h"
-
+namespace beak::net
+{
+constexpr std::size_t bufferSize = 1024;
 using asio::ip::udp;
 typedef std::function<void(std::shared_ptr<Packet>)> msgRecvCallbackFn;
 class Server
@@ -25,6 +27,7 @@ class Server
  private:
   udp::socket m_socket;
   udp::endpoint m_remoteEndpoint;
-  std::array<char, 1024> m_recvBuffer;
+  std::array<char, bufferSize> m_recvBuffer{};
   std::map<Packet::ContentCase, msgRecvCallbackFn> m_callBackFns;
 };
+}  // namespace beak::net

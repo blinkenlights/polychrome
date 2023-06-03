@@ -1,5 +1,8 @@
 #include "processor.h"
 
+namespace beak
+{
+
 /**
  * @brief Construct a new Processor Base:: Processor Base object
  *
@@ -45,7 +48,7 @@ MonoFilePlayerProcessor::MonoFilePlayerProcessor(juce::File const &file) :
  * @brief Destroy the Mono File Player Processor:: Mono File Player Processor object
  *
  */
-MonoFilePlayerProcessor::~MonoFilePlayerProcessor() { releaseResources(); }
+MonoFilePlayerProcessor::~MonoFilePlayerProcessor() { m_source.releaseResources(); }
 
 void MonoFilePlayerProcessor::reset() { m_source.stop(); }
 
@@ -56,7 +59,7 @@ void MonoFilePlayerProcessor::reset() { m_source.stop(); }
 void MonoFilePlayerProcessor::start()
 {
   m_source.start();
-  startTimer(200);
+  startTimer(defaultCleanupInterval);
 }
 
 /**
@@ -99,7 +102,7 @@ void MonoFilePlayerProcessor::processBlock(juce::AudioSampleBuffer &buffer, juce
  */
 void MonoFilePlayerProcessor::timerCallback()
 {
-  bool playing = (m_readerSource->getNextReadPosition() < m_readerSource->getTotalLength());
+  bool const playing = (m_readerSource->getNextReadPosition() < m_readerSource->getTotalLength());
   if (!playing)
   {
     stopTimer();
@@ -120,3 +123,4 @@ void MonoFilePlayerProcessor::setNodeID(NodeID const &nodeID) { m_nodeID = nodeI
  * @return NodeID
  */
 NodeID MonoFilePlayerProcessor::getNodeID() const { return m_nodeID; }
+}  // namespace beak
