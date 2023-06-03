@@ -9,7 +9,7 @@ message Packet {
     WFrame w_frame = 3;
     RGBFrame rgb_frame = 4;
 
-    // From Apps/UDP to Octopus.Mixer to beak
+    // Frames with audio data
     AudioFrame audio_frame = 5;
 
     // Events from the input controllers
@@ -39,6 +39,12 @@ message WFrame {
 message RGBFrame {
   bytes data = 1 [(nanopb).max_size = 1920]; // Series of RGB values. 8bit per color. First pixel is top left. One panel after the other.
   uint32 easing_interval = 2;
+}
+
+// AudioFrame with uri of the sample to be played and the channel number
+message AudioFrame {
+  string uri = 1; // supports file://<path>, http(s)://<url> with .wav or .aiff files
+  uint32 channel = 2;
 }
 
 message InputEvent {
@@ -118,9 +124,4 @@ message FirmwareInfo {
 
 message RemoteLog {
   string message = 1 [(nanopb).max_length = 100];
-}
-
-message AudioFrame {
-  string uri = 1; // supports file://<path>, http(s)://<url> with .wav or .aiff files
-  uint32 channel = 2;
 }
