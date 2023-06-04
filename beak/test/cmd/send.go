@@ -32,7 +32,7 @@ func init() {
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
 	sendCmd.PersistentFlags().StringVarP(&address, "address", "a", "127.0.0.1", "udp address")
-	sendCmd.PersistentFlags().UintVarP(&port, "port", "p", 60000, "udp port")
+	sendCmd.PersistentFlags().UintVarP(&port, "port", "p", 1337, "udp port")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
