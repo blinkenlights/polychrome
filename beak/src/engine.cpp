@@ -11,7 +11,7 @@ namespace beak
  *
  */
 Engine::Engine() :
-  m_mainProcessor(new juce::AudioProcessorGraph()), m_player(new juce::AudioProcessorPlayer(true))
+  m_mainProcessor(new juce::AudioProcessorGraph()), m_player(new juce::AudioProcessorPlayer(false))
 {
 }
 
@@ -34,7 +34,7 @@ Engine::~Engine()
  */
 Error Engine::configureGraph(Config const &config)
 {
-  std::scoped_lock<std::mutex> const lock(mut);
+  const juce::ScopedLock lock(m_lock);
   juce::AudioIODevice *device = m_deviceManager.getCurrentAudioDevice();
   double const sampleRate = device->getCurrentSampleRate();
   int const samplesPerBlock = device->getCurrentBufferSizeSamples();
@@ -48,9 +48,9 @@ Error Engine::configureGraph(Config const &config)
   m_mainProcessor->prepareToPlay(sampleRate, samplesPerBlock);
 
   m_mainProcessor->clear();
-  audioOutputNode = m_mainProcessor->addNode(
+  m_audioOutputNode = m_mainProcessor->addNode(
       std::make_unique<AudioGraphIOProcessor>(AudioGraphIOProcessor::audioOutputNode));
-  if (!audioOutputNode)
+  if (!m_audioOutputNode)
   {
     return Error("could not add output node");
   }
@@ -108,36 +108,6 @@ Error Engine::configure(Config const &config)
 }
 
 /**
- * @brief Play a sound from a MemorySource
- *
- * @param src     AudioSource to be used
- * @param channel Channel to play the sample back on
- * @param name    Name of the sample
- * @return Error  Custom error to signal a failure
- */
-Error Engine::playSound(std::unique_ptr<juce::PositionableAudioSource> src, int channel,
-                        juce::String const &name)
-{
-  Error err;
-  std::scoped_lock<std::mutex> const lock(mut);
-  auto node = m_mainProcessor->addNode(make_unique<MonoFilePlayerProcessor>(std::move(src), name));
-  auto conn = Connection{{node->nodeID, 0}, {audioOutputNode->nodeID, channel - 1}};
-  m_mainProcessor->addConnection(conn);
-  if (auto proc = dynamic_cast<MonoFilePlayerProcessor *>(node->getProcessor()))
-  {
-    proc->setNodeID(node->nodeID);
-    proc->start();
-    const juce::MessageManagerLock mmLock;
-    proc->addChangeListener(this);
-  }
-  else
-  {
-    err = Error("not a MonoFilePlayerProcessor");
-  }
-  return err;
-}
-
-/**
  * @brief Plays back a sample from a file
  *
  * @param file      The file to be played back
@@ -147,8 +117,9 @@ Error Engine::playSound(std::unique_ptr<juce::PositionableAudioSource> src, int 
 Error Engine::playSound(const juce::File &file, int channel)
 {
   Error err;
+  const juce::ScopedLock lock(m_lock);
   auto node = m_mainProcessor->addNode(std::make_unique<MonoFilePlayerProcessor>(file));
-  auto conn = Connection{{node->nodeID, 0}, {audioOutputNode->nodeID, channel - 1}};
+  auto conn = Connection{{node->nodeID, 0}, {m_audioOutputNode->nodeID, channel - 1}};
   m_mainProcessor->addConnection(conn);
   if (auto proc = dynamic_cast<MonoFilePlayerProcessor *>(node->getProcessor()))
   {
@@ -178,7 +149,7 @@ void Engine::changeListenerCallback(juce::ChangeBroadcaster *source)
   {
     if (auto proc = dynamic_cast<MonoFilePlayerProcessor *>(source))
     {
-      std::scoped_lock<std::mutex> const lock(mut);
+      const juce::ScopedLock lock(m_lock);
       m_mainProcessor->removeNode(proc->getNodeID(), juce::AudioProcessorGraph::UpdateKind::async);
     }
   }

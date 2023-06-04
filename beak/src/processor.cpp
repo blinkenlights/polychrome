@@ -25,10 +25,11 @@ MonoFilePlayerProcessor::MonoFilePlayerProcessor(juce::File const &file) :
   ProcessorBase(1, 1), m_name(file.getFullPathName())
 {
   m_formatManager.registerBasicFormats();
-
-  m_readerSource =
-      std::make_unique<juce::AudioFormatReaderSource>(m_formatManager.createReaderFor(file), true);
-  m_source.setSource(m_readerSource.get());
+  auto reader = m_formatManager.createReaderFor(file);
+  m_source.setSource(new juce::AudioFormatReaderSource(reader, true), 0, nullptr,
+                     reader->sampleRate);
+  const juce::MessageManagerLock mmLock;
+  m_source.addChangeListener(this);
 }
 
 /**
@@ -43,11 +44,7 @@ void MonoFilePlayerProcessor::reset() { m_source.stop(); }
  * @brief Start the playback
  *
  */
-void MonoFilePlayerProcessor::start()
-{
-  m_source.start();
-  startTimer(defaultCleanupInterval);
-}
+void MonoFilePlayerProcessor::start() { m_source.start(); }
 
 /**
  * @brief Reimplemented to release the resources of the transport source
@@ -70,7 +67,7 @@ const juce::String MonoFilePlayerProcessor::getName() const { return m_name; }
  */
 void MonoFilePlayerProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-  m_source.prepareToPlay(static_cast<int>(sampleRate), samplesPerBlock);
+  m_source.prepareToPlay(samplesPerBlock, sampleRate);
 }
 
 /**
@@ -87,12 +84,10 @@ void MonoFilePlayerProcessor::processBlock(juce::AudioSampleBuffer &buffer, juce
  * @brief Callback of the Timer to check if playback has finished
  *
  */
-void MonoFilePlayerProcessor::timerCallback()
+void MonoFilePlayerProcessor::changeListenerCallback(juce::ChangeBroadcaster *)
 {
-  bool const playing = (m_readerSource->getNextReadPosition() < m_readerSource->getTotalLength());
-  if (!playing)
+  if (!m_source.isPlaying())
   {
-    stopTimer();
     juce::ChangeBroadcaster::sendChangeMessage();
   }
 }

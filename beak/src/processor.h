@@ -42,7 +42,7 @@ constexpr int defaultCleanupInterval = 200;
 
 class MonoFilePlayerProcessor : public ProcessorBase,
                                 public juce::ChangeBroadcaster,
-                                public juce::Timer
+                                public juce::ChangeListener
 {
  public:
   MonoFilePlayerProcessor(juce::File const &file);
@@ -50,21 +50,21 @@ class MonoFilePlayerProcessor : public ProcessorBase,
   MonoFilePlayerProcessor(MonoFilePlayerProcessor &&) = delete;
   MonoFilePlayerProcessor &operator=(MonoFilePlayerProcessor &&) = delete;
 
-  void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+  void prepareToPlay(double sampleRate, int maximumExpectedSamplesPerBlock) override;
   void processBlock(juce::AudioSampleBuffer &buffer, juce::MidiBuffer &) override;
   void reset() override;
   void releaseResources() override;
   const juce::String getName() const override;
-  void timerCallback() override;
 
   void start();
 
   void setNodeID(NodeID const &nodeID);
   NodeID getNodeID() const;
 
+  void changeListenerCallback(juce::ChangeBroadcaster *source) override;
+
  private:
   juce::AudioFormatManager m_formatManager;
-  std::unique_ptr<juce::PositionableAudioSource> m_readerSource;
   juce::AudioTransportSource m_source;
   juce::String m_name;
   NodeID m_nodeID;

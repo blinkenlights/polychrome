@@ -86,8 +86,8 @@ class Engine : public juce::ChangeListener
   juce::AudioDeviceManager m_deviceManager;
   std::unique_ptr<juce::AudioProcessorGraph> m_mainProcessor;
   std::unique_ptr<juce::AudioProcessorPlayer> m_player;
-  juce::AudioProcessorGraph::Node::Ptr audioOutputNode;
-  std::mutex mut;
+  juce::AudioProcessorGraph::Node::Ptr m_audioOutputNode;
+  juce::CriticalSection m_lock;
 
  private:
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Engine)
