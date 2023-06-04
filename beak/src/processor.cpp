@@ -17,6 +17,7 @@ PanningProcessor::PanningProcessor(int inputNum, int maxInputs) :
   m_inputNum(inputNum),
   m_maxInputs(maxInputs)
 {
+  m_panner.setRule(juce::dsp::PannerRule::squareRoot3dB);
   const double pan = (((double)m_inputNum / m_maxInputs) * 2) - 1;
   m_panner.setPan(pan);
 }
