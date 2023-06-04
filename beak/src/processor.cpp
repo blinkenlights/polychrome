@@ -18,7 +18,7 @@ PanningProcessor::PanningProcessor(int inputNum, int maxInputs) :
   m_maxInputs(maxInputs)
 {
   m_panner.setRule(juce::dsp::PannerRule::squareRoot3dB);
-  const double pan = (((double)m_inputNum / m_maxInputs) * 2) - 1;
+  const float pan = static_cast<float>(m_inputNum) / static_cast<float>(m_maxInputs) * 2 - 1;
   m_panner.setPan(pan);
 }
 
@@ -48,7 +48,7 @@ void PanningProcessor::reset() { m_panner.reset(); }
  */
 void PanningProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-  juce::dsp::ProcessSpec spec = {sampleRate, static_cast<juce::uint32>(samplesPerBlock), 2};
+  const juce::dsp::ProcessSpec spec = {sampleRate, static_cast<juce::uint32>(samplesPerBlock), 2};
   m_panner.prepare(spec);
 }
 
@@ -60,7 +60,7 @@ void PanningProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 void PanningProcessor::processBlock(juce::AudioSampleBuffer &buffer, juce::MidiBuffer &)
 {
   juce::dsp::AudioBlock<float> block(buffer);
-  juce::dsp::ProcessContextReplacing<float> context(block);
+  const juce::dsp::ProcessContextReplacing<float> context(block);
   m_panner.process(context);
 }
 

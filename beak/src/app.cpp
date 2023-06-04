@@ -144,13 +144,14 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
 {
   // parse arguments
   uint32_t port = args.getValueForOption("--port|-p").getIntValue();
-  int const outputs = args.getValueForOption("--outputs|-o").getIntValue();
-  int const inputs = args.getValueForOption("--inputs|-i").getIntValue();
-  juce::String const device = args.getValueForOption("--device|-d");
+  const int outputs = args.getValueForOption("--outputs|-o").getIntValue();
+  const int inputs = args.getValueForOption("--inputs|-i").getIntValue();
+  const juce::String device = args.getValueForOption("--device|-d");
   juce::String cacheDir = args.getValueForOption("--cache|-c");
-  bool isSimulation = args.containsOption("--sim|-s");
-  port = port != 0 ? port : defaultPort;  // default port
-  cacheDir = cacheDir.isEmpty() ? "/tmp/beak" : cacheDir;
+  const bool isSimulation = args.containsOption("--sim|-s");
+
+  port = port != 0 ? port : defaultPort;                   // default port
+  cacheDir = cacheDir.isEmpty() ? "/tmp/beak" : cacheDir;  // default cache dir
   // setup chaching
   Cache cache(cacheDir);
   if (auto err = cache.configure())
@@ -163,7 +164,7 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
   std::unique_ptr<Engine> engine;
   if (isSimulation)
   {
-    engine.reset(new sim::SimulationEngine(outputs));
+    engine = std::make_unique<sim::SimulationEngine>(outputs);
     if (auto err = engine->configure(Engine::Config()
                                          .WithDeviceName(device)
                                          .WithInputs(inputs)
@@ -176,8 +177,7 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
   }
   else
   {
-    engine.reset(new Engine());
-
+    engine = std::make_unique<Engine>();
     if (auto err = engine->configure(Engine::Config()
                                          .WithDeviceName(device)
                                          .WithInputs(inputs)

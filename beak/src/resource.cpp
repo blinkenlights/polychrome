@@ -8,6 +8,8 @@
 namespace beak
 {
 constexpr uint32_t statusOk = 200;  //!< HTTP ok status code.
+constexpr int downloadCheckIntervalMs =
+    5;  //!< Interal in which to check if downloads is finished in ms.
 
 /**
  * @brief Configure the cache
@@ -87,7 +89,7 @@ Error Cache::cacheFile(juce::URL const& url, bool checkVersion)
     {
       // check if file is just filename relative to m_sampleDir
       auto fullPath = juce::File::addTrailingSeparator(m_sampleDir.getFullPathName());
-      fullPath.append(file.getFullPathName(), 100);
+      fullPath.append(file.getFullPathName(), maxFileNameLenght);
       auto relativeSampleFile = juce::File(fullPath);
       if (!relativeSampleFile.exists())
       {
@@ -152,7 +154,7 @@ std::tuple<juce::String, Error> Cache::download(juce::URL url, juce::File const&
   }
   while (!task->isFinished())
   {
-    juce::Thread::sleep(5);
+    juce::Thread::sleep(downloadCheckIntervalMs);
     // wait for download
   }
   if (task->hadError() || task->statusCode() != statusOk)
