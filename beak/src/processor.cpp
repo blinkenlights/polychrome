@@ -17,19 +17,6 @@ ProcessorBase::ProcessorBase(int inputs, int outputs) :
 }
 
 /**
- * @brief Construct a new Mono File Player Processor:: Mono File Player
- * Processor object
- *
- * @param file
- */
-MonoFilePlayerProcessor::MonoFilePlayerProcessor(std::unique_ptr<juce::PositionableAudioSource> src,
-                                                 juce::String const &name) :
-  ProcessorBase(1, 1), m_readerSource(std::move(src)), m_name(name)
-{
-  m_source.setSource(m_readerSource.get());
-}
-
-/**
  * @brief Construct a new Mono File Player Processor:: Mono File Player Processor object
  *
  * @param file

@@ -46,8 +46,6 @@ class MonoFilePlayerProcessor : public ProcessorBase,
 {
  public:
   MonoFilePlayerProcessor(juce::File const &file);
-  MonoFilePlayerProcessor(std::unique_ptr<juce::PositionableAudioSource> src,
-                          juce::String const &name);
   ~MonoFilePlayerProcessor() override;
   MonoFilePlayerProcessor(MonoFilePlayerProcessor &&) = delete;
   MonoFilePlayerProcessor &operator=(MonoFilePlayerProcessor &&) = delete;

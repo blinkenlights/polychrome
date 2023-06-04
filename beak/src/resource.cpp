@@ -34,12 +34,10 @@ std::tuple<std::optional<Cache::DataType>, Error> Cache::get(juce::String const&
 {
   juce::URL const url(uri);
 
-  // check if already cached in memory
+  // check if already cached
   if (m_ressourceMap.contains(url.toString(false)))
   {
-    return std::make_tuple(std::make_unique<juce::MemoryAudioSource>(
-                               *(m_ressourceMap.at(url.toString(false)).buffer), true),
-                           Error());
+    return std::make_tuple(m_ressourceMap.at(url.toString(false)).buffer, Error());
   }
   else
   {
@@ -56,9 +54,7 @@ std::tuple<std::optional<Cache::DataType>, Error> Cache::get(juce::String const&
       err << "unknown error while caching '" << url.toString(false) << "'";
       return std::make_tuple(std::nullopt, Error(err.str()));
     }
-    return std::make_tuple(std::make_unique<juce::MemoryAudioSource>(
-                               *(m_ressourceMap.at(url.toString(false)).buffer), true),
-                           Error());
+    return std::make_tuple(m_ressourceMap.at(url.toString(false)).buffer, Error());
   }
 }
 
@@ -84,7 +80,7 @@ Error Cache::cacheFile(juce::URL const& url, bool checkVersion)
   if (url.isLocalFile())
   {
     // cache local file
-    if (Error err = storeBufferFor(url.toString(false), url.getLocalFile()); err)
+    if (auto err = storeItem(url.toString(false), url.getLocalFile()); err)
     {
       return err;
     }
@@ -100,7 +96,7 @@ Error Cache::cacheFile(juce::URL const& url, bool checkVersion)
     {
       return err;
     }
-    if (Error err = storeBufferFor(url.toString(false), destination, etag); err)
+    if (auto err = storeItem(url.toString(false), destination, etag); err)
     {
       return err;
     }
@@ -138,34 +134,29 @@ std::tuple<juce::String, Error> Cache::download(juce::URL url, juce::File const&
   return std::make_tuple(etag, Error());
 }
 
-Error Cache::storeBufferFor(juce::String const& key, juce::File const& file,
-                            juce::String const& etag)
+Error Cache::storeItem(juce::String const& key, DataType const& value, juce::String const& etag)
 {
-  std::unique_ptr<juce::AudioFormatReader> reader(m_fmtManager.createReaderFor(file));
+  // check if audio file is readable
+  std::unique_ptr<juce::AudioFormatReader> reader(m_fmtManager.createReaderFor(value));
   if (!reader)
   {
     std::stringstream err;
-    err << "creating reader for '" << file.getFullPathName() << "'";
+    err << "creating reader for '" << value.getFullPathName() << "'";
     return Error(err.str());
   }
 
+  // check for maximum duration
   auto duration = (float)reader->lengthInSamples / reader->sampleRate;
   if (duration > m_fileLengthLimitSeconds)
   {
     std::stringstream err;
-    err << "file '" << file.getFullPathName() << "' is longer than maximum size of  "
+    err << "file '" << value.getFullPathName() << "' is longer than maximum size of  "
         << m_fileLengthLimitSeconds << "s ";
     return Error(err.str());
   }
 
-  std::unique_ptr<juce::AudioSampleBuffer> buf(new juce::AudioSampleBuffer());
-  buf->setSize((int)reader->numChannels, (int)reader->lengthInSamples);
-  if (!reader->read(buf.get(), 0, static_cast<int>(reader->lengthInSamples), 0, true, true))
-  {
-    return Error("could not read into buffer");
-  }
   m_ressourceMap[key] = {
-      std::move(buf),
+      value,
       etag,
   };
 

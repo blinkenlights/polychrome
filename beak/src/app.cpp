@@ -163,24 +163,23 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
     net::Server server(ioCtx, port);
 
     // register callback to play a sample
-    server.registerCallback(
-        Packet::kAudioFrame,
-        [&engine, &cache](std::shared_ptr<Packet> packet)
-        {
-          auto uri = packet->audio_frame().uri();
-          auto channel = static_cast<int>(packet->audio_frame().channel());
-          if (auto [file, err] = cache.get(uri); !err)
-          {
-            if (auto err = engine.playSound(std::move(file.value()), channel, uri))
-            {
-              std::cerr << err << std::endl;
-            }
-          }
-          else
-          {
-            std::cerr << err.what() << std::endl;
-          }
-        });
+    server.registerCallback(Packet::kAudioFrame,
+                            [&engine, &cache](std::shared_ptr<Packet> packet)
+                            {
+                              auto uri = packet->audio_frame().uri();
+                              auto channel = static_cast<int>(packet->audio_frame().channel());
+                              if (auto [file, err] = cache.get(uri); !err)
+                              {
+                                if (auto err = engine.playSound(file.value(), channel))
+                                {
+                                  std::cerr << err << std::endl;
+                                }
+                              }
+                              else
+                              {
+                                std::cerr << err.what() << std::endl;
+                              }
+                            });
     // run the server
     ioCtx.run();
   }

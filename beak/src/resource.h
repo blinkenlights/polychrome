@@ -13,12 +13,12 @@ namespace beak
 {
 class Cache : public juce::URL::DownloadTaskListener
 {
-  typedef std::unique_ptr<juce::MemoryAudioSource> DataType;
+  typedef juce::File DataType;
 
  private:
   struct InternalDataType
   {
-    std::unique_ptr<juce::AudioBuffer<float>> buffer;
+    DataType buffer;
     juce::String etag;
   };
 
@@ -34,8 +34,8 @@ class Cache : public juce::URL::DownloadTaskListener
   [[nodiscard]] std::tuple<juce::String, Error> download(juce::URL url,
                                                          juce::File const& destination,
                                                          bool checkVersion);
-  [[nodiscard]] Error storeBufferFor(juce::String const& key, juce::File const& file,
-                                     juce::String const& etag = "");
+  [[nodiscard]] Error storeItem(juce::String const& key, juce::File const& file,
+                                juce::String const& etag = "");
 
   // download status
   void progress(juce::URL::DownloadTask*, juce::int64 bytesDownloaded,
