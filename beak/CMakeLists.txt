@@ -63,6 +63,12 @@ find_package(Threads REQUIRED)
 # cpm
 include(cmake/CPM.cmake)
 
+# plog logging framework
+CPMAddPackage("gh:SergiusTheBest/plog#1.1.9@1.1.9")
+
+# fmt formatting library
+CPMAddPackage("gh:fmtlib/fmt#10.0.0@10.0.0")
+
 # asio
 # from https://github.com/cpm-cmake/CPM.cmake/blob/master/examples/asio-standalone/CMakeLists.txt
 CPMAddPackage("gh:chriskohlhoff/asio#asio-1-28-0@1.28.0")
@@ -113,6 +119,8 @@ target_compile_options(${TARGET_NAME}
 # link libs
 target_link_libraries(${TARGET_NAME}
   PRIVATE
+  plog::plog
+  fmt::fmt
   juce::juce_core
   juce::juce_audio_devices
   juce::juce_audio_formats

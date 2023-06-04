@@ -1,5 +1,7 @@
 #include "server.h"
 
+#include <plog/Log.h>
+
 #include <iostream>
 
 namespace beak::net
@@ -24,14 +26,13 @@ void Server::handleReceive(const asio::error_code &error, std::size_t sz)
     std::shared_ptr<Packet> const packet(new Packet());
     if (!packet->ParseFromArray(&m_recvBuffer, static_cast<int>(sz)))
     {
-      std::cerr << "received malformed packet, not a protobuf message" << std::endl;
+      PLOGE << "received malformed packet, not a protobuf message";
       return;
     }
 
     Packet::ContentCase const type = packet->content_case();
     if (!m_callBackFns.contains(type))
     {
-      // std::cerr << "no callback registered for " << type << std::endl;
       startReceive();
       return;
     }
@@ -48,8 +49,7 @@ void Server::handleReceive(const asio::error_code &error, std::size_t sz)
 void Server::handleSend(std::shared_ptr<std::string> msg, const asio::error_code &error,
                         std::size_t /*bytes_transferred*/)
 {
-  std::cout << "Sending '" << *msg << "', error: " << (error ? error.message() : "none")
-            << std::endl;
+  PLOGD << "Sending '" << *msg << "', error: " << (error ? error.message() : "none") << std::endl;
 }
 
 void Server::send(std::shared_ptr<std::string> msg, std::size_t /*sz*/)

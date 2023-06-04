@@ -1,7 +1,9 @@
 #include "resource.h"
 
+#include <fmt/format.h>
+#include <plog/Log.h>
+
 #include <filesystem>
-#include <sstream>
 
 namespace beak
 {
@@ -19,7 +21,8 @@ Error Cache::configure()
   {
     if (auto res = m_cachePath.createDirectory(); res.failed())
     {
-      return Error("could not create cache directory");
+      return Error(fmt::format("could not create cache directory at '{}'",
+                               m_cachePath.getFullPathName().toStdString()));
     }
   }
   return Error();
@@ -48,12 +51,10 @@ std::tuple<std::optional<Cache::DataType>, Error> Cache::get(juce::String const&
       return std::make_tuple(std::nullopt, err);
     }
 
-    // create source
     if (!m_ressourceMap.contains(url.toString(false)))
     {
-      std::stringstream err;
-      err << "unknown error while caching '" << url.toString(false) << "'";
-      return std::make_tuple(std::nullopt, Error(err.str()));
+      auto err = fmt::format("unknown error while caching '{}", url.toString(false).toStdString());
+      return std::make_tuple(std::nullopt, Error(err));
     }
     return std::make_tuple(m_ressourceMap.at(url.toString(false)).buffer, Error());
   }
@@ -73,14 +74,18 @@ Error Cache::cacheFile(juce::URL const& url, bool checkVersion)
   auto extension = fs::path(url.getFileName().toStdString()).extension();
   if (!m_fmtManager.findFormatForFileExtension(juce::String(extension)))
   {
-    std::stringstream err;
-    err << "unsupported file format for '" << url.toString(false) << "'";
-    return Error(err.str());
+    auto err = fmt::format("unsupported file format for '{}'", url.toString(false).toStdString());
+    return Error(err);
   }
 
   if (url.isLocalFile())
   {
     // cache local file
+    const juce::File file = url.getLocalFile();
+    if (!file.exists())
+    {
+      return Error(fmt::format("file '{}' does not exist", file.getFullPathName().toStdString()));
+    }
     if (auto err = storeItem(url.toString(false), url.getLocalFile()); err)
     {
       return err;
@@ -138,9 +143,9 @@ std::tuple<juce::String, Error> Cache::download(juce::URL url, juce::File const&
   }
   if (task->hadError() || task->statusCode() != statusOk)
   {
-    std::stringstream err;
-    err << "download failed, status: " << task->statusCode();
-    return std::make_tuple(etag, Error(err.str()));
+    auto err = fmt::format("download failed for '{}', status: {}",
+                           url.toString(false).toStdString(), task->statusCode());
+    return std::make_tuple(etag, Error(err));
   }
   return std::make_tuple(etag, Error());
 }
@@ -159,19 +164,17 @@ Error Cache::storeItem(juce::String const& key, DataType const& value, juce::Str
   std::unique_ptr<juce::AudioFormatReader> reader(m_fmtManager.createReaderFor(value));
   if (!reader)
   {
-    std::stringstream err;
-    err << "creating reader for '" << value.getFullPathName() << "'";
-    return Error(err.str());
+    auto err = fmt::format("creating reader for '{}", value.getFullPathName().toStdString());
+    return Error(err);
   }
 
   // check for maximum duration
   auto duration = (float)reader->lengthInSamples / reader->sampleRate;
   if (duration > m_fileLengthLimitSeconds)
   {
-    std::stringstream err;
-    err << "file '" << value.getFullPathName() << "' is longer than maximum size of  "
-        << m_fileLengthLimitSeconds << "s ";
-    return Error(err.str());
+    auto err = fmt::format("file '{}' is longer than maximum size of {}s",
+                           value.getFullPathName().toStdString(), m_fileLengthLimitSeconds);
+    return Error(err);
   }
 
   m_ressourceMap[key] = {
@@ -190,8 +193,9 @@ Error Cache::storeItem(juce::String const& key, DataType const& value, juce::Str
  */
 void Cache::progress(juce::URL::DownloadTask*, juce::int64 bytesDownloaded, juce::int64 totalLength)
 {
-  double const progress = static_cast<double>(bytesDownloaded) / static_cast<double>(totalLength);
-  int const barWidth = 70;
+  double progress = static_cast<double>(bytesDownloaded) / static_cast<double>(totalLength);
+  progress = progress < 0 ? 0 : progress;
+  const int barWidth = 70;
 
   std::cout << "[";
   int const pos = static_cast<int>(barWidth * progress);
@@ -225,19 +229,5 @@ void Cache::progress(juce::URL::DownloadTask*, juce::int64 bytesDownloaded, juce
  * @param task      Pointer to the download task
  * @param success   boolean to signal if the download was successful
  */
-void Cache::finished(juce::URL::DownloadTask* task, bool success)
-{
-  std::cout << std::endl;
-  if (!success)
-  {
-    std::cerr << "error downloading '";
-    std::cerr << task->getTargetLocation().getFullPathName();
-    std::cerr << "' status code: " << task->statusCode() << std::endl;
-    return;
-  }
-  else
-  {
-    std::cout << "Downloaded '" << task->getTargetLocation().getFullPathName() << "'" << std::endl;
-  }
-}
+void Cache::finished(juce::URL::DownloadTask*, bool) {}
 }  // namespace beak

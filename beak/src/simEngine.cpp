@@ -1,7 +1,7 @@
 #include "simEngine.h"
 
-using AudioGraphIOProcessor = juce::AudioProcessorGraph::AudioGraphIOProcessor;
-using Connection = juce::AudioProcessorGraph::Connection;
+#include <plog/Log.h>
+
 namespace beak::sim
 {
 /**
@@ -11,8 +11,7 @@ namespace beak::sim
  */
 SimulationEngine::SimulationEngine(int virtualOutputs) : m_virtualOutputs(virtualOutputs)
 {
-  std::cout << "Running simulation engine with " << m_virtualOutputs << " virtual outputs"
-            << std::endl;
+  PLOGI << "Running simulation engine with " << m_virtualOutputs << " virtual outputs" << std::endl;
 }
 
 /**
@@ -25,6 +24,8 @@ SimulationEngine::SimulationEngine(int virtualOutputs) : m_virtualOutputs(virtua
  */
 Error SimulationEngine::configureGraph(Config const &config)
 {
+  using AudioGraphIOProcessor = juce::AudioProcessorGraph::AudioGraphIOProcessor;
+
   juce::AudioIODevice *device = m_deviceManager.getCurrentAudioDevice();
   double const sampleRate = device->getCurrentSampleRate();
   int const samplesPerBlock = device->getCurrentBufferSizeSamples();

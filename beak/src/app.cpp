@@ -1,6 +1,10 @@
 #include "app.h"
 
+#include <plog/Log.h>
+
 #include "engine.h"
+#include "plog/Formatters/TxtFormatter.h"
+#include "plog/Initializers/ConsoleInitializer.h"
 #include "resource.h"
 #include "server.h"
 #include "simEngine.h"
@@ -56,6 +60,9 @@ MainApp::~MainApp()
  */
 void MainApp::initialise(const juce::String &args)
 {
+  static plog::ColorConsoleAppender<plog::TxtFormatter> consoleAppender;
+  plog::init(plog::debug, &consoleAppender);
+  PLOGI << "Starting " << getApplicationName() << "v" << getApplicationVersion();
   m_args = args;
   startThread();
 }
@@ -66,7 +73,7 @@ void MainApp::initialise(const juce::String &args)
  */
 void MainApp::shutdown()
 {
-  std::cout << "shutting down..." << std::endl;
+  PLOGI << "shutting down...";
   signalThreadShouldExit();
 }
 
@@ -117,12 +124,14 @@ void MainApp::playCmd(juce::ArgumentList const &args)
   if (auto err = engine.configure(Engine::Config().WithDeviceName(device).WithOutputs(outputs));
       err)
   {
-    juce::ConsoleApplication::fail(static_cast<juce::String>(err));
+    PLOGF << err.what();
+    std::terminate();
   }
 
   if (auto err = engine.playSound(file, channel); err)
   {
-    juce::ConsoleApplication::fail(static_cast<juce::String>(err));
+    PLOGF << err.what();
+    std::terminate();
   }
 }
 
@@ -146,7 +155,8 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
   Cache cache(cacheDir);
   if (auto err = cache.configure())
   {
-    juce::ConsoleApplication::fail(err.what());
+    PLOGF << err.what();
+    std::terminate();
   }
 
   // setup aduio engine
@@ -160,7 +170,8 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
                                          .WithOutputs(2)
                                          .WithSampleRate(Engine::Config::defaultSampleRate)))
     {
-      juce::ConsoleApplication::fail(static_cast<juce::String>(err));
+      PLOGF << err.what();
+      std::terminate();
     }
   }
   else
@@ -173,7 +184,8 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
                                          .WithOutputs(outputs)
                                          .WithSampleRate(Engine::Config::defaultSampleRate)))
     {
-      juce::ConsoleApplication::fail(static_cast<juce::String>(err));
+      PLOGF << err.what();
+      std::terminate();
     }
   }
   try
@@ -191,12 +203,12 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
                               {
                                 if (auto err = engine->playSound(file.value(), channel))
                                 {
-                                  std::cerr << err << std::endl;
+                                  PLOGE << err.what();
                                 }
                               }
                               else
                               {
-                                std::cerr << err.what() << std::endl;
+                                PLOGE << err.what();
                               }
                             });
     // run the server
@@ -204,7 +216,8 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
   }
   catch (std::exception &e)
   {
-    juce::ConsoleApplication::fail(e.what());
+    PLOGF << e.what();
+    std::terminate();
   }
 }
 }  // namespace beak
