@@ -1,7 +1,9 @@
 #pragma once
+#include <fmt/format.h>
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_core/juce_core.h>
+#include <plog/Log.h>
 
 #include <map>
 #include <optional>
@@ -11,6 +13,9 @@
 
 namespace beak
 {
+const juce::String resourceDirectory("resources");
+constexpr int maxFileNameLenght = 100;
+
 class Cache : public juce::URL::DownloadTaskListener
 {
   typedef juce::File DataType;
@@ -23,7 +28,15 @@ class Cache : public juce::URL::DownloadTaskListener
   };
 
  public:
-  explicit Cache(juce::String const& cachePath) : m_cachePath(juce::File(cachePath)) {}
+  explicit Cache(juce::String const& cachePath) : m_cachePath(juce::File(cachePath))
+  {
+    auto sampleDir = juce::File::addTrailingSeparator(
+        juce::File::getCurrentWorkingDirectory().getFullPathName());
+    sampleDir.append(resourceDirectory, resourceDirectory.length());
+    m_sampleDir = juce::File(sampleDir);
+    PLOGI << fmt::format("only local files from '{}' are allowed",
+                         m_sampleDir.getFullPathName().toStdString());
+  }
 
   [[nodiscard]] Error configure();
 
@@ -45,6 +58,7 @@ class Cache : public juce::URL::DownloadTaskListener
  private:
   juce::AudioFormatManager m_fmtManager;
   juce::File m_cachePath;
+  juce::File m_sampleDir;
   std::map<juce::String, InternalDataType> m_ressourceMap;
   static constexpr double m_fileLengthLimitSeconds = 20;
 };

@@ -82,11 +82,25 @@ Error Cache::cacheFile(juce::URL const& url, bool checkVersion)
   {
     // cache local file
     const juce::File file = url.getLocalFile();
-    if (!file.exists())
+    juce::File fileToCache;
+    if (!file.isAChildOf(m_sampleDir))
     {
-      return Error(fmt::format("file '{}' does not exist", file.getFullPathName().toStdString()));
+      // check if file is just filename relative to m_sampleDir
+      auto fullPath = juce::File::addTrailingSeparator(m_sampleDir.getFullPathName());
+      fullPath.append(file.getFullPathName(), 100);
+      auto relativeSampleFile = juce::File(fullPath);
+      if (!relativeSampleFile.exists())
+      {
+        return Error(fmt::format("file '{}' does not exist or is not allowed",
+                                 file.getFullPathName().toStdString()));
+      }
+      fileToCache = relativeSampleFile;
     }
-    if (auto err = storeItem(url.toString(false), url.getLocalFile()); err)
+    else
+    {
+      fileToCache = file;
+    }
+    if (auto err = storeItem(url.toString(false), fileToCache); err)
     {
       return err;
     }
