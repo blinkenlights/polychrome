@@ -38,6 +38,8 @@ Error Engine::configureGraph(Config const &config)
   double const sampleRate = device->getCurrentSampleRate();
   int const samplesPerBlock = device->getCurrentBufferSizeSamples();
 
+  m_mainProcessor->getCallbackLock().enter();
+
   if (!m_mainProcessor->enableAllBuses())
   {
     return Error("could not enable buses");
@@ -46,7 +48,6 @@ Error Engine::configureGraph(Config const &config)
                                         samplesPerBlock);
 
   m_mainProcessor->prepareToPlay(sampleRate, samplesPerBlock);
-
   m_mainProcessor->clear();
   m_audioOutputNode = m_mainProcessor->addNode(
       std::make_unique<AudioGraphIOProcessor>(AudioGraphIOProcessor::audioOutputNode));
@@ -62,6 +63,7 @@ Error Engine::configureGraph(Config const &config)
   }
   m_player->setProcessor(m_mainProcessor.get());
   m_deviceManager.addAudioCallback(m_player.get());
+  m_mainProcessor->getCallbackLock().exit();
   return Error();
 }
 

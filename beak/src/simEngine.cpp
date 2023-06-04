@@ -30,6 +30,8 @@ Error SimulationEngine::configureGraph(Config const &config)
   double const sampleRate = device->getCurrentSampleRate();
   int const samplesPerBlock = device->getCurrentBufferSizeSamples();
 
+  m_mainProcessor->getCallbackLock().enter();
+
   if (!m_mainProcessor->enableAllBuses())
   {
     return Error("could not enable buses");
@@ -60,6 +62,8 @@ Error SimulationEngine::configureGraph(Config const &config)
   }
   m_player->setProcessor(m_mainProcessor.get());
   m_deviceManager.addAudioCallback(m_player.get());
+  m_mainProcessor->getCallbackLock().exit();
+
   return Error();
 }
 }  // namespace beak::sim
