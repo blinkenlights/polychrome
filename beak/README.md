@@ -57,3 +57,9 @@ Run beak from the `build/beak_artefacts/Debug`. The following commands with opti
 #### Test playback
 
 `./beak play -f <absolute_path_to_sample.wav> -c <channel_number> -d <device name> -o <number_of_output_channels> -i <number_of_input_channels>`.
+
+#### Simulation
+
+If working with the live view on a machine with stereo output you can use the `-s` option with the `run` command.
+
+Use `./beak run -s -c <absolute_path_to_cache_dir> -d <device name> -o 10 -i 0` to run beak for the live view.
