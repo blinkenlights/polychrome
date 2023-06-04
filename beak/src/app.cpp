@@ -3,6 +3,7 @@
 #include "engine.h"
 #include "resource.h"
 #include "server.h"
+#include "simEngine.h"
 
 namespace beak
 {
@@ -10,7 +11,7 @@ namespace beak
  * @brief Construct a new Main App:: Main App object
  *
  */
-MainApp::MainApp() : Thread("beak"), m_deviceManager(new juce::AudioDeviceManager())
+MainApp::MainApp() : Thread("beak")
 {
   // declare commands to be used
   addHelpCommand("--help|-h", "Usage:", true);
@@ -138,8 +139,9 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
   int const inputs = args.getValueForOption("--inputs|-i").getIntValue();
   juce::String const device = args.getValueForOption("--device|-d");
   juce::String cacheDir = args.getValueForOption("--cache|-c");
+  bool isSimulation = args.containsOption("--sim|-s");
   port = port != 0 ? port : defaultPort;  // default port
-  cacheDir = cacheDir.isEmpty() ? "/home/gueldi/tmp" : cacheDir;
+  cacheDir = cacheDir.isEmpty() ? "/tmp/beak" : cacheDir;
   // setup chaching
   Cache cache(cacheDir);
   if (auto err = cache.configure())
@@ -148,14 +150,31 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
   }
 
   // setup aduio engine
-  Engine engine;
-  if (auto err = engine.configure(Engine::Config()
-                                      .WithDeviceName(device)
-                                      .WithInputs(inputs)
-                                      .WithOutputs(outputs)
-                                      .WithSampleRate(Engine::Config::defaultSampleRate)))
+  std::unique_ptr<Engine> engine;
+  if (isSimulation)
   {
-    juce::ConsoleApplication::fail(static_cast<juce::String>(err));
+    engine.reset(new sim::SimulationEngine(outputs));
+    if (auto err = engine->configure(Engine::Config()
+                                         .WithDeviceName(device)
+                                         .WithInputs(inputs)
+                                         .WithOutputs(2)
+                                         .WithSampleRate(Engine::Config::defaultSampleRate)))
+    {
+      juce::ConsoleApplication::fail(static_cast<juce::String>(err));
+    }
+  }
+  else
+  {
+    engine.reset(new Engine());
+
+    if (auto err = engine->configure(Engine::Config()
+                                         .WithDeviceName(device)
+                                         .WithInputs(inputs)
+                                         .WithOutputs(outputs)
+                                         .WithSampleRate(Engine::Config::defaultSampleRate)))
+    {
+      juce::ConsoleApplication::fail(static_cast<juce::String>(err));
+    }
   }
   try
   {
@@ -170,7 +189,7 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
                               auto channel = static_cast<int>(packet->audio_frame().channel());
                               if (auto [file, err] = cache.get(uri); !err)
                               {
-                                if (auto err = engine.playSound(file.value(), channel))
+                                if (auto err = engine->playSound(file.value(), channel))
                                 {
                                   std::cerr << err << std::endl;
                                 }

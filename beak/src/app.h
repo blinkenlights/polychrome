@@ -32,7 +32,6 @@ class MainApp : public juce::ConsoleApplication, public juce::JUCEApplication, p
   static void serverCmd(juce::ArgumentList const &args);
 
  private:
-  std::shared_ptr<juce::AudioDeviceManager> m_deviceManager;
   juce::String m_args;
 };
 }  // namespace beak

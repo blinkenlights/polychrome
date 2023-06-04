@@ -5,7 +5,8 @@
 
 namespace beak
 {
-constexpr uint32_t statusOk = 200;
+constexpr uint32_t statusOk = 200;  //!< HTTP ok status code.
+
 /**
  * @brief Configure the cache
  *
@@ -104,6 +105,15 @@ Error Cache::cacheFile(juce::URL const& url, bool checkVersion)
   return Error();
 }
 
+/**
+ * @brief Downlioads a file to a destinantion path
+ *
+ * @param url           The url to download from
+ * @param destination   The destinantion file path
+ * @param checkVersion  Signal to check if there is a new version
+ *
+ * @return std::tuple<juce::String, Error> The etag and an error
+ */
 std::tuple<juce::String, Error> Cache::download(juce::URL url, juce::File const& destination,
                                                 bool checkVersion)
 {
@@ -123,6 +133,7 @@ std::tuple<juce::String, Error> Cache::download(juce::URL url, juce::File const&
   }
   while (!task->isFinished())
   {
+    juce::Thread::sleep(5);
     // wait for download
   }
   if (task->hadError() || task->statusCode() != statusOk)
@@ -134,6 +145,14 @@ std::tuple<juce::String, Error> Cache::download(juce::URL url, juce::File const&
   return std::make_tuple(etag, Error());
 }
 
+/**
+ * @brief Stores one item in the cache
+ *
+ * @param key     Key to find the item
+ * @param value   The acutal value to store
+ * @param etag    The etag of this file version
+ * @return Error  Error if something went wrong
+ */
 Error Cache::storeItem(juce::String const& key, DataType const& value, juce::String const& etag)
 {
   // check if audio file is readable

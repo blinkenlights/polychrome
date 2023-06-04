@@ -2,15 +2,18 @@
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_dsp/juce_dsp.h>
 
 #include <cassert>
 
 namespace beak
 {
+using NodeID = juce::AudioProcessorGraph::NodeID;
+
 class ProcessorBase : public juce::AudioProcessor
 {
  public:
-  ProcessorBase(int inputs, int outputs);
+  ProcessorBase(const BusesProperties &ioConfig) : AudioProcessor(ioConfig){};
   ~ProcessorBase() override {}
   ProcessorBase(ProcessorBase &&) = delete;
   ProcessorBase &operator=(ProcessorBase &&) = delete;
@@ -18,7 +21,8 @@ class ProcessorBase : public juce::AudioProcessor
   juce::AudioProcessorEditor *createEditor() override { return nullptr; }
   bool hasEditor() const override { return false; }
 
-  const juce::String getName() const override { return {}; }
+  void setName(juce::String const &name) { m_name = name; }
+  const juce::String getName() const override { return m_name; }
   bool acceptsMidi() const override { return false; }
   bool producesMidi() const override { return false; }
   double getTailLengthSeconds() const override { return 0; }
@@ -32,44 +36,57 @@ class ProcessorBase : public juce::AudioProcessor
   void getStateInformation(juce::MemoryBlock &) override {}
   void setStateInformation(const void *, int) override {}
 
+ protected:
+  juce::String m_name;
+
  private:
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ProcessorBase)
 };
 
-using NodeID = juce::AudioProcessorGraph::NodeID;
-
-constexpr int defaultCleanupInterval = 200;
-
-class MonoFilePlayerProcessor : public ProcessorBase,
-                                public juce::ChangeBroadcaster,
-                                public juce::ChangeListener
+class PanningProcessor : public ProcessorBase
 {
  public:
-  MonoFilePlayerProcessor(juce::File const &file);
-  ~MonoFilePlayerProcessor() override;
-  MonoFilePlayerProcessor(MonoFilePlayerProcessor &&) = delete;
-  MonoFilePlayerProcessor &operator=(MonoFilePlayerProcessor &&) = delete;
+  explicit PanningProcessor(int inputNum, int maxInputs);
+  ~PanningProcessor() override;
+  PanningProcessor(PanningProcessor &&) = delete;
+  PanningProcessor &operator=(PanningProcessor &&) = delete;
+
+  void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+  void processBlock(juce::AudioSampleBuffer &buffer, juce::MidiBuffer &) override;
+  void reset() override;
+  void releaseResources() override;
+
+ private:
+  int m_inputNum;
+  int m_maxInputs;
+  juce::dsp::Panner<float> m_panner;
+
+ private:
+  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PanningProcessor)
+};
+
+class SamplerProcessor : public ProcessorBase, public juce::ChangeListener
+{
+ public:
+  explicit SamplerProcessor();
+  ~SamplerProcessor() override;
+  SamplerProcessor(SamplerProcessor &&) = delete;
+  SamplerProcessor &operator=(SamplerProcessor &&) = delete;
 
   void prepareToPlay(double sampleRate, int maximumExpectedSamplesPerBlock) override;
   void processBlock(juce::AudioSampleBuffer &buffer, juce::MidiBuffer &) override;
   void reset() override;
   void releaseResources() override;
-  const juce::String getName() const override;
-
-  void start();
-
-  void setNodeID(NodeID const &nodeID);
-  NodeID getNodeID() const;
+  void playSample(juce::File const &file);
 
   void changeListenerCallback(juce::ChangeBroadcaster *source) override;
 
- private:
+ protected:
   juce::AudioFormatManager m_formatManager;
-  juce::AudioTransportSource m_source;
-  juce::String m_name;
-  NodeID m_nodeID;
+  juce::MixerAudioSource m_source;
 
  private:
-  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MonoFilePlayerProcessor)
+  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SamplerProcessor)
 };
+
 }  // namespace beak

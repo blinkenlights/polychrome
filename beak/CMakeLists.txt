@@ -22,6 +22,7 @@ set(CPP_SRCS
   src/server.cpp
   src/engine.cpp
   src/resource.cpp
+  src/simEngine.cpp
 )
 
 # --------------------- go ---------------------------- #
@@ -96,12 +97,6 @@ target_sources(${TARGET_NAME}
   ${PROTO_HDRS}
 )
 
-target_include_directories(${TARGET_NAME}
-  PRIVATE
-  src
-  ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/JuceLibraryCode
-)
-
 target_compile_definitions(${TARGET_NAME}
   PRIVATE
   JUCE_WEB_BROWSER=0
@@ -123,6 +118,7 @@ target_link_libraries(${TARGET_NAME}
   juce::juce_audio_formats
   juce::juce_audio_basics
   juce::juce_audio_utils
+  juce::juce_dsp
   juce::juce_recommended_config_flags
   asio
   ${Protobuf_LIBRARIES}

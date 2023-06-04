@@ -8,7 +8,7 @@
 
 namespace beak
 {
-class Engine : public juce::ChangeListener
+class Engine
 {
  public:
   struct Config
@@ -65,29 +65,24 @@ class Engine : public juce::ChangeListener
 
  public:
   Engine();
-  ~Engine() override;
+  virtual ~Engine();
   Engine(Engine &&) = delete;
   Engine &operator=(Engine &&) = delete;
 
  public:
   [[nodiscard]] Error configure(Config const &config);
-  [[nodiscard]] Error playSound(const juce::File &file, int channel);
-  [[nodiscard]] Error playSound(std::unique_ptr<juce::PositionableAudioSource> src, int channel,
-                                juce::String const &name);
-
- public:
-  void changeListenerCallback(juce::ChangeBroadcaster *source) override;
+  [[nodiscard]] virtual Error playSound(const juce::File &file, int channel);
 
  private:
-  [[nodiscard]] Error configureDeviceManager(Config const &config);
-  [[nodiscard]] Error configureGraph(Config const &config);
+  [[nodiscard]] virtual Error configureDeviceManager(Config const &config);
+  [[nodiscard]] virtual Error configureGraph(Config const &config);
 
- private:
+ protected:
   juce::AudioDeviceManager m_deviceManager;
   std::unique_ptr<juce::AudioProcessorGraph> m_mainProcessor;
   std::unique_ptr<juce::AudioProcessorPlayer> m_player;
   juce::AudioProcessorGraph::Node::Ptr m_audioOutputNode;
-  juce::CriticalSection m_lock;
+  std::vector<juce::AudioProcessorGraph::Node::Ptr> m_playerNodes;
 
  private:
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Engine)

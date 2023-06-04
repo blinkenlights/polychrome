@@ -2,8 +2,6 @@
 
 #include "processor.h"
 
-using AudioGraphIOProcessor = juce::AudioProcessorGraph::AudioGraphIOProcessor;
-using Connection = juce::AudioProcessorGraph::Connection;
 namespace beak
 {
 /**
@@ -34,7 +32,8 @@ Engine::~Engine()
  */
 Error Engine::configureGraph(Config const &config)
 {
-  const juce::ScopedLock lock(m_lock);
+  using AudioGraphIOProcessor = juce::AudioProcessorGraph::AudioGraphIOProcessor;
+
   juce::AudioIODevice *device = m_deviceManager.getCurrentAudioDevice();
   double const sampleRate = device->getCurrentSampleRate();
   int const samplesPerBlock = device->getCurrentBufferSizeSamples();
@@ -45,6 +44,7 @@ Error Engine::configureGraph(Config const &config)
   }
   m_mainProcessor->setPlayConfigDetails(config.inputs(), config.outputs(), sampleRate,
                                         samplesPerBlock);
+
   m_mainProcessor->prepareToPlay(sampleRate, samplesPerBlock);
 
   m_mainProcessor->clear();
@@ -53,6 +53,12 @@ Error Engine::configureGraph(Config const &config)
   if (!m_audioOutputNode)
   {
     return Error("could not add output node");
+  }
+  for (int i = 0; i < config.outputs(); ++i)
+  {
+    auto node = m_mainProcessor->addNode(std::make_unique<SamplerProcessor>());
+    m_mainProcessor->addConnection({{node->nodeID, 0}, {m_audioOutputNode->nodeID, i}});
+    m_playerNodes.push_back(node);
   }
   m_player->setProcessor(m_mainProcessor.get());
   m_deviceManager.addAudioCallback(m_player.get());
@@ -117,41 +123,15 @@ Error Engine::configure(Config const &config)
 Error Engine::playSound(const juce::File &file, int channel)
 {
   Error err;
-  const juce::ScopedLock lock(m_lock);
-  auto node = m_mainProcessor->addNode(std::make_unique<MonoFilePlayerProcessor>(file));
-  auto conn = Connection{{node->nodeID, 0}, {m_audioOutputNode->nodeID, channel - 1}};
-  m_mainProcessor->addConnection(conn);
-  if (auto proc = dynamic_cast<MonoFilePlayerProcessor *>(node->getProcessor()))
+  auto playerNode = m_playerNodes.at(channel - 1);
+  if (auto proc = dynamic_cast<SamplerProcessor *>(playerNode->getProcessor()))
   {
-    proc->setNodeID(node->nodeID);
-    proc->start();
-    const juce::MessageManagerLock mmLock;
-    proc->addChangeListener(this);
+    proc->playSample(file);
   }
   else
   {
-    err = Error("not a MonoFilePlayerProcessor");
+    err = Error("not a SamplerProcessor");
   }
   return err;
-}
-
-/**
- * @brief Reimplemented from ChangeListener
- *
- * Called if a node signals taht it is finished playing.
- * It will remove the Processor from the AudioProcessorGraph
- *
- * @param source Emitter source should be castable into a Processor
- */
-void Engine::changeListenerCallback(juce::ChangeBroadcaster *source)
-{
-  if (source)
-  {
-    if (auto proc = dynamic_cast<MonoFilePlayerProcessor *>(source))
-    {
-      const juce::ScopedLock lock(m_lock);
-      m_mainProcessor->removeNode(proc->getNodeID(), juce::AudioProcessorGraph::UpdateKind::async);
-    }
-  }
 }
 }  // namespace beak

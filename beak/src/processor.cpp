@@ -3,106 +3,150 @@
 namespace beak
 {
 
+/* ---------------------------- panning processor --------------------------- */
 /**
- * @brief Construct a new Processor Base:: Processor Base object
+ * @brief Construct a new Panning Processor:: Panning Processor object
  *
- * @param inputs
- * @param outputs
+ * @param inputNum  The input number this panning processor uses
+ * @param maxInputs The maximum number of inputs (used to calculate panning position)
  */
-ProcessorBase::ProcessorBase(int inputs, int outputs) :
-  AudioProcessor(BusesProperties()
-                     .withInput("Input", juce::AudioChannelSet::discreteChannels(inputs))
-                     .withOutput("Output", juce::AudioChannelSet::discreteChannels(outputs)))
+PanningProcessor::PanningProcessor(int inputNum, int maxInputs) :
+  ProcessorBase(BusesProperties()
+                    .withInput("Input", juce::AudioChannelSet::stereo())
+                    .withOutput("Output", juce::AudioChannelSet::stereo())),
+  m_inputNum(inputNum),
+  m_maxInputs(maxInputs)
 {
+  const double pan = (((double)m_inputNum / m_maxInputs) * 2) - 1;
+  m_panner.setPan(pan);
 }
 
 /**
- * @brief Construct a new Mono File Player Processor:: Mono File Player Processor object
+ * @brief Destroy the Panning Processor:: Panning Processor object
  *
- * @param file
  */
-MonoFilePlayerProcessor::MonoFilePlayerProcessor(juce::File const &file) :
-  ProcessorBase(1, 1), m_name(file.getFullPathName())
+PanningProcessor::~PanningProcessor() { m_panner.reset(); }
+
+/**
+ * @brief Reimplemented to release the panners resources.
+ *
+ */
+void PanningProcessor::releaseResources() { m_panner.reset(); }
+
+/**
+ * @brief Reimplemented to reset the panner.
+ *
+ */
+void PanningProcessor::reset() { m_panner.reset(); }
+
+/**
+ * @brief Reimplemented to prepare playback with panning.
+ *
+ * @param sampleRate      The sample rate to use
+ * @param samplesPerBlock The expected samples per block
+ */
+void PanningProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
+{
+  juce::dsp::ProcessSpec spec = {sampleRate, static_cast<juce::uint32>(samplesPerBlock), 2};
+  m_panner.prepare(spec);
+}
+
+/**
+ * @brief Reimplemented to do the actual panning.
+ *
+ * @param buffer Reference to the buffer to write to.
+ */
+void PanningProcessor::processBlock(juce::AudioSampleBuffer &buffer, juce::MidiBuffer &)
+{
+  juce::dsp::AudioBlock<float> block(buffer);
+  juce::dsp::ProcessContextReplacing<float> context(block);
+  m_panner.process(context);
+}
+
+/**
+ * @brief Construct a new Sampler Processor:: Sampler Processor object
+ *
+ */
+SamplerProcessor::SamplerProcessor() :
+  ProcessorBase(BusesProperties()
+                    .withInput("Input", juce::AudioChannelSet::mono())
+                    .withOutput("Output", juce::AudioChannelSet::mono()))
 {
   m_formatManager.registerBasicFormats();
-  auto reader = m_formatManager.createReaderFor(file);
-  m_source.setSource(new juce::AudioFormatReaderSource(reader, true), 0, nullptr,
-                     reader->sampleRate);
-  const juce::MessageManagerLock mmLock;
-  m_source.addChangeListener(this);
 }
 
 /**
- * @brief Destroy the Mono File Player Processor:: Mono File Player Processor object
+ * @brief Destroy the Sampler Processor:: Sampler Processor object
  *
  */
-MonoFilePlayerProcessor::~MonoFilePlayerProcessor() { m_source.releaseResources(); }
-
-void MonoFilePlayerProcessor::reset() { m_source.stop(); }
+SamplerProcessor::~SamplerProcessor() { m_source.releaseResources(); }
 
 /**
- * @brief Start the playback
+ * @brief Reimplemented to prepare playback.
  *
+ * @param sampleRate      The sample rate to use.
+ * @param samplesPerBlock The expected number of samples per block.
  */
-void MonoFilePlayerProcessor::start() { m_source.start(); }
-
-/**
- * @brief Reimplemented to release the resources of the transport source
- *
- */
-void MonoFilePlayerProcessor::releaseResources() { m_source.releaseResources(); }
-
-/**
- * @brief
- *
- * @return const juce::String
- */
-const juce::String MonoFilePlayerProcessor::getName() const { return m_name; }
-
-/**
- * @brief Reimplemented to prepare playback of the transport source
- *
- * @param sampleRate
- * @param samplesPerBlock
- */
-void MonoFilePlayerProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
+void SamplerProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
   m_source.prepareToPlay(samplesPerBlock, sampleRate);
 }
 
 /**
- * @brief Callback for AudioProcessorGraph
+ * @brief Reimplemented to process the block with the mixer source doing the heavy lifting.
  *
- * @param buffer buffer to write audio to
+ * @param buffer Buffer to write to.
  */
-void MonoFilePlayerProcessor::processBlock(juce::AudioSampleBuffer &buffer, juce::MidiBuffer &)
+void SamplerProcessor::processBlock(juce::AudioSampleBuffer &buffer, juce::MidiBuffer &)
 {
   m_source.getNextAudioBlock(juce::AudioSourceChannelInfo(buffer));
 }
 
 /**
- * @brief Callback of the Timer to check if playback has finished
+ * @brief Removes all inputs from the mixer source.
  *
  */
-void MonoFilePlayerProcessor::changeListenerCallback(juce::ChangeBroadcaster *)
+void SamplerProcessor::reset() { m_source.removeAllInputs(); }
+
+/**
+ * @brief Releases the resources of the mixer source which will release all input resources.
+ *
+ */
+void SamplerProcessor::releaseResources() { m_source.releaseResources(); }
+
+/**
+ * @brief Plays one sample
+ *
+ * @param file Path to file
+ */
+void SamplerProcessor::playSample(juce::File const &file)
 {
-  if (!m_source.isPlaying())
-  {
-    juce::ChangeBroadcaster::sendChangeMessage();
-  }
+  juce::AudioFormatReader *reader = m_formatManager.createReaderFor(file);
+  auto transportSource = new juce::AudioTransportSource();
+
+  transportSource->setSource(new juce::AudioFormatReaderSource(reader, true), 0, nullptr,
+                             reader->sampleRate);
+  const juce::MessageManagerLock mmLock;
+  transportSource->addChangeListener(this);
+  transportSource->start();
+  m_source.addInputSource(transportSource, true);
 }
 
 /**
- * @brief Sets the nodeID for this processor as part of an AudioProcessorGraph
+ * @brief Reimplemented to handle finished sources
  *
- * @param nodeID The id of the node
- */
-void MonoFilePlayerProcessor::setNodeID(NodeID const &nodeID) { m_nodeID = nodeID; }
-
-/**
- * @brief Returns the nodeID of this processor as part of an AudioProcessorGraph
+ * Only checks for stopped samples.
  *
- * @return NodeID
+ * @param emitter   Emitter of the change signal
  */
-NodeID MonoFilePlayerProcessor::getNodeID() const { return m_nodeID; }
+void SamplerProcessor::changeListenerCallback(juce::ChangeBroadcaster *emitter)
+{
+  if (auto emitterSource = dynamic_cast<juce::AudioTransportSource *>(emitter))
+  {
+    if (!emitterSource->isPlaying())
+    {
+      m_source.removeInputSource(emitterSource);
+    }
+  }
+}
 }  // namespace beak
