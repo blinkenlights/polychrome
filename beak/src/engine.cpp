@@ -39,6 +39,7 @@ Error Engine::configureGraph(Config const &config)
   int const samplesPerBlock = device->getCurrentBufferSizeSamples();
 
   m_mainProcessor->getCallbackLock().enter();
+  juce::MessageManagerLock mmLock;
 
   if (!m_mainProcessor->enableAllBuses())
   {
