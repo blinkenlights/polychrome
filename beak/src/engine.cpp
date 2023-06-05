@@ -35,8 +35,8 @@ Error Engine::configureGraph(Config const &config)
   using AudioGraphIOProcessor = juce::AudioProcessorGraph::AudioGraphIOProcessor;
 
   juce::AudioIODevice *device = m_deviceManager.getCurrentAudioDevice();
-  double const sampleRate = device->getCurrentSampleRate();
-  int const samplesPerBlock = device->getCurrentBufferSizeSamples();
+  const double sampleRate = device->getCurrentSampleRate();
+  const int samplesPerBlock = device->getCurrentBufferSizeSamples();
 
   m_mainProcessor->getCallbackLock().enter();
   juce::MessageManagerLock mmLock;

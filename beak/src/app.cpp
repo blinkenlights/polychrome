@@ -115,10 +115,10 @@ void MainApp::listCmd(juce::ArgumentList const & /*args*/)
  */
 void MainApp::playCmd(juce::ArgumentList const &args)
 {
-  juce::String const device = args.getValueForOption("--device|-d");
-  int const outputs = args.getValueForOption("--outputs|-o").getIntValue();
-  juce::File const file = args.getExistingFileForOption("--file|-f");
-  int const channel = args.getValueForOption("--channel|-c").getIntValue();
+  const juce::String device = args.getValueForOption("--device|-d");
+  const int outputs = args.getValueForOption("--outputs|-o").getIntValue();
+  const juce::File file = args.getExistingFileForOption("--file|-f");
+  const int channel = args.getValueForOption("--channel|-c").getIntValue();
 
   Engine engine;
   if (auto err = engine.configure(Engine::Config().WithDeviceName(device).WithOutputs(outputs));

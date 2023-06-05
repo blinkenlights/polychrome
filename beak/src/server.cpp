@@ -30,14 +30,14 @@ void Server::handleReceive(const asio::error_code &error, std::size_t sz)
       return;
     }
 
-    Packet::ContentCase const type = packet->content_case();
+    const Packet::ContentCase type = packet->content_case();
     if (!m_callBackFns.contains(type))
     {
       startReceive();
       return;
     }
 
-    msgRecvCallbackFn const fn = m_callBackFns.at(packet->content_case());
+    const msgRecvCallbackFn fn = m_callBackFns.at(packet->content_case());
     if (fn)
     {
       fn.operator()(packet);
@@ -49,7 +49,7 @@ void Server::handleReceive(const asio::error_code &error, std::size_t sz)
 void Server::handleSend(std::shared_ptr<std::string> msg, const asio::error_code &error,
                         std::size_t /*bytes_transferred*/)
 {
-  PLOGD << "Sending '" << *msg << "', error: " << (error ? error.message() : "none") << std::endl;
+  PLOGD << "Sending '" << *msg << "', error: " << (error ? error.message() : "none");
 }
 
 void Server::send(std::shared_ptr<std::string> msg, std::size_t /*sz*/)

@@ -38,7 +38,7 @@ Error Cache::configure()
  */
 std::tuple<std::optional<Cache::DataType>, Error> Cache::get(juce::String const& uri)
 {
-  juce::URL const url(uri);
+  const juce::URL url(uri);
 
   // check if already cached
   if (m_ressourceMap.contains(url.toString(false)))
@@ -48,7 +48,7 @@ std::tuple<std::optional<Cache::DataType>, Error> Cache::get(juce::String const&
   else
   {
     // cache the file
-    if (Error const err = cacheFile(url); err)
+    if (const Error err = cacheFile(url); err)
     {
       return std::make_tuple(std::nullopt, err);
     }
@@ -110,7 +110,7 @@ Error Cache::cacheFile(juce::URL const& url, bool checkVersion)
   else if (url.isWellFormed())
   {
     // cache remote file
-    juce::File const destination = juce::File(m_cachePath.getFullPathName() +
+    const juce::File destination = juce::File(m_cachePath.getFullPathName() +
                                               juce::File::getSeparatorChar() + url.getFileName());
 
     auto [etag, err] = download(url, destination, checkVersion);
@@ -146,7 +146,7 @@ std::tuple<juce::String, Error> Cache::download(juce::URL url, juce::File const&
                                                        m_ressourceMap.at(url.toString(false)).etag);
   }
 
-  juce::String const etag;  //!< todo implement etags
+  const juce::String etag;  //!< todo implement etags
   std::unique_ptr<juce::URL::DownloadTask> task = url.downloadToFile(destination, downloadOptions);
   if (!task)
   {
@@ -214,7 +214,7 @@ void Cache::progress(juce::URL::DownloadTask*, juce::int64 bytesDownloaded, juce
   const int barWidth = 70;
 
   std::cout << "[";
-  int const pos = static_cast<int>(barWidth * progress);
+  const int pos = static_cast<int>(barWidth * progress);
   for (int i = 0; i < barWidth; ++i)
   {
     if (i < pos)
