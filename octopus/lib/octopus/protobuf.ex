@@ -2,7 +2,16 @@ defmodule Octopus.Protobuf do
   require Logger
 
   alias Octopus.ColorPalette
-  alias Octopus.Protobuf.{Frame, Packet, FirmwareConfig, FirmwarePacket, InputEvent}
+
+  alias Octopus.Protobuf.{
+    Packet,
+    Frame,
+    WFrame,
+    AudioFrame,
+    FirmwareConfig,
+    FirmwarePacket,
+    InputEvent
+  }
 
   def encode(%Frame{data: data, palette: palette} = frame)
       when is_binary(data) and is_binary(palette) do
