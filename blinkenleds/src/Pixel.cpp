@@ -6,7 +6,6 @@
 
 EasingMode easing_mode;
 uint32_t easing_interval_ms;
-uint8_t luminance = 255;
 bool enable_calibration = false;
 NeoGamma<NeoGammaTableMethod> colorGamma;
 
@@ -30,15 +29,6 @@ void Pixel::set_easing_mode(EasingMode mode)
 void Pixel::set_enable_calibration(bool enable)
 {
 	enable_calibration = enable;
-}
-
-void Pixel::set_luminance(uint8_t new_luminance)
-{
-
-	// todo: implement luminance
-	// Dim Function: https://github.com/Makuna/NeoPixelBus/blob/b1b71920f088809f32293169eb143ec27347b3f9/src/internal/colors/RgbwColor.h#L280
-
-	luminance = new_luminance;
 }
 
 void Pixel::set_color(RgbwColor color)

@@ -14,6 +14,7 @@ Pixel pixel[PIXEL_COUNT];
 // Config defaults
 bool show_test_frame = true;
 uint32_t config_phash = 0;
+uint8_t luminance = 255;
 
 void Display::setup()
 {
@@ -37,8 +38,7 @@ void Display::loop()
   {
     for (int i = 0; i < PIXEL_COUNT; i++)
     {
-      // strip.SetPixelColor(map_index(i), pixel[i].get_display_color());
-      strip.SetPixelColor(map_index(i), pixel[i].get_display_color());
+      strip.SetPixelColor(map_index(i), pixel[i].get_display_color().Dim(luminance));
     }
   }
 
@@ -55,7 +55,7 @@ void Display::handle_packet(Packet packet)
     config_phash = packet.content.firmware_config.config_phash;
     Pixel::set_easing_mode(EasingMode(packet.content.firmware_config.easing_mode));
     Pixel::set_enable_calibration(packet.content.firmware_config.enable_calibration);
-    Pixel::set_luminance(packet.content.firmware_config.luminance);
+    luminance = packet.content.firmware_config.luminance;
 
     break;
 
@@ -77,7 +77,7 @@ void Display::handle_packet(Packet packet)
       pixel[i].set_color(color_from_palette(packet.content.w_frame.palette, packet.content.w_frame.data.bytes[i]));
     }
 
-    Pixel::set_easing_interval(packet.content.frame.easing_interval);
+    Pixel::set_easing_interval(packet.content.w_frame.easing_interval);
 
     break;
   }

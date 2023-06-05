@@ -219,7 +219,13 @@ void Network::remote_log(String message)
     pb_ostream_t stream = pb_ostream_from_buffer(udp_buffer, UDP_BUFFER_SIZE);
     pb_encode(&stream, FirmwarePacket_fields, &packet);
 
+    Serial.println("Remote log: " + message);
+
     send_udp_packet(stream.bytes_written);
+  }
+  else
+  {
+    Serial.println("Remote log (not sent): " + message);
   }
 }
 
