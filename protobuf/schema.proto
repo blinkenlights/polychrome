@@ -9,8 +9,8 @@ message Packet {
     WFrame w_frame = 3;
     RGBFrame rgb_frame = 4;
 
-    // Frames for audio output
-    // AudioFrame audio_frame = 5;
+    // Frames with audio data
+    AudioFrame audio_frame = 5;
 
     // Events from the input controllers
     InputEvent input_event = 6;
@@ -39,6 +39,12 @@ message WFrame {
 message RGBFrame {
   bytes data = 1 [(nanopb).max_size = 1920]; // Series of RGB values. 8bit per color. First pixel is top left. One panel after the other.
   uint32 easing_interval = 2; // Optional. In milliseconds. Fade this frame over the previous one with an easing curve. Colors are blended in gamma corrected RGB space.
+}
+
+// AudioFrame with uri of the sample to be played and the channel number
+message AudioFrame {
+  string uri = 1; // supports file://<path>, http(s)://<url> with .wav or .aiff files
+  uint32 channel = 2;
 }
 
 message InputEvent {
@@ -119,4 +125,3 @@ message FirmwareInfo {
 message RemoteLog {
   string message = 1 [(nanopb).max_length = 100];
 }
-

@@ -9,7 +9,7 @@ Blinkenlights Letterbox light installation in Mildenberg, Germany.
 | protobuf | Protobuf schema files for the data packets | [schema.proto](./protobuf/schema.proto)
 | blinkenleds | ESP32 firmware that drives the LED panels | [Readme](./blinkenleds/README.md)
 | calibration | Tooling to create color calibration tables for the Leds | [Readme](./calibration/README.md)
-| beak | Audio engine that drives the sound output | todo
+| beak | Audio engine that drives the sound output | [Readme](./beak/README.md)
 
 ## Architecture
 
