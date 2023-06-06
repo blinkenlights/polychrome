@@ -14,7 +14,11 @@ defmodule Octopus.Broadcaster do
   }
 
   defmodule State do
-    defstruct [:udp, :file, :config, :remote_ip]
+    defstruct [:udp, :remote_log_file, :config, :remote_ip, firmware_stats: %{}]
+  end
+
+  defmodule FirmwareStats do
+    defstruct [:hostname, :panel_index, :build_time, :last_seen, :ip, :fps, :config_phash]
   end
 
   @remote_port 1337
@@ -34,6 +38,10 @@ defmodule Octopus.Broadcaster do
 
   def set_calibration(set_calibration) when is_boolean(set_calibration) do
     GenServer.cast(__MODULE__, {:set_calibration, set_calibration})
+  end
+
+  def firmware_stats() do
+    GenServer.call(__MODULE__, :firmware_stats)
   end
 
   def init(:ok) do
@@ -58,12 +66,12 @@ defmodule Octopus.Broadcaster do
           ip
       end
 
-    file = File.open!("remote.log", [:write])
+    remote_log_file = File.open!("remote.log", [:write])
     {:ok, udp} = :gen_udp.open(@local_port, [:binary, active: true, broadcast: true])
 
     state = %State{
       udp: udp,
-      file: file,
+      remote_log_file: remote_log_file,
       config: @default_config,
       remote_ip: broadast_ip
     }
@@ -73,32 +81,18 @@ defmodule Octopus.Broadcaster do
     {:ok, state}
   end
 
-  def handle_info({:udp, _socket, ip, _port, protobuf}, state = %State{}) do
-    case Protobuf.decode_firmware_packet(protobuf) do
-      %FirmwarePacket{content: {:remote_log, %RemoteLog{message: message}}} ->
-        IO.write(state.file, message)
-        Logger.info("#{print_ip(ip)}: Remote log #{inspect(message)}")
+  def handle_info({:udp, _socket, from_ip, _port, protobuf}, state = %State{}) do
+    state =
+      case Protobuf.decode_firmware_packet(protobuf) do
+        {:ok, %FirmwarePacket{content: {_, content}}} ->
+          handle_firmware_packet(content, from_ip, state)
 
-      %FirmwarePacket{content: {:firmware_info, %FirmwareInfo{} = firmware_info}} ->
-        # Logger.debug("#{print_ip(ip)}: Client info #{inspect(firmware_info)}")
+        {:error, error} ->
+          "#{print_ip(from_ip)}: Could not decode firmware packet: #{inspect(error)}"
+          |> Logger.warn()
 
-        %FirmwareConfig{config_phash: expected_phash} = state.config
-
-        case firmware_info do
-          %FirmwareInfo{config_phash: ^expected_phash} ->
-            :noop
-
-          _ ->
-            Logger.info(
-              "#{print_ip(ip)}: Config hash missmatch expected #{expected_phash} got #{firmware_info.config_phash}"
-            )
-
-            send_config(state.config, state)
-        end
-
-      _ ->
-        :noop
-    end
+          state
+      end
 
     {:noreply, state}
   end
@@ -126,6 +120,10 @@ defmodule Octopus.Broadcaster do
     {:noreply, state}
   end
 
+  def handle_call(:firmware_stats, _from, %State{} = state) do
+    {:reply, state.firmware_stats, state}
+  end
+
   defp print_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"
 
   defp send_config(%FirmwareConfig{} = config, %State{} = state) do
@@ -147,5 +145,44 @@ defmodule Octopus.Broadcaster do
   defp send_binary(binary, %State{} = state) do
     # Logger.debug("Sending UDP Packet: #{inspect(binary)}")
     :gen_udp.send(state.udp, state.remote_ip, @remote_port, binary)
+  end
+
+  defp handle_firmware_packet(%RemoteLog{message: message}, from_ip, %State{} = state) do
+    IO.write(state.remote_log_file, message)
+    Logger.info("#{print_ip(from_ip)}: Remote log #{inspect(message)}")
+    state
+  end
+
+  defp handle_firmware_packet(%FirmwareInfo{} = firmware_info, from_ip, %State{} = state) do
+    %FirmwareConfig{config_phash: expected_phash} = state.config
+
+    state = update_firmware_stats(firmware_info, from_ip, state)
+
+    case firmware_info do
+      %FirmwareInfo{config_phash: ^expected_phash} ->
+        state
+
+      _ ->
+        "#{firmware_info.hostname}: Config hash missmatch expected #{expected_phash} got #{firmware_info.config_phash}. Sending config."
+        |> Logger.info()
+
+        send_config(state.config, state)
+    end
+  end
+
+  defp update_firmware_stats(%FirmwareInfo{} = firmware_info, from_ip, %State{} = state) do
+    stats = %FirmwareStats{
+      hostname: firmware_info.hostname,
+      panel_index: firmware_info.panel_index,
+      build_time: firmware_info.build_time |> String.to_integer(),
+      last_seen: :os.system_time(:second),
+      ip: from_ip,
+      fps: firmware_info.fps,
+      config_phash: firmware_info.config_phash
+    }
+
+    firmware_stats = Map.put(state.firmware_stats, from_ip, stats)
+
+    %State{state | firmware_stats: firmware_stats}
   end
 end

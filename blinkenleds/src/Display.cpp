@@ -48,6 +48,8 @@ void Display::loop()
 
 void Display::handle_packet(Packet packet)
 {
+  uint16_t first_byte;
+  uint16_t last_byte;
   switch (packet.which_content)
   {
   case Packet_firmware_config_tag:
@@ -60,10 +62,12 @@ void Display::handle_packet(Packet packet)
     break;
 
   case Packet_frame_tag:
+    first_byte = PIXEL_COUNT * (PANEL_INDEX - 1);
+    last_byte = first_byte + PIXEL_COUNT - 1;
 
-    for (int i = 0; i < min(PIXEL_COUNT, int(packet.content.frame.data.size)); i++)
+    for (int i = first_byte; i < min(last_byte, packet.content.frame.data.size); i++)
     {
-      pixel[i].set_color(color_from_palette(packet.content.frame.palette, packet.content.frame.data.bytes[i]));
+      pixel[i - first_byte].set_color(color_from_palette(packet.content.frame.palette, packet.content.frame.data.bytes[i]));
     }
 
     Pixel::set_easing_interval(packet.content.frame.easing_interval);
@@ -71,10 +75,12 @@ void Display::handle_packet(Packet packet)
     break;
 
   case Packet_w_frame_tag:
+    first_byte = PIXEL_COUNT * (PANEL_INDEX - 1);
+    last_byte = first_byte + PIXEL_COUNT - 1;
 
-    for (int i = 0; i < min(PIXEL_COUNT, int(packet.content.w_frame.data.size)); i++)
+    for (int i = first_byte; i < min(last_byte, packet.content.w_frame.data.size); i++)
     {
-      pixel[i].set_color(color_from_palette(packet.content.w_frame.palette, packet.content.w_frame.data.bytes[i]));
+      pixel[i - first_byte].set_color(color_from_palette(packet.content.w_frame.palette, packet.content.w_frame.data.bytes[i]));
     }
 
     Pixel::set_easing_interval(packet.content.w_frame.easing_interval);

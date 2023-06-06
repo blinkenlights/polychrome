@@ -54,7 +54,6 @@ void network_event_callback(WiFiEvent_t event)
     Serial.println("  GW    : " + String(ETH.gatewayIP().toString()));
     Serial.println("  SubNet: " + String(ETH.subnetMask().toString()));
     Serial.println("  DNS   : " + String(ETH.dnsIP().toString()));
-    Serial.println("  Name  : " + String(ETH.getHostname()));
     Serial.println("  Speed : " + String(ETH.linkSpeed()) + " Mbps");
 
     udp_setup();
@@ -78,6 +77,8 @@ void ota_setup()
 {
 
   Serial.println("Setting up OTA");
+  Serial.println("Using mDNS hostname: " + hostname);
+
   ArduinoOTA
       .setHostname(hostname.c_str())
       .setMdnsEnabled(true)
@@ -168,6 +169,7 @@ void Network::loop()
         remote_port = udp.remotePort();
         remote_configured = true;
         Serial.println("Got first packet from " + remote_ip.toString() + ":" + String(remote_port));
+        send_firmware_info();
       }
 
       bytes = udp.read(udp_buffer, UDP_BUFFER_SIZE);
@@ -211,6 +213,8 @@ void Network::remote_log(String message)
 {
   if (eth_connected)
   {
+    Serial.println("Remote log: " + message);
+
     FirmwarePacket packet = FirmwarePacket_init_default;
     packet.which_content = FirmwarePacket_remote_log_tag;
     packet.content.remote_log = (RemoteLog)RemoteLog_init_default;
@@ -218,8 +222,6 @@ void Network::remote_log(String message)
 
     pb_ostream_t stream = pb_ostream_from_buffer(udp_buffer, UDP_BUFFER_SIZE);
     pb_encode(&stream, FirmwarePacket_fields, &packet);
-
-    Serial.println("Remote log: " + message);
 
     send_udp_packet(stream.bytes_written);
   }

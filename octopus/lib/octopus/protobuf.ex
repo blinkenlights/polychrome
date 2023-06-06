@@ -51,11 +51,10 @@ defmodule Octopus.Protobuf do
   end
 
   def decode_firmware_packet(protobuf) when is_binary(protobuf) do
-    FirmwarePacket.decode(protobuf)
+    {:ok, FirmwarePacket.decode(protobuf)}
   rescue
     error ->
-      Logger.warn("Could not decode protobuf: #{inspect(error)} Binary: #{inspect(protobuf)} ")
-      :error
+      {:error, error}
   end
 
   def decode_packet(protobuf) when is_binary(protobuf) do
