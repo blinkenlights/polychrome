@@ -9,10 +9,16 @@ interface Layout {
 
 interface Config {}
 
-interface Frame {
-  data: Uint8Array;
+interface IndexedFrame {
+  data: number[];
   palette: RGB[];
 }
+
+interface RGBFrame {
+  data: number[];
+}
+
+type Frame = IndexedFrame | RGBFrame;
 
 function resize(canvas: HTMLCanvasElement) {
   const dpr = window.devicePixelRatio || 1;
@@ -44,7 +50,7 @@ export function setup(canvas: HTMLCanvasElement) {
   let pixelOffset = 0;
 
   let layout: Layout;
-  let pixels = new Uint8Array();
+  let pixels: RGB[] = [];
   let colorPalette: RGB[] = [];
 
   const ctx = canvas.getContext("2d");
@@ -64,8 +70,26 @@ export function setup(canvas: HTMLCanvasElement) {
 
   [`frame:${id}`, "frame:*"].forEach((event) => {
     this.handleEvent(event, ({ frame: frame }: { frame: Frame }) => {
-      pixels = frame.data;
-      colorPalette = frame.palette;
+      if ("palette" in frame) {
+        const indexedFrame = frame as IndexedFrame;
+        pixels = indexedFrame.data.map((pixel) => {
+          if (pixel < colorPalette.length) {
+            return colorPalette[pixel];
+          }
+          return colorPalette[0] || [0, 0, 0];
+        });
+        colorPalette = indexedFrame.palette;
+      } else {
+        const rgbFrame = frame as RGBFrame;
+        pixels = rgbFrame.data.reduce((acc: RGB[], value, index) => {
+          const pixelIndex = Math.floor(index / 3);
+          if (!acc[pixelIndex]) {
+            acc[pixelIndex] = [0, 0, 0];
+          }
+          acc[pixelIndex][index % 3] = value;
+          return acc;
+        }, []);
+      }
     });
   });
 
@@ -102,15 +126,13 @@ export function setup(canvas: HTMLCanvasElement) {
     ctx.translate(offsetX, offsetY);
     ctx.scale(scale, scale);
 
-    const positionsWithPixels: [[number, number], number | undefined][] =
-      layout.positions.map((pos, i) => [pos, pixels[i + pixelOffset]]);
+    const positionsWithPixels: [
+      [number, number],
+      [number, number, number] | undefined
+    ][] = layout.positions.map((pos, i) => [pos, pixels[i + pixelOffset]]);
 
     positionsWithPixels.forEach(([[x, y], pixel]) => {
-      let rgb: RGB = [0, 0, 0];
-
-      if (pixel !== undefined && colorPalette[pixel] !== undefined) {
-        rgb = colorPalette[pixel];
-      }
+      let rgb = pixel || [0, 0, 0];
 
       let [r, g, b] = brighten(
         desaturate(rgb, DESATURATION_AMOUNT),

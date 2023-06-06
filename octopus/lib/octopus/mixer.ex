@@ -3,9 +3,9 @@ defmodule Octopus.Mixer do
   require Logger
 
   alias Octopus.{Broadcaster, Protobuf, AppSupervisor}
-  alias Octopus.Protobuf.{Frame, WFrame, AudioFrame, InputEvent}
+  alias Octopus.Protobuf.{Frame, WFrame, RGBFrame, AudioFrame, InputEvent}
 
-  @supported_frames [Frame, WFrame, AudioFrame]
+  @supported_frames [Frame, WFrame, RGBFrame, AudioFrame]
 
   defmodule State do
     defstruct selected_app: nil
@@ -77,7 +77,8 @@ defmodule Octopus.Mixer do
     {:noreply, state}
   end
 
-  defp send_frame(binary, %Frame{} = frame) when is_binary(binary) do
+  defp send_frame(binary, %frame_type{} = frame)
+       when is_binary(binary) and frame_type in @supported_frames do
     Phoenix.PubSub.broadcast(Octopus.PubSub, "mixer", {:mixer, {:frame, frame}})
     Broadcaster.send_binary(binary)
   end

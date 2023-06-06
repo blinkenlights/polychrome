@@ -95,14 +95,14 @@ defmodule Octopus.Apps.Starfield do
             true -> 7
           end
 
-        canvas |> Canvas.put_pixel(x, y, color)
+        canvas |> Canvas.put_pixel({x, y}, color)
       end)
 
     %__MODULE__{state | canvas: canvas}
   end
 
   defp broadcast_frame(%__MODULE__{canvas: canvas} = state) do
-    canvas |> Canvas.to_frame() |> send_frame()
+    canvas |> Canvas.to_frame(drop: true) |> send_frame()
     state
   end
 
