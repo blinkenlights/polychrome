@@ -66,7 +66,7 @@ defmodule Octopus.Canvas do
   end
 
   @doc """
-  Clears the canvas by setting all pixels to the given color.
+  Clears the canvas.
   """
   @spec clear(Canvas.t()) :: Canvas.t()
   def clear(%Canvas{} = canvas) do
