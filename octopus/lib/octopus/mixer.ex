@@ -82,9 +82,4 @@ defmodule Octopus.Mixer do
     Phoenix.PubSub.broadcast(Octopus.PubSub, "mixer", {:mixer, {:frame, frame}})
     Broadcaster.send_binary(binary)
   end
-
-  # we only send Frames to pubsub because the sim does not support them yet
-  defp send_frame(binary, _) when is_binary(binary) do
-    Broadcaster.send_binary(binary)
-  end
 end

@@ -9,16 +9,11 @@ interface Layout {
 
 interface Config {}
 
-interface IndexedFrame {
-  data: number[];
-  palette: RGB[];
-}
-
-interface RGBFrame {
-  data: number[];
-}
-
-type Frame = IndexedFrame | RGBFrame;
+type Frame =
+  | { kind: "indexed"; data: number[]; palette: RGB[] }
+  | { kind: "rgb"; data: number[] }
+  | { kind: "rgbw"; data: number[] }
+  | { kind: "audio"; uri: string; channel: number };
 
 function resize(canvas: HTMLCanvasElement) {
   const dpr = window.devicePixelRatio || 1;
@@ -51,7 +46,6 @@ export function setup(canvas: HTMLCanvasElement) {
 
   let layout: Layout;
   let pixels: RGB[] = [];
-  let colorPalette: RGB[] = [];
 
   const ctx = canvas.getContext("2d");
   if (!ctx) {
@@ -70,25 +64,30 @@ export function setup(canvas: HTMLCanvasElement) {
 
   [`frame:${id}`, "frame:*"].forEach((event) => {
     this.handleEvent(event, ({ frame: frame }: { frame: Frame }) => {
-      if ("palette" in frame) {
-        const indexedFrame = frame as IndexedFrame;
-        pixels = indexedFrame.data.map((pixel) => {
-          if (pixel < colorPalette.length) {
-            return colorPalette[pixel];
-          }
-          return colorPalette[0] || [0, 0, 0];
-        });
-        colorPalette = indexedFrame.palette;
-      } else {
-        const rgbFrame = frame as RGBFrame;
-        pixels = rgbFrame.data.reduce((acc: RGB[], value, index) => {
-          const pixelIndex = Math.floor(index / 3);
-          if (!acc[pixelIndex]) {
-            acc[pixelIndex] = [0, 0, 0];
-          }
-          acc[pixelIndex][index % 3] = value;
-          return acc;
-        }, []);
+      switch (frame.kind) {
+        case "indexed": {
+          pixels = frame.data.map((pixel) => {
+            if (pixel < frame.palette.length) {
+              return frame.palette[pixel];
+            }
+            return frame.palette[0] || [0, 0, 0];
+          });
+          break;
+        }
+        case "rgb": {
+          pixels = frame.data.reduce((acc: RGB[], value, index) => {
+            const pixelIndex = Math.floor(index / 3);
+            if (!acc[pixelIndex]) {
+              acc[pixelIndex] = [0, 0, 0];
+            }
+            acc[pixelIndex][index % 3] = value;
+            return acc;
+          }, []);
+          break;
+        }
+        case "rgbw":
+        case "audio":
+          break;
       }
     });
   });
