@@ -13,10 +13,10 @@ defmodule Octopus.App do
 
   """
 
-  alias Octopus.Protobuf.{Frame, WFrame, AudioFrame, InputEvent}
+  alias Octopus.Protobuf.{Frame, WFrame, RGBFrame, AudioFrame, InputEvent}
   alias Octopus.{Mixer, AppSupervisor}
 
-  @supported_frames [Frame, WFrame, AudioFrame]
+  @supported_frames [Frame, RGBFrame, WFrame, AudioFrame]
 
   @doc """
   Human readable name of the app. It will be used in the UI and other places to identify the app.

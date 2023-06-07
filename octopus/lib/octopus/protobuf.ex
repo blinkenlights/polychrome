@@ -1,6 +1,7 @@
 defmodule Octopus.Protobuf do
   require Logger
 
+  alias Octopus.Protobuf.RGBFrame
   alias Octopus.ColorPalette
 
   alias Octopus.Protobuf.{
@@ -32,6 +33,11 @@ defmodule Octopus.Protobuf do
   def encode(%WFrame{palette: palette, data: data} = wframe)
       when is_binary(palette) and is_binary(data) do
     %Packet{content: {:w_frame, wframe}}
+    |> Packet.encode()
+  end
+
+  def encode(%RGBFrame{data: data} = rgbframe) when is_binary(data) do
+    %Packet{content: {:rgb_frame, rgbframe}}
     |> Packet.encode()
   end
 

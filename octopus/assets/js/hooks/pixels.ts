@@ -9,10 +9,11 @@ interface Layout {
 
 interface Config {}
 
-interface Frame {
-  data: Uint8Array;
-  palette: RGB[];
-}
+type Frame =
+  | { kind: "indexed"; data: number[]; palette: RGB[] }
+  | { kind: "rgb"; data: number[] }
+  | { kind: "rgbw"; data: number[] }
+  | { kind: "audio"; uri: string; channel: number };
 
 function resize(canvas: HTMLCanvasElement) {
   const dpr = window.devicePixelRatio || 1;
@@ -44,8 +45,7 @@ export function setup(canvas: HTMLCanvasElement) {
   let pixelOffset = 0;
 
   let layout: Layout;
-  let pixels = new Uint8Array();
-  let colorPalette: RGB[] = [];
+  let pixels: RGB[] = [];
 
   const ctx = canvas.getContext("2d");
   if (!ctx) {
@@ -64,8 +64,31 @@ export function setup(canvas: HTMLCanvasElement) {
 
   [`frame:${id}`, "frame:*"].forEach((event) => {
     this.handleEvent(event, ({ frame: frame }: { frame: Frame }) => {
-      pixels = frame.data;
-      colorPalette = frame.palette;
+      switch (frame.kind) {
+        case "indexed": {
+          pixels = frame.data.map((pixel) => {
+            if (pixel < frame.palette.length) {
+              return frame.palette[pixel];
+            }
+            return frame.palette[0] || [0, 0, 0];
+          });
+          break;
+        }
+        case "rgb": {
+          pixels = frame.data.reduce((acc: RGB[], value, index) => {
+            const pixelIndex = Math.floor(index / 3);
+            if (!acc[pixelIndex]) {
+              acc[pixelIndex] = [0, 0, 0];
+            }
+            acc[pixelIndex][index % 3] = value;
+            return acc;
+          }, []);
+          break;
+        }
+        case "rgbw":
+        case "audio":
+          break;
+      }
     });
   });
 
@@ -102,15 +125,13 @@ export function setup(canvas: HTMLCanvasElement) {
     ctx.translate(offsetX, offsetY);
     ctx.scale(scale, scale);
 
-    const positionsWithPixels: [[number, number], number | undefined][] =
-      layout.positions.map((pos, i) => [pos, pixels[i + pixelOffset]]);
+    const positionsWithPixels: [
+      [number, number],
+      [number, number, number] | undefined
+    ][] = layout.positions.map((pos, i) => [pos, pixels[i + pixelOffset]]);
 
     positionsWithPixels.forEach(([[x, y], pixel]) => {
-      let rgb: RGB = [0, 0, 0];
-
-      if (pixel !== undefined && colorPalette[pixel] !== undefined) {
-        rgb = colorPalette[pixel];
-      }
+      let rgb = pixel || [0, 0, 0];
 
       let [r, g, b] = brighten(
         desaturate(rgb, DESATURATION_AMOUNT),
