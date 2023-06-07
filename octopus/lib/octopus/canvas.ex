@@ -270,11 +270,11 @@ defmodule Octopus.Canvas do
   end
 
   @doc """
-  Extends the canvas by appending the other given canvas to the right.
+  Joins the canvases by appending the second canvas to right.
   """
-  def extend(%Canvas{} = canvas1, %Canvas{} = canvas2) do
+  def join(%Canvas{} = canvas1, %Canvas{} = canvas2) do
     if canvas1.palette != canvas2.palette do
-      raise ArgumentError, "Can't extend canvases with different color palettes"
+      raise ArgumentError, "Can't join canvases with different color palettes"
     end
 
     pixels =
