@@ -110,16 +110,18 @@ defmodule Octopus.Canvas do
     Map.get(pixels, {x, y}, [0, 0, 0])
   end
 
+  @window_width 8
+  @window_gap 16
+  @window_and_gap @window_gap + @window_width
+
   def to_frame(%Canvas{width: width, height: height, palette: palette} = canvas, opts \\ []) do
-    window_width = if Keyword.get(opts, :drop, false), do: 26, else: 8
+    window_width = if Keyword.get(opts, :drop, false), do: @window_and_gap, else: @window_width
 
     pixels =
       for i <- 0..div(width, window_width),
           y <- 0..(height - 1),
           x <- 0..7,
           do: get_pixel(canvas, {i * window_width + x, y})
-
-    # pixels = if drop_columns, do: pixels, else: canvas.pixels
 
     case palette do
       nil -> %RGBFrame{data: pixels |> IO.iodata_to_binary()}
