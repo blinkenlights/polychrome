@@ -97,25 +97,18 @@ defmodule Octopus.Canvas do
 
   @doc """
   Returns the color of the pixel at the given position.
-  If the position is outside the canvas, `[0, 0, 0]` is returned.
+  If the position is outside the canvas,
+  `[0, 0, 0]` is returned for canvases with RGB colors
+  and `0` is returned for canvases with a color palette.
   """
-  @spec get_pixel(Canvas.t(), coord()) :: non_neg_integer() | rgb()
+  @spec get_pixel(Canvas.t(), coord()) :: color()
+  def get_pixel(%Canvas{pixels: pixels, palette: nil}, {x, y}) do
+    Map.get(pixels, {x, y}, 0)
+  end
+
   def get_pixel(%Canvas{pixels: pixels}, {x, y}) do
     Map.get(pixels, {x, y}, [0, 0, 0])
   end
-
-  # def to_frame(%Canvas{width: width, height: height, palette: palette} = canvas) do
-  #   pixels =
-  #     for i <- 0..div(width, 8),
-  #         y <- 0..(height - 1),
-  #         x <- 0..7,
-  #         do: get_pixel(canvas, {i * 8 + x, y})
-
-  #   case palette do
-  #     nil -> %RGBFrame{data: pixels |> IO.iodata_to_binary()}
-  #     _ -> %Frame{data: pixels, palette: palette}
-  #   end
-  # end
 
   def to_frame(%Canvas{width: width, height: height, palette: palette} = canvas, opts \\ []) do
     window_width = if Keyword.get(opts, :drop, false), do: 26, else: 8
