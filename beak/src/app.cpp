@@ -2,6 +2,8 @@
 
 #include <plog/Log.h>
 
+#include <chrono>
+
 #include "engine.h"
 #include "plog/Formatters/TxtFormatter.h"
 #include "plog/Initializers/ConsoleInitializer.h"
@@ -11,6 +13,8 @@
 
 namespace beak
 {
+constexpr auto stopThreadTimeoutMs =
+    std::chrono::milliseconds(100);  //!< Interval after which to terminate the thread
 /**
  * @brief Construct a new Main App:: Main App object
  *
@@ -25,21 +29,21 @@ MainApp::MainApp() : Thread("beak")
       "list-devices",
       "Lists available devices",
       "This command lists all available devices on your computer",
-      listCmd,
+      [this](juce::ArgumentList const &args) { listCmd(args); },
   });
   addCommand({
       "play",
       "play",
       "Plays an audio file on a specified channel",
       "",
-      playCmd,
+      [this](juce::ArgumentList const &args) { playCmd(args); },
   });
   addDefaultCommand({
       "server",
       "server",
       "Starts the udp server",
       "This command runs a udp server with an protobuf api.",
-      serverCmd,
+      [this](juce::ArgumentList const &args) { serverCmd(args); },
   });
 }
 
@@ -64,7 +68,7 @@ void MainApp::initialise(const juce::String &args)
   plog::init(plog::debug, &consoleAppender);
   PLOGI << "Starting " << getApplicationName() << "v" << getApplicationVersion();
   m_args = args;
-  startThread();
+  startThread(juce::Thread::Priority::highest);
 }
 
 /**
@@ -212,7 +216,15 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
                               }
                             });
     // run the server
-    ioCtx.run();
+    while (true)
+    {
+      ioCtx.run_one_for(stopThreadTimeoutMs);
+      if (threadShouldExit())
+      {
+        PLOGI << "stopping server...";
+        return;
+      }
+    }
   }
   catch (std::exception &e)
   {

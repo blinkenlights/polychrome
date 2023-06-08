@@ -27,9 +27,9 @@ class MainApp : public juce::ConsoleApplication, public juce::JUCEApplication, p
   void run() override;
 
  private:
-  static void listCmd(juce::ArgumentList const &args);
-  static void playCmd(juce::ArgumentList const &args);
-  static void serverCmd(juce::ArgumentList const &args);
+  void listCmd(juce::ArgumentList const &args);
+  void playCmd(juce::ArgumentList const &args);
+  void serverCmd(juce::ArgumentList const &args);
 
  private:
   juce::String m_args;
