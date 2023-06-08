@@ -4,7 +4,7 @@ Copyright © 2023 gueldi
 */
 package main
 
-import "github.com/blinkenlights/letterbox/sonartacle/test/sonartacle-proto-sim/cmd"
+import "github.com/blinkenlights/letterbox/beak/test/beak-proto-sim/cmd"
 
 func main() {
 	cmd.Execute()

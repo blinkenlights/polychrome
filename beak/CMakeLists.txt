@@ -42,7 +42,7 @@ if(BUILD_TEST_APP)
   add_custom_command(OUTPUT ${GO_BIN_NAME}
     DEPENDS ${GO_SRCS} ${GO_BIN_NAME}-proto
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/test
-    COMMAND go build -o "${CMAKE_CURRENT_BINARY_DIR}/${GO_BIN_NAME}" .
+    COMMAND go mod tidy && go build -o "${CMAKE_CURRENT_BINARY_DIR}/${GO_BIN_NAME}" .
     COMMENT "Building Test App with go"
   )
 
