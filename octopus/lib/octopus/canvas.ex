@@ -82,7 +82,7 @@ defmodule Octopus.Canvas do
   Otherwise the color must be a list of 3 integers between 0 and 255.
   """
   @spec put_pixel(Canvas.t(), coord(), non_neg_integer() | rgb()) :: Canvas.t()
-  def put_pixel(palette, coord, color)
+  def put_pixel(canvas, coord, color)
 
   def put_pixel(%Canvas{palette: %ColorPalette{}} = canvas, {x, y}, color)
       when is_integer(color) do

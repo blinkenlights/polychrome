@@ -3,7 +3,7 @@ defmodule Octopus.Apps.UdpReceiver do
   require Logger
 
   alias Octopus.Protobuf
-  alias Octopus.Protobuf.{Frame, InputEvent}
+  alias Octopus.Protobuf.{Frame, RGBFrame, InputEvent}
 
   @moduledoc """
   Will open a UDP port and listen for protobuf packets. All valid frames will be forwarded to the mixer.
@@ -34,6 +34,10 @@ defmodule Octopus.Apps.UdpReceiver do
   def handle_info({:udp, _socket, ip, port, protobuf}, state = %State{}) do
     case Protobuf.decode_packet(protobuf) do
       {:ok, %Frame{} = frame} ->
+        Logger.info("#{__MODULE__}: Received frame from #{inspect(ip)}:#{inspect(port)}")
+        send_frame(frame)
+
+      {:ok, %RGBFrame{} = frame} ->
         Logger.info("#{__MODULE__}: Received frame from #{inspect(ip)}:#{inspect(port)}")
         send_frame(frame)
 
