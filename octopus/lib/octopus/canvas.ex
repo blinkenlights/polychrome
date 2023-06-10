@@ -103,11 +103,11 @@ defmodule Octopus.Canvas do
   """
   @spec get_pixel(Canvas.t(), coord()) :: color()
   def get_pixel(%Canvas{pixels: pixels, palette: nil}, {x, y}) do
-    Map.get(pixels, {x, y}, 0)
+    Map.get(pixels, {x, y}, [0, 0, 0])
   end
 
   def get_pixel(%Canvas{pixels: pixels}, {x, y}) do
-    Map.get(pixels, {x, y}, [0, 0, 0])
+    Map.get(pixels, {x, y}, 0)
   end
 
   @window_width 8
