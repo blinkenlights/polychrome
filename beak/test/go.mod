@@ -3,7 +3,6 @@ module github.com/blinkenlights/letterbox/beak/test/beak-proto-sim
 go 1.18
 
 require (
-	github.com/golang/protobuf v1.5.2
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/viper v1.15.0
 	google.golang.org/protobuf v1.30.0
