@@ -24,7 +24,7 @@ defmodule Octopus.Apps.BeakInteractive do
 
   @max_channels 9
   # @fileUri "https://github.com/gueldenstone/MultiChannelSampler/raw/main/resources/arcade-notification.wav"
-  # @fileUri "file://Users/lukas/dev/letterbox/beak/resources/space-invader/fastinvader1.wav"
+  # @fileUri "file://space-invader/ufo_lowpitch.wav"
   # @fileUri "file:///Users/lukas/Downloads/PlayingSoundFilesTutorial 2/Resources/cello.wav"
   @fileUri "file://test/impulse.wav"
   # @fileUri "file://Users/lukas/dev/letterbox/beak/resources/hang.wav"
@@ -54,7 +54,7 @@ defmodule Octopus.Apps.BeakInteractive do
 
     send_frame(%AudioFrame{
       uri: @fileUri,
-      channel: buttonNum
+      channel: 9
     })
 
     {:noreply, state}

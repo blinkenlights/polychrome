@@ -1,4 +1,4 @@
-defmodule Octopus.Apps.BeakTest do
+defmodule Octopus.Apps.SpaceInvader do
   use Octopus.App
   require Logger
 
@@ -11,11 +11,11 @@ defmodule Octopus.Apps.BeakTest do
 
   # TODO: use the new canvas module
 
-  def name(), do: "Beak Test"
+  def name(), do: "Space Invader"
 
   def init(_args) do
     state = %State{
-      delay: 1000,
+      delay: 200,
       palette: ColorPalette.load("pico-8"),
       chan: 0,
       inc: 1
@@ -30,7 +30,7 @@ defmodule Octopus.Apps.BeakTest do
   # @fileUri "https://github.com/gueldenstone/MultiChannelSampler/raw/main/resources/arcade-notification.wav"
   # @fileUri "file://Users/lukas/dev/letterbox/beak/resources/space-invader/fastinvader1.wav"
   # @fileUri "file:///Users/lukas/Downloads/PlayingSoundFilesTutorial 2/Resources/cello.wav"
-  @fileUri "file://flipdot/flipdot-1.wav"
+  @fileUri "file://test/impulse.wav"
   # @fileUri "file://Users/lukas/dev/letterbox/beak/resources/hang.wav"
   def handle_info(:tick, %State{} = state) do
     padding_left = List.duplicate(0, 64 * state.chan)

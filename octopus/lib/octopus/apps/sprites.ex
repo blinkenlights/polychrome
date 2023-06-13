@@ -12,6 +12,8 @@ defmodule Octopus.Apps.Sprites do
   @animation_interval 10
   @easing_interval 150
   @new_sprite_interval 1000
+  @animation_duration 1000
+  @fileUri "file://flipdot/flipdot-1.wav"
 
   def name(), do: "Sprites"
 
