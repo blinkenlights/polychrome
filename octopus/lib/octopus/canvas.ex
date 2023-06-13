@@ -265,9 +265,39 @@ defmodule Octopus.Canvas do
   end
 
   @doc """
-  Joins the canvases by appending the second canvas to right.
+  Joins the canvases by appending the second canvas to right or the bottom (when vertical is true).
   """
-  def join(%Canvas{} = canvas1, %Canvas{} = canvas2) do
+  def join(%Canvas{} = canvas1, %Canvas{} = canvas2, vertical \\ false) do
+    if canvas1.palette != canvas2.palette do
+      raise ArgumentError, "Can't join canvases with different color palettes"
+    end
+
+    pixels =
+      Enum.reduce(canvas2.pixels, canvas1.pixels, fn {{x, y}, color}, pixels ->
+        case vertical do
+          false -> Map.put(pixels, {x + canvas1.width, y}, color)
+          true -> Map.put(pixels, {x, y + canvas1.height}, color)
+        end
+      end)
+
+    {width, height} =
+      case vertical do
+        false -> {canvas1.width + canvas2.width, max(canvas1.height, canvas2.height)}
+        true -> {max(canvas1.width, canvas2.width), canvas1.height + canvas2.height}
+      end
+
+    %Canvas{
+      canvas1
+      | width: width,
+        height: height,
+        pixels: pixels
+    }
+  end
+
+  @doc """
+  Overlays the the second canvas over the first one.
+  """
+  def overlay(%Canvas{} = canvas1, %Canvas{} = canvas2) do
     if canvas1.palette != canvas2.palette do
       raise ArgumentError, "Can't join canvases with different color palettes"
     end
@@ -279,9 +309,25 @@ defmodule Octopus.Canvas do
 
     %Canvas{
       canvas1
-      | width: canvas1.width + canvas2.width,
+      | width: max(canvas1.width, canvas2.width),
         height: max(canvas1.height, canvas2.height),
         pixels: pixels
     }
+  end
+
+  @doc """
+  Returns a rectangular subsection of the canvas.
+  """
+  def cut(%Canvas{} = canvas, {x1, y1}, {x2, y2}) when x2 > x1 and y2 > y1 do
+    width = x2 - x1
+    height = y2 - y1
+
+    pixels =
+      for x <- x1..x2,
+          y <- y1..y2,
+          into: %{},
+          do: {{x - x1, y - y1}, Canvas.get_pixel(canvas, {x, y})}
+
+    %Canvas{canvas | width: width, height: height, pixels: pixels}
   end
 end

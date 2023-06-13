@@ -11,7 +11,7 @@ end
 
 defimpl Jason.Encoder, for: Frame do
   def encode(%Frame{data: data} = frame, opts) do
-    %Frame{frame | data: to_char_list(data)}
+    %Frame{frame | data: to_charlist(data)}
     |> Map.from_struct()
     |> Map.put(:kind, "indexed")
     |> Jason.Encode.map(opts)

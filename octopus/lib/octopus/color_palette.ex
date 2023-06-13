@@ -45,7 +45,7 @@ defmodule Octopus.ColorPalette do
   end
 
   @doc """
-  Reads from a binary in the protobuf format [r, g, b, r, g, b, ...].
+  Reads from a binary or io_list in the protobuf format [r, g, b, r, g, b, ...] or <<r, g, b, r, g, b, ...>>.
   """
   def from_binary(io_list) when is_list(io_list) do
     io_list
@@ -64,7 +64,7 @@ defmodule Octopus.ColorPalette do
   end
 
   @doc """
-  Writes a binary in the protobuf format [r, g, b, r, g, b, ...].
+  Writes a binary in the protobuf format << r, g, b, r, g, b, ... >>.
   """
   def to_binary(%__MODULE__{colors: colors} = _palette) do
     colors
