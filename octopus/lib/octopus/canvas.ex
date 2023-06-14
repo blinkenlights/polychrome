@@ -330,4 +330,21 @@ defmodule Octopus.Canvas do
 
     %Canvas{canvas | width: width, height: height, pixels: pixels}
   end
+
+  defimpl Collectable do
+    def into(canvas) do
+      collector_fun = fn
+        canvas_acc, {:cont, {{x, y}, color}} ->
+          Canvas.put_pixel(canvas_acc, {x, y}, color)
+
+        canvas_acc, :done ->
+          canvas_acc
+
+        _canvas_acc, :halt ->
+          :ok
+      end
+
+      {canvas, collector_fun}
+    end
+  end
 end

@@ -32,7 +32,6 @@ defmodule OctopusWeb.ConnCase do
   end
 
   setup tags do
-    Octopus.DataCase.setup_sandbox(tags)
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
 end
