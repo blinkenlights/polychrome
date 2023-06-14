@@ -33,9 +33,6 @@ defmodule Octopus.MixProject do
   defp deps do
     [
       {:phoenix, "~> 1.7.2"},
-      {:phoenix_ecto, "~> 4.4"},
-      {:ecto_sql, "~> 3.6"},
-      {:postgrex, ">= 0.0.0"},
       {:phoenix_html, "~> 3.3"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 0.18"},
@@ -53,8 +50,7 @@ defmodule Octopus.MixProject do
       {:protobuf, "~> 0.12.0"},
       {:ex_png, "~> 1.0.0"},
       {:easing, "~> 0.3.1"},
-      {:cachex, "~> 3.6"},
-      {:nimble_parsec, "~> 1.3"}
+      {:cachex, "~> 3.6"}
     ]
   end
 
@@ -67,9 +63,6 @@ defmodule Octopus.MixProject do
   defp aliases do
     [
       setup: ["deps.get", "assets.setup", "assets.build"],
-      "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
-      "ecto.reset": ["ecto.drop", "ecto.setup"],
-      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["tailwind default", "esbuild default"],
       "assets.deploy": ["tailwind default --minify", "esbuild default --minify", "phx.digest"],

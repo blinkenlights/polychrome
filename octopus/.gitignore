@@ -37,3 +37,5 @@ npm-debug.log
 
 remote.log
 
+src/program_lexer.erl
+src/program_parser.erl

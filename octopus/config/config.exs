@@ -8,7 +8,6 @@
 import Config
 
 config :octopus,
-  ecto_repos: [Octopus.Repo],
   generators: [binary_id: true]
 
 # Configures the endpoint
