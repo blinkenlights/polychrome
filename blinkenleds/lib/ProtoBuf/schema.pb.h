@@ -77,6 +77,12 @@ typedef struct _RGBFrame {
     uint32_t easing_interval; /* Optional. In milliseconds. Fade this frame over the previous one with an easing curve. Colors are blended in gamma corrected RGB space. */
 } RGBFrame;
 
+/* AudioFrame with uri of the sample to be played and the channel number */
+typedef struct _AudioFrame {
+    pb_callback_t uri; /* supports file://<path>, http(s)://<url> with .wav or .aiff files */
+    uint32_t channel;
+} AudioFrame;
+
 typedef struct _InputEvent {
     Button button;
     bool pressed;
@@ -94,14 +100,18 @@ typedef struct _FirmwareConfig {
 typedef struct _Packet {
     pb_size_t which_content;
     union {
-        /* Configures firmware, for internal use only */
+        /* ** Internal use only ** */
         FirmwareConfig firmware_config;
         /* Frames with pixel data. */
         Frame frame;
         WFrame w_frame;
         RGBFrame rgb_frame;
+        /* Frames with audio data */
+        AudioFrame audio_frame;
         /* Events from the input controllers */
         InputEvent input_event;
+        RGBFrame rgb_frame_part1;
+        RGBFrame rgb_frame_part2;
     } content;
 } Packet;
 
@@ -144,6 +154,7 @@ extern "C" {
 
 
 
+
 #define InputEvent_button_ENUMTYPE Button
 
 #define FirmwareConfig_easing_mode_ENUMTYPE EasingMode
@@ -157,6 +168,7 @@ extern "C" {
 #define Frame_init_default                       {{0, {0}}, {0, {0}}, 0}
 #define WFrame_init_default                      {{0, {0}}, {0, {0}}, 0}
 #define RGBFrame_init_default                    {{0, {0}}, 0}
+#define AudioFrame_init_default                  {{{NULL}, NULL}, 0}
 #define InputEvent_init_default                  {_Button_MIN, 0}
 #define FirmwareConfig_init_default              {0, _EasingMode_MIN, 0, 0, 0}
 #define FirmwarePacket_init_default              {0, {FirmwareInfo_init_default}}
@@ -166,6 +178,7 @@ extern "C" {
 #define Frame_init_zero                          {{0, {0}}, {0, {0}}, 0}
 #define WFrame_init_zero                         {{0, {0}}, {0, {0}}, 0}
 #define RGBFrame_init_zero                       {{0, {0}}, 0}
+#define AudioFrame_init_zero                     {{{NULL}, NULL}, 0}
 #define InputEvent_init_zero                     {_Button_MIN, 0}
 #define FirmwareConfig_init_zero                 {0, _EasingMode_MIN, 0, 0, 0}
 #define FirmwarePacket_init_zero                 {0, {FirmwareInfo_init_zero}}
@@ -181,6 +194,8 @@ extern "C" {
 #define WFrame_easing_interval_tag               3
 #define RGBFrame_data_tag                        1
 #define RGBFrame_easing_interval_tag             2
+#define AudioFrame_uri_tag                       1
+#define AudioFrame_channel_tag                   2
 #define InputEvent_button_tag                    1
 #define InputEvent_pressed_tag                   2
 #define FirmwareConfig_luminance_tag             1
@@ -192,7 +207,10 @@ extern "C" {
 #define Packet_frame_tag                         2
 #define Packet_w_frame_tag                       3
 #define Packet_rgb_frame_tag                     4
+#define Packet_audio_frame_tag                   5
 #define Packet_input_event_tag                   6
+#define Packet_rgb_frame_part1_tag               7
+#define Packet_rgb_frame_part2_tag               8
 #define FirmwareInfo_hostname_tag                1
 #define FirmwareInfo_build_time_tag              2
 #define FirmwareInfo_panel_index_tag             3
@@ -208,14 +226,20 @@ X(a, STATIC,   ONEOF,    MESSAGE,  (content,firmware_config,content.firmware_con
 X(a, STATIC,   ONEOF,    MESSAGE,  (content,frame,content.frame),   2) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (content,w_frame,content.w_frame),   3) \
 X(a, STATIC,   ONEOF,    MESSAGE,  (content,rgb_frame,content.rgb_frame),   4) \
-X(a, STATIC,   ONEOF,    MESSAGE,  (content,input_event,content.input_event),   6)
+X(a, STATIC,   ONEOF,    MESSAGE,  (content,audio_frame,content.audio_frame),   5) \
+X(a, STATIC,   ONEOF,    MESSAGE,  (content,input_event,content.input_event),   6) \
+X(a, STATIC,   ONEOF,    MESSAGE,  (content,rgb_frame_part1,content.rgb_frame_part1),   7) \
+X(a, STATIC,   ONEOF,    MESSAGE,  (content,rgb_frame_part2,content.rgb_frame_part2),   8)
 #define Packet_CALLBACK NULL
 #define Packet_DEFAULT NULL
 #define Packet_content_firmware_config_MSGTYPE FirmwareConfig
 #define Packet_content_frame_MSGTYPE Frame
 #define Packet_content_w_frame_MSGTYPE WFrame
 #define Packet_content_rgb_frame_MSGTYPE RGBFrame
+#define Packet_content_audio_frame_MSGTYPE AudioFrame
 #define Packet_content_input_event_MSGTYPE InputEvent
+#define Packet_content_rgb_frame_part1_MSGTYPE RGBFrame
+#define Packet_content_rgb_frame_part2_MSGTYPE RGBFrame
 
 #define Frame_FIELDLIST(X, a) \
 X(a, STATIC,   SINGULAR, BYTES,    data,              1) \
@@ -236,6 +260,12 @@ X(a, STATIC,   SINGULAR, BYTES,    data,              1) \
 X(a, STATIC,   SINGULAR, UINT32,   easing_interval,   2)
 #define RGBFrame_CALLBACK NULL
 #define RGBFrame_DEFAULT NULL
+
+#define AudioFrame_FIELDLIST(X, a) \
+X(a, CALLBACK, SINGULAR, STRING,   uri,               1) \
+X(a, STATIC,   SINGULAR, UINT32,   channel,           2)
+#define AudioFrame_CALLBACK pb_default_field_callback
+#define AudioFrame_DEFAULT NULL
 
 #define InputEvent_FIELDLIST(X, a) \
 X(a, STATIC,   SINGULAR, UENUM,    button,            1) \
@@ -278,6 +308,7 @@ extern const pb_msgdesc_t Packet_msg;
 extern const pb_msgdesc_t Frame_msg;
 extern const pb_msgdesc_t WFrame_msg;
 extern const pb_msgdesc_t RGBFrame_msg;
+extern const pb_msgdesc_t AudioFrame_msg;
 extern const pb_msgdesc_t InputEvent_msg;
 extern const pb_msgdesc_t FirmwareConfig_msg;
 extern const pb_msgdesc_t FirmwarePacket_msg;
@@ -289,6 +320,7 @@ extern const pb_msgdesc_t RemoteLog_msg;
 #define Frame_fields &Frame_msg
 #define WFrame_fields &WFrame_msg
 #define RGBFrame_fields &RGBFrame_msg
+#define AudioFrame_fields &AudioFrame_msg
 #define InputEvent_fields &InputEvent_msg
 #define FirmwareConfig_fields &FirmwareConfig_msg
 #define FirmwarePacket_fields &FirmwarePacket_msg
@@ -296,12 +328,13 @@ extern const pb_msgdesc_t RemoteLog_msg;
 #define RemoteLog_fields &RemoteLog_msg
 
 /* Maximum encoded size of messages (where known) */
+/* Packet_size depends on runtime parameters */
+/* AudioFrame_size depends on runtime parameters */
 #define FirmwareConfig_size                      18
 #define FirmwareInfo_size                        62
 #define FirmwarePacket_size                      104
 #define Frame_size                               844
 #define InputEvent_size                          4
-#define Packet_size                              1932
 #define RGBFrame_size                            1929
 #define RemoteLog_size                           102
 #define WFrame_size                              908
@@ -315,7 +348,7 @@ extern const pb_msgdesc_t RemoteLog_msg;
 namespace nanopb {
 template <>
 struct MessageDescriptor<Packet> {
-    static PB_INLINE_CONSTEXPR const pb_size_t fields_array_length = 5;
+    static PB_INLINE_CONSTEXPR const pb_size_t fields_array_length = 8;
     static inline const pb_msgdesc_t* fields() {
         return &Packet_msg;
     }
@@ -339,6 +372,13 @@ struct MessageDescriptor<RGBFrame> {
     static PB_INLINE_CONSTEXPR const pb_size_t fields_array_length = 2;
     static inline const pb_msgdesc_t* fields() {
         return &RGBFrame_msg;
+    }
+};
+template <>
+struct MessageDescriptor<AudioFrame> {
+    static PB_INLINE_CONSTEXPR const pb_size_t fields_array_length = 2;
+    static inline const pb_msgdesc_t* fields() {
+        return &AudioFrame_msg;
     }
 };
 template <>

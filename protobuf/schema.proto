@@ -15,8 +15,10 @@ message Packet {
     // Events from the input controllers
     InputEvent input_event = 6;
 
-    // Configures firmware, for internal use only
+    // ** Internal use only **
     FirmwareConfig firmware_config = 1; 
+    RGBFrame rgb_frame_part1 = 7;
+    RGBFrame rgb_frame_part2 = 8;
   }
 }
 

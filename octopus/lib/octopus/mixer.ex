@@ -15,9 +15,21 @@ defmodule Octopus.Mixer do
     GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
   end
 
+  def handle_frame(app_id, %RGBFrame{} = frame) do
+    # Split RGB frames to avoid UPD fragmenting. Can be removed when we fix the fragmenting in the firmware
+    Protobuf.split_and_encode(frame)
+    |> Enum.each(fn binary ->
+      send_frame(binary, frame, app_id)
+    end)
+  end
+
   def handle_frame(app_id, %frame_type{} = frame) when frame_type in @supported_frames do
     # encode the frame in the app process, so any encoding errors get raised there
-    binary = Protobuf.encode(frame)
+    Protobuf.encode(frame)
+    |> send_frame(frame, app_id)
+  end
+
+  defp send_frame(binary, frame, app_id) do
     GenServer.cast(__MODULE__, {:new_frame, {app_id, binary, frame}})
   end
 
