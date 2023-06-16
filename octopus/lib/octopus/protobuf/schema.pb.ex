@@ -63,6 +63,9 @@ defmodule Octopus.Protobuf.Packet do
     type: Octopus.Protobuf.FirmwareConfig,
     json_name: "firmwareConfig",
     oneof: 0
+
+  field :rgb_frame_part1, 7, type: Octopus.Protobuf.RGBFrame, json_name: "rgbFramePart1", oneof: 0
+  field :rgb_frame_part2, 8, type: Octopus.Protobuf.RGBFrame, json_name: "rgbFramePart2", oneof: 0
 end
 
 defmodule Octopus.Protobuf.Frame do
@@ -92,6 +95,15 @@ defmodule Octopus.Protobuf.RGBFrame do
 
   field :data, 1, type: :bytes, deprecated: false
   field :easing_interval, 2, type: :uint32, json_name: "easingInterval"
+end
+
+defmodule Octopus.Protobuf.AudioFrame do
+  @moduledoc false
+
+  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+
+  field :uri, 1, type: :string
+  field :channel, 2, type: :uint32
 end
 
 defmodule Octopus.Protobuf.InputEvent do
@@ -148,13 +160,4 @@ defmodule Octopus.Protobuf.RemoteLog do
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
 
   field :message, 1, type: :string, deprecated: false
-end
-
-defmodule Octopus.Protobuf.AudioFrame do
-  @moduledoc false
-
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
-
-  field :uri, 1, type: :string
-  field :channel, 2, type: :uint32
 end

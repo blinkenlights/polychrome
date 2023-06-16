@@ -10,7 +10,6 @@ defmodule Octopus.Apps.Sprites do
   end
 
   @sprite_sheet Sprite.list_sprite_sheets() |> hd()
-  @max_index 255
   @animation_duration 1000
 
   def name(), do: "Sprites"

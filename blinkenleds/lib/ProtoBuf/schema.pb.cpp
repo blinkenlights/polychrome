@@ -18,6 +18,9 @@ PB_BIND(WFrame, WFrame, 2)
 PB_BIND(RGBFrame, RGBFrame, 2)
 
 
+PB_BIND(AudioFrame, AudioFrame, AUTO)
+
+
 PB_BIND(InputEvent, InputEvent, AUTO)
 
 
