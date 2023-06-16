@@ -36,6 +36,8 @@ defmodule Joystick.MixProject do
       {:toolshed, "~> 0.3.0"},
       {:nerves_leds, "~> 0.8"},
       {:vintage_net, "~> 0.13"},
+      {:input_event, "~> 1.2"},
+      {:protobuf, "~> 0.12.0"},
 
       # Dependencies for all targets except :host
       {:nerves_runtime, "~> 0.13.0", targets: @all_targets},
