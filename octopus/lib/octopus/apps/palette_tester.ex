@@ -40,13 +40,13 @@ defmodule Octopus.Apps.PaletteTester do
     {:noreply, state}
   end
 
-  def handle_input(%InputEvent{button: :BUTTON_1, pressed: true}, state) do
+  def handle_input(%InputEvent{type: :BUTTON_1, value: 1}, state) do
     state = next_palette(state)
     Enum.at(@palettes, state.index) |> IO.inspect()
     {:noreply, state}
   end
 
-  def handle_input(%InputEvent{button: :BUTTON_2, pressed: true}, state) do
+  def handle_input(%InputEvent{type: :BUTTON_2, value: 1}, state) do
     state = next_color(state)
     IO.inspect(state.color)
     {:noreply, state}

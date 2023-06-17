@@ -31,6 +31,7 @@ defmodule Joystick.UDP do
   def handle_cast({:send, binary}, %State{} = state) do
     case :gen_udp.send(state.udp, @octopus_host, @octopus_port, binary) do
       :ok ->
+        # Logger.debug("Event send to #{@octopus_host}:#{@octopus_port}")
         :noop
 
       {:error, reason} ->

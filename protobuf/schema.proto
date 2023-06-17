@@ -66,11 +66,11 @@ enum InputType {
   BUTTON_9 = 8;
   BUTTON_10 = 9;
 
-  X_AXIS_1 = 10;
-  Y_AXIS_1 = 11;
+  AXIS_X_1 = 10;
+  AXIS_Y_1 = 11;
   
-  X_AXIS_2 = 12;
-  Y_AXIS_2 = 13;
+  AXIS_X_2 = 12;
+  AXIS_Y_2 = 13;
 }
 
 message FirmwareConfig {

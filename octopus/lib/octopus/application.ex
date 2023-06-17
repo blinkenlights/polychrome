@@ -17,6 +17,7 @@ defmodule Octopus.Application do
       Octopus.Mixer,
       {Registry, keys: :unique, name: Octopus.AppRegistry},
       Octopus.AppSupervisor,
+      Octopus.InputAdapter,
 
       # Caches
       Supervisor.child_spec({Cachex, name: ColorPalette}, id: make_ref()),

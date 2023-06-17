@@ -13,10 +13,10 @@ defmodule Joystick.Protobuf.InputType do
   field :BUTTON_8, 7
   field :BUTTON_9, 8
   field :BUTTON_10, 9
-  field :X_AXIS_1, 10
-  field :Y_AXIS_1, 11
-  field :X_AXIS_2, 12
-  field :Y_AXIS_2, 13
+  field :AXIS_X_1, 10
+  field :AXIS_Y_1, 11
+  field :AXIS_X_2, 12
+  field :AXIS_Y_2, 13
 end
 
 defmodule Joystick.Protobuf.EasingMode do

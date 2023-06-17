@@ -1,4 +1,4 @@
-defmodule Octopus.Protobuf.Button do
+defmodule Octopus.Protobuf.InputType do
   @moduledoc false
 
   use Protobuf, enum: true, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
@@ -13,14 +13,10 @@ defmodule Octopus.Protobuf.Button do
   field :BUTTON_8, 7
   field :BUTTON_9, 8
   field :BUTTON_10, 9
-  field :DIRECTION_1_UP, 10
-  field :DIRECTION_1_DOWN, 11
-  field :DIRECTION_1_LEFT, 12
-  field :DIRECTION_1_RIGHT, 13
-  field :DIRECTION_2_UP, 14
-  field :DIRECTION_2_DOWN, 15
-  field :DIRECTION_2_LEFT, 16
-  field :DIRECTION_2_RIGHT, 17
+  field :AXIS_X_1, 10
+  field :AXIS_Y_1, 11
+  field :AXIS_X_2, 12
+  field :AXIS_Y_2, 13
 end
 
 defmodule Octopus.Protobuf.EasingMode do
@@ -111,8 +107,8 @@ defmodule Octopus.Protobuf.InputEvent do
 
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
 
-  field :button, 1, type: Octopus.Protobuf.Button, enum: true
-  field :pressed, 2, type: :bool
+  field :type, 1, type: Octopus.Protobuf.InputType, enum: true
+  field :value, 3, type: :int32
 end
 
 defmodule Octopus.Protobuf.FirmwareConfig do

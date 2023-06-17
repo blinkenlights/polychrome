@@ -46,7 +46,7 @@ defmodule Octopus.Apps.Sprites do
     {:noreply, state}
   end
 
-  def handle_input(%InputEvent{button: :BUTTON_1, pressed: true}, state) do
+  def handle_input(%InputEvent{type: :BUTTON_1, value: 1}, state) do
     {:noreply, next_sprite(state)}
   end
 

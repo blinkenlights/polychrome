@@ -83,8 +83,14 @@ defmodule Octopus.Protobuf do
       %Packet{content: {:frame, %Frame{palette: palette} = frame}} ->
         {:ok, %Frame{frame | palette: ColorPalette.from_binary(palette)}}
 
+      %Packet{content: {:wframe, %WFrame{} = frame}} ->
+        {:ok, frame}
+
       %Packet{content: {:rgb_frame, %RGBFrame{} = frame}} ->
         {:ok, frame}
+
+      %Packet{content: {:input_event, %InputEvent{} = input_event}} ->
+        {:ok, input_event}
 
       %Packet{content: {:config, %FirmwareConfig{} = config}} ->
         {:ok, config}

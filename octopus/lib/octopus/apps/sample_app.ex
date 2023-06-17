@@ -39,11 +39,11 @@ defmodule Octopus.Apps.SampleApp do
     {:noreply, increment_index(state)}
   end
 
-  def handle_input(%InputEvent{button: :BUTTON_1, pressed: true}, state) do
+  def handle_input(%InputEvent{type: :BUTTON_1, value: 1}, state) do
     {:noreply, %State{state | delay: state.delay + 10}}
   end
 
-  def handle_input(%InputEvent{button: :BUTTON_2, pressed: true}, state) do
+  def handle_input(%InputEvent{type: :BUTTON_2, value: 1}, state) do
     {:noreply, %State{state | delay: max(10, state.delay - 10)}}
   end
 

@@ -31,8 +31,10 @@ defmodule Joystick.EventHandler do
     events
     |> Enum.map(&parse_event(device, &1))
     |> Enum.reject(&is_nil/1)
-
-    # |> Enum.map(&Logger.info("Input event: #{inspect(&1)}"))
+    #|> Enum.map(fn event ->
+    #  Logger.info("Input event: #{inspect(event)}")
+    #  event
+    #end)
     |> Enum.map(&UDP.send/1)
 
     {:noreply, state}
@@ -71,10 +73,10 @@ defmodule Joystick.EventHandler do
   defp type_from_button("/dev/input/event1", :btn_thumb), do: :BUTTON_9
   defp type_from_button("/dev/input/event1", :btn_trigger), do: :BUTTON_10
 
-  defp type_from_direction("/dev/input/event0", :abs_x), do: :X_AXIS_1
-  defp type_from_direction("/dev/input/event0", :abs_y), do: :Y_AXIS_1
-  defp type_from_direction("/dev/input/event1", :abs_x), do: :X_AXIS_2
-  defp type_from_direction("/dev/input/event1", :abs_y), do: :Y_AXIS_2
+  defp type_from_direction("/dev/input/event0", :abs_x), do: :AXIS_X_1
+  defp type_from_direction("/dev/input/event0", :abs_y), do: :AXIS_Y_1
+  defp type_from_direction("/dev/input/event1", :abs_x), do: :AXIS_X_2
+  defp type_from_direction("/dev/input/event1", :abs_y), do: :AXIS_Y_2
 
   defp direction_value(0), do: -1
   defp direction_value(127), do: 0
