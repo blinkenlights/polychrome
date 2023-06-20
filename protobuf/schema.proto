@@ -50,11 +50,11 @@ message AudioFrame {
 }
 
 message InputEvent {
-  Button button = 1;
-  bool pressed = 2;
+  InputType type = 1;
+  int32 value = 3; // 0 or 1 for buttons, -1 to 1 for directions
 }
 
-enum Button {
+enum InputType {
   BUTTON_1 = 0;
   BUTTON_2 = 1;
   BUTTON_3 = 2;
@@ -66,15 +66,11 @@ enum Button {
   BUTTON_9 = 8;
   BUTTON_10 = 9;
 
-  DIRECTION_1_UP = 10;
-  DIRECTION_1_DOWN = 11;
-  DIRECTION_1_LEFT = 12;
-  DIRECTION_1_RIGHT = 13;
+  AXIS_X_1 = 10;
+  AXIS_Y_1 = 11;
   
-  DIRECTION_2_UP = 14;
-  DIRECTION_2_DOWN = 15;
-  DIRECTION_2_LEFT = 16;
-  DIRECTION_2_RIGHT = 17;
+  AXIS_X_2 = 12;
+  AXIS_Y_2 = 13;
 }
 
 message FirmwareConfig {

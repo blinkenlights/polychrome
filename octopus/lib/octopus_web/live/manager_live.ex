@@ -130,7 +130,7 @@ defmodule OctopusWeb.ManagerLive do
         int -> String.to_existing_atom("BUTTON_#{int}")
       end
 
-    %InputEvent{button: button, pressed: true}
+    %InputEvent{type: button, value: 1}
     |> Mixer.handle_input()
 
     {:noreply, socket}

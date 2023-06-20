@@ -1,4 +1,4 @@
-defmodule Octopus.Protobuf.InputType do
+defmodule Joystick.Protobuf.InputType do
   @moduledoc false
 
   use Protobuf, enum: true, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
@@ -19,7 +19,7 @@ defmodule Octopus.Protobuf.InputType do
   field :AXIS_Y_2, 13
 end
 
-defmodule Octopus.Protobuf.EasingMode do
+defmodule Joystick.Protobuf.EasingMode do
   @moduledoc false
 
   use Protobuf, enum: true, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
@@ -42,29 +42,36 @@ defmodule Octopus.Protobuf.EasingMode do
   field :EASE_IN_OUT_EXPO, 15
 end
 
-defmodule Octopus.Protobuf.Packet do
+defmodule Joystick.Protobuf.Packet do
   @moduledoc false
 
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
 
   oneof :content, 0
 
-  field :frame, 2, type: Octopus.Protobuf.Frame, oneof: 0
-  field :w_frame, 3, type: Octopus.Protobuf.WFrame, json_name: "wFrame", oneof: 0
-  field :rgb_frame, 4, type: Octopus.Protobuf.RGBFrame, json_name: "rgbFrame", oneof: 0
-  field :audio_frame, 5, type: Octopus.Protobuf.AudioFrame, json_name: "audioFrame", oneof: 0
-  field :input_event, 6, type: Octopus.Protobuf.InputEvent, json_name: "inputEvent", oneof: 0
+  field :frame, 2, type: Joystick.Protobuf.Frame, oneof: 0
+  field :w_frame, 3, type: Joystick.Protobuf.WFrame, json_name: "wFrame", oneof: 0
+  field :rgb_frame, 4, type: Joystick.Protobuf.RGBFrame, json_name: "rgbFrame", oneof: 0
+  field :audio_frame, 5, type: Joystick.Protobuf.AudioFrame, json_name: "audioFrame", oneof: 0
+  field :input_event, 6, type: Joystick.Protobuf.InputEvent, json_name: "inputEvent", oneof: 0
 
   field :firmware_config, 1,
-    type: Octopus.Protobuf.FirmwareConfig,
+    type: Joystick.Protobuf.FirmwareConfig,
     json_name: "firmwareConfig",
     oneof: 0
 
-  field :rgb_frame_part1, 7, type: Octopus.Protobuf.RGBFrame, json_name: "rgbFramePart1", oneof: 0
-  field :rgb_frame_part2, 8, type: Octopus.Protobuf.RGBFrame, json_name: "rgbFramePart2", oneof: 0
+  field :rgb_frame_part1, 7,
+    type: Joystick.Protobuf.RGBFrame,
+    json_name: "rgbFramePart1",
+    oneof: 0
+
+  field :rgb_frame_part2, 8,
+    type: Joystick.Protobuf.RGBFrame,
+    json_name: "rgbFramePart2",
+    oneof: 0
 end
 
-defmodule Octopus.Protobuf.Frame do
+defmodule Joystick.Protobuf.Frame do
   @moduledoc false
 
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
@@ -74,7 +81,7 @@ defmodule Octopus.Protobuf.Frame do
   field :easing_interval, 3, type: :uint32, json_name: "easingInterval"
 end
 
-defmodule Octopus.Protobuf.WFrame do
+defmodule Joystick.Protobuf.WFrame do
   @moduledoc false
 
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
@@ -84,7 +91,7 @@ defmodule Octopus.Protobuf.WFrame do
   field :easing_interval, 3, type: :uint32, json_name: "easingInterval"
 end
 
-defmodule Octopus.Protobuf.RGBFrame do
+defmodule Joystick.Protobuf.RGBFrame do
   @moduledoc false
 
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
@@ -93,7 +100,7 @@ defmodule Octopus.Protobuf.RGBFrame do
   field :easing_interval, 2, type: :uint32, json_name: "easingInterval"
 end
 
-defmodule Octopus.Protobuf.AudioFrame do
+defmodule Joystick.Protobuf.AudioFrame do
   @moduledoc false
 
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
@@ -102,28 +109,28 @@ defmodule Octopus.Protobuf.AudioFrame do
   field :channel, 2, type: :uint32
 end
 
-defmodule Octopus.Protobuf.InputEvent do
+defmodule Joystick.Protobuf.InputEvent do
   @moduledoc false
 
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
 
-  field :type, 1, type: Octopus.Protobuf.InputType, enum: true
+  field :type, 1, type: Joystick.Protobuf.InputType, enum: true
   field :value, 3, type: :int32
 end
 
-defmodule Octopus.Protobuf.FirmwareConfig do
+defmodule Joystick.Protobuf.FirmwareConfig do
   @moduledoc false
 
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
 
   field :luminance, 1, type: :uint32
-  field :easing_mode, 2, type: Octopus.Protobuf.EasingMode, json_name: "easingMode", enum: true
+  field :easing_mode, 2, type: Joystick.Protobuf.EasingMode, json_name: "easingMode", enum: true
   field :show_test_frame, 3, type: :bool, json_name: "showTestFrame"
   field :config_phash, 4, type: :uint32, json_name: "configPhash"
   field :enable_calibration, 5, type: :bool, json_name: "enableCalibration"
 end
 
-defmodule Octopus.Protobuf.FirmwarePacket do
+defmodule Joystick.Protobuf.FirmwarePacket do
   @moduledoc false
 
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
@@ -131,14 +138,14 @@ defmodule Octopus.Protobuf.FirmwarePacket do
   oneof :content, 0
 
   field :firmware_info, 1,
-    type: Octopus.Protobuf.FirmwareInfo,
+    type: Joystick.Protobuf.FirmwareInfo,
     json_name: "firmwareInfo",
     oneof: 0
 
-  field :remote_log, 2, type: Octopus.Protobuf.RemoteLog, json_name: "remoteLog", oneof: 0
+  field :remote_log, 2, type: Joystick.Protobuf.RemoteLog, json_name: "remoteLog", oneof: 0
 end
 
-defmodule Octopus.Protobuf.FirmwareInfo do
+defmodule Joystick.Protobuf.FirmwareInfo do
   @moduledoc false
 
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
@@ -150,7 +157,7 @@ defmodule Octopus.Protobuf.FirmwareInfo do
   field :config_phash, 5, type: :uint32, json_name: "configPhash"
 end
 
-defmodule Octopus.Protobuf.RemoteLog do
+defmodule Joystick.Protobuf.RemoteLog do
   @moduledoc false
 
   use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
