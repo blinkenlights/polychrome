@@ -17,7 +17,7 @@ burn: build
 	mix burn --task complete
 
 upload: build
-	mix upload joystick.local
+	mix upload joystick.lan.xhain.space
 
 console:
-	ssh joystick.local
+	ssh joystick.lan.xhain.space

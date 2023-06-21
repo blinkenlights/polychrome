@@ -2,11 +2,11 @@ defmodule Octopus.Apps.Sprites do
   use Octopus.App
   require Logger
 
-  alias Octopus.{Sprite, Canvas}
+  alias Octopus.{Sprite, Canvas, Transitions}
   alias Octopus.Protobuf.{InputEvent}
 
   defmodule State do
-    defstruct [:canvas, :direction, :animantion_start, :index]
+    defstruct [:transition, :index]
   end
 
   @sprite_sheet Sprite.list_sprite_sheets() |> hd()
@@ -15,34 +15,17 @@ defmodule Octopus.Apps.Sprites do
   def name(), do: "Sprites"
 
   def init(_args) do
-    state = %State{index: 0} |> next_sprite()
+    state = %State{index: 0}
 
-    :timer.send_interval(25, :tick)
+    # :timer.send_interval(250, :tick)
+    send(self(), :tick)
 
     {:ok, state}
   end
 
   def handle_info(:tick, %State{} = state) do
-    animation_end = state.animantion_start + @animation_duration
-
-    max_translate = state.canvas.height - 8
-
-    translate =
-      case System.os_time(:millisecond) do
-        now when now >= animation_end ->
-          max_translate
-
-        now ->
-          ((animation_end - now) / @animation_duration)
-          |> Easing.cubic_in_out()
-          |> then(fn progress -> max_translate - round(progress * max_translate) end)
-      end
-
-    state.canvas
-    |> Canvas.cut({0, translate}, {8, 8 + translate})
-    |> Canvas.to_frame()
-    |> send_frame()
-
+    state = next_sprite(state)
+    :timer.send_after(2000, self(), :tick)
     {:noreply, state}
   end
 
@@ -53,16 +36,23 @@ defmodule Octopus.Apps.Sprites do
   def next_sprite(%State{} = state) do
     next_index = rem(state.index + 1, 256)
     current_sprite = Sprite.load(@sprite_sheet, state.index)
-    separator = Canvas.new(8, 3, current_sprite.palette)
     next_sprite = Sprite.load(@sprite_sheet, next_index)
+    # transition = Transitions.flipdot(current_sprite, next_sprite) |> IO.inspect()
+    direction = Enum.random([:left, :right, :top, :bottom])
+    transition = Transitions.push(current_sprite, next_sprite, direction: direction)
 
-    %State{
-      state
-      | animantion_start: System.os_time(:millisecond),
-        index: next_index,
-        canvas:
-          Canvas.join(current_sprite, separator, true)
-          |> Canvas.join(next_sprite, true)
-    }
+    animate(transition)
+
+    %State{state | transition: transition, index: next_index}
+  end
+
+  def animate(transitions) do
+    transitions
+    |> Stream.map(fn canvas -> Canvas.to_frame(canvas, easing_interval: 150) end)
+    |> Stream.map(fn frame ->
+      :timer.sleep(10)
+      send_frame(frame)
+    end)
+    |> Stream.run()
   end
 end

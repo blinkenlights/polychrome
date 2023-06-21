@@ -58,10 +58,15 @@ defmodule Octopus.AppSupervisor do
       Mixer.select_app(app_id)
     end
 
-    {:ok, pid} = DynamicSupervisor.start_child(__MODULE__, {module, name: name})
-    Phoenix.PubSub.broadcast(Octopus.PubSub, "apps", {:apps, {:started, app_id, module}})
+    case DynamicSupervisor.start_child(__MODULE__, {module, name: name}) do
+      {:ok, pid} ->
+        Phoenix.PubSub.broadcast(Octopus.PubSub, "apps", {:apps, {:started, app_id, module}})
+        {:ok, pid}
 
-    {:ok, pid}
+      {:error, error} ->
+        Logger.error("Could not start app #{module}: #{inspect(error)}")
+        {:error, :start_failed}
+    end
   end
 
   @doc """
