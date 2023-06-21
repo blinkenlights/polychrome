@@ -5,6 +5,7 @@
 #include <chrono>
 
 #include "engine.h"
+#include "filter.h"
 #include "plog/Formatters/TxtFormatter.h"
 #include "plog/Initializers/ConsoleInitializer.h"
 #include "resource.h"
@@ -215,6 +216,89 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
                                 PLOGE << err.what();
                               }
                             });
+
+    server.registerCallback(
+        Packet::kSynthFrame,
+        [&engine](std::shared_ptr<Packet> packet)
+        {
+          static auto translateProtoWaveform =
+              [](const SynthWaveform &in) -> synth::Oscillator::Type
+          {
+            static const std::unordered_map<SynthWaveform, synth::Oscillator::Type>
+                translationTable{
+                    {SynthWaveform::SINE, synth::Oscillator::Type::Sine},
+                    {SynthWaveform::SAW, synth::Oscillator::Type::Saw},
+                    {SynthWaveform::SQUARE, synth::Oscillator::Type::Square},
+
+                };
+            return translationTable.at(in);
+          };
+
+          static auto translateProtoFilterType =
+              [](const SynthFilterType &in) -> synth::Filter::Type
+          {
+            static const std::unordered_map<SynthFilterType, synth::Filter::Type> translationTable{
+                {SynthFilterType::LOWPASS, synth::Filter::Type::Lowpass},
+                {SynthFilterType::HIGHPASS, synth::Filter::Type::Highpass},
+                {SynthFilterType::BANDPASS, synth::Filter::Type::Bandpass},
+            };
+            return translationTable.at(in);
+          };
+
+          const auto synthFrame = packet->synth_frame();
+          const auto config = synthFrame.config();
+
+          // oscillator config
+          synth::Oscillator::Parameters oscParams(translateProtoWaveform(config.wave_form()),
+                                                  config.gain());
+
+          // adsr config
+          const auto adsrConfig = config.adsr_config();
+          juce::ADSR::Parameters adsrParams(adsrConfig.attack(), adsrConfig.decay(),
+                                            adsrConfig.sustain(), adsrConfig.release());
+          // filter config
+          synth::Filter::Parameters filterParams(translateProtoFilterType(config.filter_type()),
+                                                 config.cutoff(), config.resonance());
+          const auto filterAdsrConfig = config.filter_adsr_config();
+          juce::ADSR::Parameters filterAdsrParams(
+              filterAdsrConfig.attack(), filterAdsrConfig.decay(), filterAdsrConfig.sustain(),
+              filterAdsrConfig.release());
+
+          // configure the channel
+          if (Error err = engine->configureSynth(synthFrame.channel(), oscParams, adsrParams,
+                                                 filterParams, filterAdsrParams))
+          {
+            PLOGE << err.what();
+          }
+          // we only need the config here
+          if (synthFrame.event_type() == CONFIG)
+          {
+            PLOGD << "config only";
+            return;
+          }
+          juce::MidiMessage msg{};
+          switch (synthFrame.event_type())
+          {
+            case SynthEventType::NOTE_ON:
+              msg = juce::MidiMessage::noteOn(synthFrame.channel(), synthFrame.note(),
+                                              synthFrame.velocity());
+              // PLOGD << "note on, channel " << synthFrame.channel() << ", note "
+              //       << synthFrame.note();
+              break;
+            case SynthEventType::NOTE_OFF:
+              msg = juce::MidiMessage::noteOff(synthFrame.channel(), synthFrame.note());
+              // PLOGD << "note off, channel " << synthFrame.channel() << ", note "
+              //       << synthFrame.note();
+              break;
+            default:
+              PLOGE << "unkown event type";
+          }
+          if (Error err = engine->playSynth(msg, synthFrame.duration_ms()))
+          {
+            PLOGE << err.what();
+          }
+        });
+
     // run the server
     while (true)
     {

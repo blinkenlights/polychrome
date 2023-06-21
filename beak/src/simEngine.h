@@ -14,6 +14,7 @@ class SimulationEngine : public Engine
  private:
   int m_virtualOutputs;
   juce::HashMap<Node::Ptr, Node::Ptr> m_playerNodeToPanners;
+  juce::HashMap<Node::Ptr, Node::Ptr> m_synthNodeToPanners;
 };
 
 }  // namespace beak::sim

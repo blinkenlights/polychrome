@@ -4,6 +4,7 @@
 #include <memory>
 
 #include "error.h"
+#include "filter.h"
 #include "processor.h"
 
 namespace beak
@@ -72,6 +73,11 @@ class Engine
  public:
   [[nodiscard]] Error configure(Config const &config);
   [[nodiscard]] virtual Error playSound(const juce::File &file, int channel);
+  [[nodiscard]] virtual Error playSynth(const juce::MidiMessage &msg, int maxDurationMs = 1000);
+  [[nodiscard]] virtual Error configureSynth(int channel, synth::Oscillator::Parameters &osc,
+                                             const juce::ADSR::Parameters &adsr,
+                                             const synth::Filter::Parameters &filter,
+                                             const juce::ADSR::Parameters &filterAdsr);
 
  private:
   [[nodiscard]] virtual Error configureDeviceManager(Config const &config);
@@ -83,6 +89,7 @@ class Engine
   std::unique_ptr<juce::AudioProcessorPlayer> m_player;
   juce::AudioProcessorGraph::Node::Ptr m_audioOutputNode;
   std::vector<juce::AudioProcessorGraph::Node::Ptr> m_playerNodes;
+  std::vector<juce::AudioProcessorGraph::Node::Ptr> m_synthNodes;
 
  private:
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(Engine)

@@ -23,6 +23,10 @@ set(CPP_SRCS
   src/engine.cpp
   src/resource.cpp
   src/simEngine.cpp
+  src/filter.cpp
+  src/oscillator.cpp
+  src/synthProcessor.cpp
+  src/synthVoice.cpp
 )
 
 # --------------------- c++ ---------------------------- #

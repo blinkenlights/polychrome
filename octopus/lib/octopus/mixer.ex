@@ -3,7 +3,14 @@ defmodule Octopus.Mixer do
   require Logger
 
   alias Octopus.{Broadcaster, Protobuf, AppSupervisor}
-  alias Octopus.Protobuf.{Frame, WFrame, RGBFrame, InputEvent, ControlEvent}
+
+  alias Octopus.Protobuf.{
+    Frame,
+    WFrame,
+    RGBFrame,
+    InputEvent,
+    ControlEvent
+  }
 
   @pubsub_topic "mixer"
   @pubsub_frames [Frame, WFrame, RGBFrame]
