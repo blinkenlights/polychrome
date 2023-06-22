@@ -5,7 +5,7 @@ defmodule Joystick.UDP do
   alias Joystick.Protobuf
   alias Joystick.Protobuf.InputEvent
 
-  @octopus_host "silence.local" |> String.to_charlist()
+  @octopus_host "oldie.local" |> String.to_charlist()
   @octopus_port 4423
   @local_port 4423
 
