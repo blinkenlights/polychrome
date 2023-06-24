@@ -79,25 +79,25 @@ defmodule Octopus.Apps.FontTester do
     {:noreply, state}
   end
 
-  defp prev_font(%State{index: index}) when index == 0 do
-    set_font(@max_index)
+  defp prev_font(%State{index: index} = state) when index == 0 do
+    set_font(@max_index, state)
   end
 
-  defp prev_font(%State{index: index}) do
-    set_font(index - 1)
+  defp prev_font(%State{index: index} = state) do
+    set_font(index - 1, state)
   end
 
-  defp next_font(%State{index: index}) when index >= @max_index do
-    set_font(0)
+  defp next_font(%State{index: index} = state) when index >= @max_index do
+    set_font(0, state)
   end
 
-  defp next_font(%State{index: index}) do
-    set_font(index + 1)
+  defp next_font(%State{index: index} = state) do
+    set_font(index + 1, state)
   end
 
-  defp set_font(index) do
+  defp set_font(index, %State{} = state) do
     font = Enum.at(@fonts, index) |> IO.inspect() |> Font.load()
-    %State{index: index, variant: 0, current_font: font}
+    %State{state | index: index, variant: 0, current_font: font}
   end
 
   defp next_variant(%State{variant: variant, current_font: %Font{} = font} = state) do
