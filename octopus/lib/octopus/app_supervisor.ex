@@ -5,6 +5,8 @@ defmodule Octopus.AppSupervisor do
   alias Octopus.Mixer
   alias Octopus.Protobuf.{InputEvent}
 
+  @topic "apps"
+
   @moduledoc """
   The AppRegistry is a DynamicSupervisor that keeps track of all running apps.
 
@@ -23,7 +25,7 @@ defmodule Octopus.AppSupervisor do
   * `{:apps, {:stopped, app_id}}` - an app was stopped
   """
   def subscribe() do
-    Phoenix.PubSub.subscribe(Octopus.PubSub, "apps")
+    Phoenix.PubSub.subscribe(Octopus.PubSub, @topic)
   end
 
   @doc """
@@ -51,7 +53,7 @@ defmodule Octopus.AppSupervisor do
 
   defp do_start_app(module) when is_atom(module) do
     app_id = generate_app_id()
-    name = {:via, Registry, {Octopus.AppRegistry, app_id}}
+    name = {:via, Registry, {Octopus.AppRegistry, app_id, module}}
 
     # select app in mixer if there is no other app running
     if running_apps() == [] do
@@ -60,7 +62,7 @@ defmodule Octopus.AppSupervisor do
 
     case DynamicSupervisor.start_child(__MODULE__, {module, name: name}) do
       {:ok, pid} ->
-        Phoenix.PubSub.broadcast(Octopus.PubSub, "apps", {:apps, {:started, app_id, module}})
+        Phoenix.PubSub.broadcast(Octopus.PubSub, @topic, {:apps, {:started, app_id, module}})
         {:ok, pid}
 
       {:error, error} ->
@@ -84,11 +86,39 @@ defmodule Octopus.AppSupervisor do
   Stops an specific instance of an app.
   """
   def stop_app(app_id) when is_binary(app_id) do
-    Phoenix.PubSub.broadcast(Octopus.PubSub, "apps", {:apps, {:stopped, app_id}})
+    Phoenix.PubSub.broadcast(Octopus.PubSub, @topic, {:apps, {:stopped, app_id}})
 
     case Registry.lookup(Octopus.AppRegistry, app_id) do
       [{pid, _}] ->
         DynamicSupervisor.terminate_child(__MODULE__, pid)
+
+      [] ->
+        Logger.warn("App #{app_id} not found")
+        :ok
+    end
+  end
+
+  def update_config(app_id, config) when is_binary(app_id) do
+    case Registry.lookup(Octopus.AppRegistry, app_id) do
+      [{pid, _}] ->
+        config = GenServer.call(pid, {:update_config, config})
+
+        Phoenix.PubSub.broadcast(
+          Octopus.PubSub,
+          @topic,
+          {:apps, {:config_updated, app_id, config}}
+        )
+
+      [] ->
+        Logger.warn("App #{app_id} not found")
+        :ok
+    end
+  end
+
+  def config(app_id) when is_binary(app_id) do
+    case Registry.lookup(Octopus.AppRegistry, app_id) do
+      [{pid, _}] ->
+        GenServer.call(pid, :get_config)
 
       [] ->
         Logger.warn("App #{app_id} not found")
@@ -102,6 +132,17 @@ defmodule Octopus.AppSupervisor do
   def stop_all_apps() do
     running_apps()
     |> Enum.map(fn {_, app_id} -> stop_app(app_id) end)
+  end
+
+  @doc """
+  Looks up the pid and module for a given app_id.
+  """
+  @spec lookup_app(binary()) :: {pid(), atom()}
+  def lookup_app(app_id) do
+    case Registry.lookup(Octopus.AppRegistry, app_id) do
+      [{pid, module}] -> {pid, module}
+      [] -> raise "App #{app_id} not found"
+    end
   end
 
   @doc """

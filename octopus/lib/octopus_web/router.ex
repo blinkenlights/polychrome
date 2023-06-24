@@ -18,6 +18,7 @@ defmodule OctopusWeb.Router do
     pipe_through :browser
 
     live "/sim", SimulatorLive
+    live "/app/:id", AppLive
     live "/", ManagerLive
   end
 
