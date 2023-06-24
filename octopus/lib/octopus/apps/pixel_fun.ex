@@ -11,12 +11,14 @@ defmodule Octopus.Apps.PixelFun do
 
   def config_schema() do
     %{
-      program: {"Program", :string, %{default: "sin((t-x*0.01)-hypot(x%8-3.5,y-3.5))"}}
+      program: {"Program", :string, %{default: "sin((t-x*0.01)-hypot(x%8-3.5,y-3.5))"}},
+      easing_interval: {"Easing Interval", :int, %{default: 50, min: 0, max: 500}}
     }
   end
 
-  def config(state) do
+  def get_config(state) do
     state.config
+    |> IO.inspect()
   end
 
   def init(_args) do
@@ -30,14 +32,23 @@ defmodule Octopus.Apps.PixelFun do
     {:ok, %{canvas: canvas, program: program, config: config}}
   end
 
-  def handle_config(config, state) do
+  def handle_config(%{program: program}, state) do
+    config = Map.put(state.config, :program, program)
+
     program =
-      case Program.parse(config.program) do
+      case Program.parse(program) do
         {:ok, program} -> program
         _ -> 0
       end
 
     {:reply, config, %{state | config: config, program: program}}
+  end
+
+  def handle_config(%{easing_interval: easing_interval}, state) do
+    config = Map.put(state.config, :easing_interval, easing_interval)
+    IO.inspect(config)
+
+    {:reply, config, %{state | config: config}}
   end
 
   def update_program(pid, program) do
@@ -56,7 +67,11 @@ defmodule Octopus.Apps.PixelFun do
 
   def handle_info(:tick, state) do
     canvas = state |> render()
-    canvas |> Canvas.to_frame(drop: true) |> send_frame()
+
+    canvas
+    |> Canvas.to_frame(drop: true)
+    |> Map.put(:easing_interval, state.config.easing_interval)
+    |> send_frame()
 
     {:noreply, %{state | canvas: canvas}}
   end

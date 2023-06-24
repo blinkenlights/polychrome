@@ -95,6 +95,7 @@ defmodule OctopusWeb.AppConfigComponent do
       min={@opts[:min]}
       max={@opts[:max]}
       phx-debounce={@debounce}
+      value={@value}
     />
     """
   end
