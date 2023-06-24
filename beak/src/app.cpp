@@ -219,40 +219,44 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
     server.registerCallback(Packet::kSynthFrame,
                             [&engine, &cache](std::shared_ptr<Packet> packet)
                             {
+                              auto type = packet->synth_frame().event_type();
                               auto channel = 6;
                               auto note = packet->synth_frame().note();
                               juce::String uri;
-                              switch (note)
+                              if (type == SynthEventType::NOTE_ON)
                               {
-                                case 84:
-                                  uri = "file://encounter/high-1.wav";
-                                  break;
-                                case 80:
-                                  uri = "file://encounter/high-2.wav";
-                                  break;
-                                case 68:
-                                  uri = "file://encounter/high-3.wav";
-                                  break;
-                                case 75:
-                                  uri = "file://encounter/high-4.wav";
-                                  break;
-                                case 82:
-                                  uri = "file://encounter/high-5.wav";
-                                  break;
-                                default:
-                                  uri = "file://encounter/low-1.wav";
-                                  break;
-                              }
-                              if (auto [file, err] = cache.get(uri); !err)
-                              {
-                                if (auto err = engine->playSound(file.value(), channel))
+                                switch (note)
+                                {
+                                  case 84:
+                                    uri = "file://encounter/high-1.wav";
+                                    break;
+                                  case 80:
+                                    uri = "file://encounter/high-2.wav";
+                                    break;
+                                  case 68:
+                                    uri = "file://encounter/high-3.wav";
+                                    break;
+                                  case 75:
+                                    uri = "file://encounter/high-4.wav";
+                                    break;
+                                  case 82:
+                                    uri = "file://encounter/high-5.wav";
+                                    break;
+                                  default:
+                                    uri = "file://encounter/low-1.wav";
+                                    break;
+                                }
+                                if (auto [file, err] = cache.get(uri); !err)
+                                {
+                                  if (auto err = engine->playSound(file.value(), channel))
+                                  {
+                                    PLOGE << err.what();
+                                  }
+                                }
+                                else
                                 {
                                   PLOGE << err.what();
                                 }
-                              }
-                              else
-                              {
-                                PLOGE << err.what();
                               }
                             });
     // run the server

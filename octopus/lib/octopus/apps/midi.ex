@@ -60,27 +60,8 @@ defmodule Octopus.Apps.MidiTest do
   def handle_info(:NOTE_ON, %State{} = state) do
     note = getNote(state.note_data, state.index)
     Logger.info("Note: #{note}")
-
-    # schedule note off event
-    :timer.apply_after(
-      getDuration(state.note_data, state.index),
-      Octopus.App,
-      :send_frame,
-      %SynthFrame{
-        event_type: :NOTE_OFF,
-        note: note
-      }
-    )
-
-    :timer.apply_after(
-      getDuration(state.note_data, state.index),
-      Octopus.App,
-      :send_frame,
-      %RGBFrame{
-        data: List.duplicate(0, 640 * 3) |> IO.iodata_to_binary(),
-        easing_interval: 500
-      }
-    )
+    duration = getDuration(state.note_data, state.index)
+    :timer.send_after(duration, self(), {:NOTE_OFF, note})
 
     # send note on frame
     send_frame(%SynthFrame{
@@ -101,6 +82,21 @@ defmodule Octopus.Apps.MidiTest do
     :timer.send_after(nextPlayTime - currentPlayTime, self(), :NOTE_ON)
 
     {:noreply, %State{state | index: state.index + 1}}
+  end
+
+  def handle_info({:NOTE_OFF, note}, %State{} = state) do
+    # schedule note off event
+    send_frame(%SynthFrame{
+      event_type: :NOTE_OFF,
+      note: note
+    })
+
+    send_frame(%RGBFrame{
+      data: List.duplicate(0, 640 * 3) |> IO.iodata_to_binary(),
+      easing_interval: 500
+    })
+
+    {:noreply, state}
   end
 
   def remap(value, old_min, old_max, new_min, new_max) do
