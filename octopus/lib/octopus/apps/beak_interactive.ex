@@ -54,7 +54,7 @@ defmodule Octopus.Apps.BeakInteractive do
 
     send_frame(%AudioFrame{
       uri: @fileUri,
-      channel: 9
+      channel: buttonNum
     })
 
     {:noreply, state}
