@@ -30,7 +30,7 @@ defmodule Octopus.Apps.Starfield do
   end
 
   def init(_) do
-    width = (8 * 10 + 9 * 18) * 2
+    width = (8 * 10 + 9 * 16) * 2
     height = 8 * 2
 
     config = config_schema() |> default_config()
