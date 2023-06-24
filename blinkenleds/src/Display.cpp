@@ -54,7 +54,7 @@ void Display::loop()
 void apply_rgb_frame(RGBFrame_data_t data, uint16_t first_pixel, uint16_t last_pixel)
 {
   RgbwColor color;
-  for (int i = first_pixel; i < min(last_pixel, uint16_t(data.size / 3)); i++)
+  for (int i = first_pixel; i <= last_pixel; i++)
   {
     color.R = data.bytes[i * 3];
     color.G = data.bytes[i * 3 + 1];
@@ -84,7 +84,7 @@ void Display::handle_packet(Packet packet)
     first_pixel = PIXEL_COUNT * (PANEL_INDEX - 1);
     last_pixel = first_pixel + PIXEL_COUNT - 1;
 
-    for (int i = first_pixel; i < min(last_pixel, packet.content.frame.data.size); i++)
+    for (int i = first_pixel; i <= last_pixel; i++)
     {
       pixel[i - first_pixel].set_color(color_from_palette(packet.content.frame.palette, packet.content.frame.data.bytes[i]));
     }
@@ -97,7 +97,7 @@ void Display::handle_packet(Packet packet)
     first_pixel = PIXEL_COUNT * (PANEL_INDEX - 1);
     last_pixel = first_pixel + PIXEL_COUNT - 1;
 
-    for (int i = first_pixel; i < min(last_pixel, packet.content.w_frame.data.size); i++)
+    for (int i = first_pixel; i <= last_pixel; i++)
     {
       pixel[i - first_pixel].set_color(color_from_palette(packet.content.w_frame.palette, packet.content.w_frame.data.bytes[i]));
     }

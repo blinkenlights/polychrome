@@ -19,5 +19,8 @@ burn: build
 upload: build
 	mix upload joystick.local
 
+update:
+	mix deps.update --all
+
 console:
 	ssh joystick.local
