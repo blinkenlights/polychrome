@@ -5,7 +5,7 @@
 #include "proto.h"
 namespace beak::net
 {
-constexpr std::size_t bufferSize = 1024;
+constexpr std::size_t bufferSize = 2048;
 using asio::ip::udp;
 typedef std::function<void(std::shared_ptr<Packet>)> msgRecvCallbackFn;
 class Server

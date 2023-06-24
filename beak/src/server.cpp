@@ -26,7 +26,7 @@ void Server::handleReceive(const asio::error_code &error, std::size_t sz)
     std::shared_ptr<Packet> const packet(new Packet());
     if (!packet->ParseFromArray(&m_recvBuffer, static_cast<int>(sz)))
     {
-      PLOGE << "received malformed packet, not a protobuf message";
+      startReceive();
       return;
     }
 
