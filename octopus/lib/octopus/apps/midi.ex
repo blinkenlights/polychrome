@@ -5,7 +5,7 @@ defmodule Octopus.Apps.MidiTest do
   alias Octopus.Protobuf.SynthEventType
   alias Octopus.Protobuf.SynthFrame
   alias Octopus.ColorPalette
-  alias Octopus.Protobuf.{Frame, InputEvent}
+  alias Octopus.Protobuf.{Frame, InputEvent, RGBFrame}
 
   defmodule State do
     defstruct [:note_data, :index]
@@ -78,10 +78,45 @@ defmodule Octopus.Apps.MidiTest do
       note: note
     })
 
+    send_frame(%RGBFrame{
+      data:
+        List.duplicate(hsl_to_rgb(remap(note, 60, 100, 0, 360), 0.5, 0.5), 640)
+        |> List.flatten()
+        |> IO.iodata_to_binary(),
+      easing_interval: 50
+    })
+
     currentPlayTime = getPlayTime(state.note_data, state.index)
     nextPlayTime = getPlayTime(state.note_data, state.index + 1)
     :timer.send_after(nextPlayTime - currentPlayTime, self(), :NOTE_ON)
 
     {:noreply, %State{state | index: state.index + 1}}
+  end
+
+  def remap(value, old_min, old_max, new_min, new_max) do
+    (value - old_min) / (old_max - old_min) * (new_max - new_min) + new_min
+  end
+
+  def hsl_to_rgb(h, s, l) do
+    h = :math.fmod(h, 360)
+    s = min(max(s, 0.0), 1.0)
+    l = min(max(l, 0.0), 1.0)
+
+    c = (1.0 - abs(2.0 * l - 1.0)) * s
+    # x = c * (1.0 - abs((h / 60.0) |> (rem(2.0) - 1.0)))
+    x = c * (1.0 - abs(((h / 60.0) |> :math.fmod(2.0)) - 1.0))
+    m = l - c / 2.0
+
+    {r1, g1, b1} =
+      case h do
+        h when h < 60.0 -> {c, x, 0.0}
+        h when h < 120.0 -> {x, c, 0.0}
+        h when h < 180.0 -> {0.0, c, x}
+        h when h < 240.0 -> {0.0, x, c}
+        h when h < 300.0 -> {x, 0.0, c}
+        _ -> {c, 0.0, x}
+      end
+
+    [round((r1 + m) * 255), round((g1 + m) * 255), round((b1 + m) * 255)]
   end
 end
