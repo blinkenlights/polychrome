@@ -7,7 +7,7 @@ defmodule Octopus.Broadcaster do
   alias Octopus.Protobuf.{FirmwareConfig, RemoteLog, FirmwareInfo, FirmwarePacket}
 
   @default_config %FirmwareConfig{
-    luminance: 255,
+    luminance: 150,
     easing_mode: :EASE_OUT_QUART,
     show_test_frame: false,
     enable_calibration: true
