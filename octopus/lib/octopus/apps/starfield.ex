@@ -7,23 +7,40 @@ defmodule Octopus.Apps.Starfield do
 
   alias Octopus.Canvas
 
-  defstruct [:width, :height, :stars, :velocity, :canvas]
+  defstruct [:width, :height, :stars, :canvas, :config]
 
   @frame_rate 60
+  @frame_time_s 1 / @frame_rate
   @frame_time_ms trunc(1000 / @frame_rate)
 
   def name, do: "Starfield"
+
+  def config_schema() do
+    %{
+      speed: {"Speed", :float, %{min: 0.01, max: 10.0, default: 1.0}},
+      rotation: {"Rotation", :float, %{min: 0.0, max: 360.0, default: 90.0}}
+    }
+  end
+
+  def get_config(state) do
+    %{
+      speed: state.config.speed,
+      rotation: state.config.rotation
+    }
+  end
 
   def init(_) do
     width = (8 * 10 + 9 * 18) * 2
     height = 8 * 2
 
+    config = config_schema() |> default_config()
+
     state = %__MODULE__{
       stars: %{},
       width: width,
       height: height,
-      velocity: {0.05, 0.07},
-      canvas: Canvas.new(8 * 10 + 9 * 18, 8, "pico-8")
+      canvas: Canvas.new(8 * 10 + 9 * 18, 8, "pico-8"),
+      config: config
     }
 
     state = state |> generate_stars(512)
@@ -33,10 +50,14 @@ defmodule Octopus.Apps.Starfield do
     {:ok, state}
   end
 
+  def handle_config(config, state) do
+    config = Map.merge(state.config, config)
+    {:reply, config, %__MODULE__{state | config: config}}
+  end
+
   def handle_info(:tick, state) do
     state =
       state
-      |> update_velocity()
       |> update_stars()
       |> update_canvas()
       |> broadcast_frame()
@@ -56,21 +77,14 @@ defmodule Octopus.Apps.Starfield do
     %__MODULE__{state | stars: stars}
   end
 
-  defp update_velocity(%__MODULE__{velocity: {vx, vy}} = state) do
-    vx = vx + :rand.uniform() * 0.02 - 0.01
-    vy = vy + :rand.uniform() * 0.02 - 0.01
-    vx = min(0.05, max(-0.05, vx))
-    vy = min(0.05, max(-0.05, vy))
-
-    %__MODULE__{state | velocity: {vx, vy}}
-  end
-
-  defp update_stars(%__MODULE__{stars: stars, velocity: {vx, vy}} = state) do
+  defp update_stars(%__MODULE__{stars: stars} = state) do
     stars =
       stars
       |> Enum.map(fn {{x, y}, speed} ->
-        x = fmod(x + vx * speed, state.width)
-        y = fmod(y + vy * speed, state.height)
+        dx = :math.cos(state.config.rotation * :math.pi() / 180.0)
+        dy = :math.sin(state.config.rotation * :math.pi() / 180.0)
+        x = fmod(x + dx * speed * state.config.speed * @frame_time_s, state.width)
+        y = fmod(y + dy * speed * state.config.speed * @frame_time_s, state.height)
         {{x, y}, speed}
       end)
       |> Map.new()

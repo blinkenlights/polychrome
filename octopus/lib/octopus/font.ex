@@ -1,5 +1,5 @@
 defmodule Octopus.Font do
-  alias Octopus.{ColorPalette}
+  alias Octopus.ColorPalette
 
   @doc """
   A selection of 8x8 fonts from https://nfggames.com/games/fontmaker/lister.php.

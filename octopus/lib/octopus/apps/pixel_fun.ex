@@ -4,19 +4,40 @@ defmodule Octopus.Apps.PixelFun do
   alias Octopus.Canvas
   alias Octopus.Apps.PixelFun.Program
 
-  def name(), do: "Pixel Fun"
-
   @width 8 * 10 + 9 * 18
   @height 8
+
+  def name(), do: "Pixel Fun"
+
+  def config_schema() do
+    %{
+      program: {"Program", :string, %{default: "sin((t-x*0.01)-hypot(x%8-3.5,y-3.5))"}}
+    }
+  end
+
+  def config(state) do
+    state.config
+  end
 
   def init(_args) do
     :timer.send_interval((1000 / 60) |> trunc(), :tick)
 
     canvas = Canvas.new(@width, @height)
 
-    {:ok, program} = "sin((t-x*0.01)-hypot(x%8-3.5,y-3.5))" |> Program.parse()
+    config = config_schema() |> default_config()
+    {:ok, program} = config.program |> Program.parse()
 
-    {:ok, %{canvas: canvas, program: program}}
+    {:ok, %{canvas: canvas, program: program, config: config}}
+  end
+
+  def handle_config(config, state) do
+    program =
+      case Program.parse(config.program) do
+        {:ok, program} -> program
+        _ -> 0
+      end
+
+    {:reply, config, %{state | config: config, program: program}}
   end
 
   def update_program(pid, program) do

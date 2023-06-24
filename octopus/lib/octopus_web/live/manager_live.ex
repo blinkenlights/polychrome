@@ -5,7 +5,6 @@ defmodule OctopusWeb.ManagerLive do
   alias Octopus.Protobuf.InputEvent
   alias Octopus.{Mixer, AppSupervisor}
   alias OctopusWeb.PixelsComponent
-  alias OctopusWeb.PixelsComponent
 
   import PixelsComponent, only: [pixels: 1]
 
@@ -17,7 +16,7 @@ defmodule OctopusWeb.ManagerLive do
 
     socket =
       socket
-      |> assign(pixel_layout: Mildenberg.layout())
+      |> assign(pixel_layout: Mildenberg.layout(), configure_app: nil)
       |> assign_apps()
       |> PixelsComponent.setup()
 
@@ -73,7 +72,7 @@ defmodule OctopusWeb.ManagerLive do
                 }>
                   <td><%= name %></td>
                   <td><%= app_id %></td>
-                  <td>
+                  <td class="flex flex-row gap-2">
                     <button
                       class="border py-1 px-2 rounded"
                       phx-click="stop"
@@ -82,6 +81,10 @@ defmodule OctopusWeb.ManagerLive do
                     >
                       Stop
                     </button>
+
+                    <.link navigate={~p"/app/#{app_id}"} class="border py-1 px-2 rounded">
+                      Configure
+                    </.link>
 
                     <button
                       :if={!selected}
@@ -138,6 +141,10 @@ defmodule OctopusWeb.ManagerLive do
 
   def handle_event("keydown-event", %{"key" => _other_key}, socket) do
     {:noreply, socket}
+  end
+
+  def handle_event("configure", %{"app-id" => app_id}, socket) do
+    {:noreply, socket |> assign(configure_app: app_id)}
   end
 
   def handle_info({:apps, _}, socket) do
