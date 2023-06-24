@@ -116,6 +116,7 @@ defmodule Octopus.Canvas do
 
   def to_frame(%Canvas{width: width, height: height, palette: palette} = canvas, opts \\ []) do
     window_width = if Keyword.get(opts, :drop, false), do: @window_and_gap, else: @window_width
+    easing_interval = Keyword.get(opts, :easing_interval, 0)
 
     pixels =
       for i <- 0..div(width, window_width),
@@ -124,8 +125,8 @@ defmodule Octopus.Canvas do
           do: get_pixel(canvas, {i * window_width + x, y})
 
     case palette do
-      nil -> %RGBFrame{data: pixels |> IO.iodata_to_binary()}
-      _ -> %Frame{data: pixels, palette: palette}
+      nil -> %RGBFrame{data: pixels |> IO.iodata_to_binary(), easing_interval: easing_interval}
+      _ -> %Frame{data: pixels, palette: palette, easing_interval: easing_interval}
     end
   end
 
@@ -266,32 +267,33 @@ defmodule Octopus.Canvas do
 
   @doc """
   Joins the canvases by appending the second canvas to right or the bottom (when vertical is true).
+
+  ## Options
+  * `:direction` - `:vertical` or `:horizontal` [default: `:horizontal`]
+
   """
-  def join(%Canvas{} = canvas1, %Canvas{} = canvas2, vertical \\ false) do
+  def join(%Canvas{} = canvas1, %Canvas{} = canvas2, opts \\ []) do
     if canvas1.palette != canvas2.palette do
       raise ArgumentError, "Can't join canvases with different color palettes"
     end
 
+    direction = Keyword.get(opts, :direction, :horizontal)
+
     pixels =
       Enum.reduce(canvas2.pixels, canvas1.pixels, fn {{x, y}, color}, pixels ->
-        case vertical do
-          false -> Map.put(pixels, {x + canvas1.width, y}, color)
-          true -> Map.put(pixels, {x, y + canvas1.height}, color)
+        case direction do
+          :horizontal -> Map.put(pixels, {x + canvas1.width, y}, color)
+          :vertical -> Map.put(pixels, {x, y + canvas1.height}, color)
         end
       end)
 
     {width, height} =
-      case vertical do
-        false -> {canvas1.width + canvas2.width, max(canvas1.height, canvas2.height)}
-        true -> {max(canvas1.width, canvas2.width), canvas1.height + canvas2.height}
+      case direction do
+        :horizontal -> {canvas1.width + canvas2.width, max(canvas1.height, canvas2.height)}
+        :vertical -> {max(canvas1.width, canvas2.width), canvas1.height + canvas2.height}
       end
 
-    %Canvas{
-      canvas1
-      | width: width,
-        height: height,
-        pixels: pixels
-    }
+    %Canvas{canvas1 | width: width, height: height, pixels: pixels}
   end
 
   @doc """
@@ -325,8 +327,8 @@ defmodule Octopus.Canvas do
     pixels =
       for x <- x1..x2,
           y <- y1..y2,
-          into: %{},
-          do: {{x - x1, y - y1}, Canvas.get_pixel(canvas, {x, y})}
+          do: {{x - x1, y - y1}, Canvas.get_pixel(canvas, {x, y})},
+          into: %{}
 
     %Canvas{canvas | width: width, height: height, pixels: pixels}
   end
