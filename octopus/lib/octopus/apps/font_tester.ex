@@ -6,7 +6,7 @@ defmodule Octopus.Apps.FontTester do
   alias Octopus.Protobuf.{Frame, InputEvent}
 
   defmodule State do
-    defstruct [:index, :variant, :current_font, :text]
+    defstruct [:index, :variant, :current_font, :text, :easing_interval]
   end
 
   @fonts Font.list_available() |> Enum.sort()
@@ -26,18 +26,20 @@ defmodule Octopus.Apps.FontTester do
 
   def config_schema() do
     %{
-      text: {"Text", :string, %{default: "    DETLEF"}}
+      text: {"Text", :string, %{default: @text}},
+      easing: {"Easing Interval", :int, %{default: 1000, min: 0, max: 3000}}
     }
   end
 
   def get_config(%State{} = state) do
     %{
-      text: state.text
+      text: state.text,
+      easing: state.easing_interval
     }
   end
 
-  def handle_config(%{text: text}, %State{} = state) do
-    {:reply, %{text: text}, %State{state | text: text}}
+  def handle_config(%{text: text, easing: easing}, %State{} = state) do
+    {:reply, %{text: text}, %State{state | text: text, easing_interval: easing}}
   end
 
   def handle_info(:tick, %State{current_font: %Font{} = font} = state) do
