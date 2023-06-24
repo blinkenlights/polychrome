@@ -3,56 +3,63 @@ defmodule Octopus.Apps.Sprites do
   require Logger
 
   alias Octopus.{Sprite, Canvas, Transitions}
-  alias Octopus.Protobuf.{InputEvent}
 
   defmodule State do
-    defstruct [:transition, :index]
+    defstruct [:indices, :canvas]
   end
 
   @sprite_sheet Sprite.list_sprite_sheets() |> hd()
-  @animation_duration 1000
+  @animation_interval 10
+  @easing_interval 150
+  @new_sprite_interval 1000
 
   def name(), do: "Sprites"
 
   def init(_args) do
-    state = %State{index: 0}
+    indeces = Enum.map(1..10, fn _ -> Enum.random(0..255) end)
 
-    # :timer.send_interval(250, :tick)
-    send(self(), :tick)
+    canvas =
+      indeces
+      |> Enum.map(fn index -> Sprite.load(@sprite_sheet, index) end)
+      |> Enum.reduce(fn sprite, acc -> Canvas.join(acc, sprite) end)
+
+    state = %State{
+      indices: indeces,
+      canvas: canvas
+    }
+
+    send(self(), :next_sprites)
 
     {:ok, state}
   end
 
-  def handle_info(:tick, %State{} = state) do
-    state = next_sprite(state)
-    :timer.send_after(2000, self(), :tick)
-    {:noreply, state}
-  end
+  def handle_info(:next_sprites, %State{} = state) do
+    updated_window = Enum.random(0..9)
 
-  def handle_input(%InputEvent{type: :BUTTON_1, value: 1}, state) do
-    {:noreply, next_sprite(state)}
-  end
-
-  def next_sprite(%State{} = state) do
-    next_index = rem(state.index + 1, 256)
-    current_sprite = Sprite.load(@sprite_sheet, state.index)
+    next_index = Enum.random(0..255)
+    current_index = Enum.at(state.indices, updated_window)
+    current_sprite = Sprite.load(@sprite_sheet, current_index)
     next_sprite = Sprite.load(@sprite_sheet, next_index)
-    # transition = Transitions.flipdot(current_sprite, next_sprite) |> IO.inspect()
+    indices = List.update_at(state.indices, updated_window, fn _ -> next_index end)
     direction = Enum.random([:left, :right, :top, :bottom])
-    transition = Transitions.push(current_sprite, next_sprite, direction: direction)
 
-    animate(transition)
-
-    %State{state | transition: transition, index: next_index}
-  end
-
-  def animate(transitions) do
-    transitions
-    |> Stream.map(fn canvas -> Canvas.to_frame(canvas, easing_interval: 150) end)
+    Transitions.push(current_sprite, next_sprite, direction: direction)
+    |> Stream.map(fn window_canvas ->
+      state.canvas
+      |> Canvas.overlay(window_canvas, offset: {updated_window * 8, 0})
+      |> Canvas.to_frame(easing_interval: @easing_interval)
+    end)
     |> Stream.map(fn frame ->
-      :timer.sleep(10)
+      :timer.sleep(@animation_interval)
       send_frame(frame)
     end)
     |> Stream.run()
+
+    canvas = Canvas.overlay(state.canvas, next_sprite, offset: {updated_window * 8, 0})
+    state = %State{state | indices: indices, canvas: canvas}
+
+    :timer.send_after(@new_sprite_interval, self(), :next_sprites)
+
+    {:noreply, state}
   end
 end

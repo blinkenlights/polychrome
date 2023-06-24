@@ -16,6 +16,7 @@ defmodule Octopus.Sprite do
 
   Returns a canvas with the sprite pixels and a palette.
   """
+
   def load(sprite_sheet, index) do
     Cachex.fetch!(__MODULE__, {sprite_sheet, index}, fn _ ->
       path = Path.join([:code.priv_dir(:octopus), "sprites", "#{sprite_sheet}.png"])
@@ -39,9 +40,6 @@ defmodule Octopus.Sprite do
         canvas =
           Enum.reduce(pixel_indices, acc, fn {x, y}, canvas ->
             case ExPng.Image.at(image, {x_start + x, y_start + y}) do
-              <<0, 0, 0, _a>> ->
-                canvas
-
               <<_, _, _, 0>> ->
                 canvas
 
@@ -56,5 +54,9 @@ defmodule Octopus.Sprite do
         raise "Sprite sheet #{sprite_sheet} not found"
       end
     end)
+  end
+
+  def clear_cache() do
+    Cachex.clear!(__MODULE__)
   end
 end

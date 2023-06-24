@@ -298,15 +298,21 @@ defmodule Octopus.Canvas do
 
   @doc """
   Overlays the the second canvas over the first one.
+
+  ## Options
+  * `:offset` - Format: `{x, y}` [default: `{0, 0}`]
   """
-  def overlay(%Canvas{} = canvas1, %Canvas{} = canvas2) do
+
+  def overlay(%Canvas{} = canvas1, %Canvas{} = canvas2, opts \\ []) do
+    {dx, dy} = Keyword.get(opts, :offset, {0, 0})
+
     if canvas1.palette != canvas2.palette do
       raise ArgumentError, "Can't join canvases with different color palettes"
     end
 
     pixels =
       Enum.reduce(canvas2.pixels, canvas1.pixels, fn {{x, y}, color}, pixels ->
-        Map.put(pixels, {x, y}, color)
+        Map.put(pixels, {x + dx, y + dy}, color)
       end)
 
     %Canvas{

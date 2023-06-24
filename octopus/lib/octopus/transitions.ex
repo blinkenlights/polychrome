@@ -64,19 +64,19 @@ defmodule Octopus.Transitions do
       case direction do
         :left ->
           0..(canvas1.width + separation)
-          |> Enum.map(fn x -> {{x, 0}, {x + canvas1.width - 1, joined.height}} end)
+          |> Enum.map(fn x -> {{x, 0}, {x + canvas1.width - 1, joined.height - 1}} end)
 
         :right ->
           (canvas1.width + separation)..0
-          |> Enum.map(fn x -> {{x, 0}, {x + canvas1.width - 1, joined.height}} end)
+          |> Enum.map(fn x -> {{x, 0}, {x + canvas1.width - 1, joined.height - 1}} end)
 
         :top ->
           0..(canvas1.height + separation)
-          |> Enum.map(fn y -> {{0, y}, {joined.width, y + canvas1.height}} end)
+          |> Enum.map(fn y -> {{0, y}, {joined.width - 1, y + canvas1.height}} end)
 
         :bottom ->
           (canvas1.height + separation)..0
-          |> Enum.map(fn y -> {{0, y}, {joined.width, y + canvas1.height}} end)
+          |> Enum.map(fn y -> {{0, y}, {joined.width - 1, y + canvas1.height}} end)
       end
 
     0..(step_count - 1)
