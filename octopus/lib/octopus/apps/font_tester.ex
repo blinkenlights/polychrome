@@ -6,29 +6,46 @@ defmodule Octopus.Apps.FontTester do
   alias Octopus.Protobuf.{Frame, InputEvent}
 
   defmodule State do
-    defstruct [:index, :variant, :current_font]
+    defstruct [:index, :variant, :current_font, :text]
   end
 
   @fonts Font.list_available() |> Enum.sort()
   @max_index Enum.count(@fonts) - 1
 
-  @text "MILDENBERG"
+  @text "    DETLEF"
 
   def name(), do: "Font Tester"
 
   def init(_args) do
     state = set_font(@max_index)
 
+    state = %State{state | text: @text}
     send(self(), :tick)
 
     {:ok, state}
+  end
+
+  def config_schema() do
+    %{
+      text: {"Text", :string, %{default: "    DETLEF"}}
+    }
+  end
+
+  def get_config(%State{} = state) do
+    %{
+      text: state.text
+    }
+  end
+
+  def handle_config(%{text: text}, %State{} = state) do
+    {:reply, %{text: text}, %State{state | text: text}}
   end
 
   def handle_info(:tick, %State{current_font: %Font{} = font} = state) do
     %Font.Variant{palette: palette} = Enum.at(font.variants, state.variant)
 
     data =
-      @text
+      state.text
       |> String.to_charlist()
       |> Enum.map(&Font.render_char(font, &1, state.variant))
       |> Enum.map(fn {data, _pallete} -> data end)
