@@ -11,6 +11,7 @@ message Packet {
 
     // Frames with audio data
     AudioFrame audio_frame = 5;
+    SynthFrame synth_frame = 9;
 
     // Events from the input controllers
     InputEvent input_event = 6;
@@ -47,6 +48,17 @@ message RGBFrame {
 message AudioFrame {
   string uri = 1; // supports file://<path>, http(s)://<url> with .wav or .aiff files
   uint32 channel = 2;
+}
+
+enum SynthEventType {
+  NOTE_ON = 0;
+  NOTE_OFF = 1;
+}
+
+message SynthFrame {
+  SynthEventType event_type = 1;
+  uint32 note = 2;
+  uint32 channel = 3;
 }
 
 message InputEvent {

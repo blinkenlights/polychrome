@@ -3,9 +3,9 @@ defmodule Octopus.Mixer do
   require Logger
 
   alias Octopus.{Broadcaster, Protobuf, AppSupervisor}
-  alias Octopus.Protobuf.{Frame, WFrame, RGBFrame, AudioFrame, InputEvent}
+  alias Octopus.Protobuf.{Frame, WFrame, RGBFrame, AudioFrame, InputEvent, SynthFrame}
 
-  @supported_frames [Frame, WFrame, RGBFrame, AudioFrame]
+  @supported_frames [Frame, WFrame, RGBFrame, AudioFrame, SynthFrame]
 
   defmodule State do
     defstruct selected_app: nil

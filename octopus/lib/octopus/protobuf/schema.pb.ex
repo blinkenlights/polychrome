@@ -1,3 +1,12 @@
+defmodule Octopus.Protobuf.SynthEventType do
+  @moduledoc false
+
+  use Protobuf, enum: true, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+
+  field :NOTE_ON, 0
+  field :NOTE_OFF, 1
+end
+
 defmodule Octopus.Protobuf.InputType do
   @moduledoc false
 
@@ -53,6 +62,7 @@ defmodule Octopus.Protobuf.Packet do
   field :w_frame, 3, type: Octopus.Protobuf.WFrame, json_name: "wFrame", oneof: 0
   field :rgb_frame, 4, type: Octopus.Protobuf.RGBFrame, json_name: "rgbFrame", oneof: 0
   field :audio_frame, 5, type: Octopus.Protobuf.AudioFrame, json_name: "audioFrame", oneof: 0
+  field :synth_frame, 9, type: Octopus.Protobuf.SynthFrame, json_name: "synthFrame", oneof: 0
   field :input_event, 6, type: Octopus.Protobuf.InputEvent, json_name: "inputEvent", oneof: 0
 
   field :firmware_config, 1,
@@ -100,6 +110,16 @@ defmodule Octopus.Protobuf.AudioFrame do
 
   field :uri, 1, type: :string
   field :channel, 2, type: :uint32
+end
+
+defmodule Octopus.Protobuf.SynthFrame do
+  @moduledoc false
+
+  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+
+  field :event_type, 1, type: Octopus.Protobuf.SynthEventType, json_name: "eventType", enum: true
+  field :note, 2, type: :uint32
+  field :channel, 3, type: :uint32
 end
 
 defmodule Octopus.Protobuf.InputEvent do
