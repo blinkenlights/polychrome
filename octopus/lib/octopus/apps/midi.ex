@@ -72,6 +72,16 @@ defmodule Octopus.Apps.MidiTest do
       }
     )
 
+    :timer.apply_after(
+      getDuration(state.note_data, state.index),
+      Octopus.App,
+      :send_frame,
+      %RGBFrame{
+        data: List.duplicate(0, 640 * 3) |> IO.iodata_to_binary(),
+        easing_interval: 500
+      }
+    )
+
     # send note on frame
     send_frame(%SynthFrame{
       event_type: :NOTE_ON,
