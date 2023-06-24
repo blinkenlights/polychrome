@@ -118,15 +118,15 @@ defmodule Octopus.Canvas do
     window_width = if Keyword.get(opts, :drop, false), do: @window_and_gap, else: @window_width
     easing_interval = Keyword.get(opts, :easing_interval, 0)
 
-    pixels =
-      for i <- 0..div(width, window_width),
+    data =
+      for window <- 0..(div(width, window_width) - 1),
           y <- 0..(height - 1),
           x <- 0..7,
-          do: get_pixel(canvas, {i * window_width + x, y})
+          do: get_pixel(canvas, {window * window_width + x, y})
 
     case palette do
-      nil -> %RGBFrame{data: pixels |> IO.iodata_to_binary(), easing_interval: easing_interval}
-      _ -> %Frame{data: pixels, palette: palette, easing_interval: easing_interval}
+      nil -> %RGBFrame{data: data |> IO.iodata_to_binary(), easing_interval: easing_interval}
+      _ -> %Frame{data: data, palette: palette, easing_interval: easing_interval}
     end
   end
 

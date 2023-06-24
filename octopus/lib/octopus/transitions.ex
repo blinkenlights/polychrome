@@ -72,11 +72,11 @@ defmodule Octopus.Transitions do
 
         :top ->
           0..(canvas1.height + separation)
-          |> Enum.map(fn y -> {{0, y}, {joined.width - 1, y + canvas1.height}} end)
+          |> Enum.map(fn y -> {{0, y}, {joined.width - 1, y + canvas1.height - 1}} end)
 
         :bottom ->
           (canvas1.height + separation)..0
-          |> Enum.map(fn y -> {{0, y}, {joined.width - 1, y + canvas1.height}} end)
+          |> Enum.map(fn y -> {{0, y}, {joined.width - 1, y + canvas1.height - 1}} end)
       end
 
     0..(step_count - 1)
