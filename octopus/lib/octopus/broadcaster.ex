@@ -45,26 +45,13 @@ defmodule Octopus.Broadcaster do
   end
 
   def init(:ok) do
-    {:ok, ifaddrs} = :inet.getifaddrs()
-
-    broadast_ip =
-      ifaddrs
-      |> Enum.map(fn {_ifname, ifprops} -> Keyword.get(ifprops, :broadaddr) end)
-      |> Enum.reject(&is_nil/1)
-      |> Enum.uniq()
-      |> case do
-        [] ->
-          Logger.error("No broadcast IP found.")
-          {127, 0, 0, 1}
-
-        [ip] ->
-          Logger.info("Using #{inspect(ip)} as broadcast address. Port #{@local_port}")
-          ip
-
-        [ip, _ | _] ->
-          Logger.warn("Multiple broadcast IPs found. Using the first one: #{inspect(ip)}")
-          ip
+    target_ip =
+      case Application.get_env(:octopus, :broadcast) do
+        true -> get_broadcast_ip()
+        false -> {127, 0, 0, 1}
       end
+
+    Logger.info("Broadcasting to #{inspect(target_ip)}. Port #{@local_port}")
 
     remote_log_file = File.open!("remote.log", [:write])
     {:ok, udp} = :gen_udp.open(@local_port, [:binary, active: true, broadcast: true])
@@ -73,7 +60,7 @@ defmodule Octopus.Broadcaster do
       udp: udp,
       remote_log_file: remote_log_file,
       config: @default_config,
-      remote_ip: broadast_ip
+      remote_ip: target_ip
     }
 
     state = send_config(@default_config, state)
@@ -184,5 +171,25 @@ defmodule Octopus.Broadcaster do
     firmware_stats = Map.put(state.firmware_stats, from_ip, stats)
 
     %State{state | firmware_stats: firmware_stats}
+  end
+
+  defp get_broadcast_ip() do
+    {:ok, ifaddrs} = :inet.getifaddrs()
+
+    ifaddrs
+    |> Enum.map(fn {_ifname, ifprops} -> Keyword.get(ifprops, :broadaddr) end)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> case do
+      [] ->
+        {127, 0, 0, 1}
+
+      [ip] ->
+        ip
+
+      [ip, _ | _] ->
+        Logger.warn("Multiple broadcast IPs found. Using the first one: #{inspect(ip)}")
+        ip
+    end
   end
 end

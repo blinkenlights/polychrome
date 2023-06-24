@@ -8,7 +8,8 @@
 import Config
 
 config :octopus,
-  generators: [binary_id: true]
+  generators: [binary_id: true],
+  broadcast: false
 
 # Configures the endpoint
 config :octopus, OctopusWeb.Endpoint,
