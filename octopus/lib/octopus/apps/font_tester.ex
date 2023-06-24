@@ -27,19 +27,24 @@ defmodule Octopus.Apps.FontTester do
   def config_schema() do
     %{
       text: {"Text", :string, %{default: @text}},
-      easing: {"Easing Interval", :int, %{default: 1000, min: 0, max: 3000}}
+      easing_interval: {"Easing Interval", :int, %{default: 500, min: 0, max: 3000}}
     }
   end
 
   def get_config(%State{} = state) do
     %{
       text: state.text,
-      easing: state.easing_interval
+      easing_interval: state.easing_interval
     }
   end
 
-  def handle_config(%{text: text, easing: easing}, %State{} = state) do
-    {:reply, %{text: text}, %State{state | text: text, easing_interval: easing}}
+  def handle_config(%{text: text}, %State{} = state) do
+    {:reply, %{text: text, easing_interval: state.easing_interval}, %State{state | text: text}}
+  end
+
+  def handle_config(%{easing_interval: easing_interval}, %State{} = state) do
+    {:reply, %{easing_interval: easing_interval, text: state.text},
+     %State{state | easing_interval: easing_interval}}
   end
 
   def handle_info(:tick, %State{current_font: %Font{} = font} = state) do
@@ -55,7 +60,7 @@ defmodule Octopus.Apps.FontTester do
     %Frame{
       data: data,
       palette: palette,
-      easing_interval: 2000
+      easing_interval: state.easing_interval
     }
     |> send_frame()
 
