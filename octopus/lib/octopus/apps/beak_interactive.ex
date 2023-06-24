@@ -29,7 +29,7 @@ defmodule Octopus.Apps.BeakInteractive do
   @fileUri "file://test/impulse.wav"
   # @fileUri "file://Users/lukas/dev/letterbox/beak/resources/hang.wav"
 
-  def handle_input(%InputEvent{button: but, pressed: true}, state) do
+  def handle_input(%InputEvent{type: but, value: 1}, state) do
     buttonNum =
       case but do
         :BUTTON_1 -> 1
