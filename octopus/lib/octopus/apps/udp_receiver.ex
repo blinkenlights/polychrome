@@ -3,7 +3,9 @@ defmodule Octopus.Apps.UdpReceiver do
   require Logger
 
   alias Octopus.Protobuf
-  alias Octopus.Protobuf.{Frame, RGBFrame, InputEvent}
+  alias Octopus.Protobuf.{Frame, RGBFrame, WFrame, InputEvent}
+
+  @supported_frames [Frame, WFrame, RGBFrame]
 
   @moduledoc """
   Will open a UDP port and listen for protobuf packets. All valid frames will be forwarded to the mixer.
@@ -17,7 +19,7 @@ defmodule Octopus.Apps.UdpReceiver do
 
   @port 2342
 
-  def name(), do: "UDP Server (Port: #{@port})"
+  def name(), do: "UDP Receiver (Port: #{@port})"
 
   def init(_args) do
     Logger.info("#{__MODULE__}: Listening on UDP port #{inspect(@port)} for protobuf packets.")
@@ -33,12 +35,8 @@ defmodule Octopus.Apps.UdpReceiver do
 
   def handle_info({:udp, _socket, ip, port, protobuf}, state = %State{}) do
     case Protobuf.decode_packet(protobuf) do
-      {:ok, %Frame{} = frame} ->
-        Logger.info("#{__MODULE__}: Received frame from #{inspect(ip)}:#{inspect(port)}")
-        send_frame(frame)
-
-      {:ok, %RGBFrame{} = frame} ->
-        Logger.info("#{__MODULE__}: Received frame from #{inspect(ip)}:#{inspect(port)}")
+      {:ok, %frame_type{} = frame} when frame_type in @supported_frames ->
+        Logger.debug("#{__MODULE__}: Received #{frame_type} from #{inspect(ip)}:#{inspect(port)}")
         send_frame(frame)
 
       {:error, error} ->
