@@ -349,7 +349,7 @@ defmodule Octopus.Apps.Calibrator do
         %State{state | color: color}
 
       {:error, reason} ->
-        Logger.warn("DisplayCal request error: #{inspect(reason)}")
+        Logger.warning("DisplayCal request error: #{inspect(reason)}")
         state
     end
   end

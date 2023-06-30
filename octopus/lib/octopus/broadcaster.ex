@@ -76,7 +76,7 @@ defmodule Octopus.Broadcaster do
 
         {:error, error} ->
           "#{print_ip(from_ip)}: Could not decode firmware packet: #{inspect(error)}"
-          |> Logger.warn()
+          |> Logger.warning()
 
           state
       end
@@ -188,7 +188,7 @@ defmodule Octopus.Broadcaster do
         ip
 
       [ip, _ | _] ->
-        Logger.warn("Multiple broadcast IPs found. Using the first one: #{inspect(ip)}")
+        Logger.warning("Multiple broadcast IPs found. Using the first one: #{inspect(ip)}")
         ip
     end
   end

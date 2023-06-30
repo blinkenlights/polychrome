@@ -40,7 +40,7 @@ defmodule Octopus.Apps.UdpReceiver do
         send_frame(frame)
 
       {:error, error} ->
-        Logger.warn("#{__MODULE__}: Could not decode. #{inspect(error)} from #{inspect(ip)}")
+        Logger.warning("#{__MODULE__}: Could not decode. #{inspect(error)} from #{inspect(ip)}")
 
         :noop
     end

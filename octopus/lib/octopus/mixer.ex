@@ -93,7 +93,7 @@ defmodule Octopus.Mixer do
 
   ### App Transitions ###
   # Implemented with a simple state machine that is represented by the `transition` field in the state.
-  # Possible value are `{:in, time_left}`, `{:out, time_left}` and `nil`.
+  # Possible values are `{:in, time_left}`, `{:out, time_left}` and `nil`.
 
   def handle_cast({:select_app, next_app_id}, %State{transition: nil} = state) do
     state =

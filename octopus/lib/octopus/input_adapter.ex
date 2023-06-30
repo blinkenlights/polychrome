@@ -29,10 +29,10 @@ defmodule Octopus.InputAdapter do
         Mixer.handle_input(input_event)
 
       {:ok, content} ->
-        Logger.warn("#{__MODULE__}: Received unexpected packet: #{inspect(content)}")
+        Logger.warning("#{__MODULE__}: Received unexpected packet: #{inspect(content)}")
 
       {:error, error} ->
-        Logger.warn("#{__MODULE__}: Error decoding packet #{inspect(error)}")
+        Logger.warning("#{__MODULE__}: Error decoding packet #{inspect(error)}")
     end
 
     {:noreply, state}

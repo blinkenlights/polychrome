@@ -100,7 +100,7 @@ defmodule Octopus.Protobuf do
     end
   rescue
     error ->
-      Logger.warn("Could not decode protobuf: #{inspect(error)} Binary: #{inspect(protobuf)} ")
+      Logger.warning("Could not decode protobuf: #{inspect(error)} Binary: #{inspect(protobuf)} ")
       {:error, :decode_error}
   end
 end

@@ -93,7 +93,7 @@ defmodule Octopus.AppSupervisor do
         DynamicSupervisor.terminate_child(__MODULE__, pid)
 
       [] ->
-        Logger.warn("App #{app_id} not found")
+        Logger.warning("App #{app_id} not found")
         :ok
     end
   end
@@ -110,7 +110,7 @@ defmodule Octopus.AppSupervisor do
         )
 
       [] ->
-        Logger.warn("App #{app_id} not found")
+        Logger.warning("App #{app_id} not found")
         :ok
     end
   end
@@ -121,7 +121,7 @@ defmodule Octopus.AppSupervisor do
         GenServer.call(pid, :get_config)
 
       [] ->
-        Logger.warn("App #{app_id} not found")
+        Logger.warning("App #{app_id} not found")
         :ok
     end
   end
