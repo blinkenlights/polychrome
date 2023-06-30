@@ -169,7 +169,7 @@ defmodule OctopusWeb.ManagerLive do
         %{module: module, name: apply(module, :name, [])}
       end
 
-    selected_app = Mixer.selected_app()
+    selected_app = Mixer.get_selected_app()
 
     running_apps =
       for {module, app_id} <- AppSupervisor.running_apps() do
