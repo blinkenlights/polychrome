@@ -101,7 +101,7 @@ defmodule Octopus.AppSupervisor do
   def update_config(app_id, config) when is_binary(app_id) do
     case Registry.lookup(Octopus.AppRegistry, app_id) do
       [{pid, _}] ->
-        config = GenServer.call(pid, {:update_config, config})
+        :ok = GenServer.call(pid, {:update_config, config})
 
         Phoenix.PubSub.broadcast(
           Octopus.PubSub,

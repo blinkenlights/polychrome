@@ -20,9 +20,9 @@ defmodule OctopusWeb.AppConfigComponent do
   def render(assigns) do
     ~H"""
     <div class="flex flex-col gap-2">
-      <div :for={{key, {name, type, opts}} <- @config_schema}>
-        <span><%= name %></span>
-        <form phx-change="change" phx-target={@myself}>
+      <form phx-change="change" phx-target={@myself}>
+        <div :for={{key, {name, type, opts}} <- @config_schema}>
+          <span><%= name %></span>
           <.config_input
             app_id={@app_id}
             key={key}
@@ -31,8 +31,8 @@ defmodule OctopusWeb.AppConfigComponent do
             opts={opts}
             value={@config[key]}
           />
-        </form>
-      </div>
+        </div>
+      </form>
     </div>
     """
   end

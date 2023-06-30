@@ -35,9 +35,20 @@ defmodule Octopus.App do
 
   @type config_schema :: %{optional(any()) => config_option()}
 
+  @doc """
+  Returns the config schema for the app. The schema is used to generate the UI for the app interface.
+  """
   @callback config_schema() :: config_schema()
-  @callback handle_config(config :: any(), state :: any()) :: {:reply, map(), state :: any()}
+
+  @doc """
+  Returns the current config for the app. This is used to initialize the app interface UI when it is started.
+  """
   @callback get_config(state :: any()) :: map()
+
+  @doc """
+  Optional callback to handle config updates. The config is updated by the UI and sent to the app via the `update_config/1` function.
+  """
+  @callback handle_config(config :: any(), state :: any()) :: {:noreply, state :: any()}
 
   defmacro __using__(_) do
     quote do
@@ -58,10 +69,10 @@ defmodule Octopus.App do
       end
 
       def handle_call({:update_config, config}, _from, state) do
-        {:reply, new_config, state} = handle_config(config, state)
         app_id = AppSupervisor.lookup_app_id(self())
+        {:noreply, state} = handle_config(config, state)
 
-        {:reply, new_config, state}
+        {:reply, :ok, state}
       end
 
       def handle_input(_input_event, state) do

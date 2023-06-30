@@ -38,13 +38,8 @@ defmodule Octopus.Apps.FontTester do
     }
   end
 
-  def handle_config(%{text: text}, %State{} = state) do
-    {:reply, %{text: text, easing_interval: state.easing_interval}, %State{state | text: text}}
-  end
-
-  def handle_config(%{easing_interval: easing_interval}, %State{} = state) do
-    {:reply, %{easing_interval: easing_interval, text: state.text},
-     %State{state | easing_interval: easing_interval}}
+  def handle_config(%{text: text, easing_interval: easing_interval}, %State{} = state) do
+    {:noreply, %State{state | text: text, easing_interval: easing_interval}}
   end
 
   def handle_info(:tick, %State{current_font: %Font{} = font} = state) do

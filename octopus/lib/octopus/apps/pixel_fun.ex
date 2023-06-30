@@ -7,6 +7,10 @@ defmodule Octopus.Apps.PixelFun do
   @width 8 * 10 + 9 * 18
   @height 8
 
+  defmodule State do
+    defstruct [:canvas, :program, :source, :easing_interval]
+  end
+
   def name(), do: "Pixel Fun"
 
   def config_schema() do
@@ -17,8 +21,7 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   def get_config(state) do
-    state.config
-    |> IO.inspect()
+    %{program: state.source, easing_interval: state.easing_interval}
   end
 
   def init(_args) do
@@ -29,11 +32,17 @@ defmodule Octopus.Apps.PixelFun do
     config = config_schema() |> default_config()
     {:ok, program} = config.program |> Program.parse()
 
-    {:ok, %{canvas: canvas, program: program, config: config}}
+    {:ok,
+     %State{
+       canvas: canvas,
+       program: program,
+       source: config.program,
+       easing_interval: config.easing_interval
+     }}
   end
 
-  def handle_config(%{program: program}, state) do
-    config = Map.put(state.config, :program, program)
+  def handle_config(%{program: program, easing_interval: easing_interval}, %State{} = state) do
+    source = program
 
     program =
       case Program.parse(program) do
@@ -41,14 +50,7 @@ defmodule Octopus.Apps.PixelFun do
         _ -> 0
       end
 
-    {:reply, config, %{state | config: config, program: program}}
-  end
-
-  def handle_config(%{easing_interval: easing_interval}, state) do
-    config = Map.put(state.config, :easing_interval, easing_interval)
-    IO.inspect(config)
-
-    {:reply, config, %{state | config: config}}
+    {:noreply, %State{state | program: program, source: source, easing_interval: easing_interval}}
   end
 
   def update_program(pid, program) do
@@ -61,22 +63,22 @@ defmodule Octopus.Apps.PixelFun do
     GenServer.cast(pid, {:update_program, program})
   end
 
-  def handle_cast({:update_program, program}, state) do
+  def handle_cast({:update_program, program}, %State{} = state) do
     {:noreply, %{state | program: program}}
   end
 
-  def handle_info(:tick, state) do
+  def handle_info(:tick, %State{} = state) do
     canvas = state |> render()
 
     canvas
     |> Canvas.to_frame(drop: true)
-    |> Map.put(:easing_interval, state.config.easing_interval)
+    |> Map.put(:easing_interval, state.easing_interval)
     |> send_frame()
 
     {:noreply, %{state | canvas: canvas}}
   end
 
-  defp render(%{canvas: canvas, program: program} = _state) do
+  defp render(%State{canvas: canvas, program: program} = _state) do
     {seconds, micros} = Time.utc_now() |> Time.to_seconds_after_midnight()
     seconds = seconds + micros / 1_000_000
 

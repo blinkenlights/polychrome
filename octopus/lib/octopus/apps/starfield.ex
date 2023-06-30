@@ -7,7 +7,9 @@ defmodule Octopus.Apps.Starfield do
 
   alias Octopus.Canvas
 
-  defstruct [:width, :height, :stars, :canvas, :config]
+  defmodule State do
+    defstruct [:width, :height, :stars, :canvas, :config, :speed, :rotation]
+  end
 
   @frame_rate 60
   @frame_time_s 1 / @frame_rate
@@ -24,8 +26,8 @@ defmodule Octopus.Apps.Starfield do
 
   def get_config(state) do
     %{
-      speed: state.config.speed,
-      rotation: state.config.rotation
+      speed: state.speed,
+      rotation: state.rotation
     }
   end
 
@@ -35,12 +37,13 @@ defmodule Octopus.Apps.Starfield do
 
     config = config_schema() |> default_config()
 
-    state = %__MODULE__{
+    state = %State{
       stars: %{},
       width: width,
       height: height,
       canvas: Canvas.new(8 * 10 + 9 * 18, 8, "pico-8"),
-      config: config
+      speed: config.speed,
+      rotation: config.rotation
     }
 
     state = state |> generate_stars(512)
@@ -50,12 +53,11 @@ defmodule Octopus.Apps.Starfield do
     {:ok, state}
   end
 
-  def handle_config(config, state) do
-    config = Map.merge(state.config, config)
-    {:reply, config, %__MODULE__{state | config: config}}
+  def handle_config(%{speed: speed, rotation: rotation}, %State{} = state) do
+    {:noreply, %State{state | speed: speed, rotation: rotation}}
   end
 
-  def handle_info(:tick, state) do
+  def handle_info(:tick, %State{} = state) do
     state =
       state
       |> update_stars()
@@ -65,7 +67,7 @@ defmodule Octopus.Apps.Starfield do
     {:noreply, state}
   end
 
-  defp generate_stars(%__MODULE__{stars: stars} = state, count) do
+  defp generate_stars(%State{stars: stars} = state, count) do
     stars =
       Enum.reduce(0..count, stars, fn _i, stars ->
         x = :rand.uniform(state.width) - 1
@@ -74,25 +76,25 @@ defmodule Octopus.Apps.Starfield do
         Map.put(stars, {x, y}, speed)
       end)
 
-    %__MODULE__{state | stars: stars}
+    %State{state | stars: stars}
   end
 
-  defp update_stars(%__MODULE__{stars: stars} = state) do
+  defp update_stars(%State{stars: stars} = state) do
     stars =
       stars
       |> Enum.map(fn {{x, y}, speed} ->
-        dx = :math.cos(state.config.rotation * :math.pi() / 180.0)
-        dy = :math.sin(state.config.rotation * :math.pi() / 180.0)
-        x = fmod(x + dx * speed * state.config.speed * @frame_time_s, state.width)
-        y = fmod(y + dy * speed * state.config.speed * @frame_time_s, state.height)
+        dx = :math.cos(state.rotation * :math.pi() / 180.0)
+        dy = :math.sin(state.rotation * :math.pi() / 180.0)
+        x = fmod(x + dx * speed * state.speed * @frame_time_s, state.width)
+        y = fmod(y + dy * speed * state.speed * @frame_time_s, state.height)
         {{x, y}, speed}
       end)
       |> Map.new()
 
-    %__MODULE__{state | stars: stars}
+    %State{state | stars: stars}
   end
 
-  defp update_canvas(%__MODULE__{canvas: canvas, stars: stars} = state) do
+  defp update_canvas(%State{canvas: canvas, stars: stars} = state) do
     canvas = canvas |> Canvas.clear()
 
     canvas =
@@ -112,10 +114,10 @@ defmodule Octopus.Apps.Starfield do
         canvas |> Canvas.put_pixel({x, y}, color)
       end)
 
-    %__MODULE__{state | canvas: canvas}
+    %State{state | canvas: canvas}
   end
 
-  defp broadcast_frame(%__MODULE__{canvas: canvas} = state) do
+  defp broadcast_frame(%State{canvas: canvas} = state) do
     canvas |> Canvas.to_frame(drop: true) |> send_frame()
     state
   end
