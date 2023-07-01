@@ -18,8 +18,31 @@ type Frame =
 function resize(canvas: HTMLCanvasElement) {
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
-  canvas.width = rect.width * dpr;
-  canvas.height = rect.height * dpr;
+  if (
+    canvas.width !== rect.width * dpr ||
+    canvas.height !== rect.height * dpr
+  ) {
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+  }
+}
+
+// Debounces a function based on the current time.
+// This is useful for animations, where we want to debounce a function
+// that is called on every frame, but we want to debounce it based on
+// the current time, not the time the function was last called.
+function debounceAnimatedFunction<T extends (...args: any[]) => any>(
+  func: T,
+  delay: number = 100
+): T {
+  let lastExecution = performance.now() - delay;
+  return function (this: any, ...args: any[]) {
+    const now = performance.now();
+    if (now - lastExecution >= delay) {
+      lastExecution = now;
+      func.apply(this, args);
+    }
+  } as any;
 }
 
 function desaturate([r, g, b]: RGB, amount: number): RGB {
@@ -54,8 +77,6 @@ export function setup(canvas: HTMLCanvasElement) {
 
   resize(canvas);
 
-  window.addEventListener("resize", () => resize(canvas));
-
   [`layout:${id}`, "layout:*"].forEach((event) => {
     this.handleEvent(event, ({ layout: newLayout }: { layout: Layout }) => {
       layout = newLayout;
@@ -75,14 +96,16 @@ export function setup(canvas: HTMLCanvasElement) {
           break;
         }
         case "rgb": {
-          pixels = frame.data.reduce((acc: RGB[], value, index) => {
-            const pixelIndex = Math.floor(index / 3);
-            if (!acc[pixelIndex]) {
-              acc[pixelIndex] = [0, 0, 0];
-            }
-            acc[pixelIndex][index % 3] = value;
-            return acc;
-          }, []);
+          const numPixels = frame.data.length / 3;
+          pixels = new Array(numPixels).fill([0, 0, 0]);
+          for (let i = 0; i < numPixels; i++) {
+            const pixelOffset = i * 3;
+            const r = frame.data[pixelOffset];
+            const g = frame.data[pixelOffset + 1];
+            const b = frame.data[pixelOffset + 2];
+
+            pixels[i] = [r, g, b];
+          }
           break;
         }
         case "rgbw":
@@ -102,13 +125,15 @@ export function setup(canvas: HTMLCanvasElement) {
     });
   });
 
+  const debouncedResize = debounceAnimatedFunction(resize, 50);
+
   const draw = () => {
     if (!layout) {
       window.requestAnimationFrame(draw);
       return;
     }
 
-    resize(canvas);
+    debouncedResize(canvas);
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
