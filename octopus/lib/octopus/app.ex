@@ -80,7 +80,7 @@ defmodule Octopus.App do
       end
 
       def handle_config(config, state) do
-        {:reply, config, state}
+        {:noreply, state}
       end
 
       def config_schema() do
