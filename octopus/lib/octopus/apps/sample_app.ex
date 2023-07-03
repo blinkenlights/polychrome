@@ -2,60 +2,50 @@ defmodule Octopus.Apps.SampleApp do
   use Octopus.App
   require Logger
 
-  alias Octopus.ColorPalette
-  alias Octopus.Protobuf.{Frame, InputEvent}
+  alias Octopus.{ColorPalette, Canvas}
+  alias Octopus.Protobuf.InputEvent
 
   defmodule State do
-    defstruct [:index, :delay, :palette]
+    defstruct [:index, :color, :canvas]
   end
 
-  @pixel_count 640
-
-  # TODO: use the new canvas module
+  @fps 60
 
   def name(), do: "Sample App"
 
   def init(_args) do
     state = %State{
       index: 0,
-      delay: 100,
-      palette: ColorPalette.load("pico-8")
+      color: 1,
+      canvas: Canvas.new(80, 8, ColorPalette.load("pico-8"))
     }
 
-    send(self(), :tick)
+    :timer.send_interval(trunc(1000 / @fps), :tick)
 
     {:ok, state}
   end
 
   def handle_info(:tick, %State{} = state) do
-    data =
-      0..(@pixel_count - 1)
-      |> Enum.map(fn _ -> 0 end)
-      |> List.update_at(state.index, fn _ -> 3 end)
+    coordinates = {rem(state.index, 80), trunc(state.index / 80)}
 
-    send_frame(%Frame{data: data, palette: state.palette})
-    :timer.send_after(state.delay, self(), :tick)
+    canvas = Canvas.put_pixel(state.canvas, coordinates, state.color)
 
-    {:noreply, increment_index(state)}
+    canvas
+    |> Canvas.to_frame()
+    |> send_frame()
+
+    {:noreply, %State{state | canvas: canvas, index: rem(state.index + 1, 640)}}
   end
 
   def handle_input(%InputEvent{type: :BUTTON_1, value: 1}, state) do
-    {:noreply, %State{state | delay: state.delay + 10}}
+    {:noreply, %State{state | color: state.color + 1}}
   end
 
   def handle_input(%InputEvent{type: :BUTTON_2, value: 1}, state) do
-    {:noreply, %State{state | delay: max(10, state.delay - 10)}}
+    {:noreply, %State{state | color: state.color - 1}}
   end
 
   def handle_input(_input_event, state) do
     {:noreply, state}
-  end
-
-  defp increment_index(%State{index: index} = state) when index >= @pixel_count do
-    %State{state | index: 0}
-  end
-
-  defp increment_index(%State{index: index} = state) do
-    %State{state | index: index + 1}
   end
 end
