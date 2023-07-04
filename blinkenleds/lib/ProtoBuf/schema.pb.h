@@ -10,26 +10,22 @@
 #endif
 
 /* Enum definitions */
-typedef enum _Button {
-    Button_BUTTON_1 = 0,
-    Button_BUTTON_2 = 1,
-    Button_BUTTON_3 = 2,
-    Button_BUTTON_4 = 3,
-    Button_BUTTON_5 = 4,
-    Button_BUTTON_6 = 5,
-    Button_BUTTON_7 = 6,
-    Button_BUTTON_8 = 7,
-    Button_BUTTON_9 = 8,
-    Button_BUTTON_10 = 9,
-    Button_DIRECTION_1_UP = 10,
-    Button_DIRECTION_1_DOWN = 11,
-    Button_DIRECTION_1_LEFT = 12,
-    Button_DIRECTION_1_RIGHT = 13,
-    Button_DIRECTION_2_UP = 14,
-    Button_DIRECTION_2_DOWN = 15,
-    Button_DIRECTION_2_LEFT = 16,
-    Button_DIRECTION_2_RIGHT = 17
-} Button;
+typedef enum _InputType {
+    InputType_BUTTON_1 = 0,
+    InputType_BUTTON_2 = 1,
+    InputType_BUTTON_3 = 2,
+    InputType_BUTTON_4 = 3,
+    InputType_BUTTON_5 = 4,
+    InputType_BUTTON_6 = 5,
+    InputType_BUTTON_7 = 6,
+    InputType_BUTTON_8 = 7,
+    InputType_BUTTON_9 = 8,
+    InputType_BUTTON_10 = 9,
+    InputType_AXIS_X_1 = 10,
+    InputType_AXIS_Y_1 = 11,
+    InputType_AXIS_X_2 = 12,
+    InputType_AXIS_Y_2 = 13
+} InputType;
 
 typedef enum _EasingMode {
     EasingMode_LINEAR = 0,
@@ -84,8 +80,8 @@ typedef struct _AudioFrame {
 } AudioFrame;
 
 typedef struct _InputEvent {
-    Button button;
-    bool pressed;
+    InputType type;
+    int32_t value; /* 0 or 1 for buttons, -1 to 1 for directions */
 } InputEvent;
 
 typedef struct _FirmwareConfig {
@@ -119,8 +115,16 @@ typedef struct _FirmwareInfo {
     char hostname[21];
     char build_time[21];
     uint32_t panel_index;
-    uint32_t fps;
+    uint32_t frames_per_second;
     uint32_t config_phash;
+    char mac[18];
+    char ipv4[16];
+    char ipv6_local[40];
+    char ipv6_global[40];
+    uint32_t packets_per_second;
+    uint64_t uptime;
+    uint32_t heap_size;
+    uint32_t free_heap;
 } FirmwareInfo;
 
 typedef struct _RemoteLog {
@@ -142,9 +146,9 @@ extern "C" {
 #endif
 
 /* Helper constants for enums */
-#define _Button_MIN Button_BUTTON_1
-#define _Button_MAX Button_DIRECTION_2_RIGHT
-#define _Button_ARRAYSIZE ((Button)(Button_DIRECTION_2_RIGHT+1))
+#define _InputType_MIN InputType_BUTTON_1
+#define _InputType_MAX InputType_AXIS_Y_2
+#define _InputType_ARRAYSIZE ((InputType)(InputType_AXIS_Y_2+1))
 
 #define _EasingMode_MIN EasingMode_LINEAR
 #define _EasingMode_MAX EasingMode_EASE_IN_OUT_EXPO
@@ -155,7 +159,7 @@ extern "C" {
 
 
 
-#define InputEvent_button_ENUMTYPE Button
+#define InputEvent_type_ENUMTYPE InputType
 
 #define FirmwareConfig_easing_mode_ENUMTYPE EasingMode
 
@@ -169,20 +173,20 @@ extern "C" {
 #define WFrame_init_default                      {{0, {0}}, {0, {0}}, 0}
 #define RGBFrame_init_default                    {{0, {0}}, 0}
 #define AudioFrame_init_default                  {{{NULL}, NULL}, 0}
-#define InputEvent_init_default                  {_Button_MIN, 0}
+#define InputEvent_init_default                  {_InputType_MIN, 0}
 #define FirmwareConfig_init_default              {0, _EasingMode_MIN, 0, 0, 0}
 #define FirmwarePacket_init_default              {0, {FirmwareInfo_init_default}}
-#define FirmwareInfo_init_default                {"", "", 0, 0, 0}
+#define FirmwareInfo_init_default                {"", "", 0, 0, 0, "", "", "", "", 0, 0, 0, 0}
 #define RemoteLog_init_default                   {""}
 #define Packet_init_zero                         {0, {FirmwareConfig_init_zero}}
 #define Frame_init_zero                          {{0, {0}}, {0, {0}}, 0}
 #define WFrame_init_zero                         {{0, {0}}, {0, {0}}, 0}
 #define RGBFrame_init_zero                       {{0, {0}}, 0}
 #define AudioFrame_init_zero                     {{{NULL}, NULL}, 0}
-#define InputEvent_init_zero                     {_Button_MIN, 0}
+#define InputEvent_init_zero                     {_InputType_MIN, 0}
 #define FirmwareConfig_init_zero                 {0, _EasingMode_MIN, 0, 0, 0}
 #define FirmwarePacket_init_zero                 {0, {FirmwareInfo_init_zero}}
-#define FirmwareInfo_init_zero                   {"", "", 0, 0, 0}
+#define FirmwareInfo_init_zero                   {"", "", 0, 0, 0, "", "", "", "", 0, 0, 0, 0}
 #define RemoteLog_init_zero                      {""}
 
 /* Field tags (for use in manual encoding/decoding) */
@@ -196,8 +200,8 @@ extern "C" {
 #define RGBFrame_easing_interval_tag             2
 #define AudioFrame_uri_tag                       1
 #define AudioFrame_channel_tag                   2
-#define InputEvent_button_tag                    1
-#define InputEvent_pressed_tag                   2
+#define InputEvent_type_tag                      1
+#define InputEvent_value_tag                     3
 #define FirmwareConfig_luminance_tag             1
 #define FirmwareConfig_easing_mode_tag           2
 #define FirmwareConfig_show_test_frame_tag       3
@@ -214,8 +218,16 @@ extern "C" {
 #define FirmwareInfo_hostname_tag                1
 #define FirmwareInfo_build_time_tag              2
 #define FirmwareInfo_panel_index_tag             3
-#define FirmwareInfo_fps_tag                     4
+#define FirmwareInfo_frames_per_second_tag       4
 #define FirmwareInfo_config_phash_tag            5
+#define FirmwareInfo_mac_tag                     6
+#define FirmwareInfo_ipv4_tag                    7
+#define FirmwareInfo_ipv6_local_tag              8
+#define FirmwareInfo_ipv6_global_tag             9
+#define FirmwareInfo_packets_per_second_tag      10
+#define FirmwareInfo_uptime_tag                  11
+#define FirmwareInfo_heap_size_tag               12
+#define FirmwareInfo_free_heap_tag               13
 #define RemoteLog_message_tag                    1
 #define FirmwarePacket_firmware_info_tag         1
 #define FirmwarePacket_remote_log_tag            2
@@ -268,8 +280,8 @@ X(a, STATIC,   SINGULAR, UINT32,   channel,           2)
 #define AudioFrame_DEFAULT NULL
 
 #define InputEvent_FIELDLIST(X, a) \
-X(a, STATIC,   SINGULAR, UENUM,    button,            1) \
-X(a, STATIC,   SINGULAR, BOOL,     pressed,           2)
+X(a, STATIC,   SINGULAR, UENUM,    type,              1) \
+X(a, STATIC,   SINGULAR, INT32,    value,             3)
 #define InputEvent_CALLBACK NULL
 #define InputEvent_DEFAULT NULL
 
@@ -294,8 +306,16 @@ X(a, STATIC,   ONEOF,    MESSAGE,  (content,remote_log,content.remote_log),   2)
 X(a, STATIC,   SINGULAR, STRING,   hostname,          1) \
 X(a, STATIC,   SINGULAR, STRING,   build_time,        2) \
 X(a, STATIC,   SINGULAR, UINT32,   panel_index,       3) \
-X(a, STATIC,   SINGULAR, UINT32,   fps,               4) \
-X(a, STATIC,   SINGULAR, UINT32,   config_phash,      5)
+X(a, STATIC,   SINGULAR, UINT32,   frames_per_second,   4) \
+X(a, STATIC,   SINGULAR, UINT32,   config_phash,      5) \
+X(a, STATIC,   SINGULAR, STRING,   mac,               6) \
+X(a, STATIC,   SINGULAR, STRING,   ipv4,              7) \
+X(a, STATIC,   SINGULAR, STRING,   ipv6_local,        8) \
+X(a, STATIC,   SINGULAR, STRING,   ipv6_global,       9) \
+X(a, STATIC,   SINGULAR, UINT32,   packets_per_second,  10) \
+X(a, STATIC,   SINGULAR, UINT64,   uptime,           11) \
+X(a, STATIC,   SINGULAR, UINT32,   heap_size,        12) \
+X(a, STATIC,   SINGULAR, UINT32,   free_heap,        13)
 #define FirmwareInfo_CALLBACK NULL
 #define FirmwareInfo_DEFAULT NULL
 
@@ -331,10 +351,10 @@ extern const pb_msgdesc_t RemoteLog_msg;
 /* Packet_size depends on runtime parameters */
 /* AudioFrame_size depends on runtime parameters */
 #define FirmwareConfig_size                      18
-#define FirmwareInfo_size                        62
-#define FirmwarePacket_size                      104
+#define FirmwareInfo_size                        209
+#define FirmwarePacket_size                      212
 #define Frame_size                               844
-#define InputEvent_size                          4
+#define InputEvent_size                          13
 #define RGBFrame_size                            1929
 #define RemoteLog_size                           102
 #define WFrame_size                              908
@@ -404,7 +424,7 @@ struct MessageDescriptor<FirmwarePacket> {
 };
 template <>
 struct MessageDescriptor<FirmwareInfo> {
-    static PB_INLINE_CONSTEXPR const pb_size_t fields_array_length = 5;
+    static PB_INLINE_CONSTEXPR const pb_size_t fields_array_length = 13;
     static inline const pb_msgdesc_t* fields() {
         return &FirmwareInfo_msg;
     }

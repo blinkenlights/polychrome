@@ -146,8 +146,16 @@ defmodule Octopus.Protobuf.FirmwareInfo do
   field :hostname, 1, type: :string, deprecated: false
   field :build_time, 2, type: :string, json_name: "buildTime", deprecated: false
   field :panel_index, 3, type: :uint32, json_name: "panelIndex"
-  field :fps, 4, type: :uint32
+  field :frames_per_second, 4, type: :uint32, json_name: "framesPerSecond"
   field :config_phash, 5, type: :uint32, json_name: "configPhash"
+  field :mac, 6, type: :string, deprecated: false
+  field :ipv4, 7, type: :string, deprecated: false
+  field :ipv6_local, 8, type: :string, json_name: "ipv6Local", deprecated: false
+  field :ipv6_global, 9, type: :string, json_name: "ipv6Global", deprecated: false
+  field :packets_per_second, 10, type: :uint32, json_name: "packetsPerSecond"
+  field :uptime, 11, type: :uint64
+  field :heap_size, 12, type: :uint32, json_name: "heapSize"
+  field :free_heap, 13, type: :uint32, json_name: "freeHeap"
 end
 
 defmodule Octopus.Protobuf.RemoteLog do

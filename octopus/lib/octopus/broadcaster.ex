@@ -17,8 +17,8 @@ defmodule Octopus.Broadcaster do
     defstruct [:udp, :remote_log_file, :config, :remote_ip, firmware_stats: %{}]
   end
 
-  defmodule FirmwareStats do
-    defstruct [:hostname, :panel_index, :build_time, :last_seen, :ip, :fps, :config_phash]
+  defmodule FirmwareInfoMeta do
+    defstruct [:last_seen, :firmware_info, :from_ip]
   end
 
   @remote_port 1337
@@ -158,17 +158,13 @@ defmodule Octopus.Broadcaster do
   end
 
   defp update_firmware_stats(%FirmwareInfo{} = firmware_info, from_ip, %State{} = state) do
-    stats = %FirmwareStats{
-      hostname: firmware_info.hostname,
-      panel_index: firmware_info.panel_index,
-      build_time: firmware_info.build_time |> String.to_integer(),
+    stats = %FirmwareInfoMeta{
       last_seen: :os.system_time(:second),
-      ip: from_ip,
-      fps: firmware_info.fps,
-      config_phash: firmware_info.config_phash
+      from_ip: from_ip,
+      firmware_info: firmware_info
     }
 
-    firmware_stats = Map.put(state.firmware_stats, from_ip, stats)
+    firmware_stats = Map.put(state.firmware_stats, firmware_info.mac, stats)
 
     %State{state | firmware_stats: firmware_stats}
   end

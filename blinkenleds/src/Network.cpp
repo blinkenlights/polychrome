@@ -21,6 +21,7 @@ static bool ota_up = false;
 
 #define METRICS_INTERVAL 5000
 uint32_t framecount = 0;
+uint32_t packetcount = 0;
 uint32_t last_metrics_send = 0;
 
 bool remote_configured = false;
@@ -46,8 +47,19 @@ void network_event_callback(WiFiEvent_t event)
   case ARDUINO_EVENT_ETH_CONNECTED:
     Serial.println("ETH Connected");
     break;
+
+  case ARDUINO_EVENT_ETH_GOT_IP6:
+    Serial.println("Got IPv6:");
+    Serial.println("  Local  : " + String(ETH.localIPv6().toString()));
+
+    static ip6_addr_t addr;
+    tcpip_adapter_get_ip6_global(TCPIP_ADAPTER_IF_ETH, &addr);
+    Serial.println("  Global : " + String(IPv6Address(addr.addr).toString()));
+
+    break;
+
   case ARDUINO_EVENT_ETH_GOT_IP:
-    Serial.println("DHCP:");
+    Serial.println("Got IPv4:");
 
     Serial.println("  MAC   : " + String(ETH.macAddress()));
     Serial.println("  IPv4  : " + String(ETH.localIP().toString()));
@@ -133,6 +145,7 @@ void Network::setup()
   Serial.println("ETH begin.");
   // from: https://quinled.info/quinled-esp32-ethernet/
   ETH.begin(0, 5, 23, 18, ETH_PHY_LAN8720, ETH_CLOCK_GPIO17_OUT);
+  ETH.enableIpV6();
 
   ota_setup();
 
@@ -176,13 +189,14 @@ void Network::loop()
 
       if (bytes > 0)
       {
+        packetcount++;
         pb_istream_t stream = pb_istream_from_buffer(udp_buffer, bytes);
         Packet packet = Packet_init_zero;
         bool status = pb_decode(&stream, Packet_fields, &packet);
 
         if (!status)
         {
-          Serial.printf("Protobuf decoding failed: %s\n", PB_GET_ERROR(&stream));
+          Network::remote_log("Protobuf decoding failed: " + String(PB_GET_ERROR(&stream)));
         }
         else
         {
@@ -243,8 +257,23 @@ void Network::send_firmware_info()
   packet.content.firmware_info.panel_index = PANEL_INDEX;
   packet.content.firmware_info.config_phash = Display::get_config_phash();
 
-  packet.content.firmware_info.fps = framecount * 1000 / (millis() - last_metrics_send);
+  packet.content.firmware_info.frames_per_second = framecount * 1000 / (millis() - last_metrics_send);
   framecount = 0;
+  packet.content.firmware_info.packets_per_second = packetcount * 1000 / (millis() - last_metrics_send);
+  packetcount = 0;
+
+  ETH.macAddress().toCharArray(packet.content.firmware_info.mac, 18);
+  ETH.localIP().toString().toCharArray(packet.content.firmware_info.ipv4, 15);
+  ETH.localIPv6().toString().toCharArray(packet.content.firmware_info.ipv6_local, 39);
+
+  static ip6_addr_t addr;
+  tcpip_adapter_get_ip6_global(TCPIP_ADAPTER_IF_ETH, &addr);
+  IPv6Address(addr.addr).toString().toCharArray(packet.content.firmware_info.ipv6_global, 39);
+
+  packet.content.firmware_info.free_heap = ESP.getFreeHeap();
+  packet.content.firmware_info.heap_size = ESP.getHeapSize();
+
+  packet.content.firmware_info.uptime = millis();
 
   pb_ostream_t stream = pb_ostream_from_buffer(udp_buffer, UDP_BUFFER_SIZE);
   pb_encode(&stream, FirmwarePacket_fields, &packet);

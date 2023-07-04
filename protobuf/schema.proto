@@ -116,8 +116,16 @@ message FirmwareInfo {
   string hostname = 1 [(nanopb).max_length = 20];
   string build_time = 2 [(nanopb).max_length = 20];
   uint32 panel_index = 3;
-  uint32 fps = 4;
+  uint32 frames_per_second = 4;
   uint32 config_phash = 5;
+  string mac = 6 [(nanopb).max_length = 17];
+  string ipv4 = 7 [(nanopb).max_length = 15];
+  string ipv6_local = 8 [(nanopb).max_length = 39];
+  string ipv6_global = 9 [(nanopb).max_length = 39];
+  uint32 packets_per_second = 10;
+  uint64 uptime = 11;
+  uint32 heap_size = 12;
+  uint32 free_heap = 13;
 }
 
 message RemoteLog {
