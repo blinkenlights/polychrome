@@ -13,7 +13,7 @@ defmodule Octopus.App do
 
   """
 
-  alias Octopus.Protobuf.{Frame, WFrame, RGBFrame, AudioFrame, InputEvent}
+  alias Octopus.Protobuf.{Frame, WFrame, RGBFrame, AudioFrame, InputEvent, ControlEvent}
   alias Octopus.{Mixer, AppSupervisor}
 
   @supported_frames [Frame, RGBFrame, WFrame, AudioFrame]
@@ -60,8 +60,12 @@ defmodule Octopus.App do
         GenServer.start_link(__MODULE__, :ok, init_args)
       end
 
-      def handle_info({:input, %InputEvent{} = input_event}, state) do
+      def handle_info({:event, %InputEvent{} = input_event}, state) do
         handle_input(input_event, state)
+      end
+
+      def handle_info({:event, %ControlEvent{} = control_event}, state) do
+        handle_control_event(control_event, state)
       end
 
       def handle_call(:get_config, _from, state) do
@@ -79,6 +83,10 @@ defmodule Octopus.App do
         {:noreply, state}
       end
 
+      def handle_control_event(_event, state) do
+        {:noreply, state}
+      end
+
       def handle_config(config, state) do
         {:noreply, state}
       end
@@ -92,6 +100,7 @@ defmodule Octopus.App do
       end
 
       defoverridable handle_input: 2
+      defoverridable handle_control_event: 2
       defoverridable config_schema: 0
       defoverridable handle_config: 2
       defoverridable get_config: 1

@@ -58,6 +58,13 @@ defmodule Octopus.Apps.UdpReceiver do
     {:noreply, state}
   end
 
+  def handle_control_event(event, state) do
+    binary = Protobuf.encode(event)
+    :gen_udp.send(state.udp, state.remote_ip, state.remote_port, binary)
+    Logger.info("UDP: Control event received. #{inspect(event)}}")
+    {:noreply, state}
+  end
+
   # special case for fly.io
   defp bind_address() do
     case System.fetch_env("FLY_APP_NAME") do

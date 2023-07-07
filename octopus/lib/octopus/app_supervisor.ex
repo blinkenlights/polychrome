@@ -3,7 +3,7 @@ defmodule Octopus.AppSupervisor do
   require Logger
 
   alias Octopus.Mixer
-  alias Octopus.Protobuf.{InputEvent}
+  alias Octopus.Protobuf.{InputEvent, ControlEvent}
 
   @topic "apps"
 
@@ -156,11 +156,11 @@ defmodule Octopus.AppSupervisor do
   end
 
   @doc """
-  Sends an input_event to an app. Ignores the event if the app is not running.
+  Sends an event to an app. Ignores the event if the app is not running.
   """
-  def send_input(app_id, %InputEvent{} = input_event) do
+  def send_event(app_id, %event_type{} = event) when event_type in [InputEvent, ControlEvent] do
     case Registry.lookup(Octopus.AppRegistry, app_id) do
-      [{pid, _}] -> send(pid, {:input, input_event})
+      [{pid, _}] -> send(pid, {:event, event})
       [] -> :noop
     end
   end

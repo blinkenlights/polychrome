@@ -15,6 +15,9 @@ message Packet {
     // Events from the input controllers
     InputEvent input_event = 6;
 
+    // Events around controlling apps
+    ControlEvent control_event = 9;
+
     // ** Internal use only **
     FirmwareConfig firmware_config = 1; 
     RGBFrame rgb_frame_part1 = 7;
@@ -71,6 +74,17 @@ enum InputType {
   
   AXIS_X_2 = 12;
   AXIS_Y_2 = 13;
+}
+
+message ControlEvent {
+  ControlEventType type = 1;
+}
+
+enum ControlEventType{
+  APP_SELECTED = 0;
+  APP_DESELECTED = 1;
+  APP_STARTED = 2;
+  APP_STOPPED = 3;
 }
 
 message FirmwareConfig {

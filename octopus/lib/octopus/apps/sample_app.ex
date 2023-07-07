@@ -48,4 +48,8 @@ defmodule Octopus.Apps.SampleApp do
   def handle_input(_input_event, state) do
     {:noreply, state}
   end
+
+  def handle_control_event(_event, state) do
+    {:noreply, state}
+  end
 end

@@ -11,7 +11,8 @@ defmodule Octopus.Protobuf do
     AudioFrame,
     FirmwareConfig,
     FirmwarePacket,
-    InputEvent
+    InputEvent,
+    ControlEvent
   }
 
   def encode(%Frame{data: data, palette: palette} = frame)
@@ -48,6 +49,11 @@ defmodule Octopus.Protobuf do
 
   def encode(%FirmwareConfig{} = config) do
     %Packet{content: {:firmware_config, config}}
+    |> Packet.encode()
+  end
+
+  def encode(%ControlEvent{} = event) do
+    %Packet{content: {:control_event, event}}
     |> Packet.encode()
   end
 

@@ -3,7 +3,7 @@ defmodule Octopus.Mixer do
   require Logger
 
   alias Octopus.{Broadcaster, Protobuf, AppSupervisor}
-  alias Octopus.Protobuf.{Frame, WFrame, RGBFrame, AudioFrame, InputEvent}
+  alias Octopus.Protobuf.{Frame, WFrame, RGBFrame, AudioFrame, InputEvent, ControlEvent}
 
   @pubsub_topic "mixer"
   @supported_frames [Frame, WFrame, RGBFrame, AudioFrame]
@@ -42,7 +42,7 @@ defmodule Octopus.Mixer do
 
   def handle_input(%InputEvent{} = input_event) do
     app_id = get_selected_app()
-    AppSupervisor.send_input(app_id, input_event)
+    AppSupervisor.send_event(app_id, input_event)
   end
 
   @doc """
@@ -195,11 +195,14 @@ defmodule Octopus.Mixer do
     Process.send_after(self(), :transition, @transition_frame_time)
   end
 
-  defp broadcast_selected_app(%State{selected_app: selected_app}) do
+  defp broadcast_selected_app(%State{} = state) do
+    AppSupervisor.send_event(state.selected_app, %ControlEvent{type: :APP_SELECTED})
+    AppSupervisor.send_event(state.last_selected_app, %ControlEvent{type: :APP_DESELECTED})
+
     Phoenix.PubSub.broadcast(
       Octopus.PubSub,
       @pubsub_topic,
-      {:mixer, {:selected_app, selected_app}}
+      {:mixer, {:selected_app, state.selected_app}}
     )
   end
 end
