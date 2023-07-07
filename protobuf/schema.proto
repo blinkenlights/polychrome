@@ -81,10 +81,10 @@ message ControlEvent {
 }
 
 enum ControlEventType{
-  APP_SELECTED = 0;
-  APP_DESELECTED = 1;
-  APP_STARTED = 2;
-  APP_STOPPED = 3;
+  APP_SELECTED = 0;     // Emitted by octopus when an app is displayed
+  APP_DESELECTED = 1;   // Emitted by octopus when the app is no longer displayed
+  APP_STARTED = 2;      // Emitted by apps when they start
+  APP_STOPPED = 3;      // Emitted by apps when they are finished. Eg to signal that the next app can be selected.
 }
 
 message FirmwareConfig {
