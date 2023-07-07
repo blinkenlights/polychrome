@@ -74,6 +74,18 @@ defmodule Octopus.Canvas do
   end
 
   @doc """
+  Clears a rectangular subsection of the canvas
+  """
+  def clear_rect(%Canvas{} = canvas, {x1, y1}, {x2, y2}) do
+    pixels =
+      for x <- x1..x2, y <- y1..y2, reduce: canvas.pixels do
+        acc -> Map.delete(acc, {x, y})
+      end
+
+    %Canvas{canvas | pixels: pixels}
+  end
+
+  @doc """
   Sets the color of the pixel at the given position.
 
   If the canvas has a color palette, the color must be an integer
@@ -301,14 +313,22 @@ defmodule Octopus.Canvas do
 
   ## Options
   * `:offset` - Format: `{x, y}` [default: `{0, 0}`]
+  * `:transparency` - Treat undefined pixels as transparent. [default: `true`]
   """
 
   def overlay(%Canvas{} = canvas1, %Canvas{} = canvas2, opts \\ []) do
-    {dx, dy} = Keyword.get(opts, :offset, {0, 0})
-
     if canvas1.palette != canvas2.palette do
       raise ArgumentError, "Can't join canvases with different color palettes"
     end
+
+    {dx, dy} = Keyword.get(opts, :offset, {0, 0})
+
+    canvas1 =
+      if Keyword.get(opts, :transparency, true) do
+        canvas1
+      else
+        Canvas.clear_rect(canvas1, {dx, dy}, {dx + canvas2.width - 1, dy + canvas2.height - 1})
+      end
 
     pixels =
       Enum.reduce(canvas2.pixels, canvas1.pixels, fn {{x, y}, color}, pixels ->
@@ -327,8 +347,8 @@ defmodule Octopus.Canvas do
   Returns a rectangular subsection of the canvas.
   """
   def cut(%Canvas{} = canvas, {x1, y1}, {x2, y2}) when x2 > x1 and y2 > y1 do
-    width = x2 - x1
-    height = y2 - y1
+    width = x2 - x1 + 1
+    height = y2 - y1 + 1
 
     pixels =
       for x <- x1..x2,

@@ -42,7 +42,7 @@ defmodule Octopus.Apps.SampleApp do
   end
 
   def handle_input(%InputEvent{type: :BUTTON_2, value: 1}, state) do
-    {:noreply, %State{state | color: state.color - 1}}
+    {:noreply, %State{state | color: max(0, state.color - 1)}}
   end
 
   def handle_input(_input_event, state) do
