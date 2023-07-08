@@ -107,39 +107,40 @@ defmodule Octopus.Apps.InputDebug do
       %Screen{
         pixels:
           [
-            0,
-            1,
-            2,
-            3,
-            0,
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            4,
-            5,
-            6,
-            7,
-            8,
-            9,
-            10,
-            11,
-            8,
-            9,
-            10,
-            11,
-            12,
-            13,
-            14,
-            15,
-            12,
-            13,
-            14,
-            15
+            0
           ]
+          #   1,
+          #   2,
+          #   3,
+          #   0,
+          #   1,
+          #   2,
+          #   3,
+          #   4,
+          #   5,
+          #   6,
+          #   7,
+          #   4,
+          #   5,
+          #   6,
+          #   7,
+          #   8,
+          #   9,
+          #   10,
+          #   11,
+          #   8,
+          #   9,
+          #   10,
+          #   11,
+          #   12,
+          #   13,
+          #   14,
+          #   15,
+          #   12,
+          #   13,
+          #   14,
+          #   15
+          # ]
           |> Stream.cycle()
           |> Stream.take(8 * 8)
           |> Enum.to_list()
@@ -220,24 +221,25 @@ defmodule Octopus.Apps.InputDebug do
 
     pixel_tuples =
       [
-        {:BUTTON_1, {0, 2}},
-        {:BUTTON_2, {1, 1}},
-        {:BUTTON_3, {2, 0}},
-        {:BUTTON_4, {2, 2}},
-        {:BUTTON_5, {3, 1}},
-        {:BUTTON_6, {4, 2}},
-        {:BUTTON_7, {5, 1}},
-        {:BUTTON_8, {6, 2}},
-        {:BUTTON_9, {6, 0}},
+        {:BUTTON_1, {0, 1}},
+        {:BUTTON_2, {0, 0}},
+        {:BUTTON_3, {1, 0}},
+        {:BUTTON_4, {2, 0}},
+        {:BUTTON_5, {3, 0}},
+        {:BUTTON_6, {4, 0}},
+        {:BUTTON_7, {5, 0}},
+        {:BUTTON_8, {6, 0}},
+        {:BUTTON_9, {7, 0}},
         {:BUTTON_10, {7, 1}}
       ]
-      |> Enum.reduce([], fn {b, coord}, acc ->
+      |> Enum.with_index()
+      |> Enum.reduce([], fn {{b, coord}, index}, acc ->
         [
           {coord,
            if state.button_state.buttons |> MapSet.member?(b) do
-             11
+             index + 4
            else
-             0
+             1
            end}
           | acc
         ]
@@ -247,12 +249,49 @@ defmodule Octopus.Apps.InputDebug do
       state.screen
       |> Screen.set_pixels(pixel_tuples)
 
+    paint_screen = fn data, screen_index ->
+      data
+      |> Enum.with_index()
+      |> Enum.map(fn {v, i} ->
+        if floor(i / 64) == screen_index do
+          screen_index + 4
+        else
+          v
+        end
+      end)
+      |> Enum.to_list()
+    end
+
     data =
       screen.pixels
       #      |> IO.inspect()
       |> Stream.cycle()
       |> Stream.take(8 * 8 * 10)
       |> Enum.to_list()
+
+    data =
+      [
+        :BUTTON_1,
+        :BUTTON_2,
+        :BUTTON_3,
+        :BUTTON_4,
+        :BUTTON_5,
+        :BUTTON_6,
+        :BUTTON_7,
+        :BUTTON_8,
+        :BUTTON_9,
+        :BUTTON_10
+      ]
+      |> Enum.with_index()
+      |> Enum.reduce(data, fn {v, i}, acc ->
+        cond do
+          state.button_state.buttons |> MapSet.member?(v) ->
+            paint_screen.(acc, i)
+
+          true ->
+            acc
+        end
+      end)
 
     %Frame{
       data: data,
