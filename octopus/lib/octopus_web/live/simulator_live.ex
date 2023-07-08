@@ -1,6 +1,8 @@
 defmodule OctopusWeb.SimulatorLive do
   use OctopusWeb, :live_view
 
+  alias Octopus.Mixer
+  alias Octopus.Protobuf.InputEvent
   alias Octopus.Layout.{Mildenberg, MildenbergZoom1, MildenbergZoom2}
   alias OctopusWeb.PixelsComponent
 
@@ -56,7 +58,11 @@ defmodule OctopusWeb.SimulatorLive do
 
   def render(assigns) do
     ~H"""
-    <div class="flex w-full h-full justify-center bg-black">
+    <div
+      class="flex w-full h-full justify-center bg-black"
+      phx-window-keydown="keydown"
+      phx-window-keyup="keyup"
+    >
       <div class="fixed top-4 flex flex-col gap-2 z-10">
         <form id="view-form" phx-change="view-changed">
           <.input type="select" name="view" options={@view_options} value={@view} />
@@ -78,6 +84,67 @@ defmodule OctopusWeb.SimulatorLive do
 
   def handle_event("view-changed", %{"view" => view}, socket) do
     {:noreply, socket |> push_patch(to: ~p"/sim?#{%{view: view, window: socket.assigns.window}}")}
+  end
+
+  @key_map %{
+    "1" => :BUTTON_1,
+    "2" => :BUTTON_2,
+    "3" => :BUTTON_3,
+    "4" => :BUTTON_4,
+    "5" => :BUTTON_5,
+    "6" => :BUTTON_6,
+    "7" => :BUTTON_7,
+    "8" => :BUTTON_8,
+    "9" => :BUTTON_9,
+    "0" => :BUTTON_10,
+    "w" => :DIRECTION_1_UP,
+    "a" => :DIRECTION_1_LEFT,
+    "s" => :DIRECTION_1_DOWN,
+    "d" => :DIRECTION_1_RIGHT,
+    "i" => :DIRECTION_2_UP,
+    "j" => :DIRECTION_2_LEFT,
+    "k" => :DIRECTION_2_DOWN,
+    "l" => :DIRECTION_2_RIGHT
+  }
+
+  def handle_event("keydown", %{"key" => key}, socket) when is_map_key(@key_map, key) do
+    button = @key_map[key]
+
+    {button, value} =
+      case button do
+        :DIRECTION_1_LEFT -> {:AXIS_X_1, -1}
+        :DIRECTION_1_RIGHT -> {:AXIS_X_1, 1}
+        _ -> {button, 1}
+      end
+
+    %InputEvent{type: button, value: value}
+    |> Mixer.handle_input()
+
+    {:noreply, socket}
+  end
+
+  def handle_event("keyup", %{"key" => key}, socket) when is_map_key(@key_map, key) do
+    button = @key_map[key]
+
+    {button, _} =
+      case button do
+        :DIRECTION_1_LEFT -> {:AXIS_X_1, 0}
+        :DIRECTION_1_RIGHT -> {:AXIS_X_1, 0}
+        _ -> {button, 0}
+      end
+
+    %InputEvent{type: button, value: 0}
+    |> Mixer.handle_input()
+
+    {:noreply, socket}
+  end
+
+  def handle_event("keydown", _msg, socket) do
+    {:noreply, socket}
+  end
+
+  def handle_event("keyup", _, socket) do
+    {:noreply, socket}
   end
 
   def handle_info({:mixer, {:frame, frame}}, socket) do
