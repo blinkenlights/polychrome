@@ -119,12 +119,12 @@ defmodule OctopusWeb.SimulatorLive do
       case button do
         :DIRECTION_1_LEFT -> {:AXIS_X_1, -1}
         :DIRECTION_1_RIGHT -> {:AXIS_X_1, 1}
-        :DIRECTION_1_DOWN -> {:AXIS_Y_1, -1}
-        :DIRECTION_1_UP -> {:AXIS_Y_1, 1}
+        :DIRECTION_1_DOWN -> {:AXIS_Y_1, 1}
+        :DIRECTION_1_UP -> {:AXIS_Y_1, -1}
         :DIRECTION_2_LEFT -> {:AXIS_X_2, -1}
         :DIRECTION_2_RIGHT -> {:AXIS_X_2, 1}
-        :DIRECTION_2_DOWN -> {:AXIS_Y_2, -1}
-        :DIRECTION_2_UP -> {:AXIS_Y_2, 1}
+        :DIRECTION_2_DOWN -> {:AXIS_Y_2, 1}
+        :DIRECTION_2_UP -> {:AXIS_Y_2, -1}
         _ -> {button, 1}
       end
 
