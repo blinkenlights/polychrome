@@ -101,10 +101,15 @@ defmodule OctopusWeb.SimulatorLive do
     "a" => :DIRECTION_1_LEFT,
     "s" => :DIRECTION_1_DOWN,
     "d" => :DIRECTION_1_RIGHT,
+    "q" => :BUTTON_1_A,
+    "z" => :BUTTON_1_B,
+    "y" => :BUTTON_1_B,
     "i" => :DIRECTION_2_UP,
     "j" => :DIRECTION_2_LEFT,
     "k" => :DIRECTION_2_DOWN,
-    "l" => :DIRECTION_2_RIGHT
+    "l" => :DIRECTION_2_RIGHT,
+    "u" => :BUTTON_2_A,
+    "m" => :BUTTON_2_B
   }
 
   def handle_event("keydown", %{"key" => key}, socket) when is_map_key(@key_map, key) do
@@ -114,6 +119,12 @@ defmodule OctopusWeb.SimulatorLive do
       case button do
         :DIRECTION_1_LEFT -> {:AXIS_X_1, -1}
         :DIRECTION_1_RIGHT -> {:AXIS_X_1, 1}
+        :DIRECTION_1_DOWN -> {:AXIS_Y_1, -1}
+        :DIRECTION_1_UP -> {:AXIS_Y_1, 1}
+        :DIRECTION_2_LEFT -> {:AXIS_X_2, -1}
+        :DIRECTION_2_RIGHT -> {:AXIS_X_2, 1}
+        :DIRECTION_2_DOWN -> {:AXIS_Y_2, -1}
+        :DIRECTION_2_UP -> {:AXIS_Y_2, 1}
         _ -> {button, 1}
       end
 
@@ -130,6 +141,12 @@ defmodule OctopusWeb.SimulatorLive do
       case button do
         :DIRECTION_1_LEFT -> {:AXIS_X_1, 0}
         :DIRECTION_1_RIGHT -> {:AXIS_X_1, 0}
+        :DIRECTION_1_UP -> {:AXIS_Y_1, 0}
+        :DIRECTION_1_DOWN -> {:AXIS_Y_1, 0}
+        :DIRECTION_2_LEFT -> {:AXIS_X_2, 0}
+        :DIRECTION_2_RIGHT -> {:AXIS_X_2, 0}
+        :DIRECTION_2_UP -> {:AXIS_Y_2, 0}
+        :DIRECTION_2_DOWN -> {:AXIS_Y_2, 0}
         _ -> {button, 0}
       end
 
