@@ -50,7 +50,8 @@ defmodule Octopus.MixProject do
       {:protobuf, "~> 0.12.0"},
       {:ex_png, "~> 1.0.0"},
       {:easing, "~> 0.3.1"},
-      {:cachex, "~> 3.6"}
+      {:cachex, "~> 3.6"},
+      {:ex_doc, "~> 0.21", only: :dev, runtime: false}
     ]
   end
 
