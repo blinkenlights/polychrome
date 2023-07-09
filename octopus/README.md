@@ -13,3 +13,10 @@ Octopus should now be reachable on [`localhost:4000`](http://localhost:4000).
 Start the "UDP Server" app to receive external frames on UDP port 2342
 
 
+### Updating Protobuf
+
+`make protbuf_generate` updates based on the protobuf schema in `../protobuf/schema.proto`
+
+Needs `protoc`
+* `brew install protobuf` on mac
+* `apt install -y protobuf-compiler` on linux
