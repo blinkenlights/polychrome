@@ -3,10 +3,10 @@ defmodule Octopus.Mixer do
   require Logger
 
   alias Octopus.{Broadcaster, Protobuf, AppSupervisor}
-  alias Octopus.Protobuf.{Frame, WFrame, RGBFrame, AudioFrame, InputEvent, ControlEvent}
+  alias Octopus.Protobuf.{Frame, WFrame, RGBFrame, InputEvent, ControlEvent}
 
   @pubsub_topic "mixer"
-  @supported_frames [Frame, WFrame, RGBFrame, AudioFrame]
+  @pubsub_frames [Frame, WFrame, RGBFrame]
   @transition_duration 300
   @transition_frame_time trunc(1000 / 60)
 
@@ -30,7 +30,7 @@ defmodule Octopus.Mixer do
     end)
   end
 
-  def handle_frame(app_id, %frame_type{} = frame) when frame_type in @supported_frames do
+  def handle_frame(app_id, %{} = frame) do
     # encode the frame in the app process, so any encoding errors get raised there
     Protobuf.encode(frame)
     |> send_frame(frame, app_id)
@@ -96,13 +96,12 @@ defmodule Octopus.Mixer do
   # Possible values are `{:in, time_left}`, `{:out, time_left}` and `nil`.
 
   def handle_cast({:select_app, next_app_id}, %State{transition: nil} = state) do
-    state =
-      %State{
-        state
-        | transition: {:out, @transition_duration},
-          selected_app: next_app_id,
-          last_selected_app: state.selected_app
-      }
+    state = %State{
+      state
+      | transition: {:out, @transition_duration},
+        selected_app: next_app_id,
+        last_selected_app: state.selected_app
+    }
 
     broadcast_selected_app(state)
     schedule_transition()
@@ -186,8 +185,11 @@ defmodule Octopus.Mixer do
 
   ### End App Transitions ###
 
-  defp send_frame(binary, %frame_type{} = frame) when frame_type in @supported_frames do
-    Phoenix.PubSub.broadcast(Octopus.PubSub, @pubsub_topic, {:mixer, {:frame, frame}})
+  defp send_frame(binary, %frame_type{} = frame) do
+    if frame_type in @pubsub_frames do
+      Phoenix.PubSub.broadcast(Octopus.PubSub, @pubsub_topic, {:mixer, {:frame, frame}})
+    end
+
     Broadcaster.send_binary(binary)
   end
 
