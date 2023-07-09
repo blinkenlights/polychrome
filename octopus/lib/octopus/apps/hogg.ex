@@ -59,13 +59,13 @@ defmodule Octopus.Apps.Hogg do
               -1 -> {[:u], [:d]}
             end
 
-          type in [:BUTTON_1_A, :BUTTON_2_A] ->
+          type in [:BUTTON_A_1, :BUTTON_A_2] ->
             case value do
               1 -> {[:a], []}
               _ -> {[], [:a]}
             end
 
-          type in [:BUTTON_1_B, :BUTTON_2_B] ->
+          type in [:BUTTON_B_1, :BUTTON_B_2] ->
             case value do
               1 -> {[:b], []}
               _ -> {[], [:b]}
@@ -104,10 +104,10 @@ defmodule Octopus.Apps.Hogg do
 
     def handle_event(%ButtonState{} = bs, type, value) do
       case type do
-        type when type in [:AXIS_X_1, :AXIS_Y_1, :BUTTON_1_A, :BUTTON_1_B] ->
+        type when type in [:AXIS_X_1, :AXIS_Y_1, :BUTTON_A_1, :BUTTON_B_1] ->
           %ButtonState{bs | joy1: bs.joy1 |> JoyState.handle_event(type, value)}
 
-        type when type in [:AXIS_X_2, :AXIS_Y_2, :BUTTON_2_A, :BUTTON_2_B] ->
+        type when type in [:AXIS_X_2, :AXIS_Y_2, :BUTTON_A_2, :BUTTON_B_2] ->
           %ButtonState{bs | joy2: bs.joy2 |> JoyState.handle_event(type, value)}
 
         button ->
