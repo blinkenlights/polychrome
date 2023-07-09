@@ -62,6 +62,8 @@ defmodule Octopus.Apps.InputDebug do
       new_js = Enum.reduce(releases, js, fn b, acc -> acc |> release(b) end)
       Enum.reduce(presses, new_js, fn b, acc -> acc |> press(b) end)
     end
+
+    def button?(%JoyState{buttons: buttons}, button), do: buttons |> MapSet.member?(button)
   end
 
   defmodule ButtonState do
@@ -93,7 +95,7 @@ defmodule Octopus.Apps.InputDebug do
           %ButtonState{bs | joy1: bs.joy1 |> JoyState.handle_event(type, value)}
 
         type when type in [:AXIS_X_2, :AXIS_Y_2, :BUTTON_2_A, :BUTTON_2_B] ->
-          %ButtonState{bs | joy1: bs.joy2 |> JoyState.handle_event(type, value)}
+          %ButtonState{bs | joy2: bs.joy2 |> JoyState.handle_event(type, value)}
 
         button ->
           case value do
@@ -236,7 +238,7 @@ defmodule Octopus.Apps.InputDebug do
 
   defp screen_button_color(sb_index), do: sb_index + 4
 
-  defp render_frame(%State{} = state) do
+  defp render_frame(%State{button_state: bs} = state) do
     # collect some painting
     pixel_tuples =
       [
@@ -255,7 +257,7 @@ defmodule Octopus.Apps.InputDebug do
       |> Enum.reduce([], fn {{b, coord}, index}, acc ->
         [
           {coord,
-           if state.button_state |> ButtonState.button?(b) do
+           if bs |> ButtonState.button?(b) do
              screen_button_color(index)
            else
              1
@@ -264,8 +266,42 @@ defmodule Octopus.Apps.InputDebug do
         ]
       end)
 
+    # Paint some joysticks
     screen =
-      state.screen
+      [{bs.joy1, {0, 3}}, {bs.joy2, {5, 3}}]
+      |> Enum.map(fn {joy, {x, y}} ->
+        [
+          {:a, {0, 0}},
+          {:b, {2, 0}},
+          {:u, {1, 1}},
+          {:d, {1, 3}},
+          {:l, {0, 2}},
+          {:r, {2, 2}},
+          {:middle, {1, 2}}
+        ]
+        |> Enum.map(fn {button, {offset_x, offset_y}} ->
+          {{x + offset_x, y + offset_y},
+           if JoyState.button?(joy, button) do
+             case button do
+               :a -> 8
+               :b -> 12
+               _ -> 7
+             end
+           else
+             cond do
+               button in [:a, :b] -> 2
+               true -> 5
+             end
+           end}
+        end)
+      end)
+      |> Enum.reduce(state.screen, fn tuplelist, acc ->
+        acc |> Screen.set_pixels(tuplelist)
+      end)
+
+    # Paint some pixels
+    screen =
+      screen
       |> Screen.set_pixels(pixel_tuples)
 
     paint_screen = fn data, screen_index ->
@@ -281,6 +317,7 @@ defmodule Octopus.Apps.InputDebug do
       |> Enum.to_list()
     end
 
+    # Put screen on all windows
     data =
       screen.pixels
       #      |> IO.inspect()
