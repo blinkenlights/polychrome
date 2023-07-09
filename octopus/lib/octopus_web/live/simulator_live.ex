@@ -101,15 +101,15 @@ defmodule OctopusWeb.SimulatorLive do
     "a" => :DIRECTION_1_LEFT,
     "s" => :DIRECTION_1_DOWN,
     "d" => :DIRECTION_1_RIGHT,
-    "q" => :BUTTON_1_A,
-    "z" => :BUTTON_1_B,
-    "y" => :BUTTON_1_B,
+    "q" => :BUTTON_A_1,
+    "z" => :BUTTON_B_1,
+    "y" => :BUTTON_B_1,
     "i" => :DIRECTION_2_UP,
     "j" => :DIRECTION_2_LEFT,
     "k" => :DIRECTION_2_DOWN,
     "l" => :DIRECTION_2_RIGHT,
-    "u" => :BUTTON_2_A,
-    "m" => :BUTTON_2_B
+    "u" => :BUTTON_A_2,
+    "m" => :BUTTON_B_2
   }
 
   def handle_event("keydown", %{"key" => key}, socket) when is_map_key(@key_map, key) do
