@@ -67,6 +67,10 @@ defmodule Octopus.Apps.InputDebug do
   defmodule ButtonState do
     defstruct [:buttons, :joy1, :joy2]
 
+    @button_map 1..10
+                |> Enum.map(fn i -> {"BUTTON_#{i}" |> String.to_atom(), i - 1} end)
+                |> Enum.into(%{})
+
     def new() do
       %ButtonState{
         buttons: MapSet.new(),
@@ -91,13 +95,27 @@ defmodule Octopus.Apps.InputDebug do
         type when type in [:AXIS_X_2, :AXIS_Y_2, :BUTTON_2_A, :BUTTON_2_B] ->
           %ButtonState{bs | joy1: bs.joy2 |> JoyState.handle_event(type, value)}
 
-        type ->
+        button ->
           case value do
-            1 -> bs |> press(type)
-            0 -> bs |> release(type)
+            1 -> bs |> press({:sb, button_to_index(button)}) |> press(button)
+            0 -> bs |> release({:sb, button_to_index(button)}) |> release(button)
           end
       end
     end
+
+    def button_to_index(button) do
+      Map.get(@button_map, button)
+    end
+
+    def index_to_button(index) do
+      "BUTTON_#{index + 1}" |> String.to_existing_atom()
+    end
+
+    def screen_button?(%ButtonState{buttons: buttons}, index),
+      do: MapSet.member?(buttons, index_to_button(index))
+
+    def button?(%ButtonState{buttons: buttons}, button),
+      do: MapSet.member?(buttons, button)
   end
 
   defmodule Screen do
@@ -216,9 +234,10 @@ defmodule Octopus.Apps.InputDebug do
     {:noreply, %State{state | button_state: new_bs}}
   end
 
+  defp screen_button_color(sb_index), do: sb_index + 4
+
   defp render_frame(%State{} = state) do
     # collect some painting
-
     pixel_tuples =
       [
         {:BUTTON_1, {0, 1}},
@@ -236,8 +255,8 @@ defmodule Octopus.Apps.InputDebug do
       |> Enum.reduce([], fn {{b, coord}, index}, acc ->
         [
           {coord,
-           if state.button_state.buttons |> MapSet.member?(b) do
-             index + 4
+           if state.button_state |> ButtonState.button?(b) do
+             screen_button_color(index)
            else
              1
            end}
@@ -254,7 +273,7 @@ defmodule Octopus.Apps.InputDebug do
       |> Enum.with_index()
       |> Enum.map(fn {v, i} ->
         if floor(i / 64) == screen_index do
-          screen_index + 4
+          screen_button_color(screen_index)
         else
           v
         end
@@ -269,23 +288,12 @@ defmodule Octopus.Apps.InputDebug do
       |> Stream.take(8 * 8 * 10)
       |> Enum.to_list()
 
+    # make whole window light up for screen buttons
     data =
-      [
-        :BUTTON_1,
-        :BUTTON_2,
-        :BUTTON_3,
-        :BUTTON_4,
-        :BUTTON_5,
-        :BUTTON_6,
-        :BUTTON_7,
-        :BUTTON_8,
-        :BUTTON_9,
-        :BUTTON_10
-      ]
-      |> Enum.with_index()
-      |> Enum.reduce(data, fn {v, i}, acc ->
+      0..9
+      |> Enum.reduce(data, fn i, acc ->
         cond do
-          state.button_state.buttons |> MapSet.member?(v) ->
+          state.button_state |> ButtonState.screen_button?(i) ->
             paint_screen.(acc, i)
 
           true ->
