@@ -6,8 +6,6 @@ defmodule OctopusWeb.AppLive do
   alias Octopus.Mixer
   alias OctopusWeb.PixelsComponent
 
-  import OctopusWeb.PixelsComponent, only: [pixels: 1]
-
   def mount(%{"id" => app_id}, _session, socket) do
     if connected?(socket) do
       Mixer.subscribe()
