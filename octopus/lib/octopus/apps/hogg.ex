@@ -10,7 +10,7 @@ defmodule Octopus.Apps.Hogg do
   @frame_time_ms trunc(1000 / @frame_rate)
 
   defmodule Player do
-    defstruct pos: {39, 1}, vel: {0, 0}, base_color: [128, 255, 128]
+    defstruct pos: {39, 1}, vel: {0, 0}, base_color: [128, 255, 128], is_ducking: false
 
     def new(0) do
       %Player{pos: {8 * 3 + 4, 1}}
@@ -189,7 +189,8 @@ defmodule Octopus.Apps.Hogg do
                     0
                   end
               end
-            }
+            },
+            is_ducking: joy |> JoyState.button?(:d)
         }
       end)
       # apply vel
@@ -231,7 +232,10 @@ defmodule Octopus.Apps.Hogg do
 
       canvas
       |> Canvas.put_pixel({x, y}, player.base_color)
-      |> Canvas.put_pixel({x, y - 1}, player.base_color)
+      |> (fn
+            c, true -> c
+            c, false -> c |> Canvas.put_pixel({x, y - 1}, player.base_color)
+          end).(player.is_ducking)
     end)
     |> Canvas.to_frame()
     |> send_frame()
