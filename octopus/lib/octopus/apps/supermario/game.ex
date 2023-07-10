@@ -21,7 +21,7 @@ defmodule Octopus.Apps.Supermario.Game do
     # init game, all levels, one player, two players, difficulty ??
     #
     state = %{current_level: 0, interval: interval}
-    :timer.send_interval(interval, self(), :tick)
+    schedule_ticker(state.interval)
     {:ok, state}
   end
 
@@ -30,7 +30,7 @@ defmodule Octopus.Apps.Supermario.Game do
     # proceed with level (? every nth tick ?), check wether level has finished or gameover
     # collect points
     # sends current pixels to output?
-    :timer.send_interval(state.interval, self(), :tick)
+    schedule_ticker(state.interval)
     {:noreply, state}
   end
 
@@ -38,5 +38,9 @@ defmodule Octopus.Apps.Supermario.Game do
   def handle_info(:move, state) do
     # handles joystick input
     {:noreply, state}
+  end
+
+  def schedule_ticker(interval) do
+    :timer.send_interval(interval, self(), :tick)
   end
 end
