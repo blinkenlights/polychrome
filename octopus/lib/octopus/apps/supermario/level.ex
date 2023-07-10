@@ -10,6 +10,7 @@ defmodule Octopus.Apps.Supermario.Level do
           pixels: [],
           # Octopus.Apps.Supermaria.Mario.t(),
           mario: nil,
+          current_position: integer(),
           ticker: integer(),
           level: integer(),
           points: integer(),
@@ -18,6 +19,7 @@ defmodule Octopus.Apps.Supermario.Level do
   defstruct [
     :pixels,
     :mario,
+    :current_position,
     :ticker,
     :level,
     :points,
