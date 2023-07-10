@@ -5,6 +5,9 @@
 # might end in gameover
 # needs to know bonus points when mario jumps on certain points
 defmodule Octopus.Apps.Supermario.Level do
+  @moduledoc """
+    handles level data
+  """
   @type t :: %__MODULE__{
           # 8 * 120
           pixels: [],
