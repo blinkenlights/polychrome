@@ -39,6 +39,13 @@ defmodule Octopus.Apps.UdpReceiver do
         Logger.debug("#{__MODULE__}: Received #{frame_type} from #{inspect(ip)}:#{inspect(port)}")
         send_frame(frame)
 
+      {:ok, %{} = unsupported} ->
+        Logger.warning(
+          "#{__MODULE__}: Received unsupported frame from #{inspect(ip)} #{inspect(unsupported)}"
+        )
+
+        :noop
+
       {:error, error} ->
         Logger.warning("#{__MODULE__}: Could not decode. #{inspect(error)} from #{inspect(ip)}")
 
