@@ -1,6 +1,9 @@
-# TODO Find a better name, currently a playground for initing the canvas with a png file
+# TODO Find a better name for this module
 defmodule Octopus.Apps.Supermario.PngFile do
-  alias Octopus.{ColorPalette, Canvas}
+  @moduledoc """
+  Reads a png file for a specific level and creates a canvas from it
+  """
+  alias Octopus.Canvas
 
   @level_defs ~w(mario-1-1.reduced mario-1-2.reduced)
   @path "supermario"
@@ -11,10 +14,8 @@ defmodule Octopus.Apps.Supermario.PngFile do
     {:ok, %ExPng.Image{pixels: pixels, height: height, width: width}} =
       ExPng.Image.from_file(path)
 
-    canvas = Canvas.new(width, height)
-
     canvas =
-      Enum.reduce(pixels, {canvas, 0}, fn row, {canvas, y} ->
+      Enum.reduce(pixels, {Canvas.new(width, height), 0}, fn row, {canvas, y} ->
         {canvas, _, y} =
           Enum.reduce(row, {canvas, 0, y}, fn pixel, {canvas, x, y} ->
             canvas = Canvas.put_pixel(canvas, {x, y}, pixel |> :binary.bin_to_list())

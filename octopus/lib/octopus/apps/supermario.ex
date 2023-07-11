@@ -3,8 +3,6 @@ defmodule Octopus.Apps.Supermario do
   require Logger
 
   alias Octopus.Apps.Supermario.PngFile
-  # alias Octopus.{ColorPalette, Canvas}
-  # alias Octopus.Protobuf.InputEvent
 
   defmodule State do
     defstruct [:game, :canvas, :interval]
