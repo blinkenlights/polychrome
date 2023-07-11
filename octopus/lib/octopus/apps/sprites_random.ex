@@ -10,10 +10,11 @@ defmodule Octopus.Apps.Sprites do
 
   @sprite_sheet Sprite.list_sprite_sheets() |> hd()
   @animation_interval 10
+  @animation_steps 50
   @easing_interval 150
   @new_sprite_interval 1000
 
-  def name(), do: "Sprites"
+  def name(), do: "Random Sprites"
 
   def init(_args) do
     indeces = Enum.map(1..10, fn _ -> Enum.random(0..255) end)
@@ -43,7 +44,7 @@ defmodule Octopus.Apps.Sprites do
     indices = List.update_at(state.indices, updated_window, fn _ -> next_index end)
     direction = Enum.random([:left, :right, :top, :bottom])
 
-    Transitions.push(current_sprite, next_sprite, direction: direction)
+    Transitions.push(current_sprite, next_sprite, direction: direction, steps: @animation_steps)
     |> Stream.map(fn window_canvas ->
       state.canvas
       |> Canvas.overlay(window_canvas, offset: {updated_window * 8, 0})
