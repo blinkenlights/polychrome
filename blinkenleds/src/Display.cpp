@@ -8,11 +8,7 @@
 #define PIXEL_COUNT 64
 #define DATA_PIN 16
 
-#ifdef DOUBLE_LEDS
-NeoPixelBus<NeoWrgbTm1814Feature, NeoTm1814Method> strip(PIXEL_COUNT * 2, DATA_PIN);
-#else
 NeoPixelBus<NeoWrgbTm1814Feature, NeoTm1814Method> strip(PIXEL_COUNT, DATA_PIN);
-#endif
 
 Pixel pixel[PIXEL_COUNT];
 
@@ -199,10 +195,6 @@ uint32_t Display::map_index(uint32_t index)
     converted = index % 8;
     break;
   }
-
-#ifdef DOUBLE_LEDS
-  converted = converted * 2 + 1;
-#endif
 
   return converted;
 }
