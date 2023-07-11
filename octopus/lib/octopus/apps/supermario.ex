@@ -2,7 +2,8 @@ defmodule Octopus.Apps.Supermario do
   use Octopus.App
   require Logger
 
-  alias Octopus.{ColorPalette, Canvas}
+  alias Octopus.Apps.Supermario.PngFile
+  # alias Octopus.{ColorPalette, Canvas}
   # alias Octopus.Protobuf.InputEvent
 
   defmodule State do
@@ -12,9 +13,11 @@ defmodule Octopus.Apps.Supermario do
   def name(), do: "Supermario"
 
   def init(_args) do
+    canvas = PngFile.init_canvas_for_level(1)
+
     state = %State{
       interval: 100,
-      canvas: Canvas.new(80, 8, ColorPalette.load("pico-8"))
+      canvas: canvas
     }
 
     # init game, all levels, one player, two players, difficulty ??
