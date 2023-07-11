@@ -19,9 +19,9 @@ deploy-fly:
 	fly deploy
 
 deploy-oldie:
-	rsync -av --delete --filter=':- .gitignore' . oldie:octopus
-	ssh oldie "cd octopus && make release"
-	ssh oldie "sudo systemctl restart octopus"
+	rsync -rl --delete --filter=':- .gitignore' . oldie.bjrm.de:/opt/octopus
+	ssh oldie.bjrm.de "cd /opt/octopus && make release"
+	ssh oldie.bjrm.de "sudo systemctl restart octopus.service"
 
 remote-shell:
 	fly ssh console --pty -C "/app/bin/octopus remote"

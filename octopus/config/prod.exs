@@ -11,7 +11,8 @@ import Config
 # before starting your production server.
 config :octopus, OctopusWeb.Endpoint,
   cache_static_manifest: "priv/static/cache_manifest.json",
-  server: true
+  server: true,
+  check_origin: :conn
 
 config :octopus,
   broadcast: true
