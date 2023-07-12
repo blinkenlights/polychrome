@@ -10,7 +10,7 @@ protobuf_generate:
 		schema.proto
 
 release: export MIX_ENV=prod
-release: 
+release:
 	mix setup
 	mix assets.deploy
 	mix release --overwrite
@@ -19,8 +19,9 @@ deploy-fly:
 	fly deploy
 
 deploy-oldie:
-	rsync -rl --delete --filter=':- .gitignore' . oldie.bjrm.de:/opt/octopus
+	rsync -rl --delete --filter=':- .gitignore' --perms --chmod=775 . oldie.bjrm.de:/opt/octopus
 	ssh oldie.bjrm.de "cd /opt/octopus && make release"
+	ssh oldie.bjrm.de "sudo chown -R octopus:octopus /opt/octopus"
 	ssh oldie.bjrm.de "sudo systemctl restart octopus.service"
 
 remote-shell:
