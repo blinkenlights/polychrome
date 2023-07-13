@@ -1,6 +1,6 @@
 # Polychrome
 
-Blinkenlights Polychrome light installation in Mildenberg, Germany, 2023
+Blinkenlights Polychrome light and sound installation in Mildenberg, Germany, 2023
 
 ## Components
 
