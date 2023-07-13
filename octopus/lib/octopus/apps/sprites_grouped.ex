@@ -10,7 +10,7 @@ defmodule Octopus.Apps.SpritesGrouped do
 
   @sprite_sheet Sprite.list_sprite_sheets() |> hd()
 
-  @easing_interval 150
+  @easing_interval 250
 
   @animation_interval 15
   @animation_steps 50
@@ -20,13 +20,10 @@ defmodule Octopus.Apps.SpritesGrouped do
 
   @groups [
     mario: [0..7, 9, 12],
-    # donkey_kong: [14, 15],
-    # pokemon: [20..24],
+    pokemon: [20..26],
     pacman: [56..59],
-    # sonic: [64..66],
-    # lemming: [68],
+    # sonic: [64..67],
     ninja_turtles: [70..73],
-    # dexter: [89, 90],
     # futurama: [91..93],
     simpsons: [99..103, 105, 107, 109..111],
     # flintstones: [128..132],
@@ -34,9 +31,16 @@ defmodule Octopus.Apps.SpritesGrouped do
     powerrangers: [144..149],
     looney_toons: [150..159],
     disney: [208..215],
-    # waldo: [220],
     marvel: [221..225, 228..232],
-    starwars: [240..247]
+    starwars: [240..247],
+    # kirby: [13],
+    # donkey_kong: [14, 15],
+    # link: [16],
+    # rayman: [47],
+    # lemming: [68],
+    # dexter: [89, 90],
+    # waldo: [220],
+    others: [13, 14, 16, 68, 47, 220]
 
     # powerpuff: [111..113],
     # marvel: [114..120],
