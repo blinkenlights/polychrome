@@ -5,8 +5,9 @@ defmodule Octopus.Apps.Supermario do
   alias Octopus.Apps.Supermario.Game
   alias Octopus.Canvas
 
-  # @frame_rate 60
-  @frame_time_ms 1000
+  @frame_rate 60
+  @frame_time_ms trunc(1000 / @frame_rate)
+
   defmodule State do
     defstruct [:game, :interval, :canvas]
   end

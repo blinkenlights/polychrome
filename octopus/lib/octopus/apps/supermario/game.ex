@@ -8,12 +8,17 @@ defmodule Octopus.Apps.Supermario.Game do
 
   @type t :: %__MODULE__{
           pixels: [],
-          current_position: integer()
+          current_position: integer(),
+          last_ticker: Time.t()
         }
   defstruct [
     :pixels,
-    :current_position
+    :current_position,
+    :last_ticker
   ]
+
+  # micro seconds between two moves
+  @move_interval_ms 80_000
 
   def new() do
     # TODO hard coded level
@@ -21,15 +26,23 @@ defmodule Octopus.Apps.Supermario.Game do
 
     %Game{
       pixels: pixels,
-      current_position: -1
+      current_position: -1,
+      last_ticker: Time.utc_now()
     }
   end
 
-  def tick(%Game{current_position: current_position} = game) do
-    if current_position < max_position(game) do
-      {:ok, %Game{game | current_position: current_position + 1}}
+  def tick(%Game{current_position: current_position, last_ticker: last_ticker} = game) do
+    # only move every ?? ms
+    now = Time.utc_now()
+
+    if Time.diff(now, last_ticker, :microsecond) > @move_interval_ms do
+      if current_position < max_position(game) do
+        {:ok, %Game{game | current_position: current_position + 1, last_ticker: now}}
+      else
+        {:level_end, game}
+      end
     else
-      {:level_end, game}
+      {:ok, game}
     end
   end
 
