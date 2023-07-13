@@ -4,9 +4,7 @@ defmodule OctopusWeb.ManagerLive do
   alias Octopus.Layout.Mildenberg
   alias Octopus.Protobuf.InputEvent
   alias Octopus.{Mixer, AppSupervisor}
-  alias OctopusWeb.PixelsComponent
-
-  import PixelsComponent, only: [pixels: 1]
+  alias OctopusWeb.PixelsLive
 
   def mount(_params, _session, socket) do
     if connected?(socket) do
@@ -18,7 +16,6 @@ defmodule OctopusWeb.ManagerLive do
       socket
       |> assign(pixel_layout: Mildenberg.layout(), configure_app: nil)
       |> assign_apps()
-      |> PixelsComponent.setup()
 
     {:ok, socket, temporary_assigns: [pixel_layout: nil]}
   end
@@ -27,7 +24,7 @@ defmodule OctopusWeb.ManagerLive do
     ~H"""
     <div class="w-full" phx-window-keydown="keydown-event">
       <div class="flex w-full h-full justify-center bg-black">
-        <.pixels id="pixels" pixel_layout={@pixel_layout} />
+        <%= live_render(@socket, PixelsLive, id: "main") %>
       </div>
 
       <div class="container mx-auto">
@@ -47,7 +44,7 @@ defmodule OctopusWeb.ManagerLive do
               </a>
             </div>
           </div>
-          <table class="w-full table-auto text-left m-0">
+          <table class="w-full text-left m-0">
             <tbody>
               <tr :for={
                 %{module: module, app_id: app_id, name: name, selected: selected} <- @running_apps
@@ -118,7 +115,6 @@ defmodule OctopusWeb.ManagerLive do
 
   def handle_event("select", %{"app-id" => app_id}, socket) do
     Mixer.select_app(app_id)
-
     {:noreply, socket}
   end
 
@@ -154,11 +150,11 @@ defmodule OctopusWeb.ManagerLive do
   end
 
   def handle_info({:mixer, {:frame, frame}}, socket) do
-    {:noreply, socket |> PixelsComponent.push_frame(frame)}
+    {:noreply, socket}
   end
 
   def handle_info({:mixer, {:config, config}}, socket) do
-    {:noreply, socket |> PixelsComponent.push_config(config)}
+    {:noreply, socket}
   end
 
   defp assign_apps(socket) do
