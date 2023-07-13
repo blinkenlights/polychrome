@@ -8,6 +8,11 @@ defmodule Octopus.Apps.Supermario do
   @frame_rate 60
   @frame_time_ms trunc(1000 / @frame_rate)
 
+  # how many windows are we using for the game
+  @windows_shown 4
+  # starting from window
+  @windows_offset 3
+
   defmodule State do
     defstruct [:game, :interval, :canvas]
   end
@@ -15,7 +20,7 @@ defmodule Octopus.Apps.Supermario do
   def name(), do: "Supermario"
 
   def init(_args) do
-    game = Game.new()
+    game = Game.new(@windows_shown)
     canvas = Canvas.new(80, 8)
 
     state = %State{
@@ -64,7 +69,7 @@ defmodule Octopus.Apps.Supermario do
             canvas =
               Canvas.put_pixel(
                 canvas,
-                {x, y},
+                {x + @windows_offset * 8, y},
                 pixel |> :binary.bin_to_list() |> Enum.slice(0, 3)
               )
 

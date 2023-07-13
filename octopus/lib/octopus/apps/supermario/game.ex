@@ -9,25 +9,28 @@ defmodule Octopus.Apps.Supermario.Game do
   @type t :: %__MODULE__{
           pixels: [],
           current_position: integer(),
+          windows_shown: integer(),
           last_ticker: Time.t()
         }
   defstruct [
     :pixels,
     :current_position,
-    :last_ticker
+    :last_ticker,
+    :windows_shown
   ]
 
   # micro seconds between two moves
   @move_interval_ms 80_000
 
-  def new() do
+  def new(windows_shown) when windows_shown > 0 and windows_shown < 11 do
     # TODO hard coded level
     pixels = PngFile.load_image_for_level(1)
 
     %Game{
       pixels: pixels,
       current_position: -1,
-      last_ticker: Time.utc_now()
+      last_ticker: Time.utc_now(),
+      windows_shown: windows_shown
     }
   end
 
@@ -46,9 +49,13 @@ defmodule Octopus.Apps.Supermario.Game do
     end
   end
 
-  def current_pixels(%Game{pixels: pixels, current_position: current_position}) do
+  def current_pixels(%Game{
+        pixels: pixels,
+        current_position: current_position,
+        windows_shown: windows_shown
+      }) do
     Enum.map(pixels, fn row ->
-      Enum.slice(row, current_position, 8)
+      Enum.slice(row, current_position, 8 * windows_shown)
     end)
   end
 
