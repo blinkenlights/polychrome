@@ -1,5 +1,5 @@
-# Letterbox
-Blinkenlights Letterbox light installation in Mildenberg, Germany.
+# Polychrome
+Blinkenlights Polychrome light installation in Mildenberg, Germany, 2023
 
 ## Components
 
