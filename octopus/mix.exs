@@ -66,13 +66,7 @@ defmodule Octopus.MixProject do
       setup: ["deps.get", "assets.setup", "assets.build"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["tailwind default", "esbuild default"],
-      "assets.deploy": ["tailwind default --minify", "esbuild default --minify", "phx.digest"],
-      "proto.build": [
-        "cmd rm -rf lib/octopus/protobuf",
-        "cmd mkdir -p lib/octopus/protobuf",
-        "cmd protoc --elixir_out=./lib/octopus/protobuf --elixir_opt=package_prefix=Octopus.protobuf -I../protobuf -I=../protobuf ../protobuf/schema.proto",
-        "format lib/octopus/protobuf/*.ex"
-      ]
+      "assets.deploy": ["tailwind default --minify", "esbuild default --minify", "phx.digest"]
     ]
   end
 end
