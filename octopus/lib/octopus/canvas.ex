@@ -206,6 +206,23 @@ defmodule Octopus.Canvas do
   end
 
   @doc """
+  Flips the canvas horizontally or vertically.
+  """
+  @spec flip(Canvas.t(), :horizontal | :vertical) :: Canvas.t()
+  def flip(%Canvas{width: width, height: height} = canvas, :horizontal) do
+    pixels = canvas.pixels |> Enum.map(fn {{x, y}, color} -> {{width - x - 1, y}, color} end)
+
+    %Canvas{canvas | pixels: pixels}
+  end
+
+  def flip(%Canvas{width: width, height: height} = canvas, :vertical) do
+    pixels = canvas.pixels |> Enum.map(fn {{x, y}, color} -> {{x, height - y - 1}, color} end)
+
+    %Canvas{canvas | pixels: pixels}
+  end
+
+
+  @doc """
   Draws a line on the canvas using Bresenham's line algorithm.
   """
   @spec line(Canvas.t(), coord(), coord(), color()) :: Canvas.t()

@@ -28,8 +28,13 @@ defmodule Octopus.Image do
 
         canvas = Enum.reduce(pixel_indices, canvas, fn {x, y}, canvas ->
             color = ExPng.Image.at(image, {x, y})
-            rgb = [color] |> Enum.map(fn <<r, g, b, _a>> -> [r, g, b] end) |> List.flatten()
-            Canvas.put_pixel(canvas, {x, y}, rgb)
+            alpha = [color] |> Enum.map(fn <<_r, _g, _b, a>> -> a end) |> List.first()
+            if alpha == 0 do
+              canvas
+            else
+              rgb = [color] |> Enum.map(fn <<r, g, b, _a>> -> [r, g, b] end) |> List.flatten()
+              Canvas.put_pixel(canvas, {x, y}, rgb)
+            end
           end)
 
         {:commit, canvas}
