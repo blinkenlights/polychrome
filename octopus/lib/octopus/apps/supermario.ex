@@ -41,9 +41,9 @@ defmodule Octopus.Apps.Supermario do
         {:ok, game} ->
           game
 
-        {:level_end, game} ->
-          game
-          # FIXME: show end level screen and load next level
+          # {:game_over, game} ->
+          #   game
+          # FIXME: show end screen
       end
 
     canvas = Game.current_pixels(game) |> fill_canvas(canvas)

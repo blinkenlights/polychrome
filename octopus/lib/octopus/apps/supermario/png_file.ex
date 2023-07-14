@@ -7,7 +7,8 @@ defmodule Octopus.Apps.Supermario.PngFile do
   @level_defs ~w(mario-1-1.reduced mario-1-2.reduced)
   @path "supermario"
 
-  def load_image_for_level(level) when level > 0 and level < 2 do
+  def load_image_for_level(level) when level > 0 and level < 3 do
+    IO.inspect("loading level png #{Enum.at(@level_defs, level - 1)}.png")
     path = Path.join([:code.priv_dir(:octopus), @path, "#{Enum.at(@level_defs, level - 1)}.png"])
 
     # just make sure the height is 8 pixels
@@ -15,5 +16,5 @@ defmodule Octopus.Apps.Supermario.PngFile do
     pixels
   end
 
-  def load_image_for_level(level), do: raise("level #{level} must be between 0 and 1")
+  def load_image_for_level(level), do: raise("level #{level} must be between 0 and 2")
 end

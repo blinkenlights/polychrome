@@ -1,52 +1,174 @@
 defmodule Octopus.Apps.Supermario.Game do
   @moduledoc """
-  handles the game logic
-  TODO most of current code will be moved to level.ex
+  handles the game logic, still under heavy development
+  some will move into level module
+  mario movement is missing, some moving parts are missing
   """
   alias __MODULE__
   alias Octopus.Apps.Supermario.PngFile
 
   @type t :: %__MODULE__{
           pixels: [],
+          state: :starting | :running | :paused | :gameover,
           current_position: integer(),
           windows_shown: integer(),
-          last_ticker: Time.t()
+          last_ticker: Time.t(),
+          current_level: integer()
         }
   defstruct [
     :pixels,
+    :state,
     :current_position,
     :last_ticker,
-    :windows_shown
+    :windows_shown,
+    :current_level
   ]
 
   # micro seconds between two moves
-  @move_interval_ms 80_000
+  @move_interval_ms 40_000
+  @intro_animation_ms 3_000_000
+  @pause_animation_ms 3_000_000
+  @max_level 2
 
   def new(windows_shown) when windows_shown > 0 and windows_shown < 11 do
-    # TODO hard coded level
-    pixels = PngFile.load_image_for_level(1)
+    current_level = 1
 
     %Game{
-      pixels: pixels,
+      current_level: current_level,
+      pixels: load_level(current_level),
+      state: :starting,
       current_position: -1,
       last_ticker: Time.utc_now(),
       windows_shown: windows_shown
     }
   end
 
-  def tick(%Game{current_position: current_position, last_ticker: last_ticker} = game) do
-    # only move every ?? ms
+  # intro animation
+  def tick(%Game{last_ticker: last_ticker, state: :starting} = game) do
+    now = Time.utc_now()
+
+    if Time.diff(now, last_ticker, :microsecond) > @intro_animation_ms do
+      {:ok, %Game{game | state: :running, last_ticker: now}}
+    else
+      {:ok, game}
+    end
+  end
+
+  # between levels animation
+  def tick(%Game{last_ticker: last_ticker, state: :paused, current_level: current_level} = game) do
+    now = Time.utc_now()
+
+    if Time.diff(now, last_ticker, :microsecond) > @pause_animation_ms do
+      current_level = current_level + 1
+      IO.inspect("starting level #{current_level}")
+
+      {:ok,
+       %Game{
+         game
+         | state: :running,
+           pixels: load_level(current_level),
+           last_ticker: now,
+           current_level: current_level,
+           current_position: -1
+       }}
+    else
+      {:ok, game}
+    end
+  end
+
+  # FIXME: do not move automaticly, movement is done only by user input. Usermovement can also be back
+  def tick(
+        %Game{current_position: current_position, last_ticker: last_ticker, state: :running} =
+          game
+      ) do
     now = Time.utc_now()
 
     if Time.diff(now, last_ticker, :microsecond) > @move_interval_ms do
       if current_position < max_position(game) do
         {:ok, %Game{game | current_position: current_position + 1, last_ticker: now}}
       else
-        {:level_end, game}
+        if game.current_level <= @max_level do
+          IO.inspect("level up, going to pause, level: #{game.current_level}")
+          {:ok, %Game{game | state: :paused, last_ticker: now}}
+        else
+          IO.inspect("game over")
+          {:game_over, %Game{game | state: :gameover}}
+        end
       end
     else
       {:ok, game}
     end
+  end
+
+  # TODO intro animation
+  def current_pixels(%Game{state: :starting}) do
+    [
+      [
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>
+      ],
+      [
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>
+      ],
+      [
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>
+      ]
+    ]
+  end
+
+  def current_pixels(%Game{state: :pause}) do
+    [
+      [
+        <<33, 44, 55, 255>>,
+        <<0, 0, 0, 0>>,
+        <<33, 44, 55, 255>>,
+        <<0, 0, 0, 0>>,
+        <<33, 44, 55, 255>>,
+        <<0, 0, 0, 0>>,
+        <<33, 44, 55, 255>>,
+        <<0, 0, 0, 0>>
+      ],
+      [
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>
+      ],
+      [
+        <<33, 44, 55, 255>>,
+        <<0, 0, 0, 0>>,
+        <<33, 44, 55, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<33, 44, 55, 255>>,
+        <<255, 255, 255, 255>>,
+        <<33, 44, 55, 255>>
+      ]
+    ]
   end
 
   def current_pixels(%Game{
@@ -58,6 +180,8 @@ defmodule Octopus.Apps.Supermario.Game do
       Enum.slice(row, current_position, 8 * windows_shown)
     end)
   end
+
+  defp load_level(level), do: PngFile.load_image_for_level(level)
 
   defp max_position(%Game{pixels: pixels}), do: (Enum.at(pixels, 0) |> Enum.count()) - 8
 end
