@@ -5,7 +5,7 @@ defmodule Octopus.Apps.Supermario.Game do
   mario movement is missing, some moving parts are missing
   """
   alias __MODULE__
-  alias Octopus.Apps.Supermario.PngFile
+  alias Octopus.Apps.Supermario.{Mario, PngFile}
 
   @type t :: %__MODULE__{
           pixels: [],
@@ -13,7 +13,8 @@ defmodule Octopus.Apps.Supermario.Game do
           current_position: integer(),
           windows_shown: integer(),
           last_ticker: Time.t(),
-          current_level: integer()
+          current_level: integer(),
+          mario: Mario.t()
         }
   defstruct [
     :pixels,
@@ -21,7 +22,8 @@ defmodule Octopus.Apps.Supermario.Game do
     :current_position,
     :last_ticker,
     :windows_shown,
-    :current_level
+    :current_level,
+    :mario
   ]
 
   # micro seconds between two moves
@@ -39,7 +41,8 @@ defmodule Octopus.Apps.Supermario.Game do
       state: :starting,
       current_position: -1,
       last_ticker: Time.utc_now(),
-      windows_shown: windows_shown
+      windows_shown: windows_shown,
+      mario: Mario.new()
     }
   end
 
@@ -136,6 +139,7 @@ defmodule Octopus.Apps.Supermario.Game do
     ]
   end
 
+  # TODO between levels animation
   def current_pixels(%Game{state: :pause}) do
     [
       [
@@ -171,14 +175,19 @@ defmodule Octopus.Apps.Supermario.Game do
     ]
   end
 
+  # FIXME missing game over animation
+
+  # draw current pixels of level and mario
   def current_pixels(%Game{
         pixels: pixels,
         current_position: current_position,
-        windows_shown: windows_shown
+        windows_shown: windows_shown,
+        mario: mario
       }) do
     Enum.map(pixels, fn row ->
       Enum.slice(row, current_position, 8 * windows_shown)
     end)
+    |> Mario.draw(mario)
   end
 
   defp load_level(level), do: PngFile.load_image_for_level(level)

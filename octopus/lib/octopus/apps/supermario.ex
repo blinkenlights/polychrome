@@ -70,7 +70,7 @@ defmodule Octopus.Apps.Supermario do
               Canvas.put_pixel(
                 canvas,
                 {x + @windows_offset * 8, y},
-                pixel |> :binary.bin_to_list() |> Enum.slice(0, 3)
+                convert_to_list(pixel)
               )
 
             {canvas, x + 1, y}
@@ -81,4 +81,10 @@ defmodule Octopus.Apps.Supermario do
 
     canvas
   end
+
+  def convert_to_list(pixel) when is_binary(pixel) do
+    pixel |> :binary.bin_to_list() |> Enum.slice(0, 3)
+  end
+
+  def convert_to_list(pixel) when is_list(pixel), do: pixel
 end
