@@ -39,7 +39,7 @@ defmodule Octopus.Apps.Supermario.Game do
       current_level: current_level,
       pixels: load_level(current_level),
       state: :starting,
-      current_position: -1,
+      current_position: 0,
       last_ticker: Time.utc_now(),
       windows_shown: windows_shown,
       mario: Mario.new()
