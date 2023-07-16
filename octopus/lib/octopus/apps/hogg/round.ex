@@ -11,7 +11,10 @@ defmodule Octopus.Apps.Hogg.Round do
     defstruct pos: {39, 1},
               vel: {0, 0},
               base_color: [128, 255, 128],
-              is_ducking: false,
+              weapon_color: [128, 128, 128],
+              ducks: false,
+              stabs: false,
+              facing: 1,
               can_jump: false,
               last_jump: -100
 
@@ -20,7 +23,14 @@ defmodule Octopus.Apps.Hogg.Round do
     end
 
     def new(1) do
-      %Player{pos: {8 * 6 + 3, 1}, base_color: [255, 128, 128]}
+      %Player{pos: {8 * 6 + 3, 1}, base_color: [255, 128, 128], facing: -1}
+    end
+
+    def weapon_pixels(%Player{stabs: false}), do: []
+
+    def weapon_pixels(%Player{pos: {x, y}, facing: facing, ducks: ducks}) do
+      weapon_y = if(ducks, do: y, else: y - 1)
+      [{facing + x, weapon_y}, {facing * 2 + x, weapon_y}]
     end
   end
 
@@ -56,7 +66,8 @@ defmodule Octopus.Apps.Hogg.Round do
                   dy
               end
             },
-            is_ducking: joy |> JoyState.button?(:d),
+            ducks: joy |> JoyState.button?(:d),
+            stabs: joy |> JoyState.button?(:a),
             last_jump: t
         }
       end)
@@ -140,7 +151,13 @@ defmodule Octopus.Apps.Hogg.Round do
           p
           | pos: {new_x, new_y},
             vel: {new_dx, new_dy},
-            can_jump: new_dy == 0 and dy > 0 and p.last_jump + 60 > t
+            can_jump: new_dy == 0 and dy > 0 and p.last_jump + 60 > t,
+            facing:
+              cond do
+                new_dx > 0 -> 1
+                new_dx < 0 -> -1
+                true -> p.facing
+              end
         }
       end)
 
@@ -177,15 +194,25 @@ defmodule Octopus.Apps.Hogg.Round do
 
     round.players
     |> Enum.reduce(canvas, fn %Player{pos: {x, y}} = player, canvas ->
-      x = floor(x)
-      y = floor(y)
+      {x, y} = {floor(x), floor(y)}
 
       canvas
       |> Canvas.put_pixel({x, y}, player.base_color)
       |> (fn
             c, true -> c
             c, false -> c |> Canvas.put_pixel({x, y - 1}, player.base_color)
-          end).(player.is_ducking)
+          end).(player.ducks)
+      |> (fn
+            c, false ->
+              c
+
+            c, true ->
+              player
+              |> Player.weapon_pixels()
+              |> Enum.reduce(c, fn {x, y}, c ->
+                Canvas.put_pixel(c, {floor(x), floor(y)}, player.weapon_color)
+              end)
+          end).(player.stabs)
     end)
     |> Canvas.to_frame()
   end
