@@ -30,8 +30,8 @@ defmodule Octopus.Apps.Hogg.Round do
 
   @horz_acc 0.01
   @horz_max 0.20
-  @jump -1
-  @gravity 0.006
+  @jump -0.25
+  @gravity 0.007
 
   defp apply_input(%Round{t: t, players: [p1, p2]} = round, [joy1, joy2]) do
     players =
@@ -75,19 +75,54 @@ defmodule Octopus.Apps.Hogg.Round do
     %Round{round | players: players}
   end
 
-  defp collsion_detection(%Round{players: players} = round) do
-    players =
-      players
-      |> Enum.map(fn %Player{pos: {x, y}, vel: {dx, dy}} = p ->
-        {tx, ty} = {x + dx, y + dy}
+  defp resolve_player_collision([%Player{} = p1, %Player{} = p2]) do
+    pre_x_players =
+      [p1, p2]
+      |> Enum.map(fn %Player{pos: {x, y}, vel: {dx, _dy}} = p ->
+        %Player{p | pos: {x - dx, y}}
+      end)
 
+    [pxp1, pxp2] = pre_x_players
+
+    {{p1_x, p1_y}, {p2_x, p2_y}, {pxp1_x, _pxp1_y}, {pxp2_x, _pxp2_y}} =
+      {p1.pos, p2.pos, pxp1.pos, pxp2.pos}
+
+    crossed_paths =
+      case {floor(p1_x) - floor(p2_x), floor(pxp1_x) - floor(pxp2_x)} do
+        {x, pre} when x < 0 and pre > 0 -> true
+        {x, pre} when x > 0 and pre < 0 -> true
+        {0, _} -> true
+        {_, 0} -> true
+        _ -> false
+      end
+
+    cond do
+      # todo check height too
+      crossed_paths and abs(p1_y - p2_y) < 2.0 ->
+        [
+          %Player{pxp1 | pos: {pxp1_x + elem(p2.vel, 0), p1_y}},
+          %Player{pxp2 | pos: {pxp2_x + elem(p1.vel, 0), p2_y}}
+        ]
+
+      true ->
+        [p1, p2]
+    end
+  end
+
+  defp collsion_detection(%Round{players: players, t: t} = round) do
+    new_players =
+      players
+      |> resolve_player_collision()
+      |> Enum.map(fn %Player{pos: {x, y}, vel: {dx, dy}} = p ->
+        #         {prevx, prevy} = {x - dx, y - dy}
+        # Environment
         clampx_max = round.canvas.width - 1
         clampx_min = 0
 
         {new_x, new_dx} =
           cond do
-            round(tx) >= clampx_max and dx > 0 -> {clampx_max, 0}
-            round(tx) <= clampx_min and dx < 0 -> {clampx_min, 0}
+            round(x) >= clampx_max and dx > 0 -> {clampx_max, 0}
+            round(x) <= clampx_min and dx < 0 -> {clampx_min, 0}
             true -> {x, dx}
           end
 
@@ -96,19 +131,23 @@ defmodule Octopus.Apps.Hogg.Round do
 
         {new_y, new_dy} =
           cond do
-            round(ty) >= clampy_max and dy > 0 -> {clampy_max, 0}
-            round(ty) <= clampy_min and dy < 0 -> {clampy_min, 0}
+            round(y) >= clampy_max and dy > 0 -> {clampy_max, 0}
+            round(y) <= clampy_min and dy < 0 -> {clampy_min, 0}
             true -> {y, dy}
           end
 
-        %Player{p | pos: {new_x, new_y}, vel: {new_dx, new_dy}, can_jump: new_dy == 0 and dy > 0}
+        %Player{
+          p
+          | pos: {new_x, new_y},
+            vel: {new_dx, new_dy},
+            can_jump: new_dy == 0 and dy > 0 and p.last_jump + 60 > t
+        }
       end)
 
-    %Round{round | players: players}
+    %Round{round | players: new_players}
   end
 
   defp apply_movement(%Round{players: players} = round) do
-    # apply vel
     players =
       players
       |> Enum.map(fn %Player{pos: {x, y}, vel: {dx, dy}} = p ->
@@ -118,12 +157,12 @@ defmodule Octopus.Apps.Hogg.Round do
     %Round{round | players: players}
   end
 
-  def tick(%Round{t: t, players: [p1, p2]} = round, [joy1, joy2] = joylist) do
+  def tick(%Round{t: t} = round, joylist) do
     round
-    |> apply_input(joylist)
     |> apply_physics()
-    |> collsion_detection()
+    |> apply_input(joylist)
     |> apply_movement()
+    |> collsion_detection()
     |> Map.replace(:t, t + 1)
   end
 
