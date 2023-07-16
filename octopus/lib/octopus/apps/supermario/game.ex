@@ -30,7 +30,7 @@ defmodule Octopus.Apps.Supermario.Game do
   @move_interval_ms 40_000
   @intro_animation_ms 3_000_000
   @pause_animation_ms 3_000_000
-  @max_level 2
+  @max_level 4
 
   def new(windows_shown) when windows_shown > 0 and windows_shown < 11 do
     current_level = 1
