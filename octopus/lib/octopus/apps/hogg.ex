@@ -3,11 +3,9 @@ defmodule Octopus.Apps.Hogg do
   require Logger
 
   alias Octopus.Apps.Hogg
-  alias Octopus.Protobuf.{InputEvent, Frame}
+  alias Octopus.Protobuf.InputEvent
   alias Hogg.Game
   alias Hogg.ButtonState
-  alias Octopus.Canvas
-  alias Hogg.JoyState
 
   @frame_rate 60
   @frame_time_ms trunc(1000 / @frame_rate)
@@ -37,11 +35,7 @@ defmodule Octopus.Apps.Hogg do
         %InputEvent{type: type, value: value} = _event,
         %State{button_state: bs} = state
       ) do
-    # Logger.info("Input Debug: #{inspect(event)}")
-
-    new_bs = bs |> ButtonState.handle_event(type, value) |> IO.inspect()
-
-    {:noreply, %State{state | button_state: new_bs}}
+    {:noreply, %State{state | button_state: bs |> ButtonState.handle_event(type, value)}}
   end
 
   defp tick(%State{t: t, button_state: %ButtonState{} = bs} = state) do
