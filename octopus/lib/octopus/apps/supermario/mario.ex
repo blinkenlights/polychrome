@@ -16,7 +16,7 @@ defmodule Octopus.Apps.Supermario.Mario do
   ]
 
   def new do
-    %Mario{x_position: 1, y_position: 7}
+    %Mario{x_position: 2, y_position: 6}
   end
 
   def draw(pixels, %Mario{} = mario) do

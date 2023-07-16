@@ -88,7 +88,7 @@ defmodule Octopus.Apps.Supermario.Game do
 
     if Time.diff(now, last_ticker, :microsecond) > @move_interval_ms do
       if current_position < max_position(game) do
-        {:ok, %Game{game | current_position: current_position + 1, last_ticker: now}}
+        {:ok, %Game{game | last_ticker: now}}
       else
         if game.current_level <= @max_level do
           IO.inspect("level up, going to pause, level: #{game.current_level}")
@@ -101,6 +101,14 @@ defmodule Octopus.Apps.Supermario.Game do
     else
       {:ok, game}
     end
+  end
+
+  def move_left(%Game{current_position: current_position} = game) do
+    {:ok, %Game{game | current_position: current_position - 1}}
+  end
+
+  def move_right(%Game{current_position: current_position} = game) do
+    {:ok, %Game{game | current_position: current_position + 1}}
   end
 
   # TODO intro animation

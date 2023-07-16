@@ -4,6 +4,7 @@ defmodule Octopus.Apps.Supermario do
 
   alias Octopus.Apps.Supermario.Game
   alias Octopus.Canvas
+  alias Octopus.Protobuf.InputEvent
 
   @frame_rate 60
   @frame_time_ms trunc(1000 / @frame_rate)
@@ -48,12 +49,46 @@ defmodule Octopus.Apps.Supermario do
 
     canvas = Game.current_pixels(game) |> fill_canvas(canvas)
     canvas |> Canvas.to_frame() |> send_frame()
-    schedule_ticker(state.interval)
+    # schedule_ticker(state.interval)
     {:noreply, %State{state | game: game, canvas: canvas}}
   end
 
-  def handle_info(:move, state) do
-    # handles joystick input
+  def handle_input(
+        %InputEvent{type: button, value: value},
+        %State{game: game} = state
+      ) do
+    state =
+      case {button, value} do
+        {:AXIS_X_1, -1} ->
+          case Game.move_left(game) do
+            {:ok, game} ->
+              %{state | game: game}
+
+              # {:game_over, game} ->
+              #   %{state | game: game}
+          end
+
+        {:AXIS_X_1, 1} ->
+          case Game.move_right(game) do
+            {:ok, game} ->
+              %{state | game: game}
+
+              # {:game_over, game} ->
+              #   %{state | game: game}
+          end
+
+        # {:BUTTON_5, 1} ->
+        #   %{state | game: Game.jump(game)}
+
+        _ ->
+          state
+      end
+
+    {:noreply, state}
+  end
+
+  def handle_input(_, state) do
+    IO.inspect("!!!!!!!!!!!!!!!!!!!!!!! handles input !!!!!!!!!!!!!!!!!!!!!!!!!!!!")
     {:noreply, state}
   end
 
