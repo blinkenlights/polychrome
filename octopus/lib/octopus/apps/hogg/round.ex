@@ -18,12 +18,16 @@ defmodule Octopus.Apps.Hogg.Round do
               can_jump: false,
               last_jump: -100
 
-    def new(0) do
-      %Player{pos: {8 * 3 + 4, 1}}
+    def new(0, xpos) do
+      %Player{pos: {xpos, 0}}
     end
 
-    def new(1) do
-      %Player{pos: {8 * 6 + 3, 1}, base_color: [255, 128, 128], facing: -1}
+    def new(1, xpos) do
+      %Player{pos: {xpos, 0}, base_color: [255, 128, 128], facing: -1}
+    end
+
+    def new_pair_at_x_pos(xpos) do
+      [new(0, xpos - 11), new(1, xpos + 12)]
     end
 
     def weapon_pixels(%Player{stabs: false}), do: []
@@ -32,10 +36,29 @@ defmodule Octopus.Apps.Hogg.Round do
       weapon_y = if(ducks, do: y, else: y - 1)
       [{facing + x, weapon_y}, {facing * 2 + x, weapon_y}]
     end
+
+    def player_pixels(%Player{ducks: false} = p) do
+      [{x, y}] = player_pixels(%Player{p | ducks: true})
+      [{x, y}, {x, y - 1}]
+    end
+
+    def player_pixels(%Player{pos: {x, y}, ducks: true}), do: [{x, y}]
+
+    def was_stabbed(%Player{}, %Player{stabs: false}), do: false
+
+    def was_stabbed(%Player{} = p, %Player{stabs: true} = op) do
+      pp = player_pixels(p) |> Enum.map(&to_pix/1)
+
+      weapon_pixels(op)
+      |> Enum.map(&to_pix/1)
+      |> Enum.any?(fn pix -> pix in pp end)
+    end
+
+    def to_pix({x, y}), do: {floor(x), floor(y)}
   end
 
   def new() do
-    %Round{t: 0, canvas: Canvas.new(80, 8), players: [Player.new(0), Player.new(1)]}
+    %Round{t: 0, canvas: Canvas.new(80, 8), players: Player.new_pair_at_x_pos(39)}
   end
 
   @horz_acc 0.01
@@ -46,7 +69,7 @@ defmodule Octopus.Apps.Hogg.Round do
   defp apply_input(%Round{t: t, players: [p1, p2]} = round, [joy1, joy2]) do
     players =
       [{p1, joy1}, {p2, joy2}]
-      |> Enum.map(fn {%Player{pos: {x, y}, vel: {dx, dy}} = p, %JoyState{} = joy} ->
+      |> Enum.map(fn {%Player{vel: {dx, dy}} = p, %JoyState{} = joy} ->
         will_jump = p.can_jump and JoyState.button?(joy, :u)
 
         %Player{
@@ -120,6 +143,25 @@ defmodule Octopus.Apps.Hogg.Round do
     end
   end
 
+  @death_distance 16
+
+  defp game_events(
+         %Round{
+           players: [%Player{pos: {p1x, _}} = p1, %Player{pos: {p2x, _}} = p2] = _players,
+           t: t
+         } = round
+       ) do
+    new_players =
+      case {Player.was_stabbed(p1, p2), Player.was_stabbed(p2, p1)} do
+        {true, true} -> Player.new_pair_at_x_pos(floor((p1x + p2x) / 2))
+        {true, false} -> [Player.new(0, p2x - @death_distance), p2]
+        {false, true} -> [p1, Player.new(1, p2x + @death_distance)]
+        _ -> [p1, p2]
+      end
+
+    %Round{round | players: new_players}
+  end
+
   defp collsion_detection(%Round{players: players, t: t} = round) do
     new_players =
       players
@@ -179,6 +221,7 @@ defmodule Octopus.Apps.Hogg.Round do
     |> apply_physics()
     |> apply_input(joylist)
     |> apply_movement()
+    |> game_events()
     |> collsion_detection()
     |> Map.replace(:t, t + 1)
   end
@@ -193,15 +236,12 @@ defmodule Octopus.Apps.Hogg.Round do
     #    state.players |> IO.inspect()
 
     round.players
-    |> Enum.reduce(canvas, fn %Player{pos: {x, y}} = player, canvas ->
-      {x, y} = {floor(x), floor(y)}
-
-      canvas
-      |> Canvas.put_pixel({x, y}, player.base_color)
-      |> (fn
-            c, true -> c
-            c, false -> c |> Canvas.put_pixel({x, y - 1}, player.base_color)
-          end).(player.ducks)
+    |> Enum.reduce(canvas, fn %Player{} = player, canvas ->
+      player
+      |> Player.player_pixels()
+      |> Enum.reduce(canvas, fn pix, c ->
+        c |> Canvas.put_pixel(Player.to_pix(pix), player.base_color)
+      end)
       |> (fn
             c, false ->
               c
