@@ -27,7 +27,7 @@ defmodule Octopus.Apps.Supermario.Game do
   ]
 
   # micro seconds between two moves
-  @move_interval_ms 40_000
+  @update_interval_ms 10_000
   @intro_animation_ms 3_000_000
   @pause_animation_ms 3_000_000
   @max_level 4
@@ -82,8 +82,8 @@ defmodule Octopus.Apps.Supermario.Game do
   def tick(%Game{last_ticker: last_ticker, state: :running} = game) do
     now = Time.utc_now()
 
-    if Time.diff(now, last_ticker, :microsecond) > @move_interval_ms do
-      {:ok, %Game{game | last_ticker: now}}
+    if Time.diff(now, last_ticker, :microsecond) > @update_interval_ms do
+      Game.update(game)
     else
       {:ok, game}
     end
@@ -131,6 +131,14 @@ defmodule Octopus.Apps.Supermario.Game do
         end
       end
     end
+  end
+
+  def jump(%Game{mario: mario} = game) do
+    %Game{game | mario: Mario.jump(mario)}
+  end
+
+  def update(%Game{mario: mario} = game) do
+    {:ok, %Game{game | mario: Mario.update(mario)}}
   end
 
   # TODO intro animation

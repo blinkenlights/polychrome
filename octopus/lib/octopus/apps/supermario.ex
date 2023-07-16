@@ -76,8 +76,8 @@ defmodule Octopus.Apps.Supermario do
               #   %{state | game: game}
           end
 
-        # {:BUTTON_5, 1} ->
-        #   %{state | game: Game.jump(game)}
+        {:BUTTON_5, 1} ->
+          %{state | game: Game.jump(game)}
 
         _ ->
           state
