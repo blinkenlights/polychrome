@@ -53,7 +53,7 @@ defmodule OctopusWeb do
     quote do
       use Phoenix.LiveView,
         layout: {OctopusWeb.Layouts, :app},
-        container: {:div, class: "h-full"}
+        container: {:div, class: "contents"}
 
       unquote(html_helpers())
     end

@@ -14,7 +14,7 @@ defmodule Octopus.Broadcaster do
   }
 
   defmodule State do
-    defstruct [:udp, :remote_log_file, :config, :remote_ip, firmware_stats: %{}]
+    defstruct [:udp, :config, :remote_ip, firmware_stats: %{}]
   end
 
   defmodule FirmwareInfoMeta do
@@ -53,12 +53,10 @@ defmodule Octopus.Broadcaster do
 
     Logger.info("Broadcasting to #{inspect(target_ip)}. Port #{@local_port}")
 
-    remote_log_file = File.open!("remote.log", [:write])
     {:ok, udp} = :gen_udp.open(@local_port, [:binary, active: true, broadcast: true])
 
     state = %State{
       udp: udp,
-      remote_log_file: remote_log_file,
       config: @default_config,
       remote_ip: target_ip
     }
@@ -135,7 +133,6 @@ defmodule Octopus.Broadcaster do
   end
 
   defp handle_firmware_packet(%RemoteLog{message: message}, from_ip, %State{} = state) do
-    IO.write(state.remote_log_file, message)
     Logger.info("#{print_ip(from_ip)}: Remote log #{inspect(message)}")
     state
   end

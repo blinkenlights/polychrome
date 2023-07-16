@@ -77,13 +77,13 @@ export function setup(canvas: HTMLCanvasElement) {
 
   resize(canvas);
 
-  [`layout:${id}`, "layout:*"].forEach((event) => {
+  [`layout:${id}`, "layout:pixels-*"].forEach((event) => {
     this.handleEvent(event, ({ layout: newLayout }: { layout: Layout }) => {
       layout = newLayout;
     });
   });
 
-  [`frame:${id}`, "frame:*"].forEach((event) => {
+  [`frame:${id}`, "frame:pixels-*"].forEach((event) => {
     this.handleEvent(event, ({ frame: frame }: { frame: Frame }) => {
       switch (frame.kind) {
         case "indexed": {
@@ -115,11 +115,11 @@ export function setup(canvas: HTMLCanvasElement) {
     });
   });
 
-  [`config:${id}`, "config:*"].forEach((event) => {
+  [`config:${id}`, "config:pixels-*"].forEach((event) => {
     this.handleEvent(event, ({ config: _ }: { config: Config }) => {});
   });
 
-  ["pixel_offset", "pixel_offset:*"].forEach((event) => {
+  [`pixel_offset:${id}`, "pixel_offset:pixels-*"].forEach((event) => {
     this.handleEvent(event, ({ offset: newOffset }: { offset: number }) => {
       pixelOffset = newOffset;
     });

@@ -1,15 +1,16 @@
-# Letterbox
-Blinkenlights Letterbox light installation in Mildenberg, Germany.
+# Polychrome
+
+Blinkenlights Polychrome light and sound installation in Mildenberg, Germany, 2023
 
 ## Components
 
-| Name | Description | Documentation |
-| ---- | ------------| ------------- |
-| octopus | Central hub for the project. <br/>Manages apps, mixes pixel streams, shows previews. | [Readme](./octopus/README.md)
-| protobuf | Protobuf schema files for the data packets | [schema.proto](./protobuf/schema.proto)
-| blinkenleds | ESP32 firmware that drives the LED panels | [Readme](./blinkenleds/README.md)
-| calibration | Tooling to create color calibration tables for the Leds | [Readme](./calibration/README.md)
-| beak | Audio engine that drives the sound output | [Readme](./beak/README.md)
+| Name        | Description                                                                          | Documentation                           |
+| ----------- | ------------------------------------------------------------------------------------ | --------------------------------------- |
+| octopus     | Central hub for the project. <br/>Manages apps, mixes pixel streams, shows previews. | [Readme](./octopus/README.md)           |
+| protobuf    | Protobuf schema files for the data packets                                           | [schema.proto](./protobuf/schema.proto) |
+| blinkenleds | ESP32 firmware that drives the LED panels                                            | [Readme](./blinkenleds/README.md)       |
+| calibration | Tooling to create color calibration tables for the Leds                              | [Readme](./calibration/README.md)       |
+| beak        | Audio engine that drives the sound output                                            | [Readme](./beak/README.md)              |
 
 ## Architecture
 
@@ -17,13 +18,13 @@ Protobuf is used everywhere as the wire format. All messages are wrapped in the 
 
 ### Data flow for pixel and sound outputs
 
-```mermaid 
+```mermaid
 flowchart LR
   external_1[External Source] --> |UDP| udp_server_1
   external_2[External Source] --> |UDP| udp_server_2
 
   subgraph Octopus
-  
+
   udp_server_1["Octopus.UDPServer [Port 2342]"] --> mixer
   udp_server_2["Octopus.UDPServer [Port 2343]"] --> mixer
 
@@ -49,11 +50,9 @@ flowchart LR
   end
 ```
 
-
 ### Data flow for input events
 
-
-```mermaid 
+```mermaid
 ---
 title: "Input events"
 ---
@@ -62,7 +61,7 @@ flowchart LR
   controllers --> |UDP| input_adapter
 
   subgraph Octopus
-  
+
   input_adapter[Octopus.InputAdapter] --> mixer["Octopus.Mixer"]
   manager[OctobusWeb.ManagerLive] --> mixer
 

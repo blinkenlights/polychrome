@@ -1,4 +1,4 @@
-module github.com/blinkenlights/letterbox/beak/test/beak-proto-sim
+module github.com/blinkenlights/polychrome/beak/test/beak-proto-sim
 
 go 1.18
 

@@ -4,9 +4,6 @@ defmodule OctopusWeb.AppLive do
 
   alias Octopus.AppSupervisor
   alias Octopus.Mixer
-  alias OctopusWeb.PixelsComponent
-
-  import OctopusWeb.PixelsComponent, only: [pixels: 1]
 
   def mount(%{"id" => app_id}, _session, socket) do
     if connected?(socket) do
@@ -22,10 +19,8 @@ defmodule OctopusWeb.AppLive do
       |> assign(
         app_id: app_id,
         module: module,
-        name: name,
-        pixel_layout: Mildenberg.layout()
+        name: name
       )
-      |> PixelsComponent.setup()
 
     {:ok, socket}
   end

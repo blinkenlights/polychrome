@@ -75,6 +75,6 @@ func init() {
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
-	playMessageCmd.Flags().StringVarP(&file, "file", "f", "/Users/lukas/dev/letterbox/sonartacle/resources/pew.wav", "the file to play")
+	playMessageCmd.Flags().StringVarP(&file, "file", "f", "/Users/lukas/dev/polychrome/sonartacle/resources/pew.wav", "the file to play")
 	playMessageCmd.Flags().Uint32VarP(&channel, "channel", "c", 1, "the channel to play the sample on")
 }
