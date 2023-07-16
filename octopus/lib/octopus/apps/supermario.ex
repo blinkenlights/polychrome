@@ -49,7 +49,6 @@ defmodule Octopus.Apps.Supermario do
 
     canvas = Game.current_pixels(game) |> fill_canvas(canvas)
     canvas |> Canvas.to_frame() |> send_frame()
-    # schedule_ticker(state.interval)
     {:noreply, %State{state | game: game, canvas: canvas}}
   end
 

@@ -64,7 +64,7 @@ defmodule Octopus.Apps.Supermario.Game do
     if Time.diff(now, last_ticker, :microsecond) > @pause_animation_ms do
       current_level = current_level + 1
       IO.inspect("starting level #{current_level}")
-
+      # FIXME check max level => end game!!!, also check maxlevel is already done before????
       {:ok,
        %Game{
          game
@@ -79,36 +79,58 @@ defmodule Octopus.Apps.Supermario.Game do
     end
   end
 
-  # FIXME: do not move automaticly, movement is done only by user input. Usermovement can also be back
-  def tick(
-        %Game{current_position: current_position, last_ticker: last_ticker, state: :running} =
-          game
-      ) do
+  def tick(%Game{last_ticker: last_ticker, state: :running} = game) do
     now = Time.utc_now()
 
     if Time.diff(now, last_ticker, :microsecond) > @move_interval_ms do
-      if current_position < max_position(game) do
-        {:ok, %Game{game | last_ticker: now}}
-      else
-        if game.current_level <= @max_level do
-          IO.inspect("level up, going to pause, level: #{game.current_level}")
-          {:ok, %Game{game | state: :paused, last_ticker: now}}
-        else
-          IO.inspect("game over")
-          {:game_over, %Game{game | state: :gameover}}
-        end
-      end
+      {:ok, %Game{game | last_ticker: now}}
     else
       {:ok, game}
     end
   end
 
-  def move_left(%Game{current_position: current_position} = game) do
-    {:ok, %Game{game | current_position: current_position - 1}}
+  def move_left(%Game{current_position: 0, mario: mario} = game) do
+    {:ok, %Game{game | mario: Mario.move_left(mario)}}
   end
 
-  def move_right(%Game{current_position: current_position} = game) do
-    {:ok, %Game{game | current_position: current_position + 1}}
+  def move_left(
+        %Game{
+          current_position: current_position,
+          mario: %Mario{} = mario
+        } = game
+      ) do
+    if mario.x_position > Mario.start_position_x() do
+      {:ok, %Game{game | mario: Mario.move_left(mario)}}
+    else
+      {:ok, %Game{game | current_position: current_position - 1}}
+    end
+  end
+
+  def move_right(%Game{current_position: 0, mario: mario} = game) do
+    if mario.x_position < Mario.start_position_x() do
+      {:ok, %Game{game | mario: Mario.move_right(mario)}}
+    else
+      {:ok, %Game{game | current_position: 1}}
+    end
+  end
+
+  def move_right(%Game{current_position: current_position, mario: mario} = game) do
+    # TODO too many ifs, refactor
+    if current_position < max_position(game) do
+      {:ok, %Game{game | current_position: current_position + 1}}
+    else
+      if mario.x_position < 7 do
+        {:ok, %Game{game | mario: Mario.move_right(mario)}}
+      else
+        if game.current_level <= @max_level do
+          IO.inspect("level up, going to pause, level: #{game.current_level}")
+          {:ok, %Game{game | state: :paused}}
+        else
+          IO.inspect("game over")
+          {:game_over, %Game{game | state: :gameover}}
+        end
+      end
+    end
   end
 
   # TODO intro animation
@@ -200,5 +222,6 @@ defmodule Octopus.Apps.Supermario.Game do
 
   defp load_level(level), do: PngFile.load_image_for_level(level)
 
+  # TODO move to level module
   defp max_position(%Game{pixels: pixels}), do: (Enum.at(pixels, 0) |> Enum.count()) - 8
 end
