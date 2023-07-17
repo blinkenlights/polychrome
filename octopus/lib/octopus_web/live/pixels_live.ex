@@ -1,5 +1,5 @@
 defmodule OctopusWeb.PixelsLive do
-  alias Octopus.Layout.{Mildenberg, MildenbergZoom1, MildenbergZoom2}
+  alias Octopus.Layout.{Mildenberg, MildenbergNarrow, MildenbergZoom1, MildenbergZoom2}
   use OctopusWeb, :live_view
 
   import Phoenix.LiveView, only: [push_event: 3, connected?: 1]
@@ -17,6 +17,7 @@ defmodule OctopusWeb.PixelsLive do
 
   @views %{
     "default" => Mildenberg.layout(),
+    "narrow" => MildenbergNarrow.layout(),
     "zoom1" => MildenbergZoom1.layout(),
     "zoom2" => MildenbergZoom2.layout()
   }
