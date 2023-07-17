@@ -6,23 +6,32 @@ defmodule Octopus.Apps.Supermario.Mario do
   alias Octopus.Apps.Supermario.Matrix
 
   @start_position_x 3
-  @jump_interval_ms 5_000
+  @jump_interval_ms 90_000
+  @fall_interval_ms 100_000
   @colour [216, 40, 0]
   @type t :: %__MODULE__{
           x_position: integer(),
           y_position: integer(),
           jumping: boolean(),
-          jumped_at: Time.t()
+          jumped_at: Time.t() | nil,
+          falling_since: Time.t() | nil
         }
   defstruct [
     :x_position,
     :y_position,
     :jumping,
-    :jumped_at
+    :jumped_at,
+    :falling_since
   ]
 
   def new do
-    %Mario{x_position: @start_position_x, y_position: 6, jumping: false, jumped_at: nil}
+    %Mario{
+      x_position: @start_position_x,
+      y_position: 6,
+      jumping: false,
+      jumped_at: nil,
+      falling_since: nil
+    }
   end
 
   def draw(pixels, %Mario{} = mario) do
@@ -45,13 +54,17 @@ defmodule Octopus.Apps.Supermario.Mario do
   end
 
   def jump(%Mario{jumping: false} = mario) do
-    %Mario{mario | y_position: mario.y_position - 1, jumping: true, jumped_at: Time.utc_now()}
+    if can_jump?(mario) do
+      %Mario{mario | y_position: mario.y_position - 1, jumping: true, jumped_at: Time.utc_now()}
+    else
+      mario
+    end
   end
 
   def jump(%Mario{jumping: true, jumped_at: jumped_at} = mario) do
     now = Time.utc_now()
-    # y position 2 is arbitrary, just to prevent jumping into the sky
-    if Time.diff(now, jumped_at, :microsecond) > @jump_interval_ms && mario.y_position > 2 do
+
+    if Time.diff(now, jumped_at, :microsecond) > @jump_interval_ms && can_jump?(mario) do
       %Mario{mario | y_position: mario.y_position - 1, jumping: true, jumped_at: Time.utc_now()}
     else
       mario
@@ -59,30 +72,57 @@ defmodule Octopus.Apps.Supermario.Mario do
   end
 
   def update(%Mario{jumping: true, y_position: y_position, jumped_at: jumped_at} = mario) do
-    now = Time.utc_now()
     # jump a second pixel after a while
     # TODO: use another constant, jump_interval_ms is used to prevent a second jump within a short time
-    if Time.diff(now, jumped_at, :microsecond) > @jump_interval_ms do
-      %Mario{mario | y_position: y_position - 1, jumping: false, jumped_at: nil}
+    if Time.diff(Time.utc_now(), jumped_at, :microsecond) > @jump_interval_ms do
+      %Mario{
+        mario
+        | y_position: y_position - 1,
+          jumping: false,
+          jumped_at: nil,
+          falling_since: Time.utc_now()
+      }
     else
       mario
     end
   end
 
-  def update(%Mario{y_position: y_position} = mario) do
+  # falling_since may be nil, when mario was not jumping before but ran over a hole
+  # but then we want to fall immidiately
+  def update(%Mario{y_position: y_position, falling_since: nil} = mario) do
     mario =
       if can_fall?(mario) do
-        %Mario{mario | y_position: y_position + 1}
+        %Mario{mario | y_position: y_position + 1, falling_since: Time.utc_now()}
       else
         mario
       end
 
-    %Mario{mario | jumping: false, jumped_at: nil}
+    mario
   end
 
-  # very simple implementation wether maria can fall or not
+  # already falling, check if we can fall further and fall with a delay
+  def update(%Mario{y_position: y_position, falling_since: falling_since} = mario) do
+    if Time.diff(Time.utc_now(), falling_since, :microsecond) > @fall_interval_ms do
+      if can_fall?(mario) do
+        # reset falling timestamp, also next fall should be done with a delay
+        %Mario{mario | y_position: y_position + 1, falling_since: Time.utc_now()}
+      else
+        %Mario{mario | falling_since: nil}
+      end
+    else
+      mario
+    end
+  end
+
+  # very simple implementation wether maria can fall or not. need to provide a pixel matrix
   defp can_fall?(%Mario{y_position: y_position}) do
     y_position < 6
+  end
+
+  # very simple implementation wether maria can jump or not
+  defp can_jump?(%Mario{y_position: y_position}) do
+    # y position 3 is arbitrary, just to prevent jumping into the sky. need to provide a pixel matrix
+    y_position > 3
   end
 
   def start_position_x, do: @start_position_x
