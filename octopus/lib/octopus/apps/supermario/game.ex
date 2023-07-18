@@ -1,28 +1,27 @@
 defmodule Octopus.Apps.Supermario.Game do
   @moduledoc """
   handles the game logic, still under heavy development
-  some will move into level module
-  mario movement is missing, some moving parts are missing
+  blocks are missing
+  moving bad guy is missing
+  moving blocks are missing
   """
   alias __MODULE__
-  alias Octopus.Apps.Supermario.{Mario, PngFile}
+  alias Octopus.Apps.Supermario.{Level, Mario}
 
   @type t :: %__MODULE__{
-          pixels: [],
           state: :starting | :running | :paused | :gameover,
           current_position: integer(),
           windows_shown: integer(),
           last_ticker: Time.t(),
-          current_level: integer(),
+          level: Level.t(),
           mario: Mario.t()
         }
   defstruct [
-    :pixels,
     :state,
     :current_position,
     :last_ticker,
     :windows_shown,
-    :current_level,
+    :level,
     :mario
   ]
 
@@ -30,14 +29,10 @@ defmodule Octopus.Apps.Supermario.Game do
   @update_interval_ms 10_000
   @intro_animation_ms 3_000_000
   @pause_animation_ms 3_000_000
-  @max_level 4
 
   def new(windows_shown) when windows_shown > 0 and windows_shown < 11 do
-    current_level = 1
-
     %Game{
-      current_level: current_level,
-      pixels: load_level(current_level),
+      level: Level.new(),
       state: :starting,
       current_position: 0,
       last_ticker: Time.utc_now(),
@@ -58,21 +53,19 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   # between levels animation
-  def tick(%Game{last_ticker: last_ticker, state: :paused, current_level: current_level} = game) do
+  def tick(%Game{last_ticker: last_ticker, state: :paused, level: level} = game) do
     now = Time.utc_now()
 
     if Time.diff(now, last_ticker, :microsecond) > @pause_animation_ms do
-      current_level = current_level + 1
-      IO.inspect("starting level #{current_level}")
       # FIXME check max level => end game!!!, also check maxlevel is already done before????
+      #       second thought, this should have been done before the pause animation => CEHECK
       {:ok,
        %Game{
          game
          | state: :running,
-           pixels: load_level(current_level),
+           level: Level.next_level(level),
            last_ticker: now,
-           current_level: current_level,
-           current_position: -1
+           current_position: 0
        }}
     else
       {:ok, game}
@@ -122,20 +115,19 @@ defmodule Octopus.Apps.Supermario.Game do
     end
   end
 
-  def move_right(%Game{current_position: current_position, mario: mario} = game) do
-    # TODO too many nested ifs, refactor
-    if current_position < max_position(game) do
+  def move_right(%Game{current_position: current_position, mario: mario, level: level} = game) do
+    # TODO too many nested ifs, refactor, use case statement
+    if current_position < Level.max_position(level) do
       {:ok, %Game{game | current_position: current_position + 1}}
     else
       if mario.x_position < 7 do
         {:ok, %Game{game | mario: Mario.move_right(mario)}}
       else
-        if game.current_level <= @max_level do
-          IO.inspect("level up, going to pause, level: #{game.current_level}")
-          {:ok, %Game{game | state: :paused}}
-        else
+        if Level.last_level?(game.level) do
           IO.inspect("game over")
           {:game_over, %Game{game | state: :gameover}}
+        else
+          {:ok, %Game{game | state: :paused}}
         end
       end
     end
@@ -226,19 +218,14 @@ defmodule Octopus.Apps.Supermario.Game do
 
   # draw current pixels of level and mario
   def current_pixels(%Game{
-        pixels: pixels,
+        level: level,
         current_position: current_position,
         windows_shown: windows_shown,
         mario: mario
       }) do
-    Enum.map(pixels, fn row ->
+    Enum.map(level.pixels, fn row ->
       Enum.slice(row, current_position, 8 * windows_shown)
     end)
     |> Mario.draw(mario)
   end
-
-  defp load_level(level), do: PngFile.load_image_for_level(level)
-
-  # TODO move to level module
-  defp max_position(%Game{pixels: pixels}), do: (Enum.at(pixels, 0) |> Enum.count()) - 8
 end
