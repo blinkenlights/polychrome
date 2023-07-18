@@ -1,7 +1,7 @@
 # TODO Find a better name for this module
 defmodule Octopus.Apps.Supermario.PngFile do
   @moduledoc """
-  Reads a png file for a specific level and creates a canvas from it
+  Reads a png file for a specific level and loads the pixels from it
   """
 
   @level_defs ~w(mario-1-1.reduced mario-1-2.reduced mario-1-3-reduced mario-1-4-reduced)
