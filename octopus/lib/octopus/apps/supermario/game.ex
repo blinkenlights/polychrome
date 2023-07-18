@@ -99,10 +99,18 @@ defmodule Octopus.Apps.Supermario.Game do
           mario: %Mario{} = mario
         } = game
       ) do
-    if mario.x_position > Mario.start_position_x() do
-      {:ok, %Game{game | mario: Mario.move_left(mario)}}
+    game =
+      if mario.x_position > Mario.start_position_x() do
+        %Game{game | mario: Mario.move_left(mario)}
+      else
+        %Game{game | current_position: current_position - 1}
+      end
+
+    # FIXME: check if mario is dead
+    if true do
+      {:ok, game}
     else
-      {:ok, %Game{game | current_position: current_position - 1}}
+      {:game_over, game}
     end
   end
 
@@ -115,7 +123,7 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   def move_right(%Game{current_position: current_position, mario: mario} = game) do
-    # TODO too many ifs, refactor
+    # TODO too many nested ifs, refactor
     if current_position < max_position(game) do
       {:ok, %Game{game | current_position: current_position + 1}}
     else
@@ -134,7 +142,8 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   def jump(%Game{mario: mario} = game) do
-    %Game{game | mario: Mario.jump(mario)}
+    mario = Mario.jump(mario)
+    %Game{game | mario: mario}
   end
 
   def update(%Game{mario: mario} = game) do

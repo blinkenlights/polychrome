@@ -5,6 +5,7 @@ defmodule Octopus.Apps.Supermario do
   alias Octopus.Apps.Supermario.Game
   alias Octopus.Canvas
   alias Octopus.Protobuf.InputEvent
+  alias Octopus.Apps.Input.{ButtonState, JoyState}
 
   @frame_rate 60
   @frame_time_ms trunc(1000 / @frame_rate)
@@ -15,7 +16,7 @@ defmodule Octopus.Apps.Supermario do
   @windows_offset 3
 
   defmodule State do
-    defstruct [:game, :interval, :canvas]
+    defstruct [:game, :interval, :canvas, :button_state]
   end
 
   def name(), do: "Supermario"
@@ -27,7 +28,8 @@ defmodule Octopus.Apps.Supermario do
     state = %State{
       interval: @frame_time_ms,
       game: game,
-      canvas: canvas
+      canvas: canvas,
+      button_state: ButtonState.new()
     }
 
     schedule_ticker(state.interval)
@@ -53,37 +55,43 @@ defmodule Octopus.Apps.Supermario do
   end
 
   def handle_input(
-        %InputEvent{type: button, value: value},
-        %State{game: game} = state
+        %InputEvent{type: type, value: value},
+        %State{button_state: button_state} = state
       ) do
+    new_button_state = ButtonState.handle_event(button_state, type, value)
+
     state =
-      case {button, value} do
-        {:AXIS_X_1, -1} ->
-          case Game.move_left(game) do
-            {:ok, game} ->
-              %{state | game: game}
-
-              # {:game_over, game} ->
-              #   %{state | game: game}
-          end
-
-        {:AXIS_X_1, 1} ->
-          case Game.move_right(game) do
-            {:ok, game} ->
-              %{state | game: game}
-
-              # {:game_over, game} ->
-              #   %{state | game: game}
-          end
-
-        {:BUTTON_5, 1} ->
-          %{state | game: Game.jump(game)}
-
-        _ ->
-          state
+      if ButtonState.button?(new_button_state, :BUTTON_5) do
+        game = Game.jump(state.game)
+        %{state | game: game}
+      else
+        state
       end
 
-    {:noreply, state}
+    state =
+      if JoyState.button?(new_button_state.joy1, :r) do
+        case Game.move_right(state.game) do
+          {:ok, game} ->
+            %{state | game: game}
+
+          {:game_over, game} ->
+            %{state | game: game}
+        end
+      else
+        if JoyState.button?(new_button_state.joy1, :l) do
+          case Game.move_left(state.game) do
+            {:ok, game} ->
+              %{state | game: game}
+
+            {:game_over, game} ->
+              %{state | game: game}
+          end
+        else
+          state
+        end
+      end
+
+    {:noreply, %{state | button_state: new_button_state}}
   end
 
   def handle_input(_, state) do
