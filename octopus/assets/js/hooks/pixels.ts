@@ -15,7 +15,7 @@ type Frame =
   | { kind: "rgbw"; data: number[] }
   | { kind: "audio"; uri: string; channel: number };
 
-function resize(canvas: HTMLCanvasElement) {
+function resize(canvas: HTMLCanvasElement, aspectRatio) {
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
   if (
@@ -23,8 +23,11 @@ function resize(canvas: HTMLCanvasElement) {
     canvas.height !== rect.height * dpr
   ) {
     canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
+    canvas.height = (rect.width / aspectRatio) * dpr;
   }
+  // TODO decide which side to calculate
+  // canvas.width = (rect.height / aspectRatio) * dpr ;
+  // canvas.height = rect.height * dpr;
 }
 
 // Debounces a function based on the current time.
@@ -68,6 +71,7 @@ export function setup(canvas: HTMLCanvasElement) {
   let pixelOffset = 0;
 
   let layout: Layout;
+  let aspectRatio: Number = 1;
   let pixels: RGB[] = [];
 
   const ctx = canvas.getContext("2d");
@@ -75,11 +79,12 @@ export function setup(canvas: HTMLCanvasElement) {
     return;
   }
 
-  resize(canvas);
+  resize(canvas, aspectRatio);
 
   [`layout:${id}`, "layout:pixels-*"].forEach((event) => {
     this.handleEvent(event, ({ layout: newLayout }: { layout: Layout }) => {
       layout = newLayout;
+      aspectRatio = layout.imageSize[0] / layout.imageSize[1]
     });
   });
 
@@ -133,7 +138,7 @@ export function setup(canvas: HTMLCanvasElement) {
       return;
     }
 
-    debouncedResize(canvas);
+    debouncedResize(canvas, aspectRatio);
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 

@@ -62,7 +62,7 @@ defmodule OctopusWeb.PixelsLive do
   def render(assigns) do
     ~H"""
     <div
-      class="flex w-full h-full justify-center bg-black"
+      class="flex w-full h-min justify-center bg-black"
       phx-window-keydown="keydown"
       phx-window-keyup="keyup"
     >
@@ -84,16 +84,16 @@ defmodule OctopusWeb.PixelsLive do
           </button>
         </div>
       </div>
-      <div class="w-full h-full float-left relative">
+      <div class="w-full h-min float-left relative">
         <canvas
           id={"#{@id_prefix}-#{@id}"}
           phx-hook="Pixels"
-          class="w-full h-full bg-contain bg-no-repeat bg-center"
+          class="w-full h-min bg-contain bg-no-repeat bg-center layout-#{@pixel_layout.name}"
           style={"background-image: url(#{@pixel_layout.background_image});"}
         />
-        <img
+        <img id="resizeme"
           src={@pixel_layout.pixel_image}
-          class="absolute left-0 top-0 w-full h-full object-contain mix-blend-multiply pointer-events-none"
+          class="absolute left-0 top-0 w-full h-min object-contain mix-blend-multiply pointer-events-none"
         />
       </div>
     </div>

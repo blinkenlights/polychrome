@@ -22,7 +22,7 @@ defmodule OctopusWeb.ManagerLive do
 
   def render(assigns) do
     ~H"""
-    <div class="flex w-full h-full justify-center bg-black">
+    <div class="flex w-full h-min justify-center bg-black">
       <%= live_render(@socket, PixelsLive, id: "main") %>
     </div>
 
