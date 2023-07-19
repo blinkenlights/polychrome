@@ -1,13 +1,10 @@
 defmodule OctopusWeb.AppLive do
-  alias Octopus.Layout.Mildenberg
   use OctopusWeb, :live_view
 
   alias Octopus.AppSupervisor
-  alias Octopus.Mixer
 
   def mount(%{"id" => app_id}, _session, socket) do
     if connected?(socket) do
-      Mixer.subscribe()
       AppSupervisor.subscribe()
     end
 

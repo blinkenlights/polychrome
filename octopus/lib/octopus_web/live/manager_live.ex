@@ -149,11 +149,11 @@ defmodule OctopusWeb.ManagerLive do
     {:noreply, socket |> assign_apps()}
   end
 
-  def handle_info({:mixer, {:frame, frame}}, socket) do
+  def handle_info({:mixer, {:frame, _frame}}, socket) do
     {:noreply, socket}
   end
 
-  def handle_info({:mixer, {:config, config}}, socket) do
+  def handle_info({:mixer, {:config, _config}}, socket) do
     {:noreply, socket}
   end
 

@@ -32,6 +32,8 @@ defmodule Octopus.App do
           {String.t(), :int, %{min: integer(), max: integer(), default: integer()}}
           | {String.t(), :float, %{min: float(), max: float(), default: float()}}
           | {String.t(), :string, %{default: String.t()}}
+          | {String.t(), :boolean, %{default: boolean()}}
+          | {String.t(), :select, %{default: non_neg_integer(), options: list({binary(), any()})}}
 
   @type config_schema :: %{optional(any()) => config_option()}
 
@@ -118,8 +120,13 @@ defmodule Octopus.App do
   @spec default_config(config_schema()) :: map
   def default_config(config_schema) do
     config_schema
-    |> Enum.map(fn {key, {_name, _type, options}} ->
-      {key, Map.fetch!(options, :default)}
+    |> Enum.map(fn
+      {key, {_name, :select, %{default: default, options: options}}} ->
+        {_name, value} = Enum.at(options, default)
+        {key, value}
+
+      {key, {_name, _type, options}} ->
+        {key, Map.fetch!(options, :default)}
     end)
     |> Map.new()
   end
