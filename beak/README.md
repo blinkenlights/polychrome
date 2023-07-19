@@ -12,7 +12,6 @@ Audio Engine component of letterbox.
 - protoc
 - libcurl
 - [JUCE Dependencies](https://github.com/juce-framework/JUCE/blob/master/docs/Linux%20Dependencies.md)
-- golang (optional)
 
 ### Build Steps
 
@@ -25,14 +24,6 @@ All build steps can be carried out by cmake. Commands should be run from `<PATH_
 - configure cmake (specifying the generator is optional) `cmake -B build -S . -G"Ninja Multi-Config`
 - build `cmake --build build --config Release`
 - you can find the binary here: `build/beak_artefacts/Release/beak`
-
-#### Build test application
-
-There is a test application build in golang to simply test the UDP protobuf API.
-
-- set the `BUILD_TEST_APP` option to `TRUE`
-- `cmake -B build -S . -G"Ninja Multi-Config" -DBUILD_TEST_APP=TRUE`
-- for convenience there are test scripts under `test/scripts`
 
 #### Build documentation
 
