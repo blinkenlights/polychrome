@@ -143,7 +143,7 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   # TODO intro animation
-  def current_pixels(%Game{state: :starting}) do
+  def draw(%Game{state: :starting}) do
     [
       [
         <<255, 255, 255, 255>>,
@@ -179,7 +179,7 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   # TODO between levels animation
-  def current_pixels(%Game{state: :pause}) do
+  def draw(%Game{state: :pause}) do
     [
       [
         <<33, 44, 55, 255>>,
@@ -217,7 +217,7 @@ defmodule Octopus.Apps.Supermario.Game do
   # FIXME missing game over animation
 
   # draw current pixels of level and mario
-  def current_pixels(%Game{
+  def draw(%Game{
         level: level,
         current_position: current_position,
         windows_shown: windows_shown,

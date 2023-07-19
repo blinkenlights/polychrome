@@ -49,7 +49,7 @@ defmodule Octopus.Apps.Supermario do
           # FIXME: show end screen
       end
 
-    canvas = Game.current_pixels(game) |> fill_canvas(canvas)
+    canvas = Game.draw(game) |> fill_canvas(canvas)
     canvas |> Canvas.to_frame() |> send_frame()
     {:noreply, %State{state | game: game, canvas: canvas}}
   end
