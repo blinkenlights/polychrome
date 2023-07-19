@@ -125,8 +125,8 @@ defmodule Octopus.Apps.Supermario.Mario do
   end
 
   # very simple implementation wether maria can fall or not. need to provide a pixel matrix
-  defp can_fall?(%Mario{y_position: y_position, x_position: _x_position}, _level) do
-    y_position < 6
+  defp can_fall?(%Mario{y_position: y_position, x_position: x_position}, level) do
+    Level.can_fall?(level, x_position, y_position)
   end
 
   # very simple implementation wether maria can jump or not
