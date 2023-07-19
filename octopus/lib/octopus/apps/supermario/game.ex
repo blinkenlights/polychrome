@@ -83,7 +83,7 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   def move_left(%Game{current_position: 0, mario: mario} = game) do
-    {:ok, %Game{game | mario: Mario.move_left(mario)}}
+    {:ok, %Game{game | mario: Mario.move_left(mario, game.level)}}
   end
 
   def move_left(
@@ -94,7 +94,7 @@ defmodule Octopus.Apps.Supermario.Game do
       ) do
     game =
       if mario.x_position > Mario.start_position_x() do
-        %Game{game | mario: Mario.move_left(mario)}
+        %Game{game | mario: Mario.move_left(mario, game.level)}
       else
         %Game{game | current_position: current_position - 1}
       end
@@ -109,7 +109,7 @@ defmodule Octopus.Apps.Supermario.Game do
 
   def move_right(%Game{current_position: 0, mario: mario} = game) do
     if mario.x_position < Mario.start_position_x() do
-      {:ok, %Game{game | mario: Mario.move_right(mario)}}
+      {:ok, %Game{game | mario: Mario.move_right(mario, game.level)}}
     else
       {:ok, %Game{game | current_position: 1}}
     end
@@ -121,7 +121,7 @@ defmodule Octopus.Apps.Supermario.Game do
       {:ok, %Game{game | current_position: current_position + 1}}
     else
       if mario.x_position < 7 do
-        {:ok, %Game{game | mario: Mario.move_right(mario)}}
+        {:ok, %Game{game | mario: Mario.move_right(mario, level)}}
       else
         if Level.last_level?(game.level) do
           IO.inspect("game over")
@@ -134,12 +134,12 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   def jump(%Game{mario: mario} = game) do
-    mario = Mario.jump(mario)
+    mario = Mario.jump(mario, game.level)
     %Game{game | mario: mario}
   end
 
   def update(%Game{mario: mario} = game) do
-    {:ok, %Game{game | mario: Mario.update(mario)}}
+    {:ok, %Game{game | mario: Mario.update(mario, game.level)}}
   end
 
   # TODO intro animation
