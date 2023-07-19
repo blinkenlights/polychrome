@@ -93,7 +93,7 @@ defmodule Octopus.Apps.Supermario.Mario do
   end
 
   # falling_since may be nil, when mario was not jumping before but ran over a hole
-  # but then we want to fall immidiately
+  # but then we are falling immidiately
   def update(%Mario{y_position: y_position, falling_since: nil} = mario, level) do
     mario =
       if can_fall?(mario, level) do

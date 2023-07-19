@@ -9,7 +9,7 @@ defmodule Octopus.Apps.Supermario.Game do
   alias Octopus.Apps.Supermario.{Level, Mario}
 
   @type t :: %__MODULE__{
-          state: :starting | :running | :paused | :gameover,
+          state: :starting | :running | :paused | :mario_dies | :gameover | :completed,
           current_position: integer(),
           windows_shown: integer(),
           last_ticker: Time.t(),
@@ -138,8 +138,22 @@ defmodule Octopus.Apps.Supermario.Game do
     %Game{game | mario: mario}
   end
 
+  # called by tick in intervals
   def update(%Game{mario: mario} = game) do
-    {:ok, %Game{game | mario: Mario.update(mario, game.level)}}
+    mario = Mario.update(mario, game.level)
+    # TODO: check also for bonus points
+    if Game.mario_dies?(game) do
+      {:mario_dies, %Game{game | mario: mario}}
+    else
+      {:ok, %Game{game | mario: mario}}
+    end
+  end
+
+  # varios ways to die
+  # currently the only way is to fall down
+  # will have to check the level for enemies etc.
+  def mario_dies?(%Game{mario: mario}) do
+    mario.y_position >= 7
   end
 
   # TODO intro animation

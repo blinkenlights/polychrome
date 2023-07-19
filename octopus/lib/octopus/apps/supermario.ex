@@ -74,6 +74,10 @@ defmodule Octopus.Apps.Supermario do
           {:ok, game} ->
             %{state | game: game}
 
+          {:mario_dies, game} ->
+            # TODO: show mario dying, then reset game, reduce level by 1, possibly game over
+            %{state | game: game}
+
           {:game_over, game} ->
             %{state | game: game}
         end
