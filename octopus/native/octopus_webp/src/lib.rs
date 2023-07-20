@@ -12,6 +12,7 @@ type Frame = (Vec<Vec<u8>>, i32);
 #[module = "Octopus.WebP"]
 struct Animation {
     frames: Vec<Frame>,
+    size: (u32, u32),
 }
 
 #[rustler::nif]
@@ -22,6 +23,7 @@ fn decode(path: &str) -> Option<Animation> {
     let mut animation = Animation::default();
 
     for frame in decoder.into_iter() {
+        animation.size = frame.dimensions();
         match frame.color_mode() {
             ColorMode::Rgb => {
                 let rgb = frame.data().chunks_exact(3).map(|x| x.to_vec()).collect();
