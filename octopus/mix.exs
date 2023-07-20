@@ -51,7 +51,8 @@ defmodule Octopus.MixProject do
       {:ex_png, "~> 1.0.0"},
       {:easing, "~> 0.3.1"},
       {:cachex, "~> 3.6"},
-      {:ex_doc, "~> 0.21", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.21", only: :dev, runtime: false},
+      {:rustler, "~> 0.29.1"}
     ]
   end
 

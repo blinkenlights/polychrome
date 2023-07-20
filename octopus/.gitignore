@@ -41,3 +41,5 @@ src/program_lexer.erl
 src/program_parser.erl
 
 .elixir_ls
+
+priv/native
