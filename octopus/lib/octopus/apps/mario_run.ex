@@ -2,27 +2,37 @@ defmodule Octopus.Apps.MarioRun do
   alias Octopus.Protobuf.InputEvent
   alias Octopus.Canvas
   alias Octopus.Sprite
+
   use Octopus.App
 
   @loops %{
     run: [
-      {0, {80, 130}},
-      {1, {80, 130}},
-      {2, {80, 130}},
-      {3, {80, 130}},
-      {4, {80, 130}},
-      {5, {80, 130}}
-      # {0, 100},
-      # {1, 100},
-      # {2, 100},
-      # {3, 100},
-      # {4, 100},
-      # {5, 100}
+      {0, {80, 130}, false},
+      {1, {80, 130}, false},
+      {2, {80, 130}, false},
+      {3, {80, 130}, false},
+      {4, {80, 130}, false},
+      {5, {80, 130}, false}
     ],
-    look: [
-      {6, 500},
-      {7, 100},
-      {8, 500}
+    look1: [
+      {6, 500, false},
+      {7, 100, false},
+      {8, 500, false}
+    ],
+    look2: [
+      {6, 500, false},
+      {7, 100, false},
+      {8, 100, false},
+      {7, 100, false},
+      {6, 500, false}
+    ],
+    look3: [
+      {6, 500, false},
+      {7, 100, false},
+      {8, 500, false},
+      {6, 500, true},
+      {7, 100, true},
+      {8, 500, true}
     ]
   }
 
@@ -53,7 +63,8 @@ defmodule Octopus.Apps.MarioRun do
 
   def init(_) do
     sprite_sheets = %{
-      mario: "mario-run"
+      mario: "mario-run",
+      luigi: "luigi-run"
     }
 
     state = %State{
@@ -90,7 +101,7 @@ defmodule Octopus.Apps.MarioRun do
   end
 
   def handle_info(:tick, %State{} = state) do
-    {sprite_index, duration} = Enum.at(@loops[state.loop], state.current_frame)
+    {sprite_index, duration, flip} = Enum.at(@loops[state.loop], state.current_frame)
     sprite_sheet = state.sprite_sheets[state.character]
     sprite = Sprite.load(sprite_sheet, sprite_index, :rgb)
 
@@ -98,6 +109,7 @@ defmodule Octopus.Apps.MarioRun do
       state.canvas
       |> Canvas.clear()
       |> Canvas.overlay(sprite)
+      |> then(&if(flip, do: Canvas.flip_horizontal(&1), else: &1))
 
     canvas |> Canvas.to_frame() |> send_frame()
 
@@ -117,7 +129,23 @@ defmodule Octopus.Apps.MarioRun do
   end
 
   def handle_input(%InputEvent{type: :BUTTON_2, value: 1}, state) do
-    {:noreply, %State{state | next_loop: :look}}
+    {:noreply, %State{state | next_loop: :look1}}
+  end
+
+  def handle_input(%InputEvent{type: :BUTTON_3, value: 1}, state) do
+    {:noreply, %State{state | next_loop: :look2}}
+  end
+
+  def handle_input(%InputEvent{type: :BUTTON_4, value: 1}, state) do
+    {:noreply, %State{state | next_loop: :look3}}
+  end
+
+  def handle_input(%InputEvent{type: :BUTTON_10, value: 1}, %State{character: :mario} = state) do
+    {:noreply, %State{state | character: :luigi}}
+  end
+
+  def handle_input(%InputEvent{type: :BUTTON_10, value: 1}, %State{character: :luigi} = state) do
+    {:noreply, %State{state | character: :mario}}
   end
 
   def handle_input(_event, state) do
