@@ -3,7 +3,7 @@ defmodule Octopus.WebP do
     otp_app: :octopus,
     crate: :octopus_webp
 
-  defstruct frames: [], timestamp: 0
+  defstruct frames: []
 
   def decode(_path), do: :erlang.nif_error(:nif_not_loaded)
 end
