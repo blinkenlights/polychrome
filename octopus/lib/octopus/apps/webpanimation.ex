@@ -2,7 +2,7 @@ defmodule Octopus.Apps.Webpanimation do
   use Octopus.App
   require Logger
 
-  alias Octopus.{ColorPalette, Canvas}
+  alias Octopus.Canvas
   alias Octopus.WebP
 
   defmodule State do
@@ -15,16 +15,30 @@ defmodule Octopus.Apps.Webpanimation do
     path = Path.join([:code.priv_dir(:octopus), "webp", "marioi-run.webp"])
     decoded_animation = WebP.decode(path)
     {width, height} = decoded_animation.size
-    state = %State{frames: decoded_animation.frames, width: width, height: height}
+
+    state = %State{
+      frames: convert_timestamps_to_duration(decoded_animation.frames),
+      width: width,
+      height: height
+    }
+
     Process.send_after(self(), :tick, 0)
     {:ok, state}
   end
 
   def handle_info(
         :tick,
+        %State{frames: []}
+      ) do
+    Logger.info("Animation finished")
+    {:stop, :normal, nil}
+  end
+
+  def handle_info(
+        :tick,
         %State{frames: [animation_info | more_frames], width: width, height: height} = state
       ) do
-    {pixels, timestamp} = animation_info
+    {pixels, duration} = animation_info
 
     canvas = Canvas.new(width, height)
     image = Enum.chunk_every(pixels, width)
@@ -50,7 +64,16 @@ defmodule Octopus.Apps.Webpanimation do
     |> Canvas.to_frame()
     |> send_frame()
 
-    Process.send_after(self(), :tick, timestamp)
+    Process.send_after(self(), :tick, duration)
     {:noreply, %{state | frames: more_frames}}
+  end
+
+  defp convert_timestamps_to_duration(frames) do
+    {new_frames, _} =
+      Enum.reduce(frames, {[], 0}, fn {pixels, old_time_stamp}, {new_frames, last_time_stamp} ->
+        {new_frames ++ [{pixels, old_time_stamp - last_time_stamp}], old_time_stamp}
+      end)
+
+    new_frames
   end
 end
