@@ -27,7 +27,7 @@ defmodule Octopus.Apps.PixelFun do
 
   def config_schema() do
     %{
-      program: {"Program", :string, %{default: "sin((t-x*0.01)-hypot(x%8-3.5,y-3.5))"}},
+      program: {"Program", :string, %{default: "sin(t-hypot(x-3.5,y-3.5))"}},
       easing_interval: {"Afterglow", :int, %{default: 50, min: 0, max: 500}},
       color_interval: {"Color change Interval", :int, %{default: 5, min: 1, max: 20}},
       invert_colors: {"Invert Colors", :boolean, %{default: false}},
@@ -150,12 +150,9 @@ defmodule Octopus.Apps.PixelFun do
   def handle_info(:update_colors, state), do: {:noreply, state}
 
   def handle_info(:tick, %State{} = state) do
-    {seconds, micros} = Time.utc_now() |> Time.to_seconds_after_midnight()
-    seconds = seconds + micros / 1_000_000
-
     state = lerp_toward_target_colors(state)
 
-    canvas = state |> render(seconds)
+    canvas = state |> render()
 
     canvas
     |> Canvas.to_frame(drop: true)
@@ -165,7 +162,13 @@ defmodule Octopus.Apps.PixelFun do
     {:noreply, %State{state | canvas: canvas}}
   end
 
-  defp render(%State{canvas: canvas, program: program} = state, seconds) do
+  defp render(%State{canvas: canvas, program: program} = state) do
+    {seconds, micros} = Time.utc_now() |> Time.to_seconds_after_midnight()
+    seconds = seconds + micros / 1_000_000
+
+    offset_x = :math.sin(0.3 + seconds * 0.17) * 2.0
+    offset_y = :math.cos(0.7 + seconds * 0.05) * 2.0
+
     {color_a, color_b} = state.colors
 
     colors =
@@ -178,7 +181,7 @@ defmodule Octopus.Apps.PixelFun do
     for i <- 0..(@width * @height - 1), into: canvas do
       x = rem(i, @width)
       y = div(i, @width)
-      {{x, y}, pixels(program, x, y, i, seconds, colors)}
+      {{x, y}, pixels(program, x + offset_x, y + offset_y, i, seconds, colors)}
     end
   end
 
