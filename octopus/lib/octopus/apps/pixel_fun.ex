@@ -8,7 +8,19 @@ defmodule Octopus.Apps.PixelFun do
   @height 8
 
   defmodule State do
-    defstruct [:canvas, :program, :source, :easing_interval, :invert_colors, :colors]
+    defstruct [
+      :canvas,
+      :program,
+      :source,
+      :easing_interval,
+      :invert_colors,
+      :colors,
+      :last_colors,
+      :target_colors,
+      :random_colors,
+      :lerp_time,
+      :color_interval
+    ]
   end
 
   def name(), do: "Pixel Fun"
@@ -16,8 +28,10 @@ defmodule Octopus.Apps.PixelFun do
   def config_schema() do
     %{
       program: {"Program", :string, %{default: "sin((t-x*0.01)-hypot(x%8-3.5,y-3.5))"}},
-      easing_interval: {"Easing Interval", :int, %{default: 50, min: 0, max: 500}},
+      easing_interval: {"Afterglow", :int, %{default: 50, min: 0, max: 500}},
+      color_interval: {"Color change Interval", :int, %{default: 5, min: 1, max: 20}},
       invert_colors: {"Invert Colors", :boolean, %{default: false}},
+      random_colors: {"Random Colors", :boolean, %{default: true}},
       colors:
         {"Colors", :select,
          %{
@@ -34,16 +48,24 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   def get_config(state) do
-    %{program: state.source, easing_interval: state.easing_interval}
+    %{
+      program: state.source,
+      easing_interval: state.easing_interval,
+      invert_colors: state.invert_colors,
+      colors: state.colors,
+      random_colors: state.random_colors,
+      color_interval: state.color_interval
+    }
   end
 
   def init(_args) do
-    :timer.send_interval((1000 / 60) |> trunc(), :tick)
-
     canvas = Canvas.new(@width, @height)
 
     config = config_schema() |> default_config()
     {:ok, program} = config.program |> Program.parse()
+
+    :timer.send_interval((1000 / 60) |> trunc(), :tick)
+    :timer.send_interval(trunc(config.color_interval * 1000), :update_colors)
 
     {:ok,
      %State{
@@ -52,7 +74,12 @@ defmodule Octopus.Apps.PixelFun do
        source: config.program,
        easing_interval: config.easing_interval,
        invert_colors: config.invert_colors,
-       colors: config.colors
+       last_colors: config.colors,
+       colors: config.colors,
+       random_colors: config.random_colors,
+       target_colors: config.colors,
+       lerp_time: config.color_interval,
+       color_interval: config.color_interval
      }}
   end
 
@@ -61,7 +88,8 @@ defmodule Octopus.Apps.PixelFun do
           program: program,
           easing_interval: easing_interval,
           invert_colors: invert_colors,
-          colors: colors
+          colors: colors,
+          random_colors: random_colors
         },
         %State{} = state
       ) do
@@ -80,7 +108,8 @@ defmodule Octopus.Apps.PixelFun do
          source: source,
          easing_interval: easing_interval,
          invert_colors: invert_colors,
-         colors: colors
+         colors: colors,
+         random_colors: random_colors
      }}
   end
 
@@ -98,21 +127,45 @@ defmodule Octopus.Apps.PixelFun do
     {:noreply, %{state | program: program}}
   end
 
+  def handle_info(:update_colors, %State{random_colors: true} = state) do
+    hue_a = :rand.uniform(360) - 1
+    hue_b = Integer.mod(hue_a + 90 + :rand.uniform(180) - 1, 360)
+    sat_a = 70 + :rand.uniform(29)
+    sat_b = 70 + :rand.uniform(29)
+    hsv_a = Chameleon.HSV.new(hue_a, sat_a, 100)
+    hsv_b = Chameleon.HSV.new(hue_b, sat_b, 100)
+    %Chameleon.RGB{r: r1, g: g1, b: b1} = Chameleon.convert(hsv_a, Chameleon.RGB)
+    %Chameleon.RGB{r: r2, g: g2, b: b2} = Chameleon.convert(hsv_b, Chameleon.RGB)
+    colors = {[r1, g1, b1], [r2, g2, b2]}
+
+    {:noreply,
+     %{
+       state
+       | last_colors: state.colors,
+         target_colors: colors,
+         lerp_time: state.color_interval
+     }}
+  end
+
+  def handle_info(:update_colors, state), do: {:noreply, state}
+
   def handle_info(:tick, %State{} = state) do
-    canvas = state |> render()
+    {seconds, micros} = Time.utc_now() |> Time.to_seconds_after_midnight()
+    seconds = seconds + micros / 1_000_000
+
+    state = lerp_toward_target_colors(state)
+
+    canvas = state |> render(seconds)
 
     canvas
     |> Canvas.to_frame(drop: true)
     |> Map.put(:easing_interval, state.easing_interval)
     |> send_frame()
 
-    {:noreply, %{state | canvas: canvas}}
+    {:noreply, %State{state | canvas: canvas}}
   end
 
-  defp render(%State{canvas: canvas, program: program} = state) do
-    {seconds, micros} = Time.utc_now() |> Time.to_seconds_after_midnight()
-    seconds = seconds + micros / 1_000_000
-
+  defp render(%State{canvas: canvas, program: program} = state, seconds) do
     {color_a, color_b} = state.colors
 
     colors =
@@ -150,5 +203,36 @@ defmodule Octopus.Apps.PixelFun do
       true -> [0, 0, 0]
     end
     |> Enum.map(&Kernel.trunc/1)
+  end
+
+  defp lerp_toward_target_colors(%State{} = state) do
+    current_time = max(state.color_interval - state.lerp_time, 0)
+    t = current_time / state.color_interval
+    lerp_time = max(state.lerp_time - 1 / 60, 0)
+
+    {last_a, last_b} = state.last_colors
+    {target_a, target_b} = state.target_colors
+    new_a = lerp_rgb(last_a, target_a, t)
+    new_b = lerp_rgb(last_b, target_b, t)
+
+    %State{state | colors: {new_a, new_b}, lerp_time: lerp_time}
+  end
+
+  defp lerp_rgb([r1, g1, b1], [r2, g2, b2], value) do
+    hsl_a = Chameleon.RGB.new(r1, g1, b1) |> Chameleon.convert(Chameleon.HSL)
+    hsl_b = Chameleon.RGB.new(r2, g2, b2) |> Chameleon.convert(Chameleon.HSL)
+    h = lerp(hsl_a.h, hsl_b.h, value) |> trunc()
+    s = lerp(hsl_a.s, hsl_b.s, value) |> trunc()
+    l = lerp(hsl_a.l, hsl_b.l, value) |> trunc()
+
+    %Chameleon.RGB{r: r, g: g, b: b} =
+      Chameleon.HSL.new(h, s, l)
+      |> Chameleon.convert(Chameleon.RGB)
+
+    [r, g, b]
+  end
+
+  defp lerp(a, b, t) do
+    (1 - t) * a + t * b
   end
 end
