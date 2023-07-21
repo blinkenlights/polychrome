@@ -19,10 +19,12 @@ deploy-fly:
 	fly deploy
 
 deploy-oldie:
-	rsync -rl --delete --filter=':- .gitignore' --perms --chmod=775 . oldie.bjrm.de:/opt/octopus
-	ssh oldie.bjrm.de "cd /opt/octopus && make release"
-	ssh oldie.bjrm.de "sudo chown -R octopus:octopus /opt/octopus"
-	ssh oldie.bjrm.de "sudo systemctl restart octopus.service"
+	rsync -rl --delete --filter=':- .gitignore' --perms --chmod=775 . oldie.taila332c.ts.net:/opt/octopus
+	ssh oldie.taila332c.ts.net "user=$$(whoami); sudo chown -R $$user:$$user /opt/octopus"
+	ssh oldie.taila332c.ts.net "cd /opt/octopus && make release"
+	ssh oldie.taila332c.ts.net "sudo chown -R octopus:octopus /opt/octopus"
+	ssh oldie.taila332c.ts.net "sudo chmod -R 775 /opt/octopus"
+	ssh oldie.taila332c.ts.net "sudo systemctl restart octopus.service"
 
 remote-shell:
 	fly ssh console --pty -C "/app/bin/octopus remote"
