@@ -122,6 +122,17 @@ defmodule Octopus.Canvas do
     Map.get(pixels, {x, y}, 0)
   end
 
+  @spec get_pixel_color(Canvas.t(), coord()) :: color()
+  def get_pixel_color(%Canvas{palette: nil} = canvas, coord) do
+    get_pixel(canvas, coord)
+  end
+
+  def get_pixel_color(%Canvas{pixels: pixels} = canvas, coord) do
+    index = get_pixel(canvas, coord)
+    color = Enum.at(canvas.palette.colors, index)
+    [color.r, color.g, color.b]
+  end
+
   @window_width 8
   @window_gap 16
   @window_and_gap @window_gap + @window_width
@@ -204,6 +215,23 @@ defmodule Octopus.Canvas do
 
     %Canvas{canvas | pixels: pixels}
   end
+
+  @doc """
+  Flips the canvas horizontally or vertically.
+  """
+  @spec flip(Canvas.t(), :horizontal | :vertical) :: Canvas.t()
+  def flip(%Canvas{width: width, height: height} = canvas, :horizontal) do
+    pixels = canvas.pixels |> Enum.map(fn {{x, y}, color} -> {{width - x - 1, y}, color} end)
+
+    %Canvas{canvas | pixels: pixels}
+  end
+
+  def flip(%Canvas{width: width, height: height} = canvas, :vertical) do
+    pixels = canvas.pixels |> Enum.map(fn {{x, y}, color} -> {{x, height - y - 1}, color} end)
+
+    %Canvas{canvas | pixels: pixels}
+  end
+
 
   @doc """
   Draws a line on the canvas using Bresenham's line algorithm.
@@ -359,6 +387,16 @@ defmodule Octopus.Canvas do
     %Canvas{canvas | width: width, height: height, pixels: pixels}
   end
 
+  def flip_horizontal(%Canvas{} = canvas) do
+    pixels =
+      for x <- 0..(canvas.width - 1),
+          y <- 0..(canvas.height - 1),
+          do: {{x, y}, Canvas.get_pixel(canvas, {canvas.width - 1 - x, y})},
+          into: %{}
+
+    %Canvas{canvas | pixels: pixels}
+  end
+
   defimpl Collectable do
     def into(canvas) do
       collector_fun = fn
@@ -373,6 +411,46 @@ defmodule Octopus.Canvas do
       end
 
       {canvas, collector_fun}
+    end
+  end
+
+  @doc """
+  Inspect implementation for printing out Canvas objects on the iex command line
+  """
+  defimpl Inspect, for: Canvas do
+    def inspect(canvas, _opts) do
+      default_color = IO.ANSI.default_color()
+
+      # traverse pixels left to right, top to bottom
+      delimiter = default_color <> "+" <> String.duplicate("-", canvas.width) <> "+\n"
+
+      lines =
+        for y <- 0..(canvas.height - 1) do
+          line =
+            for x <- 0..(canvas.width - 1) do
+              [r, g, b] = Canvas.get_pixel_color(canvas, {x, y})
+              IO.ANSI.color(convert_color_rgb_to_ansi(r, g, b)) <> "\u2588"
+            end
+            |> List.to_string()
+
+          default_color <> "|" <> line <> default_color <> "|\n"
+        end
+
+      delimiter <> Enum.join(lines) <> delimiter
+    end
+
+    def convert_color_rgb_to_ansi(r, g, b) do
+      cond do
+        r == g and g == b ->
+          cond do
+            r < 8 -> 16
+            r > 248 -> 231
+            true -> round((r - 8) / 247 * 24) + 232
+          end
+
+        true ->
+          16 + 36 * round(r / 255 * 5) + 6 * round(g / 255 * 5) + round(b / 255 * 5)
+      end
     end
   end
 end

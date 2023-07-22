@@ -53,6 +53,7 @@ defmodule Octopus.MixProject do
       {:cachex, "~> 3.6"},
       {:ex_doc, "~> 0.21", only: :dev, runtime: false},
       {:rustler, "~> 0.29.1"}
+      {:chameleon, "~> 2.5"}
     ]
   end
 
