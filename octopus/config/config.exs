@@ -7,6 +7,9 @@
 # General application configuration
 import Config
 
+config :octopus, :installation,
+  screens: System.get_env("OCTOPUS_SCREENS", "1") |> String.to_integer()
+
 config :octopus,
   generators: [binary_id: true],
   broadcast: false
