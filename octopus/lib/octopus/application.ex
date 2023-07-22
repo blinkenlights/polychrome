@@ -9,26 +9,31 @@ defmodule Octopus.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
-      # Core
-      OctopusWeb.Telemetry,
-      {Phoenix.PubSub, name: Octopus.PubSub},
-      Octopus.Broadcaster,
-      Octopus.Mixer,
-      {Registry, keys: :unique, name: Octopus.AppRegistry},
-      Octopus.AppSupervisor,
-      Octopus.InputAdapter,
+    children =
+      [
+        # Core
+        OctopusWeb.Telemetry,
+        {Phoenix.PubSub, name: Octopus.PubSub},
+        Octopus.Broadcaster,
+        Octopus.Mixer,
+        {Registry, keys: :unique, name: Octopus.AppRegistry},
+        Octopus.AppSupervisor,
+        Octopus.InputAdapter,
 
-      # Caches
-      Supervisor.child_spec({Cachex, name: ColorPalette}, id: make_ref()),
-      Supervisor.child_spec({Cachex, name: Font}, id: make_ref()),
-      Supervisor.child_spec({Cachex, name: Sprite}, id: make_ref()),
-      Supervisor.child_spec({Cachex, name: Image}, id: make_ref()),
+        # Caches
+        Supervisor.child_spec({Cachex, name: ColorPalette}, id: make_ref()),
+        Supervisor.child_spec({Cachex, name: Font}, id: make_ref()),
+        Supervisor.child_spec({Cachex, name: Sprite}, id: make_ref()),
+        Supervisor.child_spec({Cachex, name: Image}, id: make_ref()),
 
-      # WebApp
-      {Finch, name: Octopus.Finch},
-      OctopusWeb.Endpoint
-    ]
+        # WebApp
+        {Finch, name: Octopus.Finch},
+        OctopusWeb.Endpoint
+      ] ++
+        case System.get_env("TELEGRAM_BOT_SECRET") do
+          nil -> []
+          telegram_bot_secret -> [{Octopus.TelegramBot, bot_key: telegram_bot_secret}]
+        end
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options

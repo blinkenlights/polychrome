@@ -63,7 +63,20 @@ defmodule Octopus.Broadcaster do
 
     state = send_config(@default_config, state)
 
+    Phoenix.PubSub.subscribe(Octopus.PubSub, Octopus.TelegramBot.topic())
+
     {:ok, state}
+  end
+
+  def handle_info({:bot_update, update}, state) do
+    case update["message"]["text"] do
+      "bright" -> set_luminance(255)
+      "normal" -> set_luminance(150)
+      "dim" -> set_luminance(100)
+      _ -> nil
+    end
+
+    {:noreply, state}
   end
 
   def handle_info({:udp, _socket, from_ip, _port, protobuf}, state = %State{}) do
@@ -94,6 +107,7 @@ defmodule Octopus.Broadcaster do
       %FirmwareConfig{state.config | luminance: luminance}
       |> send_config(state)
 
+    Logger.info("luminance set to #{luminance}")
     {:noreply, state}
   end
 
