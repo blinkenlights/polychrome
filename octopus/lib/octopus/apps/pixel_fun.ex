@@ -4,7 +4,8 @@ defmodule Octopus.Apps.PixelFun do
   alias Octopus.Canvas
   alias Octopus.Apps.PixelFun.Program
 
-  @width 8 * 10 + 9 * 18
+  # @width 8 * 10 + 9 * 18
+  @width 8
   @height 8
 
   @functions [
