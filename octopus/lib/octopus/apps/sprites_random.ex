@@ -8,7 +8,7 @@ defmodule Octopus.Apps.Sprites do
     defstruct [:indices, :canvas]
   end
 
-  @sprite_sheet Sprite.list_sprite_sheets() |> hd()
+  @sprite_sheet "256-characters-original"
   @animation_interval 10
   @animation_steps 50
   @easing_interval 150
