@@ -24,11 +24,13 @@ defmodule Octopus.Image do
 
         canvas = Canvas.new(image.width, image.height)
 
-        pixel_indices = for x <- 0..(image.width-1), y <- 0..(image.height-1), do: {x, y}
+        pixel_indices = for x <- 0..(image.width - 1), y <- 0..(image.height - 1), do: {x, y}
 
-        canvas = Enum.reduce(pixel_indices, canvas, fn {x, y}, canvas ->
+        canvas =
+          Enum.reduce(pixel_indices, canvas, fn {x, y}, canvas ->
             color = ExPng.Image.at(image, {x, y})
             alpha = [color] |> Enum.map(fn <<_r, _g, _b, a>> -> a end) |> List.first()
+
             if alpha == 0 do
               canvas
             else
