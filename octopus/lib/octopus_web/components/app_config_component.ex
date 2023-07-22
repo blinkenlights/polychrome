@@ -19,9 +19,10 @@ defmodule OctopusWeb.AppConfigComponent do
 
   def render(assigns) do
     ~H"""
-      <form class="flex flex-col gap-4" phx-change="change" phx-target={@myself}>
-        <div :for={{key, {name, type, opts}} <- @config_schema}>
-          <label class="font-semibold" for={"#{@app_id}-#{key}"} class="block"><%= name %></label>
+    <form class="flex flex-col gap-4" phx-change="change" phx-target={@myself}>
+      <div :for={{key, {name, type, opts}} <- @config_schema}>
+        <label class="font-semibold" for={"#{@app_id}-#{key}"} class="block"><%= name %></label>
+        <div class="flex flex-row">
           <.config_input
             class="w-full"
             app_id={@app_id}
@@ -32,7 +33,8 @@ defmodule OctopusWeb.AppConfigComponent do
             value={@config[key]}
           />
         </div>
-      </form>
+      </div>
+    </form>
     """
   end
 
@@ -94,11 +96,12 @@ defmodule OctopusWeb.AppConfigComponent do
 
   defp config_input(%{type: :float} = assigns) do
     ~H"""
+    <span><%= @value %></span>
     <input
       type="range"
       name={@key}
       id={"#{@app_id}-#{@key}"}
-      step="0.01"
+      step={@opts |> Map.get(:step, 0.01)}
       min={@opts[:min]}
       max={@opts[:max]}
       phx-debounce={@debounce}
@@ -110,11 +113,12 @@ defmodule OctopusWeb.AppConfigComponent do
 
   defp config_input(%{type: :int} = assigns) do
     ~H"""
+    <span><%= @value %></span>
     <input
       type="range"
       name={@key}
       id={"#{@app_id}-#{@key}"}
-      step="1"
+      step={@opts |> Map.get(:step, 1)}
       min={@opts[:min]}
       max={@opts[:max]}
       phx-debounce={@debounce}
@@ -126,13 +130,20 @@ defmodule OctopusWeb.AppConfigComponent do
 
   defp config_input(%{type: :string} = assigns) do
     ~H"""
-    <input type="text" name={@key} id={"#{@app_id}-#{@key}"} phx-debounce={@debounce} value={@value}  {@rest} />
+    <input
+      type="text"
+      name={@key}
+      id={"#{@app_id}-#{@key}"}
+      phx-debounce={@debounce}
+      value={@value}
+      {@rest}
+    />
     """
   end
 
   defp config_input(%{type: :boolean} = assigns) do
     ~H"""
-    <div  {@rest}>
+    <div {@rest}>
       <input
         type="checkbox"
         name={@key}

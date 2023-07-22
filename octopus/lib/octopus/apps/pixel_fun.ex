@@ -7,6 +7,16 @@ defmodule Octopus.Apps.PixelFun do
   @width 8 * 10 + 9 * 18
   @height 8
 
+  @functions [
+    "sin(t-hypot(x-3.5,y-3.5))",
+    "2*fract((0.5*t-x*0.01)*0.5+hypot(x-3.5,y-3.5))-1.0",
+    "sin(t-x/2-y/2)",
+    "sin(t+hypot(x-3.5,y-3.5))",
+    "sin(t+x/2-y/2)",
+    "sin(t+x*y)",
+    "cos(x+sin(t))-sin(y-cos(t)*0.5)"
+  ]
+
   defmodule State do
     defstruct [
       :canvas,
@@ -19,7 +29,10 @@ defmodule Octopus.Apps.PixelFun do
       :target_colors,
       :random_colors,
       :lerp_time,
-      :color_interval
+      :color_interval,
+      :cycle_functions,
+      :cycle_functions_interval,
+      :functions
     ]
   end
 
@@ -29,21 +42,26 @@ defmodule Octopus.Apps.PixelFun do
     %{
       program: {"Program", :string, %{default: "sin(t-hypot(x-3.5,y-3.5))"}},
       easing_interval: {"Afterglow", :int, %{default: 50, min: 0, max: 500}},
-      color_interval: {"Color change Interval", :int, %{default: 5, min: 1, max: 20}},
+      color_interval: {"Color change Interval (s)", :float, %{default: 5, min: 1, max: 20}},
       invert_colors: {"Invert Colors", :boolean, %{default: false}},
       random_colors: {"Random Colors", :boolean, %{default: true}},
-      colors:
-        {"Colors", :select,
-         %{
-           default: 0,
-           options: [
-             {"Camp", {[0x3F, 0xFF, 0x21], [0xFB, 0x48, 0xC4]}},
-             {"Mac Paint", {[0x8B, 0xC8, 0xFE], [0x05, 0x1B, 0x2C]}},
-             {"Bitbee", {[0x29, 0x2B, 0x30], [0xCF, 0xAB, 0x4A]}},
-             {"Gato Roboto - Starboard", {[0x0A, 0x2E, 0x44], [0xFC, 0xFF, 0xCC]}},
-             {"French Fries", {[0xFF, 0x0F, 0x0F], [0xFF, 0xDF, 0x0F]}}
-           ]
-         }}
+      cycle_functions: {"Cycle Functions", :boolean, %{default: true}},
+      cycle_functions_interval:
+        {"Cycle Functions Interval (s)", :float, %{default: 30, min: 1, max: 60 * 60}},
+      colors: {
+        "Colors",
+        :select,
+        %{
+          default: 0,
+          options: [
+            {"Camp", {[0x3F, 0xFF, 0x21], [0xFB, 0x48, 0xC4]}},
+            {"Mac Paint", {[0x8B, 0xC8, 0xFE], [0x05, 0x1B, 0x2C]}},
+            {"Bitbee", {[0x29, 0x2B, 0x30], [0xCF, 0xAB, 0x4A]}},
+            {"Gato Roboto - Starboard", {[0x0A, 0x2E, 0x44], [0xFC, 0xFF, 0xCC]}},
+            {"French Fries", {[0xFF, 0x0F, 0x0F], [0xFF, 0xDF, 0x0F]}}
+          ]
+        }
+      }
     }
   end
 
@@ -54,7 +72,9 @@ defmodule Octopus.Apps.PixelFun do
       invert_colors: state.invert_colors,
       colors: state.colors,
       random_colors: state.random_colors,
-      color_interval: state.color_interval
+      color_interval: state.color_interval,
+      cycle_functions: state.cycle_functions,
+      cycle_functions_interval: state.cycle_functions_interval
     }
   end
 
@@ -66,6 +86,13 @@ defmodule Octopus.Apps.PixelFun do
 
     :timer.send_interval((1000 / 60) |> trunc(), :tick)
     :timer.send_interval(trunc(config.color_interval * 1000), :update_colors)
+
+    Process.send_after(self(), :cycle_functions, trunc(config.cycle_functions_interval * 1000))
+
+    functions =
+      @functions
+      |> Enum.map(fn source -> {source, Program.parse(source) |> elem(1)} end)
+      |> Stream.cycle()
 
     {:ok,
      %State{
@@ -79,7 +106,10 @@ defmodule Octopus.Apps.PixelFun do
        random_colors: config.random_colors,
        target_colors: config.colors,
        lerp_time: config.color_interval,
-       color_interval: config.color_interval
+       color_interval: config.color_interval,
+       cycle_functions: config.cycle_functions,
+       cycle_functions_interval: config.cycle_functions_interval,
+       functions: functions
      }}
   end
 
@@ -89,7 +119,8 @@ defmodule Octopus.Apps.PixelFun do
           easing_interval: easing_interval,
           invert_colors: invert_colors,
           colors: colors,
-          random_colors: random_colors
+          random_colors: random_colors,
+          cycle_functions: cycle_functions
         },
         %State{} = state
       ) do
@@ -109,7 +140,8 @@ defmodule Octopus.Apps.PixelFun do
          easing_interval: easing_interval,
          invert_colors: invert_colors,
          colors: colors,
-         random_colors: random_colors
+         random_colors: random_colors,
+         cycle_functions: cycle_functions
      }}
   end
 
@@ -139,7 +171,7 @@ defmodule Octopus.Apps.PixelFun do
     colors = {[r1, g1, b1], [r2, g2, b2]}
 
     {:noreply,
-     %{
+     %State{
        state
        | last_colors: state.colors,
          target_colors: colors,
@@ -148,6 +180,19 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   def handle_info(:update_colors, state), do: {:noreply, state}
+
+  def handle_info(:cycle_functions, %State{cycle_functions: true, functions: functions} = state) do
+    [{source, function}] = Enum.take(functions, 1)
+    functions = Stream.drop(functions, 1)
+
+    Process.send_after(self(), :cycle_functions, trunc(state.cycle_functions_interval * 1000))
+    {:noreply, %State{state | functions: functions, program: function, source: source}}
+  end
+
+  def handle_info(:cycle_functions, %State{} = state) do
+    Process.send_after(self(), :cycle_functions, trunc(state.cycle_functions_interval * 1000))
+    {:noreply, state}
+  end
 
   def handle_info(:tick, %State{} = state) do
     state = lerp_toward_target_colors(state)
