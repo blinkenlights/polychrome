@@ -2,7 +2,6 @@ defmodule Octopus.Apps.FairyDust do
   use Octopus.App
 
   alias Octopus.{Canvas, Image}
-  alias Octopus.Protobuf.InputEvent
 
   @fps 60
 

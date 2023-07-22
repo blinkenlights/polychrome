@@ -127,7 +127,7 @@ defmodule Octopus.Canvas do
     get_pixel(canvas, coord)
   end
 
-  def get_pixel_color(%Canvas{pixels: pixels} = canvas, coord) do
+  def get_pixel_color(%Canvas{} = canvas, coord) do
     index = get_pixel(canvas, coord)
     color = Enum.at(canvas.palette.colors, index)
     [color.r, color.g, color.b]
@@ -220,18 +220,17 @@ defmodule Octopus.Canvas do
   Flips the canvas horizontally or vertically.
   """
   @spec flip(Canvas.t(), :horizontal | :vertical) :: Canvas.t()
-  def flip(%Canvas{width: width, height: height} = canvas, :horizontal) do
+  def flip(%Canvas{width: width} = canvas, :horizontal) do
     pixels = canvas.pixels |> Enum.map(fn {{x, y}, color} -> {{width - x - 1, y}, color} end)
 
     %Canvas{canvas | pixels: pixels}
   end
 
-  def flip(%Canvas{width: width, height: height} = canvas, :vertical) do
+  def flip(%Canvas{height: height} = canvas, :vertical) do
     pixels = canvas.pixels |> Enum.map(fn {{x, y}, color} -> {{x, height - y - 1}, color} end)
 
     %Canvas{canvas | pixels: pixels}
   end
-
 
   @doc """
   Draws a line on the canvas using Bresenham's line algorithm.
