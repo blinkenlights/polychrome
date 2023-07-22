@@ -96,7 +96,6 @@ defmodule OctopusWeb.AppConfigComponent do
 
   defp config_input(%{type: :float} = assigns) do
     ~H"""
-    <span><%= @value %></span>
     <input
       type="range"
       name={@key}
@@ -113,7 +112,6 @@ defmodule OctopusWeb.AppConfigComponent do
 
   defp config_input(%{type: :int} = assigns) do
     ~H"""
-    <span><%= @value %></span>
     <input
       type="range"
       name={@key}

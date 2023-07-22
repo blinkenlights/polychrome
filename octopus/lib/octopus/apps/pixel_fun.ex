@@ -28,6 +28,9 @@ defmodule Octopus.Apps.PixelFun do
       :target_colors,
       :random_colors,
       :lerp_time,
+      :translate_scale,
+      :rotate_scale,
+      :zoom_scale,
       :color_interval,
       :cycle_functions,
       :cycle_functions_interval,
@@ -45,6 +48,9 @@ defmodule Octopus.Apps.PixelFun do
       color_interval: {"Color change Interval (s)", :float, %{default: 5, min: 1, max: 20}},
       invert_colors: {"Invert Colors", :boolean, %{default: false}},
       random_colors: {"Random Colors", :boolean, %{default: true}},
+      translate_scale: {"Translate Scale", :float, %{default: 2, min: 0, max: 10}},
+      rotate_scale: {"Rotation Scale", :float, %{default: 0.1, min: 0, max: 4}},
+      zoom_scale: {"Zoom Scale", :float, %{default: 2, min: 0, max: 10}},
       cycle_functions: {"Cycle Functions", :boolean, %{default: true}},
       cycle_functions_interval:
         {"Cycle Functions Interval (s)", :float, %{default: 30, min: 1, max: 60 * 60}},
@@ -74,7 +80,10 @@ defmodule Octopus.Apps.PixelFun do
       random_colors: state.random_colors,
       color_interval: state.color_interval,
       cycle_functions: state.cycle_functions,
-      cycle_functions_interval: state.cycle_functions_interval
+      cycle_functions_interval: state.cycle_functions_interval,
+      translate_scale: state.translate_scale,
+      rotate_scale: state.rotate_scale,
+      zoom_scale: state.zoom_scale
     }
   end
 
@@ -109,6 +118,9 @@ defmodule Octopus.Apps.PixelFun do
        color_interval: config.color_interval,
        cycle_functions: config.cycle_functions,
        cycle_functions_interval: config.cycle_functions_interval,
+       translate_scale: config.translate_scale,
+       rotate_scale: config.rotate_scale,
+       zoom_scale: config.zoom_scale,
        functions: functions,
        pivot: {3.5, 3.5}
      }}
@@ -121,7 +133,10 @@ defmodule Octopus.Apps.PixelFun do
           invert_colors: invert_colors,
           colors: colors,
           random_colors: random_colors,
-          cycle_functions: cycle_functions
+          cycle_functions: cycle_functions,
+          translate_scale: translate_scale,
+          rotate_scale: rotate_scale,
+          zoom_scale: zoom_scale
         },
         %State{} = state
       ) do
@@ -142,7 +157,10 @@ defmodule Octopus.Apps.PixelFun do
          invert_colors: invert_colors,
          colors: colors,
          random_colors: random_colors,
-         cycle_functions: cycle_functions
+         cycle_functions: cycle_functions,
+         translate_scale: translate_scale,
+         rotate_scale: rotate_scale,
+         zoom_scale: zoom_scale
      }}
   end
 
@@ -212,13 +230,13 @@ defmodule Octopus.Apps.PixelFun do
     {seconds, micros} = Time.utc_now() |> Time.to_seconds_after_midnight()
     seconds = seconds + micros / 1_000_000
 
-    offset_x = :math.sin(0.3 + seconds * 0.17) * 2.0
-    offset_y = :math.cos(0.7 + seconds * 0.05) * 2.0
+    offset_x = :math.sin(0.3 + seconds * 0.17) * state.translate_scale
+    offset_y = :math.cos(0.7 + seconds * 0.05) * state.translate_scale
 
     {pivot_x, pivot_y} = state.pivot
 
-    scale = :math.sin(seconds * 0.1) * 2.0
-    rotation = seconds * 0.1
+    zoom = :math.sin(seconds * 0.1) * state.zoom_scale
+    rotation = seconds * state.rotate_scale
 
     {color_a, color_b} = state.colors
 
@@ -232,18 +250,18 @@ defmodule Octopus.Apps.PixelFun do
     for i <- 0..(@width * @height - 1), into: canvas do
       x = rem(i, @width)
       y = div(i, @width)
-      scaled_x = (x - pivot_x) * scale + pivot_x
-      scaled_y = (y - pivot_y) * scale + pivot_y
-      translated_x = scaled_x + offset_x
-      translated_y = scaled_y + offset_y
+      zoomed_x = (x - pivot_x) * zoom + pivot_x
+      zoomed_y = (y - pivot_y) * zoom + pivot_y
+      translated_x = zoomed_x + offset_x
+      translated_y = zoomed_y + offset_y
 
       rotated_x =
-        (translated_x - pivot_x) * :math.cos(rotation) -
-          (translated_y - pivot_y) * :math.sin(rotation) + pivot_x
+        translated_x * :math.cos(rotation) -
+          translated_y * :math.sin(rotation)
 
       rotated_y =
-        (translated_x - pivot_x) * :math.sin(rotation) +
-          (translated_y - pivot_y) * :math.cos(rotation) + pivot_y
+        translated_x * :math.sin(rotation) +
+          translated_y * :math.cos(rotation)
 
       {{x, y}, pixels(program, rotated_x, rotated_y, i, seconds, colors)}
     end
