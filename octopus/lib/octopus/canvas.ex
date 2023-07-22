@@ -396,6 +396,16 @@ defmodule Octopus.Canvas do
     %Canvas{canvas | pixels: pixels}
   end
 
+  def flip_vertical(%Canvas{} = canvas) do
+    pixels =
+      for x <- 0..(canvas.width - 1),
+          y <- 0..(canvas.height - 1),
+          do: {{x, y}, Canvas.get_pixel(canvas, {x, canvas.height - 1 - y})},
+          into: %{}
+
+    %Canvas{canvas | pixels: pixels}
+  end
+
   defimpl Collectable do
     def into(canvas) do
       collector_fun = fn
@@ -413,10 +423,10 @@ defmodule Octopus.Canvas do
     end
   end
 
-  @doc """
-  Inspect implementation for printing out Canvas objects on the iex command line
-  """
   defimpl Inspect, for: Canvas do
+    @doc """
+    Inspect implementation for printing out Canvas objects on the iex command line
+    """
     def inspect(canvas, _opts) do
       default_color = IO.ANSI.default_color()
 
