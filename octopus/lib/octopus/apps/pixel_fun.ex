@@ -13,7 +13,6 @@ defmodule Octopus.Apps.PixelFun do
     "sin(t-x/2-y/2)",
     "sin(t+hypot(x-3.5,y-3.5))",
     "sin(t+x/2-y/2)",
-    "sin(t+x*y)",
     "cos(x+sin(t))-sin(y-cos(t)*0.5)"
   ]
 
@@ -32,7 +31,8 @@ defmodule Octopus.Apps.PixelFun do
       :color_interval,
       :cycle_functions,
       :cycle_functions_interval,
-      :functions
+      :functions,
+      :pivot
     ]
   end
 
@@ -109,7 +109,8 @@ defmodule Octopus.Apps.PixelFun do
        color_interval: config.color_interval,
        cycle_functions: config.cycle_functions,
        cycle_functions_interval: config.cycle_functions_interval,
-       functions: functions
+       functions: functions,
+       pivot: {3.5, 3.5}
      }}
   end
 
@@ -214,6 +215,11 @@ defmodule Octopus.Apps.PixelFun do
     offset_x = :math.sin(0.3 + seconds * 0.17) * 2.0
     offset_y = :math.cos(0.7 + seconds * 0.05) * 2.0
 
+    {pivot_x, pivot_y} = state.pivot
+
+    scale = :math.sin(seconds * 0.1) * 2.0
+    rotation = seconds * 0.1
+
     {color_a, color_b} = state.colors
 
     colors =
@@ -226,7 +232,20 @@ defmodule Octopus.Apps.PixelFun do
     for i <- 0..(@width * @height - 1), into: canvas do
       x = rem(i, @width)
       y = div(i, @width)
-      {{x, y}, pixels(program, x + offset_x, y + offset_y, i, seconds, colors)}
+      scaled_x = (x - pivot_x) * scale + pivot_x
+      scaled_y = (y - pivot_y) * scale + pivot_y
+      translated_x = scaled_x + offset_x
+      translated_y = scaled_y + offset_y
+
+      rotated_x =
+        (translated_x - pivot_x) * :math.cos(rotation) -
+          (translated_y - pivot_y) * :math.sin(rotation) + pivot_x
+
+      rotated_y =
+        (translated_x - pivot_x) * :math.sin(rotation) +
+          (translated_y - pivot_y) * :math.cos(rotation) + pivot_y
+
+      {{x, y}, pixels(program, rotated_x, rotated_y, i, seconds, colors)}
     end
   end
 
