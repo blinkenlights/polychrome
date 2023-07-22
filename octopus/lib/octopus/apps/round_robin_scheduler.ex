@@ -14,36 +14,62 @@ defmodule Octopus.Apps.RoundRobinScheduler do
 
   def init(_args) do
     state = %State{
-      apps: [Octopus.Apps.PixelFun, Octopus.Apps.MarioRun, Octopus.Apps.Webpanimation],
+      apps: [
+        Octopus.Apps.PixelFun,
+        Octopus.Apps.MarioRun,
+        Octopus.Apps.Sprites,
+        Octopus.Apps.Webpanimation
+      ],
       index: -1,
       running_since: nil
     }
 
+    # subscribe()
     Process.send_after(self(), :tick, 0)
     {:ok, state}
   end
 
   def handle_info(:tick, %State{} = state) do
+    if state.index >= 0 do
+      state.apps
+      |> Enum.at(state.index)
+      |> app_id_of_running_app()
+      |> AppSupervisor.stop_app()
+    end
+
     Process.send_after(self(), :tick, @max_running_time)
     state = start_next_app(state)
     {:noreply, state}
   end
 
-  defp start_next_app(state) do
-    if state.index >= 0 do
-      AppSupervisor.stop_app(Enum.at(state.apps, state.index))
-    end
+  def handle_info({:apps, {:stopped, _app_id, _module}}, state) do
+    state = start_next_app(state)
+    {:noreply, state}
+  end
 
+  defp start_next_app(state) do
     new_index = rem(state.index + 1, Enum.count(state.apps))
 
     new_app = Enum.at(state.apps, new_index)
     AppSupervisor.start_app(new_app)
 
-    running_apps = AppSupervisor.running_apps()
-    Logger.info("Running apps: #{inspect(running_apps)}")
+    new_app
+    |> app_id_of_running_app()
+    |> Octopus.Mixer.select_app()
 
-    {_, id} = Enum.find(running_apps, fn {app_module, app_id} -> app_module == new_app end)
-    Octopus.Mixer.select_app(id)
     %State{state | index: new_index, running_since: Time.utc_now()}
+  end
+
+  defp subscribe() do
+    Phoenix.PubSub.subscribe(Octopus.PubSub, "apps")
+  end
+
+  defp app_id_of_running_app(app_module_to_look_for) do
+    running_apps = AppSupervisor.running_apps()
+
+    {_, id} =
+      Enum.find(running_apps, fn {app_module, _app_id} -> app_module == app_module_to_look_for end)
+
+    id
   end
 end
