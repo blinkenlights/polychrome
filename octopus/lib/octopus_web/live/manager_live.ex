@@ -2,7 +2,6 @@ defmodule OctopusWeb.ManagerLive do
   use OctopusWeb, :live_view
 
   alias Octopus.Layout.Mildenberg
-  alias Octopus.Protobuf.InputEvent
   alias Octopus.{Mixer, AppSupervisor}
   alias OctopusWeb.PixelsLive
 
