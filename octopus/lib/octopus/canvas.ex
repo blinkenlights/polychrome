@@ -443,14 +443,14 @@ defmodule Octopus.Canvas do
       default_color = IO.ANSI.default_color()
 
       # traverse pixels left to right, top to bottom
-      delimiter = default_color <> "+" <> String.duplicate("-", canvas.width) <> "+\n"
+      delimiter = default_color <> "+" <> String.duplicate("--", canvas.width) <> "+\n"
 
       lines =
         for y <- 0..(canvas.height - 1) do
           line =
             for x <- 0..(canvas.width - 1) do
               [r, g, b] = Canvas.get_pixel_color(canvas, {x, y})
-              IO.ANSI.color(convert_color_rgb_to_ansi(r, g, b)) <> "\u2588"
+              IO.ANSI.color(convert_color_rgb_to_ansi(r, g, b)) <> "\u2588\u2588"
             end
             |> List.to_string()
 
