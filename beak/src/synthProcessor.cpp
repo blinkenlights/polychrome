@@ -132,7 +132,6 @@ void SynthProcessor::hiResTimerCallback()
       {
         noteOff(it->first);
         m_noteOffs.erase(it->first);
-        PLOGD << "forced note off";
       }
       else
       {
