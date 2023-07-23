@@ -107,7 +107,6 @@ defmodule Octopus.Broadcaster do
       %FirmwareConfig{state.config | luminance: luminance}
       |> send_config(state)
 
-    Logger.info("luminance set to #{luminance}")
     {:noreply, state}
   end
 
