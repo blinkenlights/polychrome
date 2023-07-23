@@ -23,7 +23,8 @@ defmodule Octopus.Apps.OddManOut do
       canvas: [Canvas.new(8, 8), Canvas.new(8, 8), Canvas.new(8, 8)],
       sprite_sheets: %{
         menu: "oddmanout-menu",
-        figures: "oddmanout-figures"
+        figures: "oddmanout-figures",
+        timer: "timercircle-sheet"
       },
       t: 0
     }
@@ -37,10 +38,11 @@ defmodule Octopus.Apps.OddManOut do
     c1 = Sprite.load(state.sprite_sheets.menu, 0)
     c2 = Sprite.load(state.sprite_sheets.menu, 1)
     c3 = Sprite.load(state.sprite_sheets.menu, 2)
-    %State{state | canvas: [c1, c2, c3]}
+    c4 = Sprite.load(state.sprite_sheets.timer, rem(state.t, 24))
+    %State{state | canvas: [c1, c2, c3, c4]}
   end
 
-  defp display_frame(%State{canvas: [c1, c2, c3]}) do
+  defp display_frame(%State{canvas: [c1, c2, c3, c4]}) do
     Canvas.new(8 * 10, 8, c1.palette)
     |> Canvas.overlay(c1, offset: {8 * 3, 0})
     |> Canvas.overlay(c2, offset: {8 * 4, 0})
@@ -48,6 +50,8 @@ defmodule Octopus.Apps.OddManOut do
     |> IO.inspect()
     |> Canvas.to_frame()
     |> send_frame()
+
+    c4 |> IO.inspect() |> Canvas.to_frame() |> send_frame()
   end
 
   defp tick(state) do
