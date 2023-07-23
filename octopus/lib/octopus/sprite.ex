@@ -84,7 +84,7 @@ defmodule Octopus.Sprite do
 
         {:commit, canvas}
       else
-        raise "Sprite sheet #{sprite_sheet} not found"
+        raise "Sprite sheet #{sprite_sheet} not found at #{path}"
       end
     end)
   end
