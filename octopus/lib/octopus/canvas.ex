@@ -153,6 +153,18 @@ defmodule Octopus.Canvas do
     end
   end
 
+  def to_rgb(%Canvas{palette: nil} = canvas), do: canvas
+
+  def to_rgb(%Canvas{} = canvas) do
+    pixels = for {k, _v} <- canvas.pixels, into: %{}, do: {k, get_pixel_color(canvas, k)}
+
+    %Canvas{
+      canvas
+      | pixels: pixels,
+        palette: nil
+    }
+  end
+
   @doc """
   Translates the canvas by the given offset.
   Pixels that are moved outside the canvas are discarded.
