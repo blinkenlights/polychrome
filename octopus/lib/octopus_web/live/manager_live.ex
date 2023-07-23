@@ -118,21 +118,6 @@ defmodule OctopusWeb.ManagerLive do
     {:noreply, socket}
   end
 
-  # todo: handle keyup event
-  def handle_event("keydown-event", %{"key" => key}, socket)
-      when key in ~w(0 1 2 3 4 5 6 7 8 9) do
-    button =
-      case key do
-        "0" -> :BUTTON_10
-        int -> String.to_existing_atom("BUTTON_#{int}")
-      end
-
-    %InputEvent{type: button, value: 1}
-    |> Mixer.handle_input()
-
-    {:noreply, socket}
-  end
-
   def handle_event("keydown-event", %{"key" => _other_key}, socket) do
     {:noreply, socket}
   end
