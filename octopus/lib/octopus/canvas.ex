@@ -418,6 +418,43 @@ defmodule Octopus.Canvas do
     %Canvas{canvas | pixels: pixels}
   end
 
+
+  @doc """
+  Create SVG representation of the canvas by rendering the pixels
+  left to right, top to bottom in lines
+  """
+  def to_svg(canvas, opts \\ []) do
+    opts =
+      Keyword.validate!(opts,
+        width: canvas.width,
+        height: canvas.height
+      )
+
+    svg_header = """
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="#{opts[:width]}px" height="#{opts[:height]}px"
+            viewbox="0 0 #{canvas.width} #{canvas.height}">
+    """
+
+    svg_footer = """
+          </svg>
+    """
+
+    # traverse pixels left to right, top to bottom
+    svg_pixels =
+      for y <- 0..(canvas.height - 1), x <- 0..(canvas.width - 1),
+      [r, g, b] = Canvas.get_pixel_color(canvas, {x, y})
+            do
+          """
+          <rect x="#{x}" y="#{y}" fill="rgb(#{r},#{g},#{b})" width="1" height="1" />
+          """
+      end
+
+    svg_header <> Enum.join(svg_pixels) <> svg_footer
+  end
+
+
   defimpl Collectable do
     def into(canvas) do
       collector_fun = fn
