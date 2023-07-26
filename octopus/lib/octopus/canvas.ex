@@ -22,6 +22,7 @@ defmodule Octopus.Canvas do
 
   """
 
+  alias Octopus.WebP
   alias Octopus.Protobuf.{Frame, RGBFrame}
   alias Octopus.ColorPalette
   alias Octopus.Canvas
@@ -63,6 +64,39 @@ defmodule Octopus.Canvas do
       pixels: %{},
       palette: palette
     }
+  end
+
+  @doc """
+  Creates a new canvas from a webp file.
+  The webp file must be located in the priv/webp directory.
+  """
+  @spec from_webp(String.t()) :: Canvas.t()
+  def from_webp(name) do
+    path = Path.join([:code.priv_dir(:octopus), "webp", "#{name}.webp"])
+    {pixels, width, height} = WebP.decode_rgb(path)
+
+    canvas = Canvas.new(width, height)
+
+    pixels
+    |> Enum.with_index()
+    |> Enum.reduce(canvas, fn {pixel, i}, acc ->
+      x = rem(i, width)
+      y = div(i, width)
+      Canvas.put_pixel(acc, {x, y}, pixel)
+    end)
+  end
+
+  @doc """
+  Encodes the canvas as a webp file.
+  """
+  @spec to_webp(Octopus.Canvas.t()) :: binary()
+  def to_webp(%Canvas{} = canvas) do
+    rgb_pixels =
+      for y <- 0..(canvas.height - 1),
+          x <- 0..(canvas.width - 1),
+          do: Octopus.Canvas.get_pixel_color(canvas, {x, y})
+
+    WebP.encode_rgb(List.flatten(rgb_pixels), canvas.width, canvas.height)
   end
 
   @doc """

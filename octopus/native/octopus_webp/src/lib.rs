@@ -74,11 +74,28 @@ fn encode_rgb(rgb_pixels: Vec<u8>, width: usize, height: usize) -> NifResult<Own
     let mut binary = OwnedBinary::new(webp_bytes.len())
         .ok_or_else(|| rustler::Error::Term(Box::new("no mem")))?;
 
-    for (i, byte) in binary.as_mut_slice().iter_mut().enumerate() {
-        *byte = webp_bytes[i]
-    }
+    binary.copy_from_slice(webp_bytes);
 
     Ok(binary)
 }
 
-rustler::init!("Elixir.Octopus.WebP", [decode_animation, encode_rgb]);
+#[rustler::nif]
+fn decode_rgb(path: &str) -> Option<(Vec<Vec<u8>>, u32, u32)> {
+    let buffer = std::fs::read(path).ok()?;
+    let webp = webp::Decoder::new(&buffer).decode()?;
+    let width = webp.width();
+    let height = webp.height();
+    let image = webp.to_image();
+    let pixels = image
+        .into_rgb8()
+        .into_vec()
+        .chunks_exact(3)
+        .map(|pixel| pixel.to_vec())
+        .collect();
+    Some((pixels, width, height))
+}
+
+rustler::init!(
+    "Elixir.Octopus.WebP",
+    [decode_animation, encode_rgb, decode_rgb]
+);
