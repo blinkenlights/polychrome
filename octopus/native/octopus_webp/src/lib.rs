@@ -34,9 +34,23 @@ fn decode(path: &str) -> Option<Animation> {
                 let frame = (rgb, frame.timestamp());
                 animation.frames.push(frame);
             }
-            _ => {
-                eprintln!("Unsupported color mode");
-                return None;
+            ColorMode::Bgr => {
+                let rgb = frame
+                    .data()
+                    .chunks_exact(3)
+                    .map(|bgr| vec![bgr[2], bgr[1], bgr[0]])
+                    .collect();
+                let frame = (rgb, frame.timestamp());
+                animation.frames.push(frame);
+            }
+            ColorMode::Bgra => {
+                let rgb = frame
+                    .data()
+                    .chunks_exact(4)
+                    .map(|bgr| vec![bgr[2], bgr[1], bgr[0]])
+                    .collect();
+                let frame = (rgb, frame.timestamp());
+                animation.frames.push(frame);
             }
         }
     }
