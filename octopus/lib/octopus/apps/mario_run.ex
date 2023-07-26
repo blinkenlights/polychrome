@@ -51,6 +51,8 @@ defmodule Octopus.Apps.MarioRun do
 
   def name, do: "Mario Run"
 
+  def icon, do: Canvas.from_webp("mario")
+
   def config_schema do
     %{
       speed: {"Speed", :float, %{default: 1.0, min: 0.1, max: 10.0}}

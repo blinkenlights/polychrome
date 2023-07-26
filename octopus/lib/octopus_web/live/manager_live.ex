@@ -1,6 +1,7 @@
 defmodule OctopusWeb.ManagerLive do
   use OctopusWeb, :live_view
 
+  alias Octopus.Canvas
   alias Octopus.Layout.Mildenberg
   alias Octopus.{Mixer, AppSupervisor}
   alias OctopusWeb.PixelsLive
@@ -84,12 +85,17 @@ defmodule OctopusWeb.ManagerLive do
             Add App:
           </div>
           <div class="border p-2 flex flex-row flex-wrap">
-            <div :for={%{module: module, name: name} <- @available_apps} class="m-0 p-1">
+            <div :for={%{module: module, name: name, icon: icon} <- @available_apps} class="m-0 p-1">
               <button
-                class="border py-1 px-2 rounded bg-slate-500 text-white"
+                class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
                 phx-click="start"
                 phx-value-module={module}
               >
+                <%= if icon do %>
+                  <div class="w-5 h-5 inline-block rounded-sm overflow-hidden">
+                    <%= raw(icon) %>
+                  </div>
+                <% end %>
                 <%= name %>
               </button>
             </div>
@@ -144,7 +150,15 @@ defmodule OctopusWeb.ManagerLive do
   defp assign_apps(socket) do
     available_apps =
       for module <- AppSupervisor.available_apps() do
-        %{module: module, name: apply(module, :name, [])}
+        name = apply(module, :name, [])
+
+        icon =
+          case apply(module, :icon, []) do
+            nil -> nil
+            canvas -> Canvas.to_svg(canvas, width: "100%", height: "100%")
+          end
+
+        %{module: module, name: name, icon: icon}
       end
 
     selected_app = Mixer.get_selected_app()

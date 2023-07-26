@@ -13,6 +13,7 @@ defmodule Octopus.App do
 
   """
 
+  alias Octopus.Canvas
   alias Octopus.Protobuf.{Frame, WFrame, RGBFrame, AudioFrame, InputEvent, ControlEvent}
   alias Octopus.{Mixer, AppSupervisor}
 
@@ -22,6 +23,11 @@ defmodule Octopus.App do
   Human readable name of the app. It will be used in the UI and other places to identify the app.
   """
   @callback name() :: binary()
+
+  @doc """
+  Optional callback to return an icon that will be used in the UI.
+  """
+  @callback icon() :: Canvas.t() | nil
 
   @doc """
   Optional callback to handle input events. An app will only receive input events if it is selected as active in the mixer.
@@ -81,6 +87,8 @@ defmodule Octopus.App do
         {:reply, :ok, state}
       end
 
+      def icon, do: nil
+
       def handle_input(_input_event, state) do
         {:noreply, state}
       end
@@ -101,6 +109,7 @@ defmodule Octopus.App do
         %{}
       end
 
+      defoverridable icon: 0
       defoverridable handle_input: 2
       defoverridable handle_control_event: 2
       defoverridable config_schema: 0
