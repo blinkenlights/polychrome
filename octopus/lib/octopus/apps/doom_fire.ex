@@ -1,4 +1,4 @@
-defmodule Octopus.Apps.CampFire do
+defmodule Octopus.Apps.DoomFire do
   use Octopus.App
 
   defmodule Fire do
