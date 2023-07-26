@@ -1,4 +1,6 @@
-use rustler::NifStruct;
+use std::ops::Deref;
+
+use rustler::{NifResult, NifStruct, OwnedBinary};
 use webp_animation::{ColorMode, Decoder};
 
 type Frame = (Vec<Vec<u8>>, i32);
@@ -11,7 +13,7 @@ struct Animation {
 }
 
 #[rustler::nif]
-fn decode(path: &str) -> Option<Animation> {
+fn decode_animation(path: &str) -> Option<Animation> {
     let buffer = std::fs::read(path).ok()?;
     let decoder = Decoder::new(&buffer).ok()?;
 
@@ -58,4 +60,25 @@ fn decode(path: &str) -> Option<Animation> {
     Some(animation)
 }
 
-rustler::init!("Elixir.Octopus.WebP", [decode]);
+#[rustler::nif]
+fn encode_rgb(rgb_pixels: Vec<u8>, width: usize, height: usize) -> NifResult<OwnedBinary> {
+    let encoder = webp::Encoder::new(
+        &rgb_pixels,
+        webp::PixelLayout::Rgb,
+        width as u32,
+        height as u32,
+    );
+    let webp = encoder.encode_lossless();
+    let webp_bytes = webp.deref();
+
+    let mut binary = OwnedBinary::new(webp_bytes.len())
+        .ok_or_else(|| rustler::Error::Term(Box::new("no mem")))?;
+
+    for (i, byte) in binary.as_mut_slice().iter_mut().enumerate() {
+        *byte = webp_bytes[i]
+    }
+
+    Ok(binary)
+}
+
+rustler::init!("Elixir.Octopus.WebP", [decode_animation, encode_rgb]);

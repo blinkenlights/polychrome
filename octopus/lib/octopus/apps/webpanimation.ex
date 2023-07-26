@@ -12,8 +12,8 @@ defmodule Octopus.Apps.Webpanimation do
   def name(), do: "Webp Animation"
 
   def init(_args) do
-    path = Path.join([:code.priv_dir(:octopus), "webp", "marioi-run.webp"])
-    decoded_animation = WebP.decode(path)
+    path = Path.join([:code.priv_dir(:octopus), "webp", "mario-run.webp"])
+    decoded_animation = WebP.decode_animation(path)
     {width, height} = decoded_animation.size
 
     state = %State{

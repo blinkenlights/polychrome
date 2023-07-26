@@ -12,3 +12,4 @@ crate-type = ["cdylib"]
 [dependencies]
 rustler = "0.29.1"
 webp-animation = "0.8.0"
+webp = "0.2.4"
