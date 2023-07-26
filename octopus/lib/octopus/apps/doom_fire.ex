@@ -58,6 +58,7 @@ defmodule Octopus.Apps.DoomFire do
   alias Octopus.Canvas
 
   def name, do: "Doom Fire"
+  def icon, do: Canvas.from_webp("doom-fire")
 
   def init(_) do
     :timer.send_interval(trunc(1000 / 10), :tick)

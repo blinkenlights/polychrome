@@ -15,6 +15,8 @@ defmodule Octopus.Apps.FairyDust do
 
   def name(), do: "Fairy Dust"
 
+  def icon(), do: Canvas.from_webp("fairy-dust")
+
   def init(_args) do
     :timer.send_interval(trunc(1000 / @fps), :tick)
 
