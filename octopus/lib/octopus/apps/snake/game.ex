@@ -2,10 +2,10 @@ defmodule Octopus.Apps.Snake.Game do
 
   defmodule Worm do
     @base_speed 40
-    defstruct [:parts,:rem_t]
+    defstruct [:parts,:rem_t, :speed]
 
     def new() do
-      %Worm { parts: [{{3,7},:u}, {{2,7}, :r}, {{1,7}, :r}], rem_t: @base_speed }
+      %Worm { parts: [{{3,7},:r}, {{2,7}, :r}, {{1,7}, :r}], rem_t: @base_speed , speed: @base_speed}
     end
 
     defp move(parts, dir), do: move([], parts, dir)
@@ -26,13 +26,24 @@ defmodule Octopus.Apps.Snake.Game do
     def tick(%Worm{ parts: [{_,dir} | _]} = worm, []), do: tick(worm, dir)
     def tick(%Worm{ rem_t: 0} = worm, dir) do
       %Worm{
+        worm |
         parts: move(worm.parts, dir),
-        rem_t: @base_speed
+        rem_t: worm.speed
       } |> IO.inspect()
 
     end
     def tick(%Worm{parts: [{pos,_} | parttail], rem_t: rem_t} = worm, dir), do: %Worm{ worm | parts: [{pos, dir} | parttail], rem_t: rem_t-1}
 
+    def dead?(%Worm{parts: parts}) do
+      parts |> Enum.reduce({MapSet.new(), false}, fn {{x,y} = p, _}, {acc, c} ->
+        c = c or x<0 or y<0 or x>=8 or y>=8
+        {MapSet.put(acc, p), MapSet.member?(acc, p) or c}
+      end ) |> elem(1)
+    end
+
+    def positions(%Worm{parts: parts}) do
+      parts |> Enum.reduce([], fn {p, _}, acc -> [p | acc] end) |> Enum.reverse()
+    end
   end
 
   defstruct [:worm, :food]
@@ -42,25 +53,30 @@ defmodule Octopus.Apps.Snake.Game do
   alias Snake.Game
 
   def new() do
+    worm = Worm.new()
     %Game{
-      worm: Worm.new(), food: {2,2}
+      worm: Worm.new(), food: new_food(worm)
     }
   end
 
-  def new_food(%Worm{} = _worm) do
-    {:rand.uniform(8)-1,:rand.uniform(8)-1}
+  def new_food(%Worm{} = worm) do
+    food = {:rand.uniform(8)-1,:rand.uniform(8)-1}
+    cond do
+      food in Worm.positions(worm) -> new_food(worm)
+      true -> food
+    end
   end
 
   def tick(%Game{ food: food} = game, joy) do
 
     new_worm = game.worm |> Worm.tick(JoyState.direction(joy))
 
-    _game = case hd(new_worm.parts) do
+    new_game = case hd(new_worm.parts) do
     {^food, _} ->
       wormy = %Worm{ new_worm | parts: [hd(new_worm.parts) | game.worm.parts] }
       %Game{
         game |
-        worm: wormy,
+        worm: %Worm{ wormy | speed: (wormy.speed - 1) |> Snake.Util.clamp(10,60)},
         food: new_food(wormy)
       }
     _ -> %Game{
@@ -68,6 +84,11 @@ defmodule Octopus.Apps.Snake.Game do
       worm: new_worm
     }
   end
+
+    cond do
+      Worm.dead?(new_game.worm) -> Game.new()
+      true -> new_game
+    end
   end
 
   def render_frame(%Game{} = game) do
