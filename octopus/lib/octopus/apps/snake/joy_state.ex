@@ -57,4 +57,13 @@ defmodule Octopus.Apps.Snake.JoyState do
   end
 
   def button?(%JoyState{buttons: buttons}, button), do: buttons |> MapSet.member?(button)
+
+  def direction(%JoyState{buttons: buttons}) do
+    buttons
+    |> Enum.reduce([], fn
+      :a, acc -> acc
+      :b, acc -> acc
+      v, acc -> [v | acc]
+    end)
+  end
 end

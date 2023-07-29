@@ -39,7 +39,7 @@ defmodule Octopus.Apps.Snake do
   end
 
   defp tick(%State{t: t, button_state: %ButtonState{} = bs} = state) do
-    game = state.game |> Game.tick([bs.joy1, bs.joy2])
+    game = state.game |> Game.tick(bs.joy1)
 
     game
     |> Game.render_frame()
