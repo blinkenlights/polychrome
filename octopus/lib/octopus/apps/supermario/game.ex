@@ -28,6 +28,7 @@ defmodule Octopus.Apps.Supermario.Game do
   # micro seconds between two moves
   @update_interval_ms 10_000
   @intro_animation_ms 3_000_000
+  @dying_animation_ms 2_000_000
   @pause_animation_ms 3_000_000
 
   def new(windows_shown) when windows_shown > 0 and windows_shown < 11 do
@@ -41,12 +42,34 @@ defmodule Octopus.Apps.Supermario.Game do
     }
   end
 
+  def restart(%Game{level: level} = game) do
+    %Game{
+      game
+      | level: Level.restart(level),
+        state: :running,
+        current_position: 0,
+        last_ticker: Time.utc_now(),
+        mario: Mario.new()
+    }
+  end
+
   # intro animation
   def tick(%Game{last_ticker: last_ticker, state: :starting} = game) do
     now = Time.utc_now()
 
     if Time.diff(now, last_ticker, :microsecond) > @intro_animation_ms do
       {:ok, %Game{game | state: :running, last_ticker: now}}
+    else
+      {:ok, game}
+    end
+  end
+
+  def tick(%Game{last_ticker: last_ticker, state: :mario_dies} = game) do
+    now = Time.utc_now()
+
+    if Time.diff(now, last_ticker, :microsecond) > @dying_animation_ms do
+      # restart game
+      {:ok, Game.restart(game)}
     else
       {:ok, game}
     end
@@ -143,7 +166,7 @@ defmodule Octopus.Apps.Supermario.Game do
     mario = Mario.update(mario, game)
     # TODO: check also for bonus points
     if Game.mario_dies?(game) do
-      {:mario_dies, %Game{game | mario: mario, state: :mario_dies}}
+      {:mario_dies, %Game{game | mario: mario, state: :mario_dies, last_ticker: Time.utc_now()}}
     else
       {:ok, %Game{game | mario: mario}}
     end
@@ -236,10 +259,10 @@ defmodule Octopus.Apps.Supermario.Game do
         current_position: current_position,
         windows_shown: windows_shown,
         mario: mario
-      }) do
+      } = game) do
     Enum.map(level.pixels, fn row ->
       Enum.slice(row, current_position, 8 * windows_shown)
     end)
-    |> Mario.draw(mario)
+    |> Mario.draw(mario, game)
   end
 end

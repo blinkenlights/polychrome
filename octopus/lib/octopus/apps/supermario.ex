@@ -43,7 +43,8 @@ defmodule Octopus.Apps.Supermario do
       case Game.tick(game) do
         {:ok, game} ->
           game
-
+        {:mario_dies, game} ->
+            game
           # {:game_over, game} ->
           #   game
           # FIXME: show end screen
@@ -53,6 +54,13 @@ defmodule Octopus.Apps.Supermario do
     canvas |> Canvas.to_frame() |> send_frame()
     {:noreply, %State{state | game: game, canvas: canvas}}
   end
+
+
+  # ignore input events while mario dies
+  def handle_input(
+          _,
+          %State{game: %Game{state: :mario_dies}} = state
+        ), do: {:noreply, state}
 
   def handle_input(
         %InputEvent{type: type, value: value},

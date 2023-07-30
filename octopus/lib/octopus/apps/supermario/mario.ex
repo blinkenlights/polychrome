@@ -8,7 +8,6 @@ defmodule Octopus.Apps.Supermario.Mario do
   @start_position_x 3
   @jump_interval_ms 90_000
   @fall_interval_ms 100_000
-  @colour [216, 40, 0]
   @type t :: %__MODULE__{
           x_position: integer(),
           y_position: integer(),
@@ -34,10 +33,10 @@ defmodule Octopus.Apps.Supermario.Mario do
     }
   end
 
-  def draw(pixels, %Mario{} = mario) do
+  def draw(pixels, %Mario{} = mario, %Game{} = game) do
     pixels
     |> Matrix.from_list()
-    |> set_mario(mario)
+    |> set_mario(mario, game)
     |> Matrix.to_list()
   end
 
@@ -137,7 +136,10 @@ defmodule Octopus.Apps.Supermario.Mario do
 
   def start_position_x, do: @start_position_x
 
-  defp set_mario(matrix, mario) do
-    put_in(matrix[mario.y_position][mario.x_position], @colour)
+  defp set_mario(matrix, mario, %Game{state: state}) do
+    put_in(matrix[mario.y_position][mario.x_position], mario_colour(state))
   end
+
+  defp mario_colour(:mario_dies), do: [66, 44, 23]
+  defp mario_colour(_), do: [216, 40, 0]
 end

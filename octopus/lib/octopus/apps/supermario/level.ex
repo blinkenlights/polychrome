@@ -1,7 +1,6 @@
 # matrix with level infos (8 * 120 pixel)
 # needs to know position of mario (x,y)
 #       where x might be fixed (current position, which moves by a ticker)
-# needs to handle ticker and movement of mario
 # might end in gameover
 # needs to know bonus points when mario jumps on certain points
 defmodule Octopus.Apps.Supermario.Level do
@@ -17,7 +16,6 @@ defmodule Octopus.Apps.Supermario.Level do
           # 8 * 120 .. fixed height, variable width,
           pixels: [],
           mario: nil,
-          ticker: integer(),
           level: integer(),
           points: integer(),
           gameover: boolean()
@@ -25,7 +23,6 @@ defmodule Octopus.Apps.Supermario.Level do
   defstruct [
     :pixels,
     :mario,
-    :ticker,
     :level,
     :points,
     :gameover
@@ -36,6 +33,11 @@ defmodule Octopus.Apps.Supermario.Level do
       pixels: load_pixels(1),
       level: 1
     }
+  end
+
+  # TODO: what to restart? moving parts ?
+  def restart(%Level{} = level) do
+    level
   end
 
   def next_level(%Level{level: level}) do
@@ -936,7 +938,6 @@ defmodule Octopus.Apps.Supermario.Level do
         1,
         1,
         1,
-        11,
         1,
         1,
         1,
@@ -949,6 +950,18 @@ defmodule Octopus.Apps.Supermario.Level do
         1,
         1,
         1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        nil,
+        nil,
         1,
         1,
         1,
@@ -959,14 +972,6 @@ defmodule Octopus.Apps.Supermario.Level do
         1,
         1,
         nil,
-        1,
-        1,
-        1,
-        1,
-        nil,
-        nil,
-        1,
-        1,
         1,
         1,
         1,
