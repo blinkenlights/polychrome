@@ -8,6 +8,7 @@ defmodule Octopus.Apps.Supermario.Mario do
   @start_position_x 3
   @jump_interval_ms 90_000
   @fall_interval_ms 100_000
+  @mario_colour [216, 40, 0]
   @type t :: %__MODULE__{
           x_position: integer(),
           y_position: integer(),
@@ -33,10 +34,10 @@ defmodule Octopus.Apps.Supermario.Mario do
     }
   end
 
-  def draw(pixels, %Mario{} = mario, %Game{} = game) do
+  def draw(pixels, %Mario{} = mario, mario_colour \\ @mario_colour) do
     pixels
     |> Matrix.from_list()
-    |> set_mario(mario, game)
+    |> set_mario(mario, mario_colour)
     |> Matrix.to_list()
   end
 
@@ -124,7 +125,10 @@ defmodule Octopus.Apps.Supermario.Mario do
   end
 
   # very simple implementation wether mario can fall or not. need to provide a pixel matrix
-  defp can_fall?(%Mario{y_position: y_position, x_position: x_position}, %Game{level: level, current_position: current_position}) do
+  defp can_fall?(%Mario{y_position: y_position, x_position: x_position}, %Game{
+         level: level,
+         current_position: current_position
+       }) do
     Level.can_fall?(level, x_position + current_position, y_position)
   end
 
@@ -136,10 +140,7 @@ defmodule Octopus.Apps.Supermario.Mario do
 
   def start_position_x, do: @start_position_x
 
-  defp set_mario(matrix, mario, %Game{state: state}) do
-    put_in(matrix[mario.y_position][mario.x_position], mario_colour(state))
+  defp set_mario(matrix, mario, mario_colour) do
+    put_in(matrix[mario.y_position][mario.x_position], mario_colour)
   end
-
-  defp mario_colour(:mario_dies), do: [66, 44, 23]
-  defp mario_colour(_), do: [216, 40, 0]
 end

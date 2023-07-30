@@ -6,7 +6,7 @@ defmodule Octopus.Apps.Supermario.Game do
   moving blocks are missing
   """
   alias __MODULE__
-  alias Octopus.Apps.Supermario.{Level, Mario}
+  alias Octopus.Apps.Supermario.{Animation, Level, Mario}
 
   @type t :: %__MODULE__{
           state: :starting | :running | :paused | :mario_dies | :gameover | :completed,
@@ -14,7 +14,8 @@ defmodule Octopus.Apps.Supermario.Game do
           windows_shown: integer(),
           last_ticker: Time.t(),
           level: Level.t(),
-          mario: Mario.t()
+          mario: Mario.t(),
+          current_animation: Animation.t() | nil
         }
   defstruct [
     :state,
@@ -22,7 +23,8 @@ defmodule Octopus.Apps.Supermario.Game do
     :last_ticker,
     :windows_shown,
     :level,
-    :mario
+    :mario,
+    :current_animation
   ]
 
   # micro seconds between two moves
@@ -38,7 +40,8 @@ defmodule Octopus.Apps.Supermario.Game do
       current_position: 0,
       last_ticker: Time.utc_now(),
       windows_shown: windows_shown,
-      mario: Mario.new()
+      mario: Mario.new(),
+      current_animation: nil
     }
   end
 
@@ -49,7 +52,8 @@ defmodule Octopus.Apps.Supermario.Game do
         state: :running,
         current_position: 0,
         last_ticker: Time.utc_now(),
-        mario: Mario.new()
+        mario: Mario.new(),
+        current_animation: nil
     }
   end
 
@@ -166,7 +170,23 @@ defmodule Octopus.Apps.Supermario.Game do
     mario = Mario.update(mario, game)
     # TODO: check also for bonus points
     if Game.mario_dies?(game) do
-      {:mario_dies, %Game{game | mario: mario, state: :mario_dies, last_ticker: Time.utc_now()}}
+      # init dying animation
+      # get current pixels and mario position
+      #
+      animation =
+        game
+        |> current_game_pixels()
+        |> Octopus.Apps.Supermario.Animation.MarioDies.new({0, 0})
+
+      # FIX>ME reduce mario lives!!!!!!
+      {:mario_dies,
+       %Game{
+         game
+         | mario: mario,
+           state: :mario_dies,
+           last_ticker: Time.utc_now(),
+           current_animation: animation
+       }}
     else
       {:ok, %Game{game | mario: mario}}
     end
@@ -179,8 +199,9 @@ defmodule Octopus.Apps.Supermario.Game do
     mario.y_position >= 7
   end
 
+  # Game draw just returns pixels TODO find a better name
   # TODO intro animation
-  def draw(%Game{state: :starting}) do
+  def draw(%Game{state: :starting, current_animation: nil}) do
     [
       [
         <<255, 255, 255, 255>>,
@@ -216,7 +237,7 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   # TODO between levels animation
-  def draw(%Game{state: :pause}) do
+  def draw(%Game{state: :pause, current_animation: nil}) do
     [
       [
         <<33, 44, 55, 255>>,
@@ -251,18 +272,73 @@ defmodule Octopus.Apps.Supermario.Game do
     ]
   end
 
-  # FIXME missing game over animation
+  # TODO game over animation
+  def draw(%Game{state: :gameover, current_animation: nil}) do
+    [
+      [
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>
+      ],
+      [
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>
+      ],
+      [
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>,
+        <<255, 255, 255, 255>>,
+        <<0, 0, 0, 0>>
+      ]
+    ]
+  end
 
   # draw current pixels of level and mario
-  def draw(%Game{
-        level: level,
-        current_position: current_position,
-        windows_shown: windows_shown,
-        mario: mario
-      } = game) do
+  def draw(
+        %Game{
+          # level: level,
+          # current_position: current_position,
+          # windows_shown: windows_shown,
+          mario: mario,
+          current_animation: nil
+        } = game
+      ) do
+    game
+    |> current_game_pixels
+    # Enum.map(level.pixels, fn row ->
+    #   Enum.slice(row, current_position, 8 * windows_shown)
+    # end)
+    |> Mario.draw(mario)
+  end
+
+  def draw(%Game{current_animation: current_animation}) do
+    Animation.draw(current_animation)
+  end
+
+  defp current_game_pixels(
+         %Game{
+           level: level,
+           current_position: current_position,
+           windows_shown: windows_shown
+         } = game
+       ) do
     Enum.map(level.pixels, fn row ->
       Enum.slice(row, current_position, 8 * windows_shown)
     end)
-    |> Mario.draw(mario, game)
   end
 end
