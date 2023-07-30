@@ -3,7 +3,7 @@ defmodule Octopus.Apps.Supermario.Mario do
   handles the mario logic, still under heavy development
   """
   alias __MODULE__
-  alias Octopus.Apps.Supermario.{Level, Matrix}
+  alias Octopus.Apps.Supermario.{Game, Level, Matrix}
 
   @start_position_x 3
   @jump_interval_ms 90_000
@@ -76,7 +76,7 @@ defmodule Octopus.Apps.Supermario.Mario do
     end
   end
 
-  def update(%Mario{jumping: true, y_position: y_position, jumped_at: jumped_at} = mario, _level) do
+  def update(%Mario{jumping: true, y_position: y_position, jumped_at: jumped_at} = mario, _game) do
     # jump a second pixel after a while
     # TODO: use another constant, jump_interval_ms is used to prevent a second jump within a short time
     if Time.diff(Time.utc_now(), jumped_at, :microsecond) > @jump_interval_ms do
@@ -94,9 +94,9 @@ defmodule Octopus.Apps.Supermario.Mario do
 
   # falling_since may be nil, when mario was not jumping before but ran over a hole
   # but then we are falling immidiately
-  def update(%Mario{y_position: y_position, falling_since: nil} = mario, level) do
+  def update(%Mario{y_position: y_position, falling_since: nil} = mario, %Game{} = game) do
     mario =
-      if can_fall?(mario, level) do
+      if can_fall?(mario, game) do
         IO.inspect("falling #{y_position}")
         %Mario{mario | y_position: y_position + 1, falling_since: Time.utc_now()}
       else
@@ -107,9 +107,9 @@ defmodule Octopus.Apps.Supermario.Mario do
   end
 
   # already falling, check if we can fall further and fall with a delay
-  def update(%Mario{y_position: y_position, falling_since: falling_since} = mario, level) do
+  def update(%Mario{y_position: y_position, falling_since: falling_since} = mario, %Game{} = game) do
     if Time.diff(Time.utc_now(), falling_since, :microsecond) > @fall_interval_ms do
-      if can_fall?(mario, level) do
+      if can_fall?(mario, game) do
         IO.inspect(
           "falling #{y_position}, diff: #{Time.diff(Time.utc_now(), falling_since, :microsecond)}"
         )
@@ -124,9 +124,9 @@ defmodule Octopus.Apps.Supermario.Mario do
     end
   end
 
-  # very simple implementation wether maria can fall or not. need to provide a pixel matrix
-  defp can_fall?(%Mario{y_position: y_position, x_position: x_position}, level) do
-    Level.can_fall?(level, x_position, y_position)
+  # very simple implementation wether mario can fall or not. need to provide a pixel matrix
+  defp can_fall?(%Mario{y_position: y_position, x_position: x_position}, %Game{level: level, current_position: current_position}) do
+    Level.can_fall?(level, x_position + current_position, y_position)
   end
 
   # very simple implementation wether maria can jump or not

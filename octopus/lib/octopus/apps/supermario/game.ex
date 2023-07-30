@@ -140,10 +140,10 @@ defmodule Octopus.Apps.Supermario.Game do
 
   # called by tick in intervals
   def update(%Game{mario: mario} = game) do
-    mario = Mario.update(mario, game.level)
+    mario = Mario.update(mario, game)
     # TODO: check also for bonus points
     if Game.mario_dies?(game) do
-      {:mario_dies, %Game{game | mario: mario}}
+      {:mario_dies, %Game{game | mario: mario, state: :mario_dies}}
     else
       {:ok, %Game{game | mario: mario}}
     end
