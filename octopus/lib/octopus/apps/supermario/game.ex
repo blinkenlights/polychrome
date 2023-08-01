@@ -58,11 +58,15 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   # intro animation
+  def tick(%Game{last_ticker: last_ticker, state: :starting, current_animation: nil} = game) do
+    {:ok, %Game{game | current_animation: Octopus.Apps.Supermario.Animation.Intro.new()}}
+  end
+
   def tick(%Game{last_ticker: last_ticker, state: :starting} = game) do
     now = Time.utc_now()
 
     if Time.diff(now, last_ticker, :microsecond) > @intro_animation_ms do
-      {:ok, %Game{game | state: :running, last_ticker: now}}
+      {:ok, %Game{game | state: :running, last_ticker: now, current_animation: nil}}
     else
       {:ok, game}
     end
@@ -311,18 +315,12 @@ defmodule Octopus.Apps.Supermario.Game do
   # draw current pixels of level and mario
   def draw(
         %Game{
-          # level: level,
-          # current_position: current_position,
-          # windows_shown: windows_shown,
           mario: mario,
           current_animation: nil
         } = game
       ) do
     game
     |> current_game_pixels
-    # Enum.map(level.pixels, fn row ->
-    #   Enum.slice(row, current_position, 8 * windows_shown)
-    # end)
     |> Mario.draw(mario)
   end
 

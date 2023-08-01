@@ -3,7 +3,7 @@ defmodule Octopus.Apps.Supermario.Animation do
   Base module for animations
   """
   alias __MODULE__
-  alias Octopus.Apps.Supermario.Animation.MarioDies
+  alias Octopus.Apps.Supermario.Animation.{Intro, MarioDies}
 
   @type t :: %__MODULE__{
           start_time: Time.t(),
@@ -40,6 +40,10 @@ defmodule Octopus.Apps.Supermario.Animation do
 
   def draw(%Animation{animation_type: :mario_dies} = animation) do
     MarioDies.draw(animation)
+  end
+
+  def draw(%Animation{animation_type: :intro} = animation) do
+    Intro.draw(animation)
   end
 
   def draw(%Animation{} = animation) do
