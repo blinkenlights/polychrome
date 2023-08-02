@@ -7,6 +7,7 @@ defmodule Octopus.Apps.Supermario.Game do
   """
   alias __MODULE__
   alias Octopus.Apps.Supermario.{Animation, Level, Mario}
+  alias Octopus.Apps.Supermario.Animation.MarioDies
 
   @type t :: %__MODULE__{
           state: :starting | :running | :paused | :mario_dies | :gameover | :completed,
@@ -30,7 +31,7 @@ defmodule Octopus.Apps.Supermario.Game do
   # micro seconds between two moves
   @update_interval_ms 10_000
   @intro_animation_ms 3_000_000
-  @dying_animation_ms 2_000_000
+  @dying_animation_ms 3_000_000
   @pause_animation_ms 3_000_000
 
   def new(windows_shown) when windows_shown > 0 and windows_shown < 11 do
@@ -176,11 +177,13 @@ defmodule Octopus.Apps.Supermario.Game do
     if Game.mario_dies?(game) do
       # init dying animation
       # get current pixels and mario position
-      #
       animation =
         game
         |> current_game_pixels()
-        |> Octopus.Apps.Supermario.Animation.MarioDies.new({0, 0})
+        |> MarioDies.new({
+          mario.x_position,
+          mario.y_position
+        })
 
       # FIX>ME reduce mario lives!!!!!!
       {:mario_dies,

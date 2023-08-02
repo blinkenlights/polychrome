@@ -1,6 +1,5 @@
 defmodule Octopus.Apps.Supermario.Animation.Intro do
   alias Octopus.Apps.Supermario.Animation
-  alias Octopus.Canvas
   alias Octopus.WebP
 
   # we need to now all current game pixels and the position of mario
