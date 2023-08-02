@@ -8,7 +8,7 @@ defmodule Octopus.Apps.Supermario.Level do
     handles level data
   """
 
-  alias Octopus.Apps.Supermario.{Level, PngFile}
+  alias Octopus.Apps.Supermario.{Level, Matrix, PngFile}
 
   @max_level 4
 
@@ -48,8 +48,6 @@ defmodule Octopus.Apps.Supermario.Level do
 
   def max_position(%Level{pixels: pixels}), do: (Enum.at(pixels, 0) |> Enum.count()) - 8
 
-
-
   def can_fall?(%Level{level: level}, x_position, y_position) do
     level
     |> level_blocks()
@@ -68,14 +66,55 @@ defmodule Octopus.Apps.Supermario.Level do
   end
 
   def can_move_left?(%Level{level: level}, x_position, y_position) do
-      level
-      |> level_blocks()
-      |> Enum.at(y_position)
-      |> Enum.at(x_position - 1)
-      |> is_nil()
-    end
+    level
+    |> level_blocks()
+    |> Enum.at(y_position)
+    |> Enum.at(x_position - 1)
+    |> is_nil()
+  end
 
-  defp load_pixels(level), do: PngFile.load_image_for_level(level)
+  # do nothing
+  # def draw(_pixels, _game,  _level) do
+
+  # end
+
+  # only for testing
+  def draw(pixels, %{current_position: current_position}, %Level{} = level) do
+    pixels
+    |> Matrix.from_list()
+    |> draw_blocks(level, current_position)
+    |> Matrix.to_list()
+  end
+
+  defp draw_blocks(matrix, %Level{level: level}, current_position) do
+    blocks = level_blocks(level)
+
+    {matrix, _} =
+      Enum.reduce(blocks, {matrix, 0}, fn row, {matrix, y} ->
+        # IO.inspect("draw_blocks: y: #{y}")
+        # IO.inspect("draw_blocks: row: #{Enum.count(row)}")
+
+        {matrix, _, y} =
+          Enum.reduce(row, {matrix, 0, y}, fn pixel, {matrix, x, y} ->
+            matrix =
+              if  is_nil(pixel) do
+                matrix
+              else
+                if x > current_position && Enum.count(matrix[0]) + current_position > x do
+                  put_in(matrix[y][x - current_position], [255, 142, 198])
+                else
+                  matrix
+                end
+              end
+
+            {matrix, x + 1, y}
+          end)
+
+        {matrix, y + 1}
+      end)
+
+    matrix
+  end
 
   # nil: all free
   # 1: block
@@ -1132,4 +1171,6 @@ defmodule Octopus.Apps.Supermario.Level do
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil]
     ]
   end
+
+  defp load_pixels(level), do: PngFile.load_image_for_level(level)
 end

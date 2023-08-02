@@ -216,40 +216,40 @@ defmodule Octopus.Apps.Supermario.Game do
 
   # Game draw just returns pixels TODO find a better name
   # TODO intro animation
-  def draw(%Game{state: :starting, current_animation: nil}) do
-    [
-      [
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>
-      ],
-      [
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>
-      ],
-      [
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>
-      ]
-    ]
-  end
+  # def draw(%Game{state: :starting, current_animation: nil}) do
+  #   [
+  #     [
+  #       <<255, 255, 255, 255>>,
+  #       <<0, 0, 0, 0>>,
+  #       <<255, 255, 255, 255>>,
+  #       <<0, 0, 0, 0>>,
+  #       <<255, 255, 255, 255>>,
+  #       <<0, 0, 0, 0>>,
+  #       <<255, 255, 255, 255>>,
+  #       <<0, 0, 0, 0>>
+  #     ],
+  #     [
+  #       <<255, 255, 255, 255>>,
+  #       <<0, 0, 0, 0>>,
+  #       <<255, 255, 255, 255>>,
+  #       <<0, 0, 0, 0>>,
+  #       <<255, 255, 255, 255>>,
+  #       <<0, 0, 0, 0>>,
+  #       <<255, 255, 255, 255>>,
+  #       <<0, 0, 0, 0>>
+  #     ],
+  #     [
+  #       <<255, 255, 255, 255>>,
+  #       <<0, 0, 0, 0>>,
+  #       <<255, 255, 255, 255>>,
+  #       <<0, 0, 0, 0>>,
+  #       <<255, 255, 255, 255>>,
+  #       <<0, 0, 0, 0>>,
+  #       <<255, 255, 255, 255>>,
+  #       <<0, 0, 0, 0>>
+  #     ]
+  #   ]
+  # end
 
   # TODO between levels animation
   def draw(%Game{state: :pause, current_animation: nil}) do
@@ -327,12 +327,14 @@ defmodule Octopus.Apps.Supermario.Game do
   def draw(
         %Game{
           mario: mario,
-          current_animation: nil
+          current_animation: nil,
+          level: level
         } = game
       ) do
     game
     |> current_game_pixels
     |> Mario.draw(mario)
+    |> Level.draw(game, level)
   end
 
   def draw(%Game{current_animation: current_animation}) do
