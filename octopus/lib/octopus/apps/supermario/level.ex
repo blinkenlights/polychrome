@@ -74,12 +74,10 @@ defmodule Octopus.Apps.Supermario.Level do
   end
 
   # do nothing
-  # def draw(_pixels, _game,  _level) do
+  def draw(pixels, _game,  _level), do: pixels
 
-  # end
-
-  # only for testing
-  def draw(pixels, %{current_position: current_position}, %Level{} = level) do
+  # only for testing, to enable rename to draw and rename or disable empty draw function
+  def _draw(pixels, %{current_position: current_position}, %Level{} = level) do
     pixels
     |> Matrix.from_list()
     |> draw_blocks(level, current_position)
