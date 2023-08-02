@@ -145,6 +145,13 @@ defmodule Octopus.Apps.Supermario.Mario do
     Level.can_move_right?(level, x_position + current_position, y_position)
   end
 
+  def can_move_left?(%Mario{y_position: y_position, x_position: x_position}, %Game{
+        level: level,
+        current_position: current_position
+      }) do
+    Level.can_move_left?(level, x_position + current_position, y_position)
+  end
+
   def start_position_x, do: @start_position_x
 
   defp set_mario(matrix, mario, mario_color) do

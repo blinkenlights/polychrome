@@ -67,6 +67,14 @@ defmodule Octopus.Apps.Supermario.Level do
     |> is_nil()
   end
 
+  def can_move_left?(%Level{level: level}, x_position, y_position) do
+      level
+      |> level_blocks()
+      |> Enum.at(y_position)
+      |> Enum.at(x_position - 1)
+      |> is_nil()
+    end
+
   defp load_pixels(level), do: PngFile.load_image_for_level(level)
 
   # nil: all free

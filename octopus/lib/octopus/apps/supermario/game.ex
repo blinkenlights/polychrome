@@ -128,7 +128,11 @@ defmodule Octopus.Apps.Supermario.Game do
       if mario.x_position > Mario.start_position_x() do
         %Game{game | mario: Mario.move_left(mario, game.level)}
       else
-        %Game{game | current_position: current_position - 1}
+        if Mario.can_move_left?(mario, game) do
+          %Game{game | current_position: current_position - 1}
+        else
+          game
+        end
       end
 
     # FIXME: check if mario is dead
