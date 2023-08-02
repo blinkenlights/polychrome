@@ -134,8 +134,15 @@ defmodule Octopus.Apps.Supermario.Mario do
 
   # very simple implementation wether maria can jump or not
   defp can_jump?(%Mario{y_position: y_position}, _level) do
-    # y position 3 is arbitrary, just to prevent jumping into the sky. need to provide a pixel matrix
+    # FIXME: y position 3 is arbitrary, just to prevent jumping into the sky. need to provide a pixel matrix
     y_position > 3
+  end
+
+  def can_move_right?(%Mario{y_position: y_position, x_position: x_position}, %Game{
+        level: level,
+        current_position: current_position
+      }) do
+    Level.can_move_right?(level, x_position + current_position, y_position)
   end
 
   def start_position_x, do: @start_position_x

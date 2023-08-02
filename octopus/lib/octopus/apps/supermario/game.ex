@@ -150,7 +150,11 @@ defmodule Octopus.Apps.Supermario.Game do
   def move_right(%Game{current_position: current_position, mario: mario, level: level} = game) do
     # TODO too many nested ifs, refactor, use case statement
     if current_position < Level.max_position(level) do
-      {:ok, %Game{game | current_position: current_position + 1}}
+      if Mario.can_move_right?(mario, game) do
+        {:ok, %Game{game | current_position: current_position + 1}}
+      else
+        {:ok, game}
+      end
     else
       if mario.x_position < 7 do
         {:ok, %Game{game | mario: Mario.move_right(mario, level)}}
