@@ -8,30 +8,29 @@ defmodule Octopus.Apps.Supermario.Level do
     handles level data
   """
 
-  alias Octopus.Apps.Supermario.{Level, Matrix, PngFile}
+  alias Octopus.Apps.Supermario.{BadGuy, Level, Matrix, PngFile}
 
   @max_level 4
 
   @type t :: %__MODULE__{
           # 8 * 120 .. fixed height, variable width,
           pixels: [],
-          mario: nil,
           level: integer(),
           points: integer(),
-          gameover: boolean()
+          bad_guys: []
         }
   defstruct [
     :pixels,
-    :mario,
     :level,
     :points,
-    :gameover
+    :bad_guys
   ]
 
   def new() do
     %Level{
       pixels: load_pixels(1),
-      level: 1
+      level: 1,
+      bad_guys: init_bad_guys(1),
     }
   end
 
@@ -41,7 +40,8 @@ defmodule Octopus.Apps.Supermario.Level do
   end
 
   def next_level(%Level{level: level}) do
-    %Level{level: level + 1, pixels: load_pixels(level + 1)}
+    level = level + 1
+    %Level{level: level, pixels: load_pixels(level), bad_guys: init_bad_guys(level)}
   end
 
   def last_level?(%Level{level: level}), do: level >= @max_level
@@ -73,8 +73,11 @@ defmodule Octopus.Apps.Supermario.Level do
     |> is_nil()
   end
 
-  # do nothing
-  def draw(pixels, _game,  _level), do: pixels
+  def draw(pixels, %{current_position: current_position},  %Level{bad_guys: bad_guys}) do
+    Enum.reduce(bad_guys, pixels, fn bad_guy, pixels ->
+      BadGuy.draw(pixels, bad_guy, current_position)
+    end)
+  end
 
   # only for testing, to enable rename to draw and rename or disable empty draw function
   def _draw(pixels, %{current_position: current_position}, %Level{} = level) do
@@ -113,6 +116,14 @@ defmodule Octopus.Apps.Supermario.Level do
 
     matrix
   end
+
+  defp init_bad_guys(l) do
+    [
+      %BadGuy{x_position: 15, y_position: 6,  min_position: 0, max_position: 15, direction: :left}
+    ]
+  end
+
+  defp init_bad_guys(_), do: []
 
   # nil: all free
   # 1: block
