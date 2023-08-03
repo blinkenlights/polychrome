@@ -174,7 +174,7 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   def jump(%Game{mario: mario} = game) do
-    mario = Mario.jump(mario, game.level)
+    mario = Mario.jump(mario, game)
     %Game{game | mario: mario}
   end
 
@@ -214,43 +214,6 @@ defmodule Octopus.Apps.Supermario.Game do
   def mario_dies?(%Game{mario: mario}) do
     mario.y_position >= 7
   end
-
-  # Game draw just returns pixels TODO find a better name
-  # TODO intro animation
-  # def draw(%Game{state: :starting, current_animation: nil}) do
-  #   [
-  #     [
-  #       <<255, 255, 255, 255>>,
-  #       <<0, 0, 0, 0>>,
-  #       <<255, 255, 255, 255>>,
-  #       <<0, 0, 0, 0>>,
-  #       <<255, 255, 255, 255>>,
-  #       <<0, 0, 0, 0>>,
-  #       <<255, 255, 255, 255>>,
-  #       <<0, 0, 0, 0>>
-  #     ],
-  #     [
-  #       <<255, 255, 255, 255>>,
-  #       <<0, 0, 0, 0>>,
-  #       <<255, 255, 255, 255>>,
-  #       <<0, 0, 0, 0>>,
-  #       <<255, 255, 255, 255>>,
-  #       <<0, 0, 0, 0>>,
-  #       <<255, 255, 255, 255>>,
-  #       <<0, 0, 0, 0>>
-  #     ],
-  #     [
-  #       <<255, 255, 255, 255>>,
-  #       <<0, 0, 0, 0>>,
-  #       <<255, 255, 255, 255>>,
-  #       <<0, 0, 0, 0>>,
-  #       <<255, 255, 255, 255>>,
-  #       <<0, 0, 0, 0>>,
-  #       <<255, 255, 255, 255>>,
-  #       <<0, 0, 0, 0>>
-  #     ]
-  #   ]
-  # end
 
   # TODO between levels animation
   def draw(%Game{state: :pause, current_animation: nil}) do

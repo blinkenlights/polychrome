@@ -57,6 +57,16 @@ defmodule Octopus.Apps.Supermario.Level do
     |> is_nil()
   end
 
+  # can jump when there is no block above and we are on the ground ??? FIXME
+  def can_jump?(_, _, 0), do: false
+  def can_jump?(%Level{level_number: level_number}, x_position, y_position) do
+    level_number
+    |> level_blocks()
+    |> Enum.at(y_position - 1)
+    |> Enum.at(x_position)
+    |> is_nil()
+  end
+
   # check blocks
   def can_move_right?(%Level{level_number: level_number}, x_position, y_position) do
     level_number

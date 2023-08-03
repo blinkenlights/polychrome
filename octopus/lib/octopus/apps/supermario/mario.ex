@@ -41,7 +41,6 @@ defmodule Octopus.Apps.Supermario.Mario do
     |> Matrix.to_list()
   end
 
-  # FIXME movement (also jumping) can result to a gameover, check here or in game?!
   def move_left(%Mario{x_position: 0} = mario, _level), do: mario
 
   def move_left(%Mario{} = mario, _level) do
@@ -53,19 +52,18 @@ defmodule Octopus.Apps.Supermario.Mario do
     %Mario{mario | x_position: mario.x_position + 1}
   end
 
-  def jump(%Mario{jumping: false} = mario, level) do
-    if can_jump?(mario, level) do
-      IO.inspect("jumping first #{mario.y_position}")
+  def jump(%Mario{jumping: false} = mario, game) do
+    if can_jump?(mario, game) do
       %Mario{mario | y_position: mario.y_position - 1, jumping: true, jumped_at: Time.utc_now()}
     else
       mario
     end
   end
 
-  def jump(%Mario{jumping: true, jumped_at: jumped_at} = mario, level) do
+  def jump(%Mario{jumping: true, jumped_at: jumped_at} = mario, game) do
     now = Time.utc_now()
 
-    if Time.diff(now, jumped_at, :microsecond) > @jump_interval_ms && can_jump?(mario, level) do
+    if Time.diff(now, jumped_at, :microsecond) > @jump_interval_ms && can_jump?(mario, game) do
       IO.inspect(
         "jumping second #{mario.y_position}, diff: #{Time.diff(now, jumped_at, :microsecond)}"
       )
@@ -76,13 +74,20 @@ defmodule Octopus.Apps.Supermario.Mario do
     end
   end
 
-  def update(%Mario{jumping: true, y_position: y_position, jumped_at: jumped_at} = mario, _game) do
+  def update(%Mario{jumping: true, y_position: y_position, jumped_at: jumped_at} = mario, game) do
     # jump a second pixel after a while
     # TODO: use another constant, jump_interval_ms is used to prevent a second jump within a short time
     if Time.diff(Time.utc_now(), jumped_at, :microsecond) > @jump_interval_ms do
+      new_y_position =
+        if can_jump?(mario, game) do
+          y_position - 1
+        else
+          y_position
+        end
+
       %Mario{
         mario
-        | y_position: y_position - 1,
+        | y_position: new_y_position,
           jumping: false,
           jumped_at: nil,
           falling_since: Time.utc_now()
@@ -133,9 +138,11 @@ defmodule Octopus.Apps.Supermario.Mario do
   end
 
   # very simple implementation wether maria can jump or not
-  defp can_jump?(%Mario{y_position: y_position}, _level) do
-    # FIXME: y position 3 is arbitrary, just to prevent jumping into the sky. need to provide a pixel matrix
-    y_position > 3
+  defp can_jump?(%Mario{y_position: y_position, x_position: x_position}, %Game{
+         level: level,
+         current_position: current_position
+       }) do
+    Level.can_jump?(level, x_position + current_position, y_position)
   end
 
   def can_move_right?(%Mario{y_position: y_position, x_position: x_position}, %Game{
