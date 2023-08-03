@@ -7,11 +7,61 @@ defmodule Octopus.Apps.Supermario.BadGuy do
           y_position: integer(),
           min_position: integer(),
           max_position: integer(),
-          direction: :left | :right
+          direction: :left | :right,
+          last_moved_at: Time.t()
         }
   @color [0, 0, 0]
 
-  defstruct [:x_position, :y_position, :min_position, :max_position, :direction]
+  defstruct [:x_position, :y_position, :min_position, :max_position, :direction, :last_moved_at]
+
+  def update(%BadGuy{} = bad_guy) do
+    if is_nil(bad_guy.last_moved_at) or
+         Time.diff(Time.utc_now(), bad_guy.last_moved_at, :millisecond) > 500 do
+      move(bad_guy)
+    else
+      bad_guy
+    end
+  end
+
+  def move(
+        %BadGuy{x_position: x_position, direction: :left, min_position: min_position} = bad_guy
+      )
+      when x_position <= min_position do
+    %BadGuy{
+      bad_guy
+      | direction: :right,
+        x_position: bad_guy.x_position + 1,
+        last_moved_at: Time.utc_now()
+    }
+  end
+
+  def move(%BadGuy{x_position: x_position, direction: :left} = bad_guy) do
+    %BadGuy{
+      bad_guy
+      | x_position: bad_guy.x_position - 1,
+        last_moved_at: Time.utc_now()
+    }
+  end
+
+  def move(
+        %BadGuy{x_position: x_position, direction: :right, max_position: max_position} = bad_guy
+      )
+      when x_position >= max_position do
+    %BadGuy{
+      bad_guy
+      | direction: :left,
+        x_position: bad_guy.x_position - 1,
+        last_moved_at: Time.utc_now()
+    }
+  end
+
+  def move(%BadGuy{x_position: x_position, direction: :right} = bad_guy) do
+    %BadGuy{
+      bad_guy
+      | x_position: bad_guy.x_position + 1,
+        last_moved_at: Time.utc_now()
+    }
+  end
 
   def draw(pixels, %BadGuy{} = bad_guy, current_position) do
     pixels

@@ -7,8 +7,9 @@ defmodule Octopus.Apps.Supermario.Level do
   @moduledoc """
     handles level data
   """
-
-  alias Octopus.Apps.Supermario.{BadGuy, Level, Matrix, PngFile}
+  alias __MODULE__
+  # TODO cyclic dependency Game <-> Level
+  alias Octopus.Apps.Supermario.{BadGuy, Game, Matrix, PngFile}
 
   @max_level 4
 
@@ -34,7 +35,7 @@ defmodule Octopus.Apps.Supermario.Level do
     }
   end
 
-  # TODO: what to restart? moving parts ?
+  # TODO: restart bad guys!!
   def restart(%Level{} = level) do
     level
   end
@@ -115,6 +116,11 @@ defmodule Octopus.Apps.Supermario.Level do
       end)
 
     matrix
+  end
+
+  def update(%Game{level: level} = game) do
+    level = %Level{level | bad_guys: Enum.map(level.bad_guys, fn bad_guy -> BadGuy.update(bad_guy) end)}
+    %Game{game | level: level}
   end
 
   defp init_bad_guys(l) do

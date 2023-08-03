@@ -180,6 +180,7 @@ defmodule Octopus.Apps.Supermario.Game do
 
   # called by tick in intervals
   def update(%Game{mario: mario} = game) do
+    game = Level.update(game)
     mario = Mario.update(mario, game)
     # TODO: check also for bonus points
     if Game.mario_dies?(game) do
