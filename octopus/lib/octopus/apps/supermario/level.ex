@@ -35,9 +35,8 @@ defmodule Octopus.Apps.Supermario.Level do
     }
   end
 
-  # TODO: restart bad guys!!
-  def restart(%Level{} = level) do
-    level
+  def restart(%Level{level_number: level_number} = level) do
+    %Level{level | bad_guys: init_bad_guys(level_number)}
   end
 
   def next_level(%Level{level_number: level_number}) do
