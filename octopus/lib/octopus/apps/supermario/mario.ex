@@ -6,9 +6,10 @@ defmodule Octopus.Apps.Supermario.Mario do
   alias Octopus.Apps.Supermario.{Game, Level, Matrix}
 
   @start_position_x 3
-  @jump_interval_ms 90_000
+  @jump_interval_ms 110_000
   @fall_interval_ms 100_000
   @mario_color [216, 40, 0]
+
   @type t :: %__MODULE__{
           x_position: integer(),
           y_position: integer(),
@@ -60,19 +61,9 @@ defmodule Octopus.Apps.Supermario.Mario do
     end
   end
 
-  def jump(%Mario{jumping: true, jumped_at: jumped_at} = mario, game) do
-    now = Time.utc_now()
-
-    if Time.diff(now, jumped_at, :microsecond) > @jump_interval_ms && can_jump?(mario, game) do
-      IO.inspect(
-        "jumping second #{mario.y_position}, diff: #{Time.diff(now, jumped_at, :microsecond)}"
-      )
-
-      %Mario{mario | y_position: mario.y_position - 1, jumping: true, jumped_at: Time.utc_now()}
-    else
-      mario
-    end
-  end
+  # Not sure, but jumping a second time does not work as expected
+  # so for now I disable it
+  def jump(%Mario{jumping: true} = mario, _game), do: mario
 
   def update(%Mario{jumping: true, y_position: y_position, jumped_at: jumped_at} = mario, game) do
     # jump a second pixel after a while

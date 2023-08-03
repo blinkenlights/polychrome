@@ -138,7 +138,7 @@ defmodule Octopus.Apps.Supermario.Level do
     %Game{game | level: level}
   end
 
-  defp init_bad_guys(l) do
+  defp init_bad_guys(1) do
     [
       %BadGuy{x_position: 15, y_position: 6,  min_position: 0, max_position: 15, direction: :left}
     ]

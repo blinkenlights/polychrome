@@ -7,7 +7,7 @@ defmodule Octopus.Apps.Supermario.Game do
   """
   alias __MODULE__
   alias Octopus.Apps.Supermario.{Animation, Level, Mario}
-  alias Octopus.Apps.Supermario.Animation.MarioDies
+  alias Octopus.Apps.Supermario.Animation.{Intro, MarioDies}
 
   @type t :: %__MODULE__{
           state: :starting | :running | :paused | :mario_dies | :gameover | :completed,
@@ -59,8 +59,8 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   # intro animation
-  def tick(%Game{last_ticker: last_ticker, state: :starting, current_animation: nil} = game) do
-    {:ok, %Game{game | current_animation: Octopus.Apps.Supermario.Animation.Intro.new()}}
+  def tick(%Game{state: :starting, current_animation: nil} = game) do
+    {:ok, %Game{game | current_animation: Intro.new()}}
   end
 
   def tick(%Game{last_ticker: last_ticker, state: :starting} = game) do
@@ -311,13 +311,11 @@ defmodule Octopus.Apps.Supermario.Game do
     Animation.draw(current_animation)
   end
 
-  defp current_game_pixels(
-         %Game{
-           level: level,
-           current_position: current_position,
-           windows_shown: windows_shown
-         } = game
-       ) do
+  defp current_game_pixels(%Game{
+         level: level,
+         current_position: current_position,
+         windows_shown: windows_shown
+       }) do
     Enum.map(level.pixels, fn row ->
       Enum.slice(row, current_position, 8 * windows_shown)
     end)

@@ -38,7 +38,7 @@ defmodule Octopus.Apps.Supermario.BadGuy do
   def move(%BadGuy{x_position: x_position, direction: :left} = bad_guy) do
     %BadGuy{
       bad_guy
-      | x_position: bad_guy.x_position - 1,
+      | x_position: x_position - 1,
         last_moved_at: Time.utc_now()
     }
   end
@@ -50,7 +50,7 @@ defmodule Octopus.Apps.Supermario.BadGuy do
     %BadGuy{
       bad_guy
       | direction: :left,
-        x_position: bad_guy.x_position - 1,
+        x_position: x_position - 1,
         last_moved_at: Time.utc_now()
     }
   end
@@ -58,7 +58,7 @@ defmodule Octopus.Apps.Supermario.BadGuy do
   def move(%BadGuy{x_position: x_position, direction: :right} = bad_guy) do
     %BadGuy{
       bad_guy
-      | x_position: bad_guy.x_position + 1,
+      | x_position: x_position + 1,
         last_moved_at: Time.utc_now()
     }
   end

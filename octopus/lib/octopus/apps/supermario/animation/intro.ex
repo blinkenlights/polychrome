@@ -26,7 +26,7 @@ defmodule Octopus.Apps.Supermario.Animation.Intro do
     |> Enum.chunk_every(data.width)
   end
 
-  defp find_frame([{pixels, timestamp} | tail], timediff) when timediff < timestamp, do: pixels
+  defp find_frame([{pixels, timestamp} | _tail], timediff) when timediff < timestamp, do: pixels
   defp find_frame([{pixels, _timestamp}], _timediff), do: pixels
 
   defp find_frame([_hd | tail], diff), do: find_frame(tail, diff)

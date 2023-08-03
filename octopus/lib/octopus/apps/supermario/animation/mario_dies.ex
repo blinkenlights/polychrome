@@ -17,7 +17,7 @@ defmodule Octopus.Apps.Supermario.Animation.MarioDies do
   end
 
   # draw mario blinking and moving up then falling
-  def draw(%Animation{start_time: start_time, data: data} = animation) do
+  def draw(%Animation{start_time: start_time, data: data}) do
     pixel_map = Matrix.from_list(data.current_game_pixels)
     timediff = Time.diff(Time.utc_now(), start_time, :millisecond)
 
