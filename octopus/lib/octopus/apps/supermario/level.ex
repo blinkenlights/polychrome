@@ -49,6 +49,7 @@ defmodule Octopus.Apps.Supermario.Level do
 
   def max_position(%Level{pixels: pixels}), do: (Enum.at(pixels, 0) |> Enum.count()) - 8
 
+  def can_fall?(_, _, 7), do: false
   def can_fall?(%Level{level_number: level_number}, x_position, y_position) do
     level_number
     |> level_blocks()
@@ -82,6 +83,10 @@ defmodule Octopus.Apps.Supermario.Level do
     |> Enum.at(y_position)
     |> Enum.at(x_position - 1)
     |> is_nil()
+  end
+
+  def has_bad_guy_on_postion?(%Level{bad_guys: bad_guys}, x_position, y_position) do
+    Enum.any?(bad_guys, fn bad_guy -> BadGuy.on_position?(bad_guy, x_position, y_position) end)
   end
 
   def draw(pixels, %{current_position: current_position},  %Level{bad_guys: bad_guys}) do

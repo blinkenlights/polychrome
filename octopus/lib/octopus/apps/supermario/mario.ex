@@ -102,7 +102,6 @@ defmodule Octopus.Apps.Supermario.Mario do
   def update(%Mario{y_position: y_position, falling_since: nil} = mario, %Game{} = game) do
     mario =
       if can_fall?(mario, game) do
-        IO.inspect("falling #{y_position}")
         %Mario{mario | y_position: y_position + 1, falling_since: Time.utc_now()}
       else
         mario

@@ -63,6 +63,16 @@ defmodule Octopus.Apps.Supermario.BadGuy do
     }
   end
 
+  def on_position?(
+        %BadGuy{x_position: x_position, y_position: y_position},
+        x_position_to_ask,
+        y_position_to_ask
+      )
+      when x_position == x_position_to_ask and y_position == y_position_to_ask,
+      do: true
+
+  def on_position?(_, _, _), do: false
+
   def draw(pixels, %BadGuy{} = bad_guy, current_position) do
     pixels
     |> Matrix.from_list()

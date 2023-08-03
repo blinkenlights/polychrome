@@ -211,8 +211,14 @@ defmodule Octopus.Apps.Supermario.Game do
   # varios ways to die
   # currently the only way is to fall down
   # will have to check the level for enemies etc.
-  def mario_dies?(%Game{mario: mario}) do
-    mario.y_position >= 7
+  def mario_dies?(%Game{mario: %Mario{y_position: y_position}}) when y_position >= 7, do: true
+
+  def mario_dies?(%Game{
+        current_position: current_position,
+        level: level,
+        mario: %Mario{y_position: y_position, x_position: x_position}
+      }) do
+    Level.has_bad_guy_on_postion?(level, current_position + x_position, y_position)
   end
 
   # TODO between levels animation
