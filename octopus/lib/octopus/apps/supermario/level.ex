@@ -15,13 +15,13 @@ defmodule Octopus.Apps.Supermario.Level do
   @type t :: %__MODULE__{
           # 8 * 120 .. fixed height, variable width,
           pixels: [],
-          level: integer(),
+          level_number: integer(),
           points: integer(),
           bad_guys: []
         }
   defstruct [
     :pixels,
-    :level,
+    :level_number,
     :points,
     :bad_guys
   ]
@@ -29,7 +29,7 @@ defmodule Octopus.Apps.Supermario.Level do
   def new() do
     %Level{
       pixels: load_pixels(1),
-      level: 1,
+      level_number: 1,
       bad_guys: init_bad_guys(1),
     }
   end
@@ -39,17 +39,17 @@ defmodule Octopus.Apps.Supermario.Level do
     level
   end
 
-  def next_level(%Level{level: level}) do
-    level = level + 1
-    %Level{level: level, pixels: load_pixels(level), bad_guys: init_bad_guys(level)}
+  def next_level(%Level{level_number: level_number}) do
+    level_number = level_number + 1
+    %Level{level_number: level_number, pixels: load_pixels(level_number), bad_guys: init_bad_guys(level_number)}
   end
 
-  def last_level?(%Level{level: level}), do: level >= @max_level
+  def last_level?(%Level{level_number: level_number}), do: level_number >= @max_level
 
   def max_position(%Level{pixels: pixels}), do: (Enum.at(pixels, 0) |> Enum.count()) - 8
 
-  def can_fall?(%Level{level: level}, x_position, y_position) do
-    level
+  def can_fall?(%Level{level_number: level_number}, x_position, y_position) do
+    level_number
     |> level_blocks()
     |> Enum.at(y_position + 1)
     |> Enum.at(x_position)
@@ -57,16 +57,16 @@ defmodule Octopus.Apps.Supermario.Level do
   end
 
   # check blocks
-  def can_move_right?(%Level{level: level}, x_position, y_position) do
-    level
+  def can_move_right?(%Level{level_number: level_number}, x_position, y_position) do
+    level_number
     |> level_blocks()
     |> Enum.at(y_position)
     |> Enum.at(x_position + 1)
     |> is_nil()
   end
 
-  def can_move_left?(%Level{level: level}, x_position, y_position) do
-    level
+  def can_move_left?(%Level{level_number: level_number}, x_position, y_position) do
+    level_number
     |> level_blocks()
     |> Enum.at(y_position)
     |> Enum.at(x_position - 1)
@@ -87,8 +87,8 @@ defmodule Octopus.Apps.Supermario.Level do
     |> Matrix.to_list()
   end
 
-  defp draw_blocks(matrix, %Level{level: level}, current_position) do
-    blocks = level_blocks(level)
+  defp draw_blocks(matrix, %Level{level_number: level_number}, current_position) do
+    blocks = level_blocks(level_number)
 
     {matrix, _} =
       Enum.reduce(blocks, {matrix, 0}, fn row, {matrix, y} ->
