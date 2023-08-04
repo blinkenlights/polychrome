@@ -65,7 +65,10 @@ defmodule Octopus.Apps.Supermario.Mario do
   # so for now I disable it
   def jump(%Mario{jumping: true} = mario, _game), do: mario
 
-  def update(%Mario{jumping: true, y_position: y_position, jumped_at: jumped_at} = mario, game) do
+  def jump_second_if(
+        %Mario{jumping: true, y_position: y_position, jumped_at: jumped_at} = mario,
+        %Game{} = game
+      ) do
     # jump a second pixel after a while
     # TODO: use another constant, jump_interval_ms is used to prevent a second jump within a short time
     if Time.diff(Time.utc_now(), jumped_at, :microsecond) > @jump_interval_ms do
@@ -89,34 +92,34 @@ defmodule Octopus.Apps.Supermario.Mario do
   end
 
   # falling_since may be nil, when mario was not jumping before but ran over a hole
-  # but then we are falling immidiately
-  def update(%Mario{y_position: y_position, falling_since: nil} = mario, %Game{} = game) do
-    mario =
-      if can_fall?(mario, game) do
-        %Mario{mario | y_position: y_position + 1, falling_since: Time.utc_now()}
-      else
-        mario
-      end
-
-    mario
+  # but then we are falling immediately
+  def fall_if(%Mario{falling_since: nil} = mario, game) do
+    if can_fall?(mario, game) do
+      {true, fall(mario)}
+    else
+      {false, mario}
+    end
   end
 
   # already falling, check if we can fall further and fall with a delay
-  def update(%Mario{y_position: y_position, falling_since: falling_since} = mario, %Game{} = game) do
+  def fall_if(
+        %Mario{falling_since: falling_since} = mario,
+        %Game{} = game
+      ) do
     if Time.diff(Time.utc_now(), falling_since, :microsecond) > @fall_interval_ms do
       if can_fall?(mario, game) do
-        IO.inspect(
-          "falling #{y_position}, diff: #{Time.diff(Time.utc_now(), falling_since, :microsecond)}"
-        )
-
         # reset falling timestamp, also next fall should be done with a delay
-        %Mario{mario | y_position: y_position + 1, falling_since: Time.utc_now()}
+        {true, fall(mario)}
       else
-        %Mario{mario | falling_since: nil}
+        {false, %Mario{mario | falling_since: nil}}
       end
     else
-      mario
+      {false, mario}
     end
+  end
+
+  defp fall(%Mario{y_position: y_position} = mario) do
+    %Mario{mario | y_position: y_position + 1, falling_since: Time.utc_now()}
   end
 
   # very simple implementation wether mario can fall or not. need to provide a pixel matrix

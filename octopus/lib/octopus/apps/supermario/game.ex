@@ -178,10 +178,51 @@ defmodule Octopus.Apps.Supermario.Game do
     %Game{game | mario: mario}
   end
 
+  defp update_mario(
+         %Game{mario: %Mario{jumping: true} = mario} =
+           game
+       ) do
+    %Game{game | mario: Mario.jump_second_if(mario, game)}
+  end
+
+  defp update_mario(%Game{mario: mario} = game) do
+    case Mario.fall_if(mario, game) do
+      {true, mario} ->
+        mario_has_fallen(%Game{game | mario: mario})
+
+      {false, mario} ->
+        %Game{game | mario: mario}
+    end
+  end
+
+  defp mario_has_fallen(
+         %Game{
+           mario: %Mario{y_position: y_position, x_position: x_position},
+           current_position: current_position,
+           level: level
+         } = game
+       ) do
+    absolute_x_position = current_position + x_position
+
+    # check wether we fall on bad guy
+    game =
+      if Level.has_bad_guy_on_postion?(level, absolute_x_position, y_position) do
+        # FIXME add score points!!!
+        %Game{game | level: Level.kill_bad_guy(level, absolute_x_position, y_position)}
+      else
+        game
+      end
+
+    game
+  end
+
   # called by tick in intervals
-  def update(%Game{mario: mario} = game) do
-    game = Level.update(game)
-    mario = Mario.update(mario, game)
+  def update(%Game{} = game) do
+    game =
+      game
+      |> Level.update()
+      |> update_mario()
+
     # TODO: check also for bonus points
     if Game.mario_dies?(game) do
       # init dying animation
@@ -190,21 +231,21 @@ defmodule Octopus.Apps.Supermario.Game do
         game
         |> current_game_pixels()
         |> MarioDies.new({
-          mario.x_position,
-          mario.y_position
+          game.mario.x_position,
+          game.mario.y_position
         })
 
       # FIX>ME reduce mario lives!!!!!!
       {:mario_dies,
        %Game{
          game
-         | mario: mario,
+         | mario: game.mario,
            state: :mario_dies,
            last_ticker: Time.utc_now(),
            current_animation: animation
        }}
     else
-      {:ok, %Game{game | mario: mario}}
+      {:ok, game}
     end
   end
 

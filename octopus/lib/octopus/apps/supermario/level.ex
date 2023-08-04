@@ -88,6 +88,10 @@ defmodule Octopus.Apps.Supermario.Level do
     Enum.any?(bad_guys, fn bad_guy -> BadGuy.on_position?(bad_guy, x_position, y_position) end)
   end
 
+  def kill_bad_guy(%Level{} = level, x_position, y_position) do
+    %Level{level | bad_guys: Enum.filter(level.bad_guys, fn bad_guy -> not BadGuy.on_position?(bad_guy, x_position, y_position) end)}
+  end
+
   def draw(pixels, %{current_position: current_position},  %Level{bad_guys: bad_guys}) do
     Enum.reduce(bad_guys, pixels, fn bad_guy, pixels ->
       BadGuy.draw(pixels, bad_guy, current_position)
