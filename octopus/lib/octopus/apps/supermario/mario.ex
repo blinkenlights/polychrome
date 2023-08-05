@@ -25,10 +25,10 @@ defmodule Octopus.Apps.Supermario.Mario do
     :falling_since
   ]
 
-  def new do
+  def new(start_position_y) do
     %Mario{
       x_position: @start_position_x,
-      y_position: 6,
+      y_position: start_position_y,
       jumps: 0,
       jumped_at: nil,
       falling_since: nil

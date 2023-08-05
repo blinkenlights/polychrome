@@ -35,13 +35,14 @@ defmodule Octopus.Apps.Supermario.Game do
   @pause_animation_ms 3_000_000
 
   def new(windows_shown) when windows_shown > 0 and windows_shown < 11 do
+    level = Level.new()
     %Game{
-      level: Level.new(),
+      level: level,
       state: :starting,
       current_position: 0,
       last_ticker: Time.utc_now(),
       windows_shown: windows_shown,
-      mario: Mario.new(),
+      mario: Mario.new(level.mario_start_y_position),
       current_animation: nil
     }
   end
@@ -53,7 +54,7 @@ defmodule Octopus.Apps.Supermario.Game do
         state: :running,
         current_position: 0,
         last_ticker: Time.utc_now(),
-        mario: Mario.new(),
+        mario: Mario.new(level.mario_start_y_position),
         current_animation: nil
     }
   end

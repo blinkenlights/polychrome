@@ -18,20 +18,24 @@ defmodule Octopus.Apps.Supermario.Level do
           pixels: [],
           level_number: integer(),
           points: integer(),
-          bad_guys: []
+          bad_guys: [],
+          mario_start_y_position: integer()
         }
   defstruct [
     :pixels,
     :level_number,
     :points,
-    :bad_guys
+    :bad_guys,
+    :mario_start_y_position
   ]
 
   def new() do
+    start_level_number = 1
     %Level{
-      pixels: load_pixels(1),
-      level_number: 1,
-      bad_guys: init_bad_guys(1),
+      pixels: load_pixels(start_level_number),
+      level_number: start_level_number,
+      bad_guys: init_bad_guys(start_level_number),
+      mario_start_y_position: init_mario_start_y_position(start_level_number)
     }
   end
 
@@ -1140,6 +1144,83 @@ defmodule Octopus.Apps.Supermario.Level do
     ]
   end
 
+  def level_blocks(2) do
+    [
+      # row 1
+      [nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil],
+      # row 2
+      [1, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       1, 1, nil, 1, 1, 1, nil, 1, 1, 1, nil, nil, nil, 1, 1,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil],
+      # row 3
+      [1, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       1, nil, nil, nil, nil, 1, nil, nil, 1, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil],
+      # row 4
+      [1, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, 1, nil, 1, 1, 1, nil, 1, nil, nil,
+       1, nil, nil, nil, nil, 1, nil, nil, 1, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil],
+      # row 5
+      [1, nil, nil, nil, nil, nil, 1, 1, 1, 1, nil, nil, nil, nil, 1,
+       1, nil, nil, nil, nil, nil, 1, 1, 1, nil, 1, 1, 1, nil, nil,
+       1, 1, nil, 1, 1, 1, nil, nil, 1, 1, nil, nil, 1, 1, 1,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil],
+      # row 6
+      [1, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1, 1,
+       1, 1, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, 1, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil],
+      # row 7
+      [1, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1, 1, 1,
+       1, 1, 1, nil, nil, nil, nil, nil, nil, 1, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil],
+      # row 8
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+       1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+       1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, nil,
+       nil, nil, 1, 1, 1, 1, 1, nil, 1, 1, 1, 1, 1, 1, 1,
+       1, 1, 1, 1, 1, 1, 1, 1, nil, nil, 1, nil, 1, 1, 1,
+       1, 1, 1, 1, nil, nil, nil, nil, 1, 1, 1, nil, nil, 2, nil,
+       nil, 1, 1, 1, nil, 1, 1, 1, nil, 1, 1, 1, nil, 1, 1,
+       nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil]
+    ]
+  end
+
   def level_blocks(_) do
     [
       [nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
@@ -1208,6 +1289,10 @@ defmodule Octopus.Apps.Supermario.Level do
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil]
     ]
   end
+
+  defp init_mario_start_y_position(1), do: 6
+  defp init_mario_start_y_position(2), do: 0
+  defp init_mario_start_y_position(_), do: 6
 
   defp load_pixels(level), do: PngFile.load_image_for_level(level)
 end
