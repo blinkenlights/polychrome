@@ -93,8 +93,9 @@ defmodule Octopus.Apps.Supermario.Level do
   end
 
   def draw(pixels, %{current_position: current_position},  %Level{bad_guys: bad_guys}) do
+    width = pixels |> List.first |> Enum.count()
     Enum.reduce(bad_guys, pixels, fn bad_guy, pixels ->
-      BadGuy.draw(pixels, bad_guy, current_position)
+      BadGuy.draw(pixels, bad_guy, current_position, width)
     end)
   end
 
@@ -111,9 +112,6 @@ defmodule Octopus.Apps.Supermario.Level do
 
     {matrix, _} =
       Enum.reduce(blocks, {matrix, 0}, fn row, {matrix, y} ->
-        # IO.inspect("draw_blocks: y: #{y}")
-        # IO.inspect("draw_blocks: row: #{Enum.count(row)}")
-
         {matrix, _, y} =
           Enum.reduce(row, {matrix, 0, y}, fn pixel, {matrix, x, y} ->
             matrix =
@@ -143,7 +141,13 @@ defmodule Octopus.Apps.Supermario.Level do
 
   defp init_bad_guys(1) do
     [
-      %BadGuy{x_position: 15, y_position: 6,  min_position: 0, max_position: 15, direction: :left}
+      %BadGuy{x_position: 15, y_position: 6,  min_position: 0, max_position: 15, direction: :left},
+      %BadGuy{x_position: 21, y_position: 6,  min_position: 17, max_position: 21, direction: :left},
+      %BadGuy{x_position: 27, y_position: 6,  min_position: 27, max_position: 32, direction: :right},
+      %BadGuy{x_position: 32, y_position: 6,  min_position: 27, max_position: 32, direction: :left},
+      %BadGuy{x_position: 97, y_position: 3,  min_position: 97, max_position: 99, direction: :right},
+      %BadGuy{x_position: 101, y_position: 6,  min_position: 94, max_position: 101, direction: :left},
+      %BadGuy{x_position: 99, y_position: 6,  min_position: 94, max_position: 101, direction: :left}
     ]
   end
 

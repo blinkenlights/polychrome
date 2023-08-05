@@ -73,25 +73,27 @@ defmodule Octopus.Apps.Supermario.BadGuy do
 
   def on_position?(_, _, _), do: false
 
-  def draw(pixels, %BadGuy{} = bad_guy, current_position) do
+  def draw(pixels, %BadGuy{} = bad_guy, current_position, width) do
     pixels
     |> Matrix.from_list()
-    |> set_bad_guy(bad_guy, current_position)
+    |> set_bad_guy(bad_guy, current_position, width)
     |> Matrix.to_list()
   end
 
-  #
+
   defp set_bad_guy(
          pixels,
          %BadGuy{x_position: x_position, y_position: y_position},
-         current_position
+         current_position,
+         width
        )
-       when x_position >= current_position do
+       when x_position >= current_position and x_position < current_position + width do
     put_in(pixels[y_position][x_position - current_position], @color)
   end
 
   defp set_bad_guy(
          pixels,
+         _,
          _,
          _
        ),
