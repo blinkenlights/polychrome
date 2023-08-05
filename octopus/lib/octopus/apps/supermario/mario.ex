@@ -13,14 +13,14 @@ defmodule Octopus.Apps.Supermario.Mario do
   @type t :: %__MODULE__{
           x_position: integer(),
           y_position: integer(),
-          jumping: boolean(),
+          jumps: integer(),
           jumped_at: Time.t() | nil,
           falling_since: Time.t() | nil
         }
   defstruct [
     :x_position,
     :y_position,
-    :jumping,
+    :jumps,
     :jumped_at,
     :falling_since
   ]
@@ -29,7 +29,7 @@ defmodule Octopus.Apps.Supermario.Mario do
     %Mario{
       x_position: @start_position_x,
       y_position: 6,
-      jumping: false,
+      jumps: 0,
       jumped_at: nil,
       falling_since: nil
     }
@@ -45,7 +45,6 @@ defmodule Octopus.Apps.Supermario.Mario do
   def move_left(%Mario{x_position: 0} = mario, _level), do: mario
 
   def move_left(%Mario{} = mario, _level) do
-    IO.inspect("move left #{mario.x_position}")
     %Mario{mario | x_position: mario.x_position - 1}
   end
 
@@ -53,23 +52,31 @@ defmodule Octopus.Apps.Supermario.Mario do
     %Mario{mario | x_position: mario.x_position + 1}
   end
 
-  def jump(%Mario{jumping: false} = mario, game) do
-    if can_jump?(mario, game) do
-      %Mario{mario | y_position: mario.y_position - 1, jumping: true, jumped_at: Time.utc_now()}
+  def jump(%Mario{jumps: 0} = mario, game) do
+    if can_jump?(mario, game) and !can_fall?(mario, game) do
+      %Mario{mario | y_position: mario.y_position - 1, jumps: 1, jumped_at: Time.utc_now()}
     else
       mario
     end
   end
 
-  # Not sure, but jumping a second time does not work as expected
-  # so for now I disable it
-  def jump(%Mario{jumping: true} = mario, _game), do: mario
+  # we can jump a second time in the air
+  def jump(%Mario{jumps: 1} = mario, game) do
+    if can_jump?(mario, game) do
+        %Mario{mario | y_position: mario.y_position - 1, jumps: 2, jumped_at: Time.utc_now()}
+      else
+        mario
+      end
+  end
 
+  # no third jump should be possible
+  def jump(%Mario{jumps: 2} = mario, _game), do: mario
+
+  # jump a second pixel after a while but only when we are already jumping
   def jump_second_if(
-        %Mario{jumping: true, y_position: y_position, jumped_at: jumped_at} = mario,
+        %Mario{jumps: jumps, y_position: y_position, jumped_at: jumped_at} = mario,
         %Game{} = game
-      ) do
-    # jump a second pixel after a while
+      ) when jumps > 0 do
     # TODO: use another constant, jump_interval_ms is used to prevent a second jump within a short time
     if Time.diff(Time.utc_now(), jumped_at, :microsecond) > @jump_interval_ms do
       new_y_position =
@@ -82,7 +89,7 @@ defmodule Octopus.Apps.Supermario.Mario do
       %Mario{
         mario
         | y_position: new_y_position,
-          jumping: false,
+          jumps: 0,
           jumped_at: nil,
           falling_since: Time.utc_now()
       }
@@ -130,7 +137,6 @@ defmodule Octopus.Apps.Supermario.Mario do
     Level.can_fall?(level, x_position + current_position, y_position)
   end
 
-  # very simple implementation wether maria can jump or not
   defp can_jump?(%Mario{y_position: y_position, x_position: x_position}, %Game{
          level: level,
          current_position: current_position
