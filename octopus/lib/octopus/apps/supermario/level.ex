@@ -673,7 +673,7 @@ defmodule Octopus.Apps.Supermario.Level do
         nil,
         nil,
         nil,
-        1, # 30
+        nil, # 30
         nil,
         nil,
         nil,
@@ -795,7 +795,7 @@ defmodule Octopus.Apps.Supermario.Level do
         1,
         nil,
         nil,
-        1,
+        nil, #30
         nil,
         nil,
         nil,
@@ -917,7 +917,7 @@ defmodule Octopus.Apps.Supermario.Level do
         1,
         nil,
         nil,
-        1,
+        nil, #30
         nil,
         nil,
         nil,
