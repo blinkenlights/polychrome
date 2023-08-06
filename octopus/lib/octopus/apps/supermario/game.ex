@@ -16,7 +16,8 @@ defmodule Octopus.Apps.Supermario.Game do
           last_ticker: Time.t(),
           level: Level.t(),
           mario: Mario.t(),
-          current_animation: Animation.t() | nil
+          current_animation: Animation.t() | nil,
+          lives: integer()
         }
   defstruct [
     :state,
@@ -25,7 +26,9 @@ defmodule Octopus.Apps.Supermario.Game do
     :windows_shown,
     :level,
     :mario,
-    :current_animation
+    :current_animation,
+    :lives,
+    :score
   ]
 
   # micro seconds between two moves
@@ -43,7 +46,9 @@ defmodule Octopus.Apps.Supermario.Game do
       last_ticker: Time.utc_now(),
       windows_shown: windows_shown,
       mario: Mario.new(level.mario_start_y_position),
-      current_animation: nil
+      current_animation: nil,
+      lives: 3,
+      score: 0
     }
   end
 
@@ -92,13 +97,16 @@ defmodule Octopus.Apps.Supermario.Game do
     if Time.diff(now, last_ticker, :microsecond) > @pause_animation_ms do
       # FIXME check max level => end game!!!, also check maxlevel is already done before????
       #       second thought, this should have been done before the pause animation => CEHECK
+      #
+      next_level = Level.next_level(level)
       {:ok,
        %Game{
          game
          | state: :running,
-           level: Level.next_level(level),
+           level: next_level,
            last_ticker: now,
-           current_position: 0
+           current_position: 0,
+           mario: Mario.new(next_level.mario_start_y_position)
        }}
     else
       {:ok, game}

@@ -45,7 +45,12 @@ defmodule Octopus.Apps.Supermario.Level do
 
   def next_level(%Level{level_number: level_number}) do
     level_number = level_number + 1
-    %Level{level_number: level_number, pixels: load_pixels(level_number), bad_guys: init_bad_guys(level_number)}
+    %Level{
+      level_number: level_number,
+      pixels: load_pixels(level_number),
+      bad_guys: init_bad_guys(level_number),
+      mario_start_y_position: init_mario_start_y_position(level_number)
+    }
   end
 
   def last_level?(%Level{level_number: level_number}), do: level_number >= @max_level
