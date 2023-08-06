@@ -137,6 +137,8 @@ defmodule Octopus.Apps.Supermario.Mario do
     Level.can_fall?(level, x_position + current_position, y_position)
   end
 
+  defp can_jump?(%Mario{y_position: 0}, _), do: false
+
   defp can_jump?(%Mario{y_position: y_position, x_position: x_position}, %Game{
          level: level,
          current_position: current_position
