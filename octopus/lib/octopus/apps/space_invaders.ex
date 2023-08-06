@@ -47,13 +47,13 @@ defmodule Octopus.Apps.SpaceInvaders do
     def draw(%Game{} = game, %Canvas{} = canvas, {offset_x, offset_y}) do
       canvas =
         Enum.reduce(game.bullets ++ game.invaders, canvas, fn %{x: x, y: y}, canvas ->
-          Canvas.put_pixel(canvas, {offset_x + trunc(x), offset_y + trunc(y)}, [255, 255, 255])
+          Canvas.put_pixel(canvas, {offset_x + trunc(x), offset_y + trunc(y)}, {255, 255, 255})
         end)
 
-      player_color = [0, 255, 0]
+      player_color = {0, 255, 0}
 
       player_gun_color =
-        if rem(trunc(ceil(game.player.shoot_anim)), 2) == 0, do: player_color, else: [0, 0, 0]
+        if rem(trunc(ceil(game.player.shoot_anim)), 2) == 0, do: player_color, else: {0, 0, 0}
 
       canvas =
         [

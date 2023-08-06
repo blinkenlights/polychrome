@@ -105,7 +105,7 @@ defmodule Octopus.Apps.MarioRun do
   def handle_info(:tick, %State{} = state) do
     {sprite_index, duration, flip} = Enum.at(@loops[state.loop], state.current_frame)
     sprite_sheet = state.sprite_sheets[state.character]
-    sprite = Sprite.load(sprite_sheet, sprite_index, :rgb)
+    sprite = Sprite.load(sprite_sheet, sprite_index)
 
     canvas =
       state.canvas

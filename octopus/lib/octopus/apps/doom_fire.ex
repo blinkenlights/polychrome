@@ -39,18 +39,18 @@ defmodule Octopus.Apps.DoomFire do
     defp intensity_to_rgb(intensity) do
       case intensity do
         0 ->
-          [0, 0, 0]
+          {0, 0, 0}
 
         1 ->
-          [220, 0, 0]
+          {220, 0, 0}
 
         n when n <= 8 ->
           fraction = (n - 1) / 7
-          [220, trunc(fraction * 220), 0]
+          {220, trunc(fraction * 220), 0}
 
         n ->
           fraction = (n - 8) / 7
-          [220, 220, trunc(fraction * 220)]
+          {220, 220, trunc(fraction * 220)}
       end
     end
   end
