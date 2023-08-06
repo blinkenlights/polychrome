@@ -1,9 +1,6 @@
 defmodule Octopus.Apps.Supermario.Game do
   @moduledoc """
-  handles the game logic, still under heavy development
-  blocks are missing
-  moving bad guy is missing
-  moving blocks are missing
+  handles the game logic
   """
   alias __MODULE__
   alias Octopus.Apps.Supermario.{Animation, Level, Mario}
@@ -123,6 +120,10 @@ defmodule Octopus.Apps.Supermario.Game do
     end
   end
 
+  def tick(%Game{state: :gameover} = game) do
+    {:ok, game}
+  end
+
   def move_left(%Game{current_position: 0, mario: mario} = game) do
     {:ok, %Game{game | mario: Mario.move_left(mario, game.level)}}
   end
@@ -176,6 +177,7 @@ defmodule Octopus.Apps.Supermario.Game do
           IO.inspect("game over")
           {:game_over, %Game{game | state: :gameover}}
         else
+          # FIXME add score
           {:ok, %Game{game | state: :paused}}
         end
       end
@@ -242,37 +244,45 @@ defmodule Octopus.Apps.Supermario.Game do
       |> Level.update()
       |> update_mario()
 
-    # TODO: check also for bonus points
     if Game.mario_dies?(game) do
-      # init dying animation
-      # get current pixels and mario position
-      animation =
-        game
-        |> current_game_pixels()
-        |> MarioDies.new({
-          game.mario.x_position,
-          game.mario.y_position
-        })
 
-      # FIX>ME reduce mario lives!!!!!!
-      {:mario_dies,
-       %Game{
-         game
-         | mario: game.mario,
-           state: :mario_dies,
-           last_ticker: Time.utc_now(),
-           current_animation: animation
-       }}
+     mario_has_died(game)
     else
       {:ok, game}
     end
   end
 
+  # last live: game over!!
+  def mario_has_died(%Game{lives: 1} = game) do
+    {:game_over, %Game{game | state: :gameover}}
+  end
+
+  # init dying animation: get current pixels and mario position
+  def mario_has_died(%Game{} = game) do
+    animation =
+      game
+      |> current_game_pixels()
+      |> MarioDies.new({
+        game.mario.x_position,
+        game.mario.y_position
+      })
+
+    {:mario_dies,
+     %Game{
+       game
+       | mario: game.mario,
+         state: :mario_dies,
+         last_ticker: Time.utc_now(),
+         current_animation: animation,
+         lives: game.lives - 1
+     }}
+  end
+
   # varios ways to die
-  # currently the only way is to fall down
-  # will have to check the level for enemies etc.
+  # when mario falls down
   def mario_dies?(%Game{mario: %Mario{y_position: y_position}}) when y_position >= 7, do: true
 
+  # or when mario meets a bad guy
   def mario_dies?(%Game{
         current_position: current_position,
         level: level,

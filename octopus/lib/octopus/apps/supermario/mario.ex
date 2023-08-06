@@ -1,13 +1,13 @@
 defmodule Octopus.Apps.Supermario.Mario do
   @moduledoc """
-  handles the mario logic, still under heavy development
+  handles the mario logic
   """
   alias __MODULE__
   alias Octopus.Apps.Supermario.{Game, Level, Matrix}
 
   @start_position_x 3
-  @jump_interval_ms 80_000
-  @fall_interval_ms 100_000
+  @jump_interval_ms 70_000
+  @fall_interval_ms 110_000
   @mario_color [216, 40, 0]
 
   @type t :: %__MODULE__{
@@ -113,8 +113,9 @@ defmodule Octopus.Apps.Supermario.Mario do
     end
   end
 
+  # when mario was jumping before, we have to wait a bit before falling
   def fall_if(%Mario{falling_since: nil, jumped_at: jumped_at} = mario, game) do
-    if can_fall?(mario, game) and Time.diff(Time.utc_now(), jumped_at, :microsecond) > @jump_interval_ms do
+    if can_fall?(mario, game) and Time.diff(Time.utc_now(), jumped_at, :microsecond) > @fall_interval_ms do
       {true, fall(mario)}
     else
       {false, mario}

@@ -45,9 +45,9 @@ defmodule Octopus.Apps.Supermario do
           game
         {:mario_dies, game} ->
             game
-          # {:game_over, game} ->
-          #   game
-          # FIXME: show end screen
+        # FIXME: show end screen
+        {:game_over, game} ->
+          game
       end
 
     canvas = Game.draw(game) |> fill_canvas(canvas)
