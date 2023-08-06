@@ -191,10 +191,17 @@ defmodule Octopus.Apps.Supermario.Game do
          %Game{mario: %Mario{jumps: jumps} = mario} =
            game
        ) when jumps > 0 do
-    %Game{game | mario: Mario.jump_second_if(mario, game)}
+    case Mario.jump_second_if(mario, game) do
+      {true, mario} ->
+        %Game{game | mario: mario}
+      {false, mario } ->
+        check_mario_fall(%Game{game | mario: mario})
+    end
   end
 
-  defp update_mario(%Game{mario: mario} = game) do
+  defp update_mario(game), do: check_mario_fall(game)
+
+  defp check_mario_fall(%Game{mario: mario} = game) do
     case Mario.fall_if(mario, game) do
       {true, mario} ->
         mario_has_fallen(%Game{game | mario: mario})
@@ -214,15 +221,18 @@ defmodule Octopus.Apps.Supermario.Game do
     absolute_x_position = current_position + x_position
 
     # check wether we fall on bad guy
-    game =
-      if Level.has_bad_guy_on_postion?(level, absolute_x_position, y_position) do
-        # FIXME add score points!!!
-        %Game{game | level: Level.kill_bad_guy(level, absolute_x_position, y_position)}
-      else
-        game
-      end
-
-    game
+    game = if Level.has_bad_guy_on_postion?(level, absolute_x_position, y_position) do
+      # FIXME add score points!!!
+      %Game{game | level: Level.kill_bad_guy(level, absolute_x_position, y_position)}
+    else
+      game
+    end
+    # when we ware falling on the ground reset the jump counter
+    if !Mario.can_fall?(game.mario, game) do
+      %Game{game | mario: Mario.reset_jumps(game.mario)}
+    else
+      game
+    end
   end
 
   # called by tick in intervals

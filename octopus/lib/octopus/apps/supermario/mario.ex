@@ -70,13 +70,13 @@ defmodule Octopus.Apps.Supermario.Mario do
   end
 
   # no third jump should be possible
-  def jump(%Mario{jumps: 2} = mario, _game), do: mario
+  def jump(%Mario{jumps: _jumps} = mario, _game), do: mario
 
   # jump a second pixel after a while but only when we are already jumping
   def jump_second_if(
         %Mario{jumps: jumps, y_position: y_position, jumped_at: jumped_at} = mario,
         %Game{} = game
-      ) when jumps > 0 do
+      ) when jumps > 0 and jumps < 2 do
     # TODO: use another constant, jump_interval_ms is used to prevent a second jump within a short time
     if Time.diff(Time.utc_now(), jumped_at, :microsecond) > @jump_interval_ms do
       new_y_position =
@@ -86,21 +86,28 @@ defmodule Octopus.Apps.Supermario.Mario do
           y_position
         end
 
-      %Mario{
+      {true, %Mario{
         mario
         | y_position: new_y_position,
           jumps: 0,
           jumped_at: nil,
           falling_since: Time.utc_now()
-      }
+      }}
     else
-      mario
+      {false, mario}
     end
   end
+
+  def jump_second_if(
+       mario,
+       _
+      ), do: {false, mario}
+
 
   # falling_since may be nil, when mario was not jumping before but ran over a hole
   # but then we are falling immediately
   def fall_if(%Mario{falling_since: nil} = mario, game) do
+    IO.inspect("fall_if, NIL")
     if can_fall?(mario, game) do
       {true, fall(mario)}
     else
@@ -125,12 +132,15 @@ defmodule Octopus.Apps.Supermario.Mario do
     end
   end
 
+  def reset_jumps(%Mario{} = mario) do
+    %Mario{mario | jumps: 0, jumped_at: nil}
+  end
+
   defp fall(%Mario{y_position: y_position} = mario) do
     %Mario{mario | y_position: y_position + 1, falling_since: Time.utc_now()}
   end
 
-  # very simple implementation wether mario can fall or not. need to provide a pixel matrix
-  defp can_fall?(%Mario{y_position: y_position, x_position: x_position}, %Game{
+  def can_fall?(%Mario{y_position: y_position, x_position: x_position}, %Game{
          level: level,
          current_position: current_position
        }) do
