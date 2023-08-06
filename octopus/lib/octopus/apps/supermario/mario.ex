@@ -60,10 +60,10 @@ defmodule Octopus.Apps.Supermario.Mario do
     end
   end
 
-  # we can jump a second time in the air
-  def jump(%Mario{jumps: 1} = mario, game) do
+  # we can jump a second and third time in the air
+  def jump(%Mario{jumps: jumps} = mario, game) when jumps == 1 or jumps == 2 do
     if can_jump?(mario, game) do
-        %Mario{mario | y_position: mario.y_position - 1, jumps: 2, jumped_at: Time.utc_now()}
+        %Mario{mario | y_position: mario.y_position - 1, jumps: jumps + 1, jumped_at: Time.utc_now()}
       else
         mario
       end
@@ -76,7 +76,7 @@ defmodule Octopus.Apps.Supermario.Mario do
   def jump_second_if(
         %Mario{jumps: jumps, y_position: y_position, jumped_at: jumped_at} = mario,
         %Game{} = game
-      ) when jumps > 0 and jumps < 2 do
+      ) when jumps > 0 and jumps < 3 do
     # TODO: use another constant, jump_interval_ms is used to prevent a second jump within a short time
     if Time.diff(Time.utc_now(), jumped_at, :microsecond) > @jump_interval_ms do
       new_y_position =
@@ -107,7 +107,6 @@ defmodule Octopus.Apps.Supermario.Mario do
   # falling_since may be nil, when mario was not jumping before but ran over a hole
   # but then we are falling immediately
   def fall_if(%Mario{falling_since: nil} = mario, game) do
-    IO.inspect("fall_if, NIL")
     if can_fall?(mario, game) do
       {true, fall(mario)}
     else
