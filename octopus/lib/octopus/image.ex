@@ -34,8 +34,10 @@ defmodule Octopus.Image do
             if alpha == 0 do
               canvas
             else
-              rgb = [color] |> Enum.map(fn <<r, g, b, _a>> -> [r, g, b] end) |> List.flatten()
-              Canvas.put_pixel(canvas, {x, y}, rgb)
+              [r, g, b] =
+                [color] |> Enum.map(fn <<r, g, b, _a>> -> [r, g, b] end) |> List.flatten()
+
+              Canvas.put_pixel(canvas, {x, y}, {r, g, b})
             end
           end)
 

@@ -2,8 +2,9 @@ defmodule Octopus.Apps.FontTester do
   use Octopus.App
   require Logger
 
+  alias Octopus.Canvas
   alias Octopus.Font
-  alias Octopus.Protobuf.{Frame, InputEvent}
+  alias Octopus.Protobuf.InputEvent
 
   defmodule State do
     defstruct [:index, :variant, :current_font, :text, :easing_interval]
@@ -43,20 +44,12 @@ defmodule Octopus.Apps.FontTester do
   end
 
   def handle_info(:tick, %State{current_font: %Font{} = font} = state) do
-    %Font.Variant{palette: palette} = Enum.at(font.variants, state.variant)
-
-    data =
-      state.text
-      |> String.to_charlist()
-      |> Enum.map(&Font.render_char(font, &1, state.variant))
-      |> Enum.map(fn {data, _pallete} -> data end)
-      |> List.flatten()
-
-    %Frame{
-      data: data,
-      palette: palette,
-      easing_interval: state.easing_interval
-    }
+    state.text
+    |> String.to_charlist()
+    |> Enum.map(&Font.draw_char(font, &1, state.variant, Canvas.new(8, 8)))
+    |> Enum.reverse()
+    |> Enum.reduce(&Canvas.join/2)
+    |> Canvas.to_frame()
     |> send_frame()
 
     :timer.send_after(100, self(), :tick)

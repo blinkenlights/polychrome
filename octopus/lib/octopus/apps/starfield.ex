@@ -19,7 +19,7 @@ defmodule Octopus.Apps.Starfield do
 
   def config_schema() do
     %{
-      speed: {"Speed", :float, %{min: 0.01, max: 10.0, default: 1.0}},
+      speed: {"Speed", :float, %{min: 1.0, max: 20.0, default: 10.0}},
       rotation: {"Rotation", :float, %{min: 0.0, max: 360.0, default: 90.0}}
     }
   end
@@ -32,7 +32,7 @@ defmodule Octopus.Apps.Starfield do
   end
 
   def init(_) do
-    width = (8 * 10 + 9 * 16) * 2
+    width = (8 * 10 + 9 * 18) * 2
     height = 8 * 2
 
     config = config_schema() |> default_config()
@@ -41,12 +41,12 @@ defmodule Octopus.Apps.Starfield do
       stars: %{},
       width: width,
       height: height,
-      canvas: Canvas.new(8 * 10 + 9 * 18, 8, "pico-8"),
+      canvas: Canvas.new(8 * 10 + 9 * 18, 8),
       speed: config.speed,
-      rotation: config.rotation
+      rotation: :rand.uniform(360) - 1
     }
 
-    state = state |> generate_stars(512)
+    state = state |> generate_stars(2048)
 
     :timer.send_interval(@frame_time_ms, :tick)
 
@@ -60,6 +60,7 @@ defmodule Octopus.Apps.Starfield do
   def handle_info(:tick, %State{} = state) do
     state =
       state
+      |> rotate()
       |> update_stars()
       |> update_canvas()
       |> broadcast_frame()
@@ -72,11 +73,20 @@ defmodule Octopus.Apps.Starfield do
       Enum.reduce(0..count, stars, fn _i, stars ->
         x = :rand.uniform(state.width) - 1
         y = :rand.uniform(state.height) - 1
-        speed = 1 + :rand.uniform() * 3
+        speed = :rand.uniform() * 0.75 + 0.25
         Map.put(stars, {x, y}, speed)
       end)
 
     %State{state | stars: stars}
+  end
+
+  defp rotate(%State{} = state) do
+    {seconds, micros} = Time.utc_now() |> Time.to_seconds_after_midnight()
+    seconds = seconds + micros / 1_000_000
+
+    rotation = fmod(seconds * 10, 360)
+
+    %State{state | rotation: rotation}
   end
 
   defp update_stars(%State{stars: stars} = state) do
@@ -101,17 +111,10 @@ defmodule Octopus.Apps.Starfield do
       stars
       |> Enum.sort_by(fn {_, speed} -> speed end)
       |> Enum.reduce(canvas, fn {{x, y}, speed}, canvas ->
-        x = trunc(x)
-        y = trunc(y)
+        color_value = speed * 255
+        color = {trunc(color_value * 0.8), trunc(color_value * 0.9), trunc(color_value)}
 
-        color =
-          cond do
-            speed < 2 -> 1
-            speed < 3 -> 5
-            true -> 7
-          end
-
-        canvas |> Canvas.put_pixel({x, y}, color)
+        canvas |> Canvas.put_pixel({trunc(x), trunc(y)}, color)
       end)
 
     %State{state | canvas: canvas}

@@ -10,7 +10,7 @@ defmodule Octopus.Apps.CanvasTest do
     :timer.send_interval(@tick_interval, self(), :tick)
 
     canvas =
-      Canvas.new(80 + 9 * 18, 8, "pico-8")
+      Canvas.new(80 + 9 * 18, 8)
       |> Canvas.polygon(
         [
           {2, 0},

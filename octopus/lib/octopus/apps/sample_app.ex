@@ -2,7 +2,7 @@ defmodule Octopus.Apps.SampleApp do
   use Octopus.App
   require Logger
 
-  alias Octopus.{ColorPalette, Canvas}
+  alias Octopus.Canvas
   alias Octopus.Protobuf.InputEvent
 
   defmodule State do
@@ -10,14 +10,15 @@ defmodule Octopus.Apps.SampleApp do
   end
 
   @fps 60
+  @colors [[255, 255, 255], [255, 0, 0], [0, 255, 0], [255, 0, 255]]
 
   def name(), do: "Sample App"
 
   def init(_args) do
     state = %State{
       index: 0,
-      color: 1,
-      canvas: Canvas.new(80, 8, ColorPalette.load("pico-8"))
+      color: 0,
+      canvas: Canvas.new(80, 8)
     }
 
     :timer.send_interval(trunc(1000 / @fps), :tick)
@@ -28,7 +29,10 @@ defmodule Octopus.Apps.SampleApp do
   def handle_info(:tick, %State{} = state) do
     coordinates = {rem(state.index, 80), trunc(state.index / 80)}
 
-    canvas = Canvas.put_pixel(state.canvas, coordinates, state.color)
+    canvas =
+      state.canvas
+      |> Canvas.clear()
+      |> Canvas.put_pixel(coordinates, Enum.at(@colors, state.color))
 
     canvas
     |> Canvas.to_frame()
@@ -38,7 +42,7 @@ defmodule Octopus.Apps.SampleApp do
   end
 
   def handle_input(%InputEvent{type: :BUTTON_1, value: 1}, state) do
-    {:noreply, %State{state | color: state.color + 1}}
+    {:noreply, %State{state | color: min(length(@colors) - 1, state.color + 1)}}
   end
 
   def handle_input(%InputEvent{type: :BUTTON_2, value: 1}, state) do
