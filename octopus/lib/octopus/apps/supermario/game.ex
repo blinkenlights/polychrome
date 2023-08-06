@@ -272,7 +272,7 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   # TODO between levels animation
-  def draw(%Game{state: :pause, current_animation: nil}) do
+  def draw(%Game{state: :paused, current_animation: nil}) do
     [
       [
         <<33, 44, 55, 255>>,
