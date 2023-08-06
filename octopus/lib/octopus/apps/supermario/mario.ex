@@ -6,7 +6,7 @@ defmodule Octopus.Apps.Supermario.Mario do
   alias Octopus.Apps.Supermario.{Game, Level, Matrix}
 
   @start_position_x 3
-  @jump_interval_ms 110_000
+  @jump_interval_ms 80_000
   @fall_interval_ms 100_000
   @mario_color [216, 40, 0]
 
@@ -77,7 +77,6 @@ defmodule Octopus.Apps.Supermario.Mario do
         %Mario{jumps: jumps, y_position: y_position, jumped_at: jumped_at} = mario,
         %Game{} = game
       ) when jumps > 0 and jumps < 3 do
-    # TODO: use another constant, jump_interval_ms is used to prevent a second jump within a short time
     if Time.diff(Time.utc_now(), jumped_at, :microsecond) > @jump_interval_ms do
       new_y_position =
         if can_jump?(mario, game) do
@@ -85,7 +84,7 @@ defmodule Octopus.Apps.Supermario.Mario do
         else
           y_position
         end
-
+      # from now on we are falling
       {true, %Mario{
         mario
         | y_position: new_y_position,
@@ -106,8 +105,16 @@ defmodule Octopus.Apps.Supermario.Mario do
 
   # falling_since may be nil, when mario was not jumping before but ran over a hole
   # but then we are falling immediately
-  def fall_if(%Mario{falling_since: nil} = mario, game) do
+  def fall_if(%Mario{falling_since: nil, jumped_at: nil} = mario, game) do
     if can_fall?(mario, game) do
+      {true, fall(mario)}
+    else
+      {false, mario}
+    end
+  end
+
+  def fall_if(%Mario{falling_since: nil, jumped_at: jumped_at} = mario, game) do
+    if can_fall?(mario, game) and Time.diff(Time.utc_now(), jumped_at, :microsecond) > @jump_interval_ms do
       {true, fall(mario)}
     else
       {false, mario}
