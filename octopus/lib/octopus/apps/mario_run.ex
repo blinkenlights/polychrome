@@ -2,6 +2,7 @@ defmodule Octopus.Apps.MarioRun do
   alias Octopus.Protobuf.InputEvent
   alias Octopus.Canvas
   alias Octopus.Sprite
+  alias Octopus.WebP
 
   use Octopus.App
 
@@ -51,7 +52,7 @@ defmodule Octopus.Apps.MarioRun do
 
   def name, do: "Mario Run"
 
-  def icon, do: Canvas.from_webp("mario")
+  def icon, do: WebP.load("mario")
 
   def config_schema do
     %{

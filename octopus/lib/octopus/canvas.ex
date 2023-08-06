@@ -47,21 +47,10 @@ defmodule Octopus.Canvas do
   Creates a new canvas from a webp file.
   The webp file must be located in the priv/webp directory.
   """
+  @deprecated "Use Octopus.WebP.load/1 instead"
   @spec from_webp(String.t()) :: Canvas.t()
   def from_webp(name) do
-    # TODO: cache decoded webp files
-    path = Path.join([:code.priv_dir(:octopus), "webp", "#{name}.webp"])
-    {pixels, width, height} = WebP.decode_rgb(path)
-
-    canvas = Canvas.new(width, height)
-
-    pixels
-    |> Enum.with_index()
-    |> Enum.reduce(canvas, fn {[r, g, b], i}, acc ->
-      x = rem(i, width)
-      y = div(i, width)
-      Canvas.put_pixel(acc, {x, y}, {r, g, b})
-    end)
+    WebP.load(name)
   end
 
   @doc """

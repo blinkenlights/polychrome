@@ -1,6 +1,9 @@
 defmodule Octopus.Apps.DoomFire do
   use Octopus.App
 
+  alias Octopus.WebP
+  alias Octopus.Canvas
+
   defmodule Fire do
     defstruct [:width, :height, :buffer]
 
@@ -55,10 +58,8 @@ defmodule Octopus.Apps.DoomFire do
     end
   end
 
-  alias Octopus.Canvas
-
   def name, do: "Doom Fire"
-  def icon, do: Canvas.from_webp("doom-fire")
+  def icon, do: WebP.load("doom-fire")
 
   def init(_) do
     :timer.send_interval(trunc(1000 / 10), :tick)

@@ -5,7 +5,7 @@ defmodule Octopus.Application do
 
   use Application
 
-  alias Octopus.{ColorPalette, Font, Sprite, Image}
+  alias Octopus.{ColorPalette, Font, Sprite, Image, WebP}
 
   @impl true
   def start(_type, _args) do
@@ -25,6 +25,7 @@ defmodule Octopus.Application do
         Supervisor.child_spec({Cachex, name: Font}, id: make_ref()),
         Supervisor.child_spec({Cachex, name: Sprite}, id: make_ref()),
         Supervisor.child_spec({Cachex, name: Image}, id: make_ref()),
+        Supervisor.child_spec({Cachex, name: WebP}, id: make_ref()),
 
         # WebApp
         {Finch, name: Octopus.Finch},

@@ -1,7 +1,7 @@
 defmodule Octopus.Apps.FairyDust do
   use Octopus.App
 
-  alias Octopus.{Canvas, Image}
+  alias Octopus.{Canvas, Image, WebP}
 
   @fps 60
 
@@ -15,7 +15,7 @@ defmodule Octopus.Apps.FairyDust do
 
   def name(), do: "Fairy Dust"
 
-  def icon(), do: Canvas.from_webp("fairy-dust")
+  def icon(), do: WebP.load("fairy-dust")
 
   def init(_args) do
     :timer.send_interval(trunc(1000 / @fps), :tick)
