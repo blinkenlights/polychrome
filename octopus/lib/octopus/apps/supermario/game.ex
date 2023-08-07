@@ -189,18 +189,6 @@ defmodule Octopus.Apps.Supermario.Game do
     %Game{game | mario: mario}
   end
 
-  defp update_mario(
-         %Game{mario: %Mario{jumps: jumps} = mario} =
-           game
-       ) when jumps > 0 do
-    case Mario.jump_second_if(mario, game) do
-      {true, mario} ->
-        %Game{game | mario: mario}
-      {false, mario } ->
-        check_mario_fall(%Game{game | mario: mario})
-    end
-  end
-
   defp update_mario(game), do: check_mario_fall(game)
 
   defp check_mario_fall(%Game{mario: mario} = game) do
