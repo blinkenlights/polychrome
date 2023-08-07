@@ -100,9 +100,6 @@ defmodule Octopus.Apps.Supermario do
           case Game.move_left(state.game) do
             {:ok, game} ->
               %{state | game: game}
-
-            {:game_over, game} ->
-              %{state | game: game}
           end
         else
           state
@@ -110,11 +107,6 @@ defmodule Octopus.Apps.Supermario do
       end
 
     {:noreply, %{state | button_state: new_button_state}}
-  end
-
-  def handle_input(_, state) do
-    IO.inspect("!!!!!!!!!!!!!!!!!!!!!!! handles input !!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-    {:noreply, state}
   end
 
   def schedule_ticker(interval) do

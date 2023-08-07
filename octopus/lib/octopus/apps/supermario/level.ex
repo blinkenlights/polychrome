@@ -14,7 +14,7 @@ defmodule Octopus.Apps.Supermario.Level do
   @max_level 4
 
   @type t :: %__MODULE__{
-          # 8 * 120 .. fixed height, variable width,
+          # 8 * ~120 .. fixed height, variable width,
           pixels: [],
           level_number: integer(),
           points: integer(),
