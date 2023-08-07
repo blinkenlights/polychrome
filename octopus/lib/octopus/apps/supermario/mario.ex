@@ -6,8 +6,8 @@ defmodule Octopus.Apps.Supermario.Mario do
   alias Octopus.Apps.Supermario.{Game, Level, Matrix}
 
   @start_position_x 3
-  @jump_interval_ms 70_000
-  @fall_interval_ms 110_000
+  @jump_interval_ms 80_000
+  @fall_interval_ms 160_000
   @mario_color [216, 40, 0]
 
   @type t :: %__MODULE__{
@@ -52,6 +52,7 @@ defmodule Octopus.Apps.Supermario.Mario do
     %Mario{mario | x_position: mario.x_position + 1}
   end
 
+  # first jump. we have to be on the ground, therefor `!can_fall?`
   def jump(%Mario{jumps: 0} = mario, game) do
     if can_jump?(mario, game) and !can_fall?(mario, game) do
       %Mario{mario | y_position: mario.y_position - 1, jumps: 1, jumped_at: Time.utc_now()}
@@ -115,7 +116,7 @@ defmodule Octopus.Apps.Supermario.Mario do
 
   # when mario was jumping before, we have to wait a bit before falling
   def fall_if(%Mario{falling_since: nil, jumped_at: jumped_at} = mario, game) do
-    if can_fall?(mario, game) and Time.diff(Time.utc_now(), jumped_at, :microsecond) > @fall_interval_ms do
+    if can_fall?(mario, game) and Time.diff(Time.utc_now(), jumped_at, :microsecond) > (@fall_interval_ms * 2) do
       {true, fall(mario)}
     else
       {false, mario}
