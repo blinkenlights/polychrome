@@ -105,7 +105,8 @@ defmodule Octopus.Apps.Supermario.Game do
            level: next_level,
            last_ticker: now,
            current_position: 0,
-           mario: Mario.new(next_level.mario_start_y_position)
+           mario: Mario.new(next_level.mario_start_y_position),
+           score: game.score + 100
        }}
     else
       {:ok, game}
@@ -182,10 +183,8 @@ defmodule Octopus.Apps.Supermario.Game do
         {:ok, %Game{game | mario: Mario.move_right(mario, level)}}
       else
         if Level.last_level?(game.level) do
-          IO.inspect("game over")
-          {:game_over, %Game{game | state: :gameover}}
+          {:game_over, %Game{game | state: :completed}}
         else
-          # FIXME add score
           {:ok, %Game{game | state: :paused}}
         end
       end
@@ -221,8 +220,11 @@ defmodule Octopus.Apps.Supermario.Game do
     # check wether we fall on bad guy
     game =
       if Level.has_bad_guy_on_postion?(level, absolute_x_position, y_position) do
-        # FIXME add score points!!!
-        %Game{game | level: Level.kill_bad_guy(level, absolute_x_position, y_position)}
+        %Game{
+          game
+          | level: Level.kill_bad_guy(level, absolute_x_position, y_position),
+            score: game.score + 20
+        }
       else
         game
       end
