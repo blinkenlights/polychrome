@@ -11,7 +11,7 @@ defmodule Octopus.Apps.Supermario do
   @frame_time_ms trunc(1000 / @frame_rate)
 
   # how many windows are we using for the game
-  @windows_shown 4
+  @windows_shown 1
   # starting from window
   @windows_offset 3
 
