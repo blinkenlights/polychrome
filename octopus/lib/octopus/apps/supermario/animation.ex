@@ -3,11 +3,11 @@ defmodule Octopus.Apps.Supermario.Animation do
   Base module for animations
   """
   alias __MODULE__
-  alias Octopus.Apps.Supermario.Animation.{Intro, MarioDies}
+  alias Octopus.Apps.Supermario.Animation.{GameOver, Intro, MarioDies}
 
   @type t :: %__MODULE__{
           start_time: Time.t(),
-          animation_type: :intro | :mario_dies | :pause,
+          animation_type: :intro | :mario_dies | :pause | :game_over,
           data: any()
         }
   defstruct [
@@ -34,5 +34,9 @@ defmodule Octopus.Apps.Supermario.Animation do
     Intro.draw(animation)
   end
 
-  def draw(_),  do: []
+  def draw(%Animation{animation_type: :game_over} = animation) do
+    GameOver.draw(animation)
+  end
+
+  def draw(_), do: []
 end

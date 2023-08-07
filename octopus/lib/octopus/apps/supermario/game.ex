@@ -4,7 +4,7 @@ defmodule Octopus.Apps.Supermario.Game do
   """
   alias __MODULE__
   alias Octopus.Apps.Supermario.{Animation, Level, Mario}
-  alias Octopus.Apps.Supermario.Animation.{Intro, MarioDies}
+  alias Octopus.Apps.Supermario.Animation.{GameOver, Intro, MarioDies}
 
   @type t :: %__MODULE__{
           state: :starting | :running | :paused | :mario_dies | :gameover | :completed,
@@ -36,6 +36,7 @@ defmodule Octopus.Apps.Supermario.Game do
 
   def new(windows_shown) when windows_shown > 0 and windows_shown < 11 do
     level = Level.new()
+
     %Game{
       level: level,
       state: :starting,
@@ -66,7 +67,7 @@ defmodule Octopus.Apps.Supermario.Game do
     {:ok, %Game{game | current_animation: Intro.new()}}
   end
 
-  def tick(%Game{last_ticker: last_ticker, state: :starting} = game) do
+  def tick(%Game{state: :starting, last_ticker: last_ticker} = game) do
     now = Time.utc_now()
 
     if Time.diff(now, last_ticker, :microsecond) > @intro_animation_ms do
@@ -96,6 +97,7 @@ defmodule Octopus.Apps.Supermario.Game do
       #       second thought, this should have been done before the pause animation => CEHECK
       #
       next_level = Level.next_level(level)
+
       {:ok,
        %Game{
          game
@@ -120,8 +122,19 @@ defmodule Octopus.Apps.Supermario.Game do
     end
   end
 
-  def tick(%Game{state: :gameover} = game) do
-    {:ok, game}
+  def tick(%Game{state: :gameover, current_animation: nil} = game) do
+    {:ok, %Game{game | current_animation: GameOver.new()}}
+  end
+
+  def tick(%Game{state: :gameover, last_ticker: last_ticker} = game) do
+    now = Time.utc_now()
+
+    if Time.diff(now, last_ticker, :microsecond) > @intro_animation_ms do
+      # FIXME END GAME!!!
+      {:ok, game}
+    else
+      {:ok, game}
+    end
   end
 
   def move_left(%Game{current_position: 0, mario: mario} = game) do
@@ -145,12 +158,7 @@ defmodule Octopus.Apps.Supermario.Game do
         end
       end
 
-    # FIXME: check if mario is dead
-    if true do
-      {:ok, game}
-    else
-      {:game_over, game}
-    end
+    {:ok, game}
   end
 
   def move_right(%Game{current_position: 0, mario: mario} = game) do
@@ -211,12 +219,14 @@ defmodule Octopus.Apps.Supermario.Game do
     absolute_x_position = current_position + x_position
 
     # check wether we fall on bad guy
-    game = if Level.has_bad_guy_on_postion?(level, absolute_x_position, y_position) do
-      # FIXME add score points!!!
-      %Game{game | level: Level.kill_bad_guy(level, absolute_x_position, y_position)}
-    else
-      game
-    end
+    game =
+      if Level.has_bad_guy_on_postion?(level, absolute_x_position, y_position) do
+        # FIXME add score points!!!
+        %Game{game | level: Level.kill_bad_guy(level, absolute_x_position, y_position)}
+      else
+        game
+      end
+
     # when we ware falling on the ground reset the jump counter
     if !Mario.can_fall?(game.mario, game) do
       %Game{game | mario: Mario.reset_jumps(game.mario)}
@@ -233,8 +243,7 @@ defmodule Octopus.Apps.Supermario.Game do
       |> update_mario()
 
     if Game.mario_dies?(game) do
-
-     mario_has_died(game)
+      mario_has_died(game)
     else
       {:ok, game}
     end
@@ -311,42 +320,6 @@ defmodule Octopus.Apps.Supermario.Game do
         <<33, 44, 55, 255>>,
         <<255, 255, 255, 255>>,
         <<33, 44, 55, 255>>
-      ]
-    ]
-  end
-
-  # TODO game over animation
-  def draw(%Game{state: :gameover, current_animation: nil}) do
-    [
-      [
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>
-      ],
-      [
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>
-      ],
-      [
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>
       ]
     ]
   end
