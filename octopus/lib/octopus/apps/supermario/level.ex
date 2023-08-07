@@ -1161,7 +1161,7 @@ defmodule Octopus.Apps.Supermario.Level do
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil],
       # row 2
-      [1, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+      [nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
        1, 1, nil, 1, 1, 1, nil, 1, 1, 1, nil, nil, nil, 1, 1,
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
@@ -1170,7 +1170,7 @@ defmodule Octopus.Apps.Supermario.Level do
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil],
       # row 3
-      [1, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+      [nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
        1, nil, nil, nil, nil, 1, nil, nil, 1, nil, nil, nil, nil, nil, nil,
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
@@ -1179,7 +1179,7 @@ defmodule Octopus.Apps.Supermario.Level do
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil],
       # row 4
-      [1, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+      [nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
        nil, nil, nil, nil, nil, nil, 1, nil, 1, 1, 1, nil, 1, nil, nil,
        1, nil, nil, nil, nil, 1, nil, nil, 1, nil, nil, nil, nil, nil, nil,
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
@@ -1188,7 +1188,7 @@ defmodule Octopus.Apps.Supermario.Level do
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil],
       # row 5
-      [1, nil, nil, nil, nil, nil, 1, 1, 1, 1, nil, nil, nil, nil, 1,
+      [nil, nil, nil, nil, nil, nil, 1, 1, 1, 1, nil, nil, nil, nil, 1,
        1, nil, nil, nil, nil, nil, 1, 1, 1, nil, 1, 1, 1, nil, nil,
        1, 1, nil, 1, 1, 1, nil, nil, 1, 1, nil, nil, 1, 1, 1,
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
@@ -1197,7 +1197,7 @@ defmodule Octopus.Apps.Supermario.Level do
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil],
       # row 6
-      [1, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1, 1,
+      [nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1, 1,
        1, 1, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
        nil, 1, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
@@ -1206,7 +1206,7 @@ defmodule Octopus.Apps.Supermario.Level do
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil],
       # row 7
-      [1, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1, 1, 1,
+      [nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1, 1, 1,
        1, 1, 1, nil, nil, nil, nil, nil, nil, 1, nil, nil, nil, nil, nil,
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
