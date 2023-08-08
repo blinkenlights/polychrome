@@ -5,10 +5,10 @@ defmodule Octopus.Apps.SpritesGrouped do
   alias Octopus.{Sprite, Canvas, Transitions}
 
   defmodule State do
-    defstruct [:canvas, :group_index, :current_sprites, :sprite_queue, :skip, :palette]
+    defstruct [:canvas, :group_index, :current_sprites, :sprite_queue, :skip]
   end
 
-  @sprite_sheet Sprite.list_sprite_sheets() |> hd()
+  @sprite_sheet "256-characters-original"
 
   @easing_interval 250
 
@@ -68,15 +68,12 @@ defmodule Octopus.Apps.SpritesGrouped do
   def name(), do: "Sprite Groups"
 
   def init(_args) do
-    %Canvas{palette: palette} = Sprite.load(@sprite_sheet, 0)
-
     state =
       %State{
         group_index: 0,
         skip: 0,
-        canvas: Canvas.new(80, 8, palette),
-        current_sprites: %{},
-        palette: palette
+        canvas: Canvas.new(80, 8),
+        current_sprites: %{}
       }
       |> queue_sprites()
 
@@ -90,7 +87,7 @@ defmodule Octopus.Apps.SpritesGrouped do
   end
 
   def handle_info(:tick, %State{skip: 1} = state) do
-    empty_canvas = Canvas.new(80, 8, state.palette)
+    empty_canvas = Canvas.new(80, 8)
 
     Transitions.push(state.canvas, empty_canvas, direction: :bottom, steps: @animation_steps)
     |> Stream.map(fn canvas ->
@@ -121,7 +118,7 @@ defmodule Octopus.Apps.SpritesGrouped do
 
   def handle_info(:tick, %State{sprite_queue: [{window, next_sprite} | rest_sprites]} = state) do
     current_canvas = Canvas.cut(state.canvas, {window * 8, 0}, {window * 8 + 8 - 1, 8 - 1})
-    next_cavnas = load_sprite(next_sprite, state.palette)
+    next_cavnas = load_sprite(next_sprite)
     # direction = Enum.random([:left, :right, :top, :bottom])
     direction = :top
 
@@ -180,6 +177,6 @@ defmodule Octopus.Apps.SpritesGrouped do
   defp place_sprites([a, b, c, d, e, f, g, h, i, j]), do: [a, b, c, d, e, f, g, h, i, j]
   # defp place_sprites(list), do: Enum.take_random(list, 10) |> place_sprites()
 
-  defp load_sprite(nil, palette), do: Canvas.new(8, 8, palette)
-  defp load_sprite(index, _palette), do: Sprite.load(@sprite_sheet, index)
+  defp load_sprite(nil), do: Canvas.new(8, 8)
+  defp load_sprite(index), do: Sprite.load(@sprite_sheet, index)
 end

@@ -15,5 +15,5 @@ alias Octopus.{
 IEx.configure(inspect: [limit: :infinity])
 Logger.configure(level: :info)
 
-mario = Sprite.load("256-characters-original", 0, :rgb)
+mario = Sprite.load("256-characters-original", 0)
 

@@ -46,12 +46,12 @@ defmodule Octopus.Apps.Webpanimation do
     {canvas, _} =
       Enum.reduce(image, {canvas, 0}, fn row, {canvas, y} ->
         {canvas, _, y} =
-          Enum.reduce(row, {canvas, 0, y}, fn pixel, {canvas, x, y} ->
+          Enum.reduce(row, {canvas, 0, y}, fn [r, g, b], {canvas, x, y} ->
             canvas =
               Canvas.put_pixel(
                 canvas,
                 {x, y},
-                pixel
+                {r, g, b}
               )
 
             {canvas, x + 1, y}

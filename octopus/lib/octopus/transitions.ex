@@ -32,7 +32,7 @@ defmodule Octopus.Transitions do
 
   """
 
-  def push(%Canvas{palette: palette} = canvas1, %Canvas{palette: palette} = canvas2, opts \\ []) do
+  def push(%Canvas{} = canvas1, %Canvas{} = canvas2, opts \\ []) do
     direction = Keyword.get(opts, :direction, :left)
     separation = Keyword.get(opts, :separation, 3)
     steps = Keyword.get(opts, :steps, 50)
@@ -41,22 +41,22 @@ defmodule Octopus.Transitions do
       case direction do
         :left ->
           canvas1
-          |> Canvas.join(Canvas.new(separation, canvas1.height, palette), direction: :horizontal)
+          |> Canvas.join(Canvas.new(separation, canvas1.height), direction: :horizontal)
           |> Canvas.join(canvas2, direction: :horizontal)
 
         :right ->
           canvas2
-          |> Canvas.join(Canvas.new(separation, canvas2.height, palette), direction: :horizontal)
+          |> Canvas.join(Canvas.new(separation, canvas2.height), direction: :horizontal)
           |> Canvas.join(canvas1, direction: :horizontal)
 
         :top ->
           canvas1
-          |> Canvas.join(Canvas.new(canvas1.width, separation, palette), direction: :vertical)
+          |> Canvas.join(Canvas.new(canvas1.width, separation), direction: :vertical)
           |> Canvas.join(canvas2, direction: :vertical)
 
         :bottom ->
           canvas2
-          |> Canvas.join(Canvas.new(canvas2.width, separation, palette), direction: :vertical)
+          |> Canvas.join(Canvas.new(canvas2.width, separation), direction: :vertical)
           |> Canvas.join(canvas1, direction: :vertical)
       end
 

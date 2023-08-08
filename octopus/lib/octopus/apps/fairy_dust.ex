@@ -1,7 +1,7 @@
 defmodule Octopus.Apps.FairyDust do
   use Octopus.App
 
-  alias Octopus.{Canvas, Image}
+  alias Octopus.{Canvas, Image, WebP}
 
   @fps 60
 
@@ -15,7 +15,7 @@ defmodule Octopus.Apps.FairyDust do
 
   def name(), do: "Fairy Dust"
 
-  def icon(), do: Canvas.from_webp("fairy-dust")
+  def icon(), do: WebP.load("fairy-dust")
 
   def init(_args) do
     :timer.send_interval(trunc(1000 / @fps), :tick)
@@ -51,11 +51,8 @@ defmodule Octopus.Apps.FairyDust do
     Enum.reduce(particles, canvas, fn particle, canvas ->
       color =
         if particle.ttl < 1 do
-          [particle.color]
-          |> Enum.map(fn [r, g, b] ->
-            [trunc(r * particle.ttl), trunc(g * particle.ttl), trunc(b * particle.ttl)]
-          end)
-          |> List.flatten()
+          {r, g, b} = particle.color
+          {trunc(r * particle.ttl), trunc(g * particle.ttl), trunc(b * particle.ttl)}
         else
           particle.color
         end
@@ -86,12 +83,12 @@ defmodule Octopus.Apps.FairyDust do
 
     # Rainbow flag
     particle_colors = [
-      [228, 3, 3],
-      [225, 140, 0],
-      [255, 237, 0],
-      [0, 128, 38],
-      [0, 77, 255],
-      [117, 7, 135]
+      {228, 3, 3},
+      {225, 140, 0},
+      {255, 237, 0},
+      {0, 128, 38},
+      {0, 77, 255},
+      {117, 7, 135}
     ]
 
     speed = 10

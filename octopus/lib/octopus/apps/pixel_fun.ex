@@ -61,11 +61,11 @@ defmodule Octopus.Apps.PixelFun do
         %{
           default: 0,
           options: [
-            {"Camp", {[0x3F, 0xFF, 0x21], [0xFB, 0x48, 0xC4]}},
-            {"Mac Paint", {[0x8B, 0xC8, 0xFE], [0x05, 0x1B, 0x2C]}},
-            {"Bitbee", {[0x29, 0x2B, 0x30], [0xCF, 0xAB, 0x4A]}},
-            {"Gato Roboto - Starboard", {[0x0A, 0x2E, 0x44], [0xFC, 0xFF, 0xCC]}},
-            {"French Fries", {[0xFF, 0x0F, 0x0F], [0xFF, 0xDF, 0x0F]}}
+            {"Camp", {{0x3F, 0xFF, 0x21}, {0xFB, 0x48, 0xC4}}},
+            {"Mac Paint", {{0x8B, 0xC8, 0xFE}, {0x05, 0x1B, 0x2C}}},
+            {"Bitbee", {[0x29, 0x2B, 0x30], {0xCF, 0xAB, 0x4A}}},
+            {"Gato Roboto - Starboard", {{0x0A, 0x2E, 0x44}, {0xFC, 0xFF, 0xCC}}},
+            {"French Fries", {{0xFF, 0x0F, 0x0F}, {0xFF, 0xDF, 0x0F}}}
           ]
         }
       }
@@ -188,7 +188,7 @@ defmodule Octopus.Apps.PixelFun do
     hsv_b = Chameleon.HSV.new(hue_b, sat_b, 100)
     %Chameleon.RGB{r: r1, g: g1, b: b1} = Chameleon.convert(hsv_a, Chameleon.RGB)
     %Chameleon.RGB{r: r2, g: g2, b: b2} = Chameleon.convert(hsv_b, Chameleon.RGB)
-    colors = {[r1, g1, b1], [r2, g2, b2]}
+    colors = {{r1, g1, b1}, {r2, g2, b2}}
 
     {:noreply,
      %State{
@@ -268,10 +268,10 @@ defmodule Octopus.Apps.PixelFun do
     end
   end
 
-  @default_env %{'pi' => :math.pi(), 'tau' => :math.pi() * 2}
+  @default_env %{~c"pi" => :math.pi(), ~c"tau" => :math.pi() * 2}
 
   defp pixels(expr, x, y, i, t, {color_a, color_b}) do
-    env = [%{'x' => x, 'y' => y, 'i' => i, 't' => t}, @default_env]
+    env = [%{~c"x" => x, ~c"y" => y, ~c"i" => i, ~c"t" => t}, @default_env]
 
     value =
       expr
@@ -282,13 +282,14 @@ defmodule Octopus.Apps.PixelFun do
     interpolate_colors(color_a, color_b, value)
   end
 
-  defp interpolate_colors([r1, g1, b1], [r2, g2, b2], value) do
+  defp interpolate_colors({r1, g1, b1}, {r2, g2, b2}, value) do
     cond do
       value > 0 -> [r1 * value, g1 * value, b1 * value]
       value < 0 -> [r2 * -value, g2 * -value, b2 * -value]
       true -> [0, 0, 0]
     end
     |> Enum.map(&Kernel.trunc/1)
+    |> List.to_tuple()
   end
 
   defp lerp_toward_target_colors(%State{} = state) do
@@ -304,7 +305,7 @@ defmodule Octopus.Apps.PixelFun do
     %State{state | colors: {new_a, new_b}, lerp_time: lerp_time}
   end
 
-  defp lerp_rgb([r1, g1, b1], [r2, g2, b2], value) do
+  defp lerp_rgb({r1, g1, b1}, {r2, g2, b2}, value) do
     hsl_a = Chameleon.RGB.new(r1, g1, b1) |> Chameleon.convert(Chameleon.HSL)
     hsl_b = Chameleon.RGB.new(r2, g2, b2) |> Chameleon.convert(Chameleon.HSL)
     h = lerp(hsl_a.h, hsl_b.h, value) |> trunc()
@@ -315,7 +316,7 @@ defmodule Octopus.Apps.PixelFun do
       Chameleon.HSL.new(h, s, l)
       |> Chameleon.convert(Chameleon.RGB)
 
-    [r, g, b]
+    {r, g, b}
   end
 
   defp lerp(a, b, t) do
