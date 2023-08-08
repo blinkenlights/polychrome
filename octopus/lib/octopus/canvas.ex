@@ -6,7 +6,7 @@ defmodule Octopus.Canvas do
   ## Example
 
       iex> canvas = Canvas.new(80, 8)
-      iex> canvas = Canvas.put_pixel(canvas, {0, 0}, [255, 255, 255])
+      iex> canvas = Canvas.put_pixel(canvas, {0, 0}, {255, 255, 255})
       iex> %Octopus.Protobuf.RGBFrame{} = Canvas.to_frame(canvas)
 
   """

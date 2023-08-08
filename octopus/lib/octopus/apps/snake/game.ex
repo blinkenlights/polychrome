@@ -94,11 +94,11 @@ defmodule Octopus.Apps.Snake.Game do
   def render_frame(%Game{} = game) do
     gamecanvas =
       Canvas.new(8,8)
-      |> Canvas.put_pixel(game.food, [0xff,0xff,0x00])
+      |> Canvas.put_pixel(game.food, {0xff,0xff,0x00})
 
     gamecanvas =
     game.worm.parts
-    |> Enum.reduce(gamecanvas, fn {pos, _dir}, acc -> acc |> Canvas.put_pixel(pos, [0x10,0xff,0x10]) end)
+    |> Enum.reduce(gamecanvas, fn {pos, _dir}, acc -> acc |> Canvas.put_pixel(pos, {0x10,0xff,0x10}) end)
 
     Canvas.new(60,8) |> Canvas.overlay(gamecanvas, offset: {8*4,0}) |> Canvas.to_frame()
   end
