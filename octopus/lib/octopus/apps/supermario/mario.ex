@@ -7,7 +7,7 @@ defmodule Octopus.Apps.Supermario.Mario do
 
   @start_position_x 3
   @fall_interval_ms 190_000
-  @mario_color [216, 40, 0]
+  @mario_color [235, 13, 16]
 
   @type t :: %__MODULE__{
           x_position: integer(),
@@ -63,10 +63,10 @@ defmodule Octopus.Apps.Supermario.Mario do
   # we can jump a second and third time in the air
   def jump(%Mario{jumps: jumps} = mario, game) when jumps == 1 or jumps == 2 do
     if can_jump?(mario, game) do
-        %Mario{jump(mario) | jumps: jumps + 1, jumped_at: Time.utc_now()}
-      else
-        mario
-      end
+      %Mario{jump(mario) | jumps: jumps + 1, jumped_at: Time.utc_now()}
+    else
+      mario
+    end
   end
 
   # no third jump should be possible
@@ -84,7 +84,8 @@ defmodule Octopus.Apps.Supermario.Mario do
 
   # when mario was jumping before, we have to wait a bit before falling
   def fall_if(%Mario{falling_since: nil, jumped_at: jumped_at} = mario, game) do
-    if can_fall?(mario, game) and Time.diff(Time.utc_now(), jumped_at, :microsecond) > @fall_interval_ms * 2 do
+    if can_fall?(mario, game) and
+         Time.diff(Time.utc_now(), jumped_at, :microsecond) > @fall_interval_ms * 2 do
       {true, fall(mario)}
     else
       {false, mario}
@@ -121,9 +122,9 @@ defmodule Octopus.Apps.Supermario.Mario do
   end
 
   def can_fall?(%Mario{y_position: y_position, x_position: x_position}, %Game{
-         level: level,
-         current_position: current_position
-       }) do
+        level: level,
+        current_position: current_position
+      }) do
     Level.can_fall?(level, x_position + current_position, y_position)
   end
 
