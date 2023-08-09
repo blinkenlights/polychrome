@@ -54,7 +54,7 @@ defmodule Octopus.Apps.Supermario.Mario do
   # first jump. we have to be on the ground, therefor `!can_fall?`
   def jump(%Mario{jumps: 0} = mario, game) do
     if can_jump?(mario, game) and !can_fall?(mario, game) do
-      %Mario{jump(mario) | jumps: 1, jumped_at: Time.utc_now()}
+      %Mario{do_jump(mario) | jumps: 1, jumped_at: Time.utc_now()}
     else
       mario
     end
@@ -63,7 +63,7 @@ defmodule Octopus.Apps.Supermario.Mario do
   # we can jump a second and third time in the air
   def jump(%Mario{jumps: jumps} = mario, game) when jumps == 1 or jumps == 2 do
     if can_jump?(mario, game) do
-      %Mario{jump(mario) | jumps: jumps + 1, jumped_at: Time.utc_now()}
+      %Mario{do_jump(mario) | jumps: jumps + 1, jumped_at: Time.utc_now()}
     else
       mario
     end
@@ -76,7 +76,7 @@ defmodule Octopus.Apps.Supermario.Mario do
   # but then we are falling immediately
   def fall_if(%Mario{falling_since: nil, jumped_at: nil} = mario, game) do
     if can_fall?(mario, game) do
-      {true, fall(mario)}
+      {true, do_fall(mario)}
     else
       {false, mario}
     end
@@ -86,7 +86,7 @@ defmodule Octopus.Apps.Supermario.Mario do
   def fall_if(%Mario{falling_since: nil, jumped_at: jumped_at} = mario, game) do
     if can_fall?(mario, game) and
          Time.diff(Time.utc_now(), jumped_at, :microsecond) > @fall_interval_ms * 2 do
-      {true, fall(mario)}
+      {true, do_fall(mario)}
     else
       {false, mario}
     end
@@ -100,7 +100,7 @@ defmodule Octopus.Apps.Supermario.Mario do
     if Time.diff(Time.utc_now(), falling_since, :microsecond) > @fall_interval_ms do
       if can_fall?(mario, game) do
         # reset falling timestamp, also next fall should be done with a delay
-        {true, fall(mario)}
+        {true, do_fall(mario)}
       else
         {false, %Mario{mario | falling_since: nil}}
       end
@@ -113,11 +113,11 @@ defmodule Octopus.Apps.Supermario.Mario do
     %Mario{mario | jumps: 0, jumped_at: nil}
   end
 
-  defp jump(%Mario{y_position: y_position} = mario) do
+  defp do_jump(%Mario{y_position: y_position} = mario) do
     %Mario{mario | y_position: y_position - 1, falling_since: nil}
   end
 
-  defp fall(%Mario{y_position: y_position} = mario) do
+  defp do_fall(%Mario{y_position: y_position} = mario) do
     %Mario{mario | y_position: y_position + 1, falling_since: Time.utc_now(), jumps: 0}
   end
 
