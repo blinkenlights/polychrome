@@ -32,7 +32,7 @@ defmodule Octopus.Apps.Supermario.Game do
   @update_interval_ms 10_000
   @intro_animation_ms 3_000_000
   @dying_animation_ms 5_000_000
-  @pause_animation_ms 3_000_000
+  @pause_animation_ms 4_000_000
 
   def new(windows_shown) when windows_shown > 0 and windows_shown < 11 do
     level = Level.new()
@@ -185,7 +185,7 @@ defmodule Octopus.Apps.Supermario.Game do
         if Level.last_level?(game.level) do
           {:game_over, %Game{game | state: :completed}}
         else
-          {:ok, %Game{game | state: :paused}}
+          {:ok, %Game{game | state: :paused, last_ticker: Time.utc_now()}}
         end
       end
     end
@@ -292,38 +292,15 @@ defmodule Octopus.Apps.Supermario.Game do
 
   # TODO between levels animation
   def draw(%Game{state: :paused, current_animation: nil}) do
-    [
-      [
-        <<33, 44, 55, 255>>,
-        <<0, 0, 0, 0>>,
-        <<33, 44, 55, 255>>,
-        <<0, 0, 0, 0>>,
-        <<33, 44, 55, 255>>,
-        <<0, 0, 0, 0>>,
-        <<33, 44, 55, 255>>,
-        <<0, 0, 0, 0>>
-      ],
-      [
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<0, 0, 0, 0>>
-      ],
-      [
-        <<33, 44, 55, 255>>,
-        <<0, 0, 0, 0>>,
-        <<33, 44, 55, 255>>,
-        <<0, 0, 0, 0>>,
-        <<255, 255, 255, 255>>,
-        <<33, 44, 55, 255>>,
-        <<255, 255, 255, 255>>,
-        <<33, 44, 55, 255>>
-      ]
-    ]
+    {:ok, %ExPng.Image{} = image} =
+      ExPng.Image.from_file(Path.join([:code.priv_dir(:octopus), "images", "mario.png"]))
+
+    Enum.map(0..7, fn y ->
+      Enum.map(0..7, fn x ->
+        <<r, g, b, _a>> = ExPng.Image.at(image, {x, y})
+        [r, g, b]
+      end)
+    end)
   end
 
   # draw current pixels of level and mario
