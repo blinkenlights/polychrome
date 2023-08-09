@@ -5,7 +5,7 @@ defmodule Octopus.Apps.Supermario.Animation.Intro do
   # we need to now all current game pixels and the position of mario
   # we rotage marios colour and draw a radial boom effect from marios position
   def new() do
-    path = Path.join([:code.priv_dir(:octopus), "webp", "marioi-run.webp"])
+    path = Path.join([:code.priv_dir(:octopus), "webp", "mario-run.webp"])
     decoded_animation = WebP.decode_animation(path)
     {width, height} = decoded_animation.size
 

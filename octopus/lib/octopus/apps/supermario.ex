@@ -43,30 +43,37 @@ defmodule Octopus.Apps.Supermario do
       case Game.tick(game) do
         {:ok, game} ->
           game
+
         {:mario_dies, game} ->
-            game
+          game
+
         # FIXME: show end screen
         {:game_over, game} ->
           game
       end
 
-    canvas = Game.draw(game) |> fill_canvas(canvas)
+    canvas =
+      game
+      |> Game.draw()
+      |> fill_canvas(canvas)
+
     canvas |> Canvas.to_frame() |> send_frame()
     {:noreply, %State{state | game: game, canvas: canvas}}
   end
 
-
   # ignore input events while mario dies
   def handle_input(
-          _,
-          %State{game: %Game{state: :mario_dies}} = state
-        ), do: {:noreply, state}
+        _,
+        %State{game: %Game{state: :mario_dies}} = state
+      ),
+      do: {:noreply, state}
 
   # also ignore input events between levels
   def handle_input(
-          _,
-          %State{game: %Game{state: :paused}} = state
-        ), do: {:noreply, state}
+        _,
+        %State{game: %Game{state: :paused}} = state
+      ),
+      do: {:noreply, state}
 
   def handle_input(
         %InputEvent{type: type, value: value},
@@ -117,12 +124,12 @@ defmodule Octopus.Apps.Supermario do
     {canvas, _} =
       Enum.reduce(visible_level_pixels, {canvas, 0}, fn row, {canvas, y} ->
         {canvas, _, y} =
-          Enum.reduce(row, {canvas, 0, y}, fn pixel, {canvas, x, y} ->
+          Enum.reduce(row, {canvas, 0, y}, fn [r, g, b], {canvas, x, y} ->
             canvas =
               Canvas.put_pixel(
                 canvas,
                 {x + @windows_offset * 8, y},
-                convert_to_list(pixel)
+                {r, g, b}
               )
 
             {canvas, x + 1, y}
@@ -133,10 +140,4 @@ defmodule Octopus.Apps.Supermario do
 
     canvas
   end
-
-  def convert_to_list(pixel) when is_binary(pixel) do
-    pixel |> :binary.bin_to_list() |> Enum.slice(0, 3)
-  end
-
-  def convert_to_list(pixel) when is_list(pixel), do: pixel
 end
