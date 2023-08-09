@@ -3,66 +3,43 @@ defmodule Octopus.Canvas do
   Provides functions to draw on a canvas. A canvas is a 2D grid of pixels. Each pixel has a color.
   The canvas is used to create frames that can be sent to the mixer.
 
-  The canvas can be used with a color palette or with RGB colors.
-
-  ## RGB example
+  ## Example
 
       iex> canvas = Canvas.new(80, 8)
-      iex> canvas = Canvas.put_pixel(canvas, {0, 0}, [255, 255, 255])
-      iex> %Octopus.Protobuf.Frame{} = Canvas.to_frame(canvas)
-
-  ## Color palette example
-
-      iex> palette = ColorPalette.load("pico-8")
-      iex> canvas = Canvas.new(80, 8, palette)
-      iex> canvas = Canvas.put_pixel(canvas, {0, 0}, 7)
-
-      iex> canvas = Canvas.new(80, 8, "pico-8")
-      iex> canvas = Canvas.put_pixel(canvas, {0, 0}, 7)
+      iex> canvas = Canvas.put_pixel(canvas, {0, 0}, {255, 255, 255})
+      iex> %Octopus.Protobuf.RGBFrame{} = Canvas.to_frame(canvas)
 
   """
 
+  alias Octopus.Font
   alias Octopus.WebP
-  alias Octopus.Protobuf.{Frame, RGBFrame}
-  alias Octopus.ColorPalette
+  alias Octopus.Protobuf.{RGBFrame}
   alias Octopus.Canvas
 
-  defstruct [:width, :height, :pixels, :palette]
+  defstruct [:width, :height, :pixels]
 
   @type coord :: {integer(), integer()}
-  @type rgb :: list(non_neg_integer())
 
   @typedoc """
-  A color is either a list of 3 integers between 0 and 255
-  or a non-negative integer which is an index into a color palette.
+  A color is a tuple of 3 integers between 0 and 255
   """
-  @type color :: non_neg_integer() | rgb()
+  @type color :: {non_neg_integer(), non_neg_integer(), non_neg_integer()}
 
   @type t :: %Canvas{
           width: non_neg_integer(),
           height: non_neg_integer(),
-          pixels: %{required(coord()) => color()},
-          palette: ColorPalette.t() | nil
+          pixels: %{required(coord()) => color()}
         }
 
   @doc """
-  Creates a new canvas. The canvas is initialized with all pixels set to 0.
+  Creates a new canvas. The canvas is initialized with no pixels set.
   """
-  alias Octopus.ColorPalette
-  @spec new(non_neg_integer(), non_neg_integer(), nil | binary() | %ColorPalette{}) :: Canvas.t()
-  def new(width, height, palette \\ nil)
-
-  def new(width, height, palette) when is_binary(palette) do
-    palette = ColorPalette.load(palette)
-    new(width, height, palette)
-  end
-
-  def new(width, height, palette) do
+  @spec new(non_neg_integer(), non_neg_integer()) :: Canvas.t()
+  def new(width, height) do
     %Canvas{
       width: width,
       height: height,
-      pixels: %{},
-      palette: palette
+      pixels: %{}
     }
   end
 
@@ -70,20 +47,10 @@ defmodule Octopus.Canvas do
   Creates a new canvas from a webp file.
   The webp file must be located in the priv/webp directory.
   """
+  @deprecated "Use Octopus.WebP.load/1 instead"
   @spec from_webp(String.t()) :: Canvas.t()
   def from_webp(name) do
-    path = Path.join([:code.priv_dir(:octopus), "webp", "#{name}.webp"])
-    {pixels, width, height} = WebP.decode_rgb(path)
-
-    canvas = Canvas.new(width, height)
-
-    pixels
-    |> Enum.with_index()
-    |> Enum.reduce(canvas, fn {pixel, i}, acc ->
-      x = rem(i, width)
-      y = div(i, width)
-      Canvas.put_pixel(acc, {x, y}, pixel)
-    end)
+    WebP.load(name)
   end
 
   @doc """
@@ -94,7 +61,8 @@ defmodule Octopus.Canvas do
     rgb_pixels =
       for y <- 0..(canvas.height - 1),
           x <- 0..(canvas.width - 1),
-          do: Octopus.Canvas.get_pixel_color(canvas, {x, y})
+          {r, g, b} <- Octopus.Canvas.get_pixel(canvas, {x, y}),
+          do: [r, g, b]
 
     WebP.encode_rgb(List.flatten(rgb_pixels), canvas.width, canvas.height)
   end
@@ -121,57 +89,72 @@ defmodule Octopus.Canvas do
 
   @doc """
   Sets the color of the pixel at the given position.
-
-  If the canvas has a color palette, the color must be an integer
-  that is an index into the palette.
-
-  Otherwise the color must be a list of 3 integers between 0 and 255.
   """
-  @spec put_pixel(Canvas.t(), coord(), non_neg_integer() | rgb()) :: Canvas.t()
-  def put_pixel(canvas, coord, color)
-
-  def put_pixel(%Canvas{palette: %ColorPalette{}} = canvas, {x, y}, color)
-      when is_integer(color) do
-    pixels = Map.put(canvas.pixels, {x, y}, color)
+  @spec put_pixel(Canvas.t(), coord(), color()) :: Canvas.t()
+  def put_pixel(%Canvas{pixels: pixels} = canvas, {x, y}, {r, g, b}) do
+    pixels = Map.put(pixels, {x, y}, {r, g, b})
     %Canvas{canvas | pixels: pixels}
   end
 
-  def put_pixel(%Canvas{palette: nil} = canvas, {x, y}, color) when is_list(color) do
-    pixels = Map.put(canvas.pixels, {x, y}, color)
-    %Canvas{canvas | pixels: pixels}
+  def put_pixel(%Canvas{}, _, color), do: raise("Invalid color #{inspect(color)}")
+
+  @doc """
+  Returns the pixel at the given position.
+  If the position is outside the canvas `{0, 0, 0}` is returned.
+  """
+  @spec get_pixel(Canvas.t(), coord()) :: color()
+  def get_pixel(%Canvas{pixels: pixels}, {x, y}) do
+    Map.get(pixels, {x, y}, {0, 0, 0})
   end
 
   @doc """
-  Returns the color of the pixel at the given position.
-  If the position is outside the canvas,
-  `[0, 0, 0]` is returned for canvases with RGB colors
-  and `0` is returned for canvases with a color palette.
+  Renders a string onto the canvas using the given font and variant.
   """
-  @spec get_pixel(Canvas.t(), coord()) :: color()
-  def get_pixel(%Canvas{pixels: pixels, palette: nil}, {x, y}) do
-    Map.get(pixels, {x, y}, [0, 0, 0])
+  @spec put_string(Canvas.t(), coord(), String.t() | charlist(), Font.t(), non_neg_integer()) ::
+          Canvas.t()
+  def put_string(canvas, pos, string, font, variant \\ 0)
+
+  def put_string(%Canvas{} = canvas, {x, y}, string, %Font{} = font, variant)
+      when is_binary(string) do
+    chars = string |> String.to_charlist()
+    put_string(canvas, {x, y}, chars, font, variant)
   end
 
-  def get_pixel(%Canvas{pixels: pixels}, {x, y}) do
-    Map.get(pixels, {x, y}, 0)
+  def put_string(%Canvas{} = canvas, {x, y}, chars, %Font{} = font, variant)
+      when is_list(chars) do
+    chars
+    |> Enum.with_index()
+    |> Enum.reduce(canvas, fn {char, i}, acc ->
+      Font.draw_char(font, char, variant, acc, {x + i * 8, y})
+    end)
   end
 
-  @spec get_pixel_color(Canvas.t(), coord()) :: color()
-  def get_pixel_color(%Canvas{palette: nil} = canvas, coord) do
-    get_pixel(canvas, coord)
+  @doc """
+  Creates a canvas that fits the given string.
+  The string is rendered using the given font and variant.
+  """
+  @spec from_string(String.t() | charlist(), Font.t(), non_neg_integer()) :: Canvas.t()
+  def from_string(string, font, variant \\ 0)
+
+  def from_string(string, %Font{} = font, variant) when is_binary(string) do
+    string
+    |> String.to_charlist()
+    |> from_string(font, variant)
   end
 
-  def get_pixel_color(%Canvas{} = canvas, coord) do
-    index = get_pixel(canvas, coord)
-    color = Enum.at(canvas.palette.colors, index)
-    [color.r, color.g, color.b]
+  def from_string(chars, %Font{} = font, variant) when is_list(chars) do
+    chars
+    |> Enum.with_index()
+    |> Enum.reduce(Canvas.new(length(chars) * 8, 8), fn {char, i}, acc ->
+      Font.draw_char(font, char, variant, acc, {i * 8, 0})
+    end)
   end
 
   @window_width 8
   @window_gap 16
   @window_and_gap @window_gap + @window_width
 
-  def to_frame(%Canvas{width: width, height: height, palette: palette} = canvas, opts \\ []) do
+  def to_frame(%Canvas{width: width, height: height} = canvas, opts \\ []) do
     window_width = if Keyword.get(opts, :drop, false), do: @window_and_gap, else: @window_width
     easing_interval = Keyword.get(opts, :easing_interval, 0)
 
@@ -179,24 +162,10 @@ defmodule Octopus.Canvas do
       for window <- 0..(div(width, window_width) - 1),
           y <- 0..(height - 1),
           x <- 0..7,
-          do: get_pixel(canvas, {window * window_width + x, y})
+          {r, g, b} = get_pixel(canvas, {window * window_width + x, y}),
+          do: [r, g, b]
 
-    case palette do
-      nil -> %RGBFrame{data: data |> IO.iodata_to_binary(), easing_interval: easing_interval}
-      _ -> %Frame{data: data, palette: palette, easing_interval: easing_interval}
-    end
-  end
-
-  def to_rgb(%Canvas{palette: nil} = canvas), do: canvas
-
-  def to_rgb(%Canvas{} = canvas) do
-    pixels = for {k, _v} <- canvas.pixels, into: %{}, do: {k, get_pixel_color(canvas, k)}
-
-    %Canvas{
-      canvas
-      | pixels: pixels,
-        palette: nil
-    }
+    %RGBFrame{data: data |> IO.iodata_to_binary(), easing_interval: easing_interval}
   end
 
   @doc """
@@ -358,10 +327,6 @@ defmodule Octopus.Canvas do
 
   """
   def join(%Canvas{} = canvas1, %Canvas{} = canvas2, opts \\ []) do
-    if canvas1.palette != canvas2.palette do
-      raise ArgumentError, "Can't join canvases with different color palettes"
-    end
-
     direction = Keyword.get(opts, :direction, :horizontal)
 
     pixels =
@@ -390,10 +355,6 @@ defmodule Octopus.Canvas do
   """
 
   def overlay(%Canvas{} = canvas1, %Canvas{} = canvas2, opts \\ []) do
-    if canvas1.palette != canvas2.palette do
-      raise ArgumentError, "Can't join canvases with different color palettes"
-    end
-
     {dx, dy} = Keyword.get(opts, :offset, {0, 0})
 
     canvas1 =
@@ -452,7 +413,6 @@ defmodule Octopus.Canvas do
     %Canvas{canvas | pixels: pixels}
   end
 
-
   @doc """
   Create SVG representation of the canvas by rendering the pixels
   left to right, top to bottom in lines
@@ -477,72 +437,75 @@ defmodule Octopus.Canvas do
 
     # traverse pixels left to right, top to bottom
     svg_pixels =
-      for y <- 0..(canvas.height - 1), x <- 0..(canvas.width - 1),
-      [r, g, b] = Canvas.get_pixel_color(canvas, {x, y})
-            do
-          """
-          <rect x="#{x}" y="#{y}" fill="rgb(#{r},#{g},#{b})" width="1" height="1" />
-          """
+      for y <- 0..(canvas.height - 1),
+          x <- 0..(canvas.width - 1),
+          {r, g, b} = Canvas.get_pixel(canvas, {x, y}) do
+        """
+        <rect x="#{x}" y="#{y}" fill="rgb(#{r},#{g},#{b})" width="1" height="1" />
+        """
       end
 
     svg_header <> Enum.join(svg_pixels) <> svg_footer
   end
+end
 
+defimpl Collectable, for: Octopus.Canvas do
+  alias Octopus.Canvas
 
-  defimpl Collectable do
-    def into(canvas) do
-      collector_fun = fn
-        canvas_acc, {:cont, {{x, y}, color}} ->
-          Canvas.put_pixel(canvas_acc, {x, y}, color)
+  def into(canvas) do
+    collector_fun = fn
+      canvas_acc, {:cont, {{x, y}, color}} ->
+        Canvas.put_pixel(canvas_acc, {x, y}, color)
 
-        canvas_acc, :done ->
-          canvas_acc
+      canvas_acc, :done ->
+        canvas_acc
 
-        _canvas_acc, :halt ->
-          :ok
+      _canvas_acc, :halt ->
+        :ok
+    end
+
+    {canvas, collector_fun}
+  end
+end
+
+defimpl Inspect, for: Octopus.Canvas do
+  alias Octopus.Canvas
+
+  @doc """
+  Inspect implementation for printing out Canvas objects on the iex command line
+  """
+  def inspect(canvas, _opts) do
+    default_color = IO.ANSI.default_color()
+
+    # traverse pixels left to right, top to bottom
+    delimiter = default_color <> "+" <> String.duplicate("--", canvas.width) <> "+\n"
+
+    lines =
+      for y <- 0..(canvas.height - 1) do
+        line =
+          for x <- 0..(canvas.width - 1) do
+            {r, g, b} = Canvas.get_pixel(canvas, {x, y})
+            IO.ANSI.color(convert_color_rgb_to_ansi(r, g, b)) <> "\u2588\u2588"
+          end
+          |> List.to_string()
+
+        default_color <> "|" <> line <> default_color <> "|\n"
       end
 
-      {canvas, collector_fun}
-    end
+    delimiter <> Enum.join(lines) <> delimiter
   end
 
-  defimpl Inspect, for: Canvas do
-    @doc """
-    Inspect implementation for printing out Canvas objects on the iex command line
-    """
-    def inspect(canvas, _opts) do
-      default_color = IO.ANSI.default_color()
-
-      # traverse pixels left to right, top to bottom
-      delimiter = default_color <> "+" <> String.duplicate("--", canvas.width) <> "+\n"
-
-      lines =
-        for y <- 0..(canvas.height - 1) do
-          line =
-            for x <- 0..(canvas.width - 1) do
-              [r, g, b] = Canvas.get_pixel_color(canvas, {x, y})
-              IO.ANSI.color(convert_color_rgb_to_ansi(r, g, b)) <> "\u2588\u2588"
-            end
-            |> List.to_string()
-
-          default_color <> "|" <> line <> default_color <> "|\n"
+  def convert_color_rgb_to_ansi(r, g, b) do
+    cond do
+      r == g and g == b ->
+        cond do
+          r < 8 -> 16
+          r > 248 -> 231
+          true -> round((r - 8) / 247 * 24) + 232
         end
 
-      delimiter <> Enum.join(lines) <> delimiter
-    end
-
-    def convert_color_rgb_to_ansi(r, g, b) do
-      cond do
-        r == g and g == b ->
-          cond do
-            r < 8 -> 16
-            r > 248 -> 231
-            true -> round((r - 8) / 247 * 24) + 232
-          end
-
-        true ->
-          16 + 36 * round(r / 255 * 5) + 6 * round(g / 255 * 5) + round(b / 255 * 5)
-      end
+      true ->
+        16 + 36 * round(r / 255 * 5) + 6 * round(g / 255 * 5) + round(b / 255 * 5)
     end
   end
 end

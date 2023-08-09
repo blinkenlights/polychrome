@@ -1,6 +1,9 @@
 defmodule Octopus.Apps.DoomFire do
   use Octopus.App
 
+  alias Octopus.WebP
+  alias Octopus.Canvas
+
   defmodule Fire do
     defstruct [:width, :height, :buffer]
 
@@ -39,26 +42,24 @@ defmodule Octopus.Apps.DoomFire do
     defp intensity_to_rgb(intensity) do
       case intensity do
         0 ->
-          [0, 0, 0]
+          {0, 0, 0}
 
         1 ->
-          [220, 0, 0]
+          {220, 0, 0}
 
         n when n <= 8 ->
           fraction = (n - 1) / 7
-          [220, trunc(fraction * 220), 0]
+          {220, trunc(fraction * 220), 0}
 
         n ->
           fraction = (n - 8) / 7
-          [220, 220, trunc(fraction * 220)]
+          {220, 220, trunc(fraction * 220)}
       end
     end
   end
 
-  alias Octopus.Canvas
-
   def name, do: "Doom Fire"
-  def icon, do: Canvas.from_webp("doom-fire")
+  def icon, do: WebP.load("doom-fire")
 
   def init(_) do
     :timer.send_interval(trunc(1000 / 10), :tick)

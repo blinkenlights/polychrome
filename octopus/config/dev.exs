@@ -1,5 +1,11 @@
 import Config
 
+so_reuseport =
+  case :os.type() do
+    {:unix, :linux} -> {:raw, 1, 15, <<1::32-native>>}
+    {:unix, :darwin} -> {:raw, 0xFFFF, 0x0200, <<1::32-native>>}
+  end
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #
@@ -9,7 +15,7 @@ import Config
 config :octopus, OctopusWeb.Endpoint,
   # Binding to loopback ipv4 address prevents access from other machines.
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
-  http: [ip: {0, 0, 0, 0}, port: 4000],
+  http: [ip: {0, 0, 0, 0}, port: 4000, transport_options: [socket_opts: [so_reuseport]]],
   check_origin: false,
   code_reloader: true,
   debug_errors: true,

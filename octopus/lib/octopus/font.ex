@@ -1,5 +1,5 @@
 defmodule Octopus.Font do
-  alias Octopus.ColorPalette
+  alias Octopus.Canvas
 
   @doc """
   A selection of 8x8 fonts from https://nfggames.com/games/fontmaker/lister.php.
@@ -8,30 +8,6 @@ defmodule Octopus.Font do
   """
 
   defstruct [:name, :variants]
-
-  defmodule Variant do
-    defstruct [:pixels, :palette]
-
-    def from_rgba(rgba_pixels) do
-      rbg_pixels =
-        rgba_pixels
-        |> :binary.bin_to_list()
-        |> Enum.chunk_every(4)
-        |> Enum.map(fn
-          [_, _, _, 0] -> [0, 0, 0]
-          [r, g, b, _] -> [r, g, b]
-        end)
-
-      palette = Enum.uniq(rbg_pixels)
-
-      pixels = Enum.map(rbg_pixels, &Enum.find_index(palette, fn value -> value == &1 end))
-
-      %__MODULE__{
-        pixels: pixels,
-        palette: palette |> List.flatten() |> ColorPalette.from_binary()
-      }
-    end
-  end
 
   @doc """
   Lists all available fonts in the priv/fonts directory.
@@ -51,17 +27,23 @@ defmodule Octopus.Font do
       path = Path.join([:code.priv_dir(:octopus), "fonts", "#{name}.png"])
 
       if File.exists?(path) do
-        {:ok, %ExPng.Image{pixels: pixels}} = ExPng.Image.from_file(path)
+        {:ok, img} = ExPng.Image.from_file(path)
 
-        variants_rgba =
-          pixels
+        variants =
+          img.pixels
+          |> to_rgb()
           |> Enum.chunk_every(8)
           |> Enum.map(&List.flatten/1)
-          |> Enum.map(&Enum.join/1)
-
-        variants = variants_rgba |> Enum.map(&Variant.from_rgba/1)
+          |> Enum.map(fn variant ->
+            variant
+            |> Enum.chunk_every(8)
+            |> Enum.chunk_every(div(img.width, 8))
+            |> Enum.zip_with(&Function.identity/1)
+            |> Enum.map(&List.flatten/1)
+          end)
 
         {:commit, %__MODULE__{name: name, variants: variants}}
+        # %__MODULE__{name: name, variants: variants}
       else
         raise "Font #{path} not found"
       end
@@ -69,19 +51,50 @@ defmodule Octopus.Font do
   end
 
   @doc """
-  Renders a single character.
-  Returns the binary format for the protobuf [r, g, b, ...] and the color palette of the variant.
+  Renders a single character onto a canvas and returns the canvas.
   """
-  def render_char(%__MODULE__{} = font, char, variant) when char >= 32 do
+  def draw_char(font, char, variant, canvas, offset \\ {0, 0})
+
+  def draw_char(%__MODULE__{} = font, char, variant, canvas, {offset_x, offset_y})
+      when char >= 32 and char <= 126 do
     char_index = char - 32
-    pixel_index = 8 * char_index
-    variant = font.variants |> Enum.at(variant)
 
-    pixels =
-      0..8
-      |> Enum.map(&Enum.slice(variant.pixels, &1 * 760 + pixel_index, 8))
-      |> List.flatten()
+    fallback_variant = Enum.at(font.variants, 0)
 
-    {pixels, variant.palette}
+    variant_chars =
+      font.variants
+      |> Enum.at(variant, fallback_variant)
+
+    fallback_char_pixels = Enum.at(variant_chars, 0)
+    char_pixels = Enum.at(variant_chars, char_index, fallback_char_pixels)
+
+    canvas =
+      char_pixels
+      |> Enum.with_index()
+      |> Enum.reduce(canvas, fn {rgb, i}, canvas ->
+        x = rem(i, 8)
+        y = div(i, 8)
+        Canvas.put_pixel(canvas, {x + offset_x, y + offset_y}, rgb)
+      end)
+
+    canvas
+  end
+
+  def draw_char(%__MODULE__{} = font, _char, variant, canvas, offset) do
+    draw_char(font, 32, variant, canvas, offset)
+  end
+
+  defp to_rgb([]), do: []
+
+  defp to_rgb([hd | tl]) when is_list(hd) do
+    [to_rgb(hd) | to_rgb(tl)]
+  end
+
+  defp to_rgb([<<_, _, _, 0>> | tl]) do
+    [{0, 0, 0} | to_rgb(tl)]
+  end
+
+  defp to_rgb([<<r, g, b, 255>> | tl]) do
+    [{r, g, b} | to_rgb(tl)]
   end
 end
