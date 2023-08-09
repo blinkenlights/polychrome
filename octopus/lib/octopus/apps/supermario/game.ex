@@ -31,7 +31,7 @@ defmodule Octopus.Apps.Supermario.Game do
   # micro seconds between two moves
   @update_interval_ms 10_000
   @intro_animation_ms 3_000_000
-  @dying_animation_ms 3_000_000
+  @dying_animation_ms 5_000_000
   @pause_animation_ms 3_000_000
 
   def new(windows_shown) when windows_shown > 0 and windows_shown < 11 do
