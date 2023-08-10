@@ -154,11 +154,14 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
   const juce::String device = args.getValueForOption("--device|-d");
   juce::String cacheDir = args.getValueForOption("--cache|-c");
   const bool isSimulation = args.containsOption("--sim|-s");
+  juce::String resourceDir = args.getValueForOption("--resource-dir|-r");
 
   port = port != 0 ? port : defaultPort;                   // default port
   cacheDir = cacheDir.isEmpty() ? "/tmp/beak" : cacheDir;  // default cache dir
+  resourceDir = resourceDir.isEmpty() ? juce::File("./resource") : resourceDir;
+
   // setup chaching
-  Cache cache(cacheDir);
+  Cache cache(cacheDir, resourceDir);
   if (auto err = cache.configure())
   {
     PLOGF << err.what();

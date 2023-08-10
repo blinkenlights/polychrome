@@ -13,7 +13,6 @@
 
 namespace beak
 {
-const juce::String resourceDirectory("resources");
 constexpr int maxFileNameLenght = 100;
 
 class Cache : public juce::URL::DownloadTaskListener
@@ -28,12 +27,9 @@ class Cache : public juce::URL::DownloadTaskListener
   };
 
  public:
-  explicit Cache(juce::String const& cachePath) : m_cachePath(juce::File(cachePath))
+  explicit Cache(juce::String const& cachePath, juce::String const& resourcePath) :
+    m_cachePath(juce::File(cachePath)), m_sampleDir(resourcePath)
   {
-    auto sampleDir = juce::File::addTrailingSeparator(
-        juce::File::getCurrentWorkingDirectory().getFullPathName());
-    sampleDir.append(resourceDirectory, resourceDirectory.length());
-    m_sampleDir = juce::File(sampleDir);
     PLOGI << fmt::format("only local files from '{}' are allowed",
                          m_sampleDir.getFullPathName().toStdString());
   }
