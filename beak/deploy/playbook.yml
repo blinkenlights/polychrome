@@ -100,6 +100,14 @@
         rsync_opts:
           - "--exclude=build"
           - "--exclude=deploy"
+    - name: synchronize local copy of protobuf
+      tags: deploy
+      become: true
+      ansible.posix.synchronize:
+        src: ../../../protobuf
+        dest: "{{ polychrom_dir }}"
+        recursive: true
+        # rsync_opts:
     - name: configure cmake for beak
       tags: deploy
       become: true
