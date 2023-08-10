@@ -51,7 +51,7 @@ defmodule Octopus.Broadcaster do
         false -> {127, 0, 0, 1}
       end
 
-    Logger.info("Broadcasting to #{inspect(target_ip)}. Port #{@local_port}")
+    Logger.info("Broadcasting to #{inspect(target_ip)}. Port #{@remote_port}")
 
     {:ok, udp} = :gen_udp.open(@local_port, [:binary, active: true, broadcast: true])
 
