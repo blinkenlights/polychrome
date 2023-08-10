@@ -2,7 +2,7 @@ defmodule Octopus.Apps.Encounter do
   use Octopus.App
   require Logger
   alias Octopus.Protobuf.SynthFrame
-  alias Octopus.{ColorPalette, Canvas}
+  alias Octopus.Canvas
   alias Octopus.Protobuf.{SynthConfig, SynthAdsrConfig}
 
   @width 8 * 10 + 9 * 18
@@ -269,7 +269,7 @@ defmodule Octopus.Apps.Encounter do
   def generate_pixel_high(canvas, note, chan) do
     offset_y = 7 - remap(note, 0, 127, 0, 7)
     offset_x = remap(chan, 0, 9, 0, 7)
-    pixel_value = [128, 80, 100]
+    pixel_value = {128, 80, 100}
 
     Canvas.fill_rect(
       canvas,
@@ -280,7 +280,7 @@ defmodule Octopus.Apps.Encounter do
   end
 
   def generate_pixel_low(canvas, _, chan) do
-    pixel_value = [255, 255, 255]
+    pixel_value = {255, 255, 255}
 
     Canvas.fill_rect(
       canvas,
