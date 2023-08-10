@@ -11,6 +11,7 @@ defmodule Octopus.Apps.Supermario.Game do
           current_position: integer(),
           windows_shown: integer(),
           last_ticker: Time.t(),
+          last_move: Time.t(),
           level: Level.t(),
           mario: Mario.t(),
           current_animation: Animation.t() | nil,
@@ -20,6 +21,7 @@ defmodule Octopus.Apps.Supermario.Game do
     :state,
     :current_position,
     :last_ticker,
+    :last_move,
     :windows_shown,
     :level,
     :mario,
@@ -30,6 +32,7 @@ defmodule Octopus.Apps.Supermario.Game do
 
   # micro seconds between two moves
   @update_interval_ms 10_000
+  @move_interval_ms 100_000
   @intro_animation_ms 3_000_000
   @dying_animation_ms 5_000_000
   @pause_animation_ms 4_000_000
@@ -42,6 +45,7 @@ defmodule Octopus.Apps.Supermario.Game do
       state: :starting,
       current_position: 0,
       last_ticker: Time.utc_now(),
+      last_move: Time.utc_now(),
       windows_shown: windows_shown,
       mario: Mario.new(level.mario_start_y_position),
       current_animation: nil,
@@ -173,8 +177,11 @@ defmodule Octopus.Apps.Supermario.Game do
   def move_right(%Game{current_position: current_position, mario: mario, level: level} = game) do
     # TODO too many nested ifs, refactor, use case statement
     if current_position < Level.max_position(level) do
-      if Mario.can_move_right?(mario, game) do
-        {:ok, %Game{game | current_position: current_position + 1}}
+      now = Time.utc_now()
+
+      if Time.diff(now, game.last_move, :microsecond) > @move_interval_ms and
+           Mario.can_move_right?(mario, game) do
+        {:ok, %Game{game | current_position: current_position + 1, last_move: now}}
       else
         {:ok, game}
       end
