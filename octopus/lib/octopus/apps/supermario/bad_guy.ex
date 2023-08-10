@@ -8,11 +8,19 @@ defmodule Octopus.Apps.Supermario.BadGuy do
           min_position: integer(),
           max_position: integer(),
           direction: :left | :right,
-          last_moved_at: Time.t()
+          last_moved_at: Time.t(),
+          color: []
         }
-  @color [0, 0, 0]
 
-  defstruct [:x_position, :y_position, :min_position, :max_position, :direction, :last_moved_at]
+  defstruct [
+    :x_position,
+    :y_position,
+    :min_position,
+    :max_position,
+    :direction,
+    :last_moved_at,
+    :color
+  ]
 
   def update(%BadGuy{} = bad_guy) do
     if is_nil(bad_guy.last_moved_at) or
@@ -80,15 +88,14 @@ defmodule Octopus.Apps.Supermario.BadGuy do
     |> Matrix.to_list()
   end
 
-
   defp set_bad_guy(
          pixels,
-         %BadGuy{x_position: x_position, y_position: y_position},
+         %BadGuy{x_position: x_position, y_position: y_position, color: color},
          current_position,
          width
        )
        when x_position >= current_position and x_position < current_position + width do
-    put_in(pixels[y_position][x_position - current_position], @color)
+    put_in(pixels[y_position][x_position - current_position], color)
   end
 
   defp set_bad_guy(

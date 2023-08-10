@@ -149,23 +149,29 @@ defmodule Octopus.Apps.Supermario.Level do
   end
 
   defp init_bad_guys(1) do
+    level_1_color = [0, 0, 0]
     [
-      %BadGuy{x_position: 11, y_position: 3,  min_position: 11, max_position: 13, direction: :right},
-      %BadGuy{x_position: 15, y_position: 6,  min_position: 0, max_position: 15, direction: :left},
-      %BadGuy{x_position: 21, y_position: 6,  min_position: 17, max_position: 21, direction: :left},
-      %BadGuy{x_position: 27, y_position: 6,  min_position: 27, max_position: 32, direction: :right},
-      %BadGuy{x_position: 32, y_position: 6,  min_position: 27, max_position: 32, direction: :left},
-      %BadGuy{x_position: 46, y_position: 3,  min_position: 46, max_position: 47, direction: :right},
-      %BadGuy{x_position: 52, y_position: 6,  min_position: 52, max_position: 75, direction: :right},
-      %BadGuy{x_position: 75, y_position: 6,  min_position: 52, max_position: 75, direction: :left},
-      %BadGuy{x_position: 97, y_position: 3,  min_position: 97, max_position: 99, direction: :right},
-      %BadGuy{x_position: 101, y_position: 6,  min_position: 94, max_position: 101, direction: :left},
-      %BadGuy{x_position: 99, y_position: 6,  min_position: 94, max_position: 101, direction: :left}
+      %BadGuy{x_position: 11, y_position: 3,  min_position: 11, max_position: 13, direction: :right, color: level_1_color},
+      %BadGuy{x_position: 15, y_position: 6,  min_position: 0, max_position: 15, direction: :left, color: level_1_color},
+      %BadGuy{x_position: 21, y_position: 6,  min_position: 17, max_position: 21, direction: :left, color: level_1_color},
+      %BadGuy{x_position: 27, y_position: 6,  min_position: 27, max_position: 32, direction: :right, color: level_1_color},
+      %BadGuy{x_position: 32, y_position: 6,  min_position: 27, max_position: 32, direction: :left, color: level_1_color},
+      %BadGuy{x_position: 46, y_position: 3,  min_position: 46, max_position: 47, direction: :right, color: level_1_color},
+      %BadGuy{x_position: 52, y_position: 6,  min_position: 52, max_position: 75, direction: :right, color: level_1_color},
+      %BadGuy{x_position: 75, y_position: 6,  min_position: 52, max_position: 75, direction: :left, color: level_1_color},
+      %BadGuy{x_position: 97, y_position: 3,  min_position: 97, max_position: 99, direction: :right, color: level_1_color},
+      %BadGuy{x_position: 101, y_position: 6,  min_position: 94, max_position: 101, direction: :left, color: level_1_color},
+      %BadGuy{x_position: 99, y_position: 6,  min_position: 94, max_position: 101, direction: :left, color: level_1_color}
     ]
   end
 
   defp init_bad_guys(2) do
     [
+      %BadGuy{x_position: 11, y_position: 6,  min_position: 2, max_position: 11, direction: :left, color: [252, 188, 176]},
+      %BadGuy{x_position: 9, y_position: 6,  min_position: 3, max_position: 11, direction: :left, color: [252, 188, 176]},
+      %BadGuy{x_position: 30, y_position: 6,  min_position: 25, max_position: 43, direction: :left, color: [252, 188, 176]},
+      %BadGuy{x_position: 38, y_position: 6,  min_position: 25, max_position: 43, direction: :left, color: [252, 188, 176]},
+      %BadGuy{x_position: 42, y_position: 6,  min_position: 25, max_position: 43, direction: :left, color: [252, 188, 176]}
     ]
   end
 
