@@ -1,0 +1,131 @@
+---
+- name: "setup beak machine and deploy"
+  hosts: all
+  vars:
+    polychrom_dir: "/opt/polychrome"
+    resource_dir: "{{ polychrom_dir }}/beak/resources"
+    device: "HDA Intel PCH, 92HD91BXX Analog; Direct hardware device without any conversions"
+  tasks:
+    - name: Update & Upgrade packages
+      become: true
+      tags: update
+      apt:
+        update_cache: yes
+        upgrade: full
+        autoclean: yes
+        autoremove: yes
+    - name: Install base Packages
+      become: true
+      tags: setup
+      apt:
+        state: present
+        install_recommends: no
+        pkg:
+          - zsh
+          - git
+          - neovim
+          - rsync
+          - fail2ban
+          - alsa-base
+          - alsa-tools
+          - alsa-utils
+    - name: Install general build dependencies
+      become: true
+      tags: setup
+      apt:
+        state: present
+        install_recommends: no
+        pkg:
+          - cmake
+          - clang
+          - ninja-build
+          - protobuf-compiler
+          - libprotobuf-dev
+    - name: Install juce dependencies
+      become: true
+      tags: setup
+      apt:
+        state: present
+        install_recommends: no
+        pkg:
+          - libasound2-dev
+          - libjack-jackd2-dev
+          - ladspa-sdk
+          - libcurl4-openssl-dev
+          - libfreetype6-dev
+          - libx11-dev
+          - libxcomposite-dev
+          - libxcursor-dev
+          - libxcursor-dev
+          - libxext-dev
+          - libxinerama-dev
+          - libxrandr-dev
+          - libxrender-dev
+          - libwebkit2gtk-4.0-dev
+          - libglu1-mesa-dev
+          - mesa-common-dev
+    - name: Create user beak
+      become: true
+      tags: setup
+      user:
+        name: "beak"
+        shell: "/bin/zsh"
+        generate_ssh_key: true
+        append: true
+        groups:
+          - audio
+    - name: Set authorized keys
+      become: true
+      tags: setup
+      ansible.posix.authorized_key:
+        user: "beak"
+        state: present
+        key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINkN6Gh946RDixD57F0DVCKDSWTgJWIdW5YXbokMXuwi"
+    - name: add systemd service
+      become: true
+      tags: deploy
+      ansible.builtin.template:
+        src: beak.service
+        dest: /etc/systemd/system/beak.service
+        owner: root
+        group: root
+        mode: "0755"
+    - name: synchronize local copy of beak
+      tags: deploy
+      become: true
+      ansible.posix.synchronize:
+        src: ../../beak
+        dest: "{{ polychrom_dir }}"
+        recursive: true
+        rsync_opts:
+          - "--exclude=build"
+          - "--exclude=deploy"
+    - name: configure cmake for beak
+      tags: deploy
+      become: true
+      environment:
+        CPM_SOURCE_CACHE: .cpm/cache
+      ansible.builtin.command: cmake -B build -S . -G"Ninja Multi-Config"
+      args:
+        chdir: "{{ polychrom_dir }}/beak"
+    - name: build beak
+      tags: deploy
+      become: true
+      environment:
+        CPM_SOURCE_CACHE: .cpm/cache
+      ansible.builtin.command: cmake --build build --config Release
+      args:
+        chdir: "{{ polychrom_dir }}/beak"
+    - name: install beak
+      tags: deploy
+      become: true
+      ansible.builtin.command: cmake --install build --config Release
+      args:
+        chdir: "{{ polychrom_dir }}/beak"
+    - name: Restart beak
+      tags: deploy
+      become: true
+      ansible.builtin.systemd:
+        state: restarted
+        daemon_reload: true
+        name: beak
