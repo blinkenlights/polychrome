@@ -8,11 +8,13 @@ defmodule Octopus.Protobuf do
     Packet,
     Frame,
     WFrame,
+    RGBFrame,
     AudioFrame,
     FirmwareConfig,
     FirmwarePacket,
     InputEvent,
-    ControlEvent
+    ControlEvent,
+    SynthFrame
   }
 
   def encode(%Frame{data: data, palette: palette} = frame)
@@ -39,6 +41,11 @@ defmodule Octopus.Protobuf do
 
   def encode(%AudioFrame{} = audio_frame) do
     %Packet{content: {:audio_frame, audio_frame}}
+    |> Packet.encode()
+  end
+
+  def encode(%SynthFrame{} = synth_frame) do
+    %Packet{content: {:synth_frame, synth_frame}}
     |> Packet.encode()
   end
 

@@ -2,6 +2,8 @@
 
 #include <plog/Log.h>
 
+#include "synthProcessor.h"
+
 namespace beak::sim
 {
 /**
@@ -52,14 +54,18 @@ Error SimulationEngine::configureGraph(Config const &config)
   for (int i = 0; i < m_virtualOutputs; ++i)
   {
     auto playerNode = m_mainProcessor->addNode(std::make_unique<SamplerProcessor>());
+    auto synthNode = m_mainProcessor->addNode(std::make_unique<SynthProcessor>());
     auto pannerNode =
         m_mainProcessor->addNode(std::make_unique<PanningProcessor>(i, m_virtualOutputs));
     m_mainProcessor->addConnection({{playerNode->nodeID, 0}, {pannerNode->nodeID, 0}});
     m_mainProcessor->addConnection({{playerNode->nodeID, 0}, {pannerNode->nodeID, 1}});
+    m_mainProcessor->addConnection({{synthNode->nodeID, 0}, {pannerNode->nodeID, 0}});
+    m_mainProcessor->addConnection({{synthNode->nodeID, 0}, {pannerNode->nodeID, 1}});
 
     m_mainProcessor->addConnection({{pannerNode->nodeID, 0}, {m_audioOutputNode->nodeID, 0}});
     m_mainProcessor->addConnection({{pannerNode->nodeID, 1}, {m_audioOutputNode->nodeID, 1}});
     m_playerNodes.push_back(playerNode);
+    m_synthNodes.push_back(synthNode);
   }
   m_player->setProcessor(m_mainProcessor.get());
   m_deviceManager.addAudioCallback(m_player.get());

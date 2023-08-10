@@ -1,5 +1,5 @@
 alias Octopus.Protobuf.FirmwareConfig
-alias Octopus.Protobuf.{Frame, RGBFrame, WFrame, AudioFrame}
+alias Octopus.Protobuf.{Frame, RGBFrame, WFrame, AudioFrame, SynthFrame}
 
 defimpl Jason.Encoder, for: FirmwareConfig do
   def encode(%FirmwareConfig{} = config, opts) do
@@ -41,6 +41,15 @@ defimpl Jason.Encoder, for: AudioFrame do
     frame
     |> Map.from_struct()
     |> Map.put(:kind, "audio")
+    |> Jason.Encode.map(opts)
+  end
+end
+
+defimpl Jason.Encoder, for: SynthFrame do
+  def encode(%SynthFrame{} = frame, opts) do
+    frame
+    |> Map.from_struct()
+    |> Map.put(:kind, "synth")
     |> Jason.Encode.map(opts)
   end
 end

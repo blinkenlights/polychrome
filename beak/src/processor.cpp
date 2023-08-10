@@ -150,4 +150,12 @@ void SamplerProcessor::changeListenerCallback(juce::ChangeBroadcaster *emitter)
     }
   }
 }
+
+// SynthProcessor::SynthProcessor() :
+//   ProcessorBase(BusesProperties()
+//                     .withInput("Input", juce::AudioChannelSet::mono())
+//                     .withOutput("Output", juce::AudioChannelSet::mono()))
+// {
+// }
+
 }  // namespace beak

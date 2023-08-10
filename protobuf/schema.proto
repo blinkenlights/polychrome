@@ -11,6 +11,7 @@ message Packet {
 
     // Frames with audio data
     AudioFrame audio_frame = 5;
+    SynthFrame synth_frame = 10;
 
     // Events from the input controllers
     InputEvent input_event = 6;
@@ -50,6 +51,60 @@ message RGBFrame {
 message AudioFrame {
   string uri = 1; // supports file://<path>, http(s)://<url> with .wav or .aiff files
   uint32 channel = 2;
+}
+
+
+enum SynthWaveform {
+  SINE = 0;
+  SAW = 1;
+  SQUARE = 2;
+}
+
+enum SynthFilterType {
+  BANDPASS = 0;
+  HIGHPASS = 1;
+  LOWPASS = 2;
+}
+
+message SynthAdsrConfig {
+  float attack  = 1;
+  float decay   = 2;
+  float sustain = 3;
+  float release = 4;
+}
+
+message SynthReverbConfig {
+  float room_size   = 1;
+  float width       = 2;
+  float damping     = 3;
+  float freeze_mode = 4;
+  float wet_level   = 5;
+}
+
+message SynthConfig {
+  SynthWaveform wave_form           = 1;
+  float gain                        = 2;
+  SynthAdsrConfig adsr_config       = 3;
+  SynthAdsrConfig filter_adsr_config = 4;
+  SynthFilterType filter_type       = 5;
+  float cutoff                      = 6;
+  float resonance                   = 7;
+  SynthReverbConfig reverb_config   = 8;
+}
+
+enum SynthEventType {
+  CONFIG = 0;
+  NOTE_ON = 1;
+  NOTE_OFF = 2;
+}
+
+message SynthFrame {
+  SynthEventType event_type = 1;
+  uint32 channel            = 2;
+  uint32 note               = 3;
+  float velocity            = 4;
+  float duration_ms         = 5;
+  SynthConfig config        = 6;
 }
 
 message InputEvent {

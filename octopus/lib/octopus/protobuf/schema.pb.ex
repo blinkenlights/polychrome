@@ -1,7 +1,37 @@
+defmodule Octopus.Protobuf.SynthWaveform do
+  @moduledoc false
+
+  use Protobuf, enum: true, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :SINE, 0
+  field :SAW, 1
+  field :SQUARE, 2
+end
+
+defmodule Octopus.Protobuf.SynthFilterType do
+  @moduledoc false
+
+  use Protobuf, enum: true, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :BANDPASS, 0
+  field :HIGHPASS, 1
+  field :LOWPASS, 2
+end
+
+defmodule Octopus.Protobuf.SynthEventType do
+  @moduledoc false
+
+  use Protobuf, enum: true, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :CONFIG, 0
+  field :NOTE_ON, 1
+  field :NOTE_OFF, 2
+end
+
 defmodule Octopus.Protobuf.InputType do
   @moduledoc false
 
-  use Protobuf, enum: true, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, enum: true, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :BUTTON_1, 0
   field :BUTTON_2, 1
@@ -26,7 +56,7 @@ end
 defmodule Octopus.Protobuf.ControlEventType do
   @moduledoc false
 
-  use Protobuf, enum: true, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, enum: true, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :APP_SELECTED, 0
   field :APP_DESELECTED, 1
@@ -37,7 +67,7 @@ end
 defmodule Octopus.Protobuf.EasingMode do
   @moduledoc false
 
-  use Protobuf, enum: true, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, enum: true, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :LINEAR, 0
   field :EASE_IN_QUAD, 1
@@ -60,7 +90,7 @@ end
 defmodule Octopus.Protobuf.Packet do
   @moduledoc false
 
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   oneof :content, 0
 
@@ -68,6 +98,7 @@ defmodule Octopus.Protobuf.Packet do
   field :w_frame, 3, type: Octopus.Protobuf.WFrame, json_name: "wFrame", oneof: 0
   field :rgb_frame, 4, type: Octopus.Protobuf.RGBFrame, json_name: "rgbFrame", oneof: 0
   field :audio_frame, 5, type: Octopus.Protobuf.AudioFrame, json_name: "audioFrame", oneof: 0
+  field :synth_frame, 10, type: Octopus.Protobuf.SynthFrame, json_name: "synthFrame", oneof: 0
   field :input_event, 6, type: Octopus.Protobuf.InputEvent, json_name: "inputEvent", oneof: 0
 
   field :control_event, 9,
@@ -87,7 +118,7 @@ end
 defmodule Octopus.Protobuf.Frame do
   @moduledoc false
 
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :data, 1, type: :bytes, deprecated: false
   field :palette, 2, type: :bytes, deprecated: false
@@ -97,7 +128,7 @@ end
 defmodule Octopus.Protobuf.WFrame do
   @moduledoc false
 
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :data, 1, type: :bytes, deprecated: false
   field :palette, 2, type: :bytes, deprecated: false
@@ -107,7 +138,7 @@ end
 defmodule Octopus.Protobuf.RGBFrame do
   @moduledoc false
 
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :data, 1, type: :bytes, deprecated: false
   field :easing_interval, 2, type: :uint32, json_name: "easingInterval"
@@ -116,16 +147,75 @@ end
 defmodule Octopus.Protobuf.AudioFrame do
   @moduledoc false
 
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :uri, 1, type: :string
   field :channel, 2, type: :uint32
 end
 
+defmodule Octopus.Protobuf.SynthAdsrConfig do
+  @moduledoc false
+
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :attack, 1, type: :float
+  field :decay, 2, type: :float
+  field :sustain, 3, type: :float
+  field :release, 4, type: :float
+end
+
+defmodule Octopus.Protobuf.SynthReverbConfig do
+  @moduledoc false
+
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :room_size, 1, type: :float, json_name: "roomSize"
+  field :width, 2, type: :float
+  field :damping, 3, type: :float
+  field :freeze_mode, 4, type: :float, json_name: "freezeMode"
+  field :wet_level, 5, type: :float, json_name: "wetLevel"
+end
+
+defmodule Octopus.Protobuf.SynthConfig do
+  @moduledoc false
+
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :wave_form, 1, type: Octopus.Protobuf.SynthWaveform, json_name: "waveForm", enum: true
+  field :gain, 2, type: :float
+  field :adsr_config, 3, type: Octopus.Protobuf.SynthAdsrConfig, json_name: "adsrConfig"
+
+  field :filter_adsr_config, 4,
+    type: Octopus.Protobuf.SynthAdsrConfig,
+    json_name: "filterAdsrConfig"
+
+  field :filter_type, 5,
+    type: Octopus.Protobuf.SynthFilterType,
+    json_name: "filterType",
+    enum: true
+
+  field :cutoff, 6, type: :float
+  field :resonance, 7, type: :float
+  field :reverb_config, 8, type: Octopus.Protobuf.SynthReverbConfig, json_name: "reverbConfig"
+end
+
+defmodule Octopus.Protobuf.SynthFrame do
+  @moduledoc false
+
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :event_type, 1, type: Octopus.Protobuf.SynthEventType, json_name: "eventType", enum: true
+  field :channel, 2, type: :uint32
+  field :note, 3, type: :uint32
+  field :velocity, 4, type: :float
+  field :duration_ms, 5, type: :float, json_name: "durationMs"
+  field :config, 6, type: Octopus.Protobuf.SynthConfig
+end
+
 defmodule Octopus.Protobuf.InputEvent do
   @moduledoc false
 
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :type, 1, type: Octopus.Protobuf.InputType, enum: true
   field :value, 3, type: :int32
@@ -134,7 +224,7 @@ end
 defmodule Octopus.Protobuf.ControlEvent do
   @moduledoc false
 
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :type, 1, type: Octopus.Protobuf.ControlEventType, enum: true
 end
@@ -142,7 +232,7 @@ end
 defmodule Octopus.Protobuf.FirmwareConfig do
   @moduledoc false
 
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :luminance, 1, type: :uint32
   field :easing_mode, 2, type: Octopus.Protobuf.EasingMode, json_name: "easingMode", enum: true
@@ -154,7 +244,7 @@ end
 defmodule Octopus.Protobuf.FirmwarePacket do
   @moduledoc false
 
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   oneof :content, 0
 
@@ -169,7 +259,7 @@ end
 defmodule Octopus.Protobuf.FirmwareInfo do
   @moduledoc false
 
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :hostname, 1, type: :string, deprecated: false
   field :build_time, 2, type: :string, json_name: "buildTime", deprecated: false
@@ -189,7 +279,7 @@ end
 defmodule Octopus.Protobuf.RemoteLog do
   @moduledoc false
 
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :message, 1, type: :string, deprecated: false
 end
