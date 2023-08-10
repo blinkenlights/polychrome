@@ -150,13 +150,22 @@ defmodule Octopus.Apps.Supermario.Level do
 
   defp init_bad_guys(1) do
     [
+      %BadGuy{x_position: 11, y_position: 3,  min_position: 11, max_position: 13, direction: :right},
       %BadGuy{x_position: 15, y_position: 6,  min_position: 0, max_position: 15, direction: :left},
       %BadGuy{x_position: 21, y_position: 6,  min_position: 17, max_position: 21, direction: :left},
       %BadGuy{x_position: 27, y_position: 6,  min_position: 27, max_position: 32, direction: :right},
       %BadGuy{x_position: 32, y_position: 6,  min_position: 27, max_position: 32, direction: :left},
+      %BadGuy{x_position: 46, y_position: 3,  min_position: 46, max_position: 47, direction: :right},
+      %BadGuy{x_position: 52, y_position: 6,  min_position: 52, max_position: 75, direction: :right},
+      %BadGuy{x_position: 75, y_position: 6,  min_position: 52, max_position: 75, direction: :left},
       %BadGuy{x_position: 97, y_position: 3,  min_position: 97, max_position: 99, direction: :right},
       %BadGuy{x_position: 101, y_position: 6,  min_position: 94, max_position: 101, direction: :left},
       %BadGuy{x_position: 99, y_position: 6,  min_position: 94, max_position: 101, direction: :left}
+    ]
+  end
+
+  defp init_bad_guys(2) do
+    [
     ]
   end
 
