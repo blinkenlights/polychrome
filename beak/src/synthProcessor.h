@@ -7,7 +7,8 @@
 
 namespace beak
 {
-class SynthProcessor : public ProcessorBase, public juce::HighResolutionTimer
+
+class SynthProcessor : public ProcessorBase, private juce::Timer
 {
  public:
   //==============================================================================
@@ -28,7 +29,7 @@ class SynthProcessor : public ProcessorBase, public juce::HighResolutionTimer
   void setReverbParams(const juce::Reverb::Parameters& reverbParams);
   void noteOn(int note, int duration);
   void noteOff(int note);
-  void hiResTimerCallback() override;
+  void timerCallback() override;
 
  private:
   void updateVoices();
@@ -44,10 +45,8 @@ class SynthProcessor : public ProcessorBase, public juce::HighResolutionTimer
   juce::ADSR::Parameters m_filterAdsrParams;
   juce::dsp::Reverb m_reverb;
   juce::Reverb::Parameters m_reverbParams;
-  std::unordered_map<int, int> m_noteOffs;
+  juce::HashMap<int, int, juce::DefaultHashFunctions, juce::CriticalSection> m_noteOffs;
   static constexpr int m_timerIntervalMs{20};
-
-  juce::CriticalSection m_lock;
   bool m_isPrepared{false};
 
   //==============================================================================

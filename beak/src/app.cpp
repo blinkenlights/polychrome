@@ -273,7 +273,6 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
           // we only need the config here
           if (synthFrame.event_type() == CONFIG)
           {
-            PLOGD << "config only";
             return;
           }
           juce::MidiMessage msg{};

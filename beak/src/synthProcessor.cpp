@@ -13,7 +13,6 @@ SynthProcessor::SynthProcessor() :
   {
     m_synth.addVoice(new synth::Voice());
   }
-  startTimer(m_timerIntervalMs);
 }
 
 SynthProcessor::~SynthProcessor() { stopTimer(); }
@@ -43,6 +42,8 @@ void SynthProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
   m_reverbParams.wetLevel = 0.3f;
 
   m_reverb.setParameters(m_reverbParams);
+
+  startTimer(m_timerIntervalMs);
   m_isPrepared = true;
 }
 
@@ -106,36 +107,30 @@ void SynthProcessor::setReverbParams(const juce::Reverb::Parameters& params)
 void SynthProcessor::noteOn(int note, int duration = 0)
 {
   m_synth.noteOn(1, note, 1.0f);
-  const juce::ScopedLock lock(m_lock);
-  m_noteOffs[note] = duration;
+  m_noteOffs.set(note, duration);
 }
 
 void SynthProcessor::noteOff(int note)
 {
   m_synth.noteOff(1, note, 1.0f, false);
-  const juce::ScopedLock lock(m_lock);
-  if (m_noteOffs.contains(note))
-  {
-    m_noteOffs.erase(note);
-  }
+  m_noteOffs.remove(note);
 }
 
-void SynthProcessor::hiResTimerCallback()
+void SynthProcessor::timerCallback()
 {
-  const juce::ScopedLock lock(m_lock);
   if (m_noteOffs.size() != 0)
   {
-    for (auto it = m_noteOffs.cbegin(); it != m_noteOffs.cend(); ++it)
+    for (auto it = m_noteOffs.begin(); it != m_noteOffs.end(); ++it)
     {
-      const int duration = it->second;
+      const int note = it.getKey();
+      const int duration = it.getValue();
       if (duration <= 0)
       {
-        noteOff(it->first);
-        m_noteOffs.erase(it->first);
+        noteOff(note);
       }
       else
       {
-        m_noteOffs[it->first] -= m_timerIntervalMs;
+        m_noteOffs.set(note, duration - m_timerIntervalMs);
       }
     }
   }
