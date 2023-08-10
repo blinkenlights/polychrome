@@ -119,6 +119,9 @@ if(UNIX AND NOT APPLE)
   )
 endif()
 
+# install
+install(TARGETS ${TARGET_NAME} RUNTIME DESTINATION /usr/local/bin/)
+
 # doxygen
 find_package(Doxygen)
 
