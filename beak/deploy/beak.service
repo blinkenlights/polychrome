@@ -1,0 +1,11 @@
+[Unit]
+Description=Beak polychrome audio engine
+After=network.target
+
+[Service]
+PrivateTmp=true
+ExecStart=/usr/local/bin/beak -c $(mktemp -d) -o 10 -i 0 -r "/opt/polychrome/beak/resources" -d "{{ device }}" -s
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
