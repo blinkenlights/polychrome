@@ -45,13 +45,13 @@ defmodule Octopus.Broadcaster do
   end
 
   def init(:ok) do
-    target_ip =
-      case Application.get_env(:octopus, :broadcast) do
-        true -> get_broadcast_ip()
-        false -> {127, 0, 0, 1}
-      end
+    target_ip = {192, 168, 23, 255}
+    # case Application.get_env(:octopus, :broadcast) do
+    #   true -> get_broadcast_ip()
+    #   false -> {127, 0, 0, 1}
+    # end
 
-    Logger.info("Broadcasting to #{inspect(target_ip)}. Port #{@local_port}")
+    Logger.info("Broadcasting to #{inspect(target_ip)}. Port #{@remote_port}")
 
     {:ok, udp} = :gen_udp.open(@local_port, [:binary, active: true, broadcast: true])
 
@@ -179,7 +179,7 @@ defmodule Octopus.Broadcaster do
     %State{state | firmware_stats: firmware_stats}
   end
 
-  defp get_broadcast_ip() do
+  def get_broadcast_ip() do
     {:ok, ifaddrs} = :inet.getifaddrs()
 
     ifaddrs

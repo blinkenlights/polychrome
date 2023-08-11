@@ -1,0 +1,4 @@
+# from galaxy
+collections:
+  - community.general
+  - ansible.posix

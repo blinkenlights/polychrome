@@ -1,6 +1,7 @@
 #include "engine.h"
 
 #include "processor.h"
+#include "synthProcessor.h"
 
 namespace beak
 {
@@ -58,9 +59,12 @@ Error Engine::configureGraph(Config const &config)
   }
   for (int i = 0; i < config.outputs(); ++i)
   {
-    auto node = m_mainProcessor->addNode(std::make_unique<SamplerProcessor>());
-    m_mainProcessor->addConnection({{node->nodeID, 0}, {m_audioOutputNode->nodeID, i}});
-    m_playerNodes.push_back(node);
+    auto playerNode = m_mainProcessor->addNode(std::make_unique<SamplerProcessor>());
+    m_mainProcessor->addConnection({{playerNode->nodeID, 0}, {m_audioOutputNode->nodeID, i}});
+    m_playerNodes.push_back(playerNode);
+    auto synthNode = m_mainProcessor->addNode(std::make_unique<SynthProcessor>());
+    m_mainProcessor->addConnection({{synthNode->nodeID, 0}, {m_audioOutputNode->nodeID, i}});
+    m_synthNodes.push_back(synthNode);
   }
   m_player->setProcessor(m_mainProcessor.get());
   m_deviceManager.addAudioCallback(m_player.get());
@@ -136,5 +140,39 @@ Error Engine::playSound(const juce::File &file, int channel)
     err = Error("not a SamplerProcessor");
   }
   return err;
+}
+
+Error Engine::playSynth(const juce::MidiMessage &msg, int maxDurationMs)
+{
+  Error err;
+  const int channel = msg.getChannel();
+  const int note = msg.getNoteNumber();
+  auto synthNode = m_synthNodes.at(channel);
+  if (auto proc = dynamic_cast<SynthProcessor *>(synthNode->getProcessor()))
+  {
+    if (msg.isNoteOn())
+    {
+      proc->noteOn(note, maxDurationMs);
+    }
+    else if (msg.isNoteOff())
+    {
+      proc->noteOff(note);
+    }
+  }
+  return err;
+}
+
+Error Engine::configureSynth(int channel, synth::Oscillator::Parameters &osc,
+                             const juce::ADSR::Parameters &adsr,
+                             const synth::Filter::Parameters &filter,
+                             const juce::ADSR::Parameters &filterAdsr)
+{
+  auto synthNode = m_synthNodes.at(channel);
+  if (auto proc = dynamic_cast<SynthProcessor *>(synthNode->getProcessor()))
+  {
+    proc->setVoiceParams(osc, adsr);
+    proc->setFilterParams(filter, filterAdsr);
+  }
+  return Error{};
 }
 }  // namespace beak
