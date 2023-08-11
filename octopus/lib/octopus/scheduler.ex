@@ -2,12 +2,15 @@ defmodule Octopus.Scheduler do
   use GenServer
   require Logger
 
-  alias Octopus.AppSupervisor
+  alias Octopus.{AppSupervisor, Mixer}
 
   @schedule [
-    %{module: Octopus.Apps.Text, config: %{text: "POLYCHROME"}, timeout: 10_000},
-    %{module: Octopus.Apps.Text, config: %{text: "MILDENBERG"}, timeout: 10_000},
-    %{module: Octopus.Apps.Text, config: %{text: "EXPERIENCE"}, timeout: 10_000}
+    %{module: Octopus.Apps.Text, config: %{text: "POLYCHROME"}, timeout: 120_000},
+    %{module: Octopus.Apps.Text, config: %{text: "MILDENBERG"}, timeout: 120_000},
+    %{module: Octopus.Apps.Text, config: %{text: "WILLKOMMEN"}, timeout: 120_000},
+    %{module: Octopus.Apps.Text, config: %{text: "HACKSPACES"}, timeout: 120_000},
+    %{module: Octopus.Apps.Text, config: %{text: "MAKESPACES"}, timeout: 120_000},
+    %{module: Octopus.Apps.Text, config: %{text: "EXPERIENCE"}, timeout: 120_000}
   ]
 
   defmodule State do
@@ -22,6 +25,10 @@ defmodule Octopus.Scheduler do
     GenServer.cast(__MODULE__, :start)
   end
 
+  def stop() do
+    GenServer.cast(__MODULE__, :stop)
+  end
+
   def init(:ok) do
     {:ok, %State{schedule: @schedule}}
   end
@@ -32,9 +39,15 @@ defmodule Octopus.Scheduler do
     {:noreply, %State{state | schedule: @schedule}}
   end
 
+  def handle_cast(:stop, %State{} = state) do
+    Logger.info("Stopping schedule")
+    {:noreply, %State{state | schedule: []}}
+  end
+
   def handle_info(:next, %State{schedule: []} = state) do
-    Logger.info("Schedule finished")
-    {:noreply, state}
+    Logger.info("Schedule finished, restarting")
+    send(self(), :next)
+    {:noreply, %State{state | schedule: @schedule}}
   end
 
   def handle_info(:next, %State{schedule: [next | rest]} = state) do
@@ -48,6 +61,7 @@ defmodule Octopus.Scheduler do
 
     {:ok, pid} = AppSupervisor.start_app(next.module, config: next.config)
     app_id = AppSupervisor.lookup_app_id(pid)
+    Mixer.select_app(app_id)
 
     :timer.send_after(next.timeout, self(), :next)
 
