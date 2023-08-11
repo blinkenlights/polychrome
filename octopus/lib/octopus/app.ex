@@ -76,8 +76,8 @@ defmodule Octopus.App do
       use GenServer
       import Octopus.App
 
-      def start_link(init_args) do
-        GenServer.start_link(__MODULE__, :ok, init_args)
+      def start_link({config, init_args}) do
+        GenServer.start_link(__MODULE__, config, init_args)
       end
 
       def handle_info({:event, %InputEvent{} = input_event}, state) do
