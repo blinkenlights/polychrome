@@ -1,5 +1,5 @@
 defmodule Octopus.Apps.Encounter do
-  use Octopus.App
+  use Octopus.App, category: :animation
   require Logger
   alias Octopus.Protobuf.SynthFrame
   alias Octopus.Canvas

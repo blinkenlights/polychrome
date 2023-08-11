@@ -1,5 +1,5 @@
 defmodule Octopus.Apps.FairyDust do
-  use Octopus.App
+  use Octopus.App, category: :animation
 
   alias Octopus.{Canvas, Image, WebP}
 

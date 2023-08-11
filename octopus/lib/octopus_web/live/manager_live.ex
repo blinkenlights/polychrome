@@ -80,24 +80,26 @@ defmodule OctopusWeb.ManagerLive do
           </table>
         </div>
 
-        <div class="flex flex-col m-2">
-          <div class="p-2 font-bold">
-            Add App:
-          </div>
-          <div class="border p-2 flex flex-row flex-wrap">
-            <div :for={%{module: module, name: name, icon: icon} <- @available_apps} class="m-0 p-1">
-              <button
-                class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
-                phx-click="start"
-                phx-value-module={module}
-              >
-                <%= if icon do %>
-                  <div class="w-5 h-5 inline-block rounded-sm overflow-hidden">
-                    <%= raw(icon) %>
-                  </div>
-                <% end %>
-                <%= name %>
-              </button>
+        <div :for={{category, apps} <- @available_apps}>
+          <div class="flex flex-col m-2">
+            <div class="p-2 font-bold">
+              <%= category |> to_string |> String.capitalize() %> Apps
+            </div>
+            <div class="border p-2 flex flex-row flex-wrap">
+              <div :for={%{module: module, name: name, icon: icon} <- apps} class="m-0 p-1">
+                <button
+                  class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
+                  phx-click="start"
+                  phx-value-module={module}
+                >
+                  <%= if icon do %>
+                    <div class="w-5 h-5 inline-block rounded-sm overflow-hidden">
+                      <%= raw(icon) %>
+                    </div>
+                  <% end %>
+                  <%= name %>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -158,8 +160,11 @@ defmodule OctopusWeb.ManagerLive do
             canvas -> Canvas.to_svg(canvas, width: "100%", height: "100%")
           end
 
-        %{module: module, name: name, icon: icon}
+        category = apply(module, :category, [])
+
+        %{module: module, name: name, icon: icon, category: category}
       end
+      |> Enum.group_by(& &1.category)
 
     selected_app = Mixer.get_selected_app()
 

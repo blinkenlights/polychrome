@@ -4,7 +4,7 @@ defmodule Octopus.Apps.MarioRun do
   alias Octopus.Sprite
   alias Octopus.WebP
 
-  use Octopus.App
+  use Octopus.App, category: :animation
 
   @loops %{
     run: [
