@@ -3,6 +3,7 @@ defmodule Octopus.Apps.Supermario.Game do
   handles the game logic
   """
   alias __MODULE__
+  alias Octopus.Canvas
   alias Octopus.Apps.Supermario.{Animation, Level, Mario}
   alias Octopus.Apps.Supermario.Animation.{GameOver, Intro, MarioDies}
 
@@ -36,6 +37,8 @@ defmodule Octopus.Apps.Supermario.Game do
   @intro_animation_ms 3_000_000
   @dying_animation_ms 5_000_000
   @pause_animation_ms 4_000_000
+  # starting from window
+  @windows_offset 3
 
   def new(windows_shown) when windows_shown > 0 and windows_shown < 11 do
     level = Level.new()
@@ -298,7 +301,7 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   # TODO between levels animation
-  def draw(%Game{state: :paused, current_animation: nil}) do
+  def draw(%Game{state: :paused, current_animation: nil}, canvas) do
     {:ok, %ExPng.Image{} = image} =
       ExPng.Image.from_file(Path.join([:code.priv_dir(:octopus), "images", "mario.png"]))
 
@@ -308,6 +311,7 @@ defmodule Octopus.Apps.Supermario.Game do
         [r, g, b]
       end)
     end)
+    |> fill_canvas(canvas)
   end
 
   # draw current pixels of level and mario
@@ -316,16 +320,19 @@ defmodule Octopus.Apps.Supermario.Game do
           mario: mario,
           current_animation: nil,
           level: level
-        } = game
+        } = game,
+        canvas
       ) do
     game
     |> current_game_pixels
     |> Mario.draw(mario)
     |> Level.draw(game, level)
+    |> fill_canvas(canvas)
   end
 
-  def draw(%Game{current_animation: current_animation}) do
+  def draw(%Game{current_animation: current_animation}, canvas) do
     Animation.draw(current_animation)
+    |> fill_canvas(canvas)
   end
 
   defp current_game_pixels(%Game{
@@ -336,5 +343,26 @@ defmodule Octopus.Apps.Supermario.Game do
     Enum.map(level.pixels, fn row ->
       Enum.slice(row, current_position, 8 * windows_shown)
     end)
+  end
+
+  defp fill_canvas(visible_level_pixels, canvas) do
+    {canvas, _} =
+      Enum.reduce(visible_level_pixels, {canvas, 0}, fn row, {canvas, y} ->
+        {canvas, _, y} =
+          Enum.reduce(row, {canvas, 0, y}, fn [r, g, b], {canvas, x, y} ->
+            canvas =
+              Canvas.put_pixel(
+                canvas,
+                {x + @windows_offset * 8, y},
+                {r, g, b}
+              )
+
+            {canvas, x + 1, y}
+          end)
+
+        {canvas, y + 1}
+      end)
+
+    canvas
   end
 end

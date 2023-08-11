@@ -12,8 +12,6 @@ defmodule Octopus.Apps.Supermario do
 
   # how many windows are we using for the game
   @windows_shown 1
-  # starting from window
-  @windows_offset 3
 
   defmodule State do
     defstruct [:game, :interval, :canvas, :button_state]
@@ -54,8 +52,7 @@ defmodule Octopus.Apps.Supermario do
 
     canvas =
       game
-      |> Game.draw()
-      |> fill_canvas(canvas)
+      |> Game.draw(canvas)
 
     canvas |> Canvas.to_frame() |> send_frame()
     {:noreply, %State{state | game: game, canvas: canvas}}
@@ -118,26 +115,5 @@ defmodule Octopus.Apps.Supermario do
 
   def schedule_ticker(interval) do
     :timer.send_interval(interval, self(), :tick)
-  end
-
-  def fill_canvas(visible_level_pixels, canvas) do
-    {canvas, _} =
-      Enum.reduce(visible_level_pixels, {canvas, 0}, fn row, {canvas, y} ->
-        {canvas, _, y} =
-          Enum.reduce(row, {canvas, 0, y}, fn [r, g, b], {canvas, x, y} ->
-            canvas =
-              Canvas.put_pixel(
-                canvas,
-                {x + @windows_offset * 8, y},
-                {r, g, b}
-              )
-
-            {canvas, x + 1, y}
-          end)
-
-        {canvas, y + 1}
-      end)
-
-    canvas
   end
 end
