@@ -165,6 +165,9 @@ defmodule OctopusWeb.ManagerLive do
         %{module: module, name: name, icon: icon, category: category}
       end
       |> Enum.group_by(& &1.category)
+      |> Enum.sort_by(fn {category, _} ->
+        Map.get(%{animation: 0, game: 1, test: 2, misc: 3}, category, 99)
+      end)
 
     selected_app = Mixer.get_selected_app()
 
