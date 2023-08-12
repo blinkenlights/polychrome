@@ -3,18 +3,20 @@ defmodule OctopusWeb.ManagerLive do
 
   alias Octopus.Canvas
   alias Octopus.Layout.Mildenberg
-  alias Octopus.{Mixer, AppSupervisor}
+  alias Octopus.{Mixer, AppSupervisor, Scheduler}
   alias OctopusWeb.PixelsLive
 
   def mount(_params, _session, socket) do
     if connected?(socket) do
       Mixer.subscribe()
       AppSupervisor.subscribe()
+      Scheduler.subscribe()
     end
 
     socket =
       socket
       |> assign(pixel_layout: Mildenberg.layout(), configure_app: nil)
+      |> assign(scheduler_status: "")
       |> assign_apps()
 
     {:ok, socket, temporary_assigns: [pixel_layout: nil]}
@@ -80,6 +82,27 @@ defmodule OctopusWeb.ManagerLive do
           </table>
         </div>
 
+        <div class="flex flex-col m-2">
+          <div class="p-2 font-bold">
+            Scheduler
+          </div>
+          <div class="border p-2 flex flex-row flex-wrap">
+            <button
+              class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
+              phx-click="start_scheduler"
+            >
+              ▶
+            </button>
+            <button
+              class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
+              phx-click="stop_scheduler"
+            >
+              ⏹︎
+            </button>
+            <p class="px-4 py-2"><%= @scheduler_status %></p>
+          </div>
+        </div>
+
         <div :for={{category, apps} <- @available_apps}>
           <div class="flex flex-col m-2">
             <div class="p-2 font-bold">
@@ -133,6 +156,16 @@ defmodule OctopusWeb.ManagerLive do
     {:noreply, socket |> assign(configure_app: app_id)}
   end
 
+  def handle_event("start_scheduler", _params, socket) do
+    Scheduler.start()
+    {:noreply, socket}
+  end
+
+  def handle_event("stop_scheduler", _params, socket) do
+    Scheduler.stop()
+    {:noreply, socket}
+  end
+
   def handle_info({:apps, _}, socket) do
     {:noreply, socket |> assign_apps()}
   end
@@ -147,6 +180,16 @@ defmodule OctopusWeb.ManagerLive do
 
   def handle_info({:mixer, {:config, _config}}, socket) do
     {:noreply, socket}
+  end
+
+  def handle_info({:scheduler, status}, socket) do
+    str =
+      case status do
+        {:running, app_id} -> "Running #{app_id}"
+        :stopped -> "Stopped"
+      end
+
+    {:noreply, assign(socket, scheduler_status: str)}
   end
 
   defp assign_apps(socket) do
