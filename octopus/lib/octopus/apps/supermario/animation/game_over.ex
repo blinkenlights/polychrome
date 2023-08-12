@@ -22,8 +22,8 @@ defmodule Octopus.Apps.Supermario.Animation.GameOver do
       |> Canvas.from_string(font)
 
     pixels =
-      for x <- 0..8,
-          y <- 0..8,
+      for x <- 0..7,
+          y <- 0..7,
           do: {{x + data.windows_offset * 8, y}, Canvas.get_pixel(canvas, {x + offset, y})},
           into: %{}
 
