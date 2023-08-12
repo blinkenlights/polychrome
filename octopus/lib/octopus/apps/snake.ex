@@ -1,5 +1,5 @@
 defmodule Octopus.Apps.Snake do
-  use Octopus.App
+  use Octopus.App, category: :game
   require Logger
 
   alias Octopus.Apps.Snake

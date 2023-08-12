@@ -1,5 +1,5 @@
 defmodule Octopus.Apps.PixelFun do
-  use Octopus.App
+  use Octopus.App, category: :animation
 
   alias Octopus.Canvas
   alias Octopus.Apps.PixelFun.Program

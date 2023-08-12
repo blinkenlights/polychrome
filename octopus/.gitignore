@@ -41,5 +41,6 @@ src/program_lexer.erl
 src/program_parser.erl
 
 .elixir_ls
+.vscode
 
 priv/native

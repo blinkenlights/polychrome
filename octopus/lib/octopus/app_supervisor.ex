@@ -2,7 +2,7 @@ defmodule Octopus.AppSupervisor do
   use DynamicSupervisor
   require Logger
 
-  alias Octopus.Mixer
+  alias Octopus.{Mixer, App}
   alias Octopus.Protobuf.{InputEvent, ControlEvent}
 
   @topic "apps"
@@ -42,16 +42,21 @@ defmodule Octopus.AppSupervisor do
   @doc """
   Starts an app and assigns a unique app_id. It is possible to start multiple instances of the same app.
   """
-  def start_app(module) when is_atom(module) do
+  def start_app(module, opts \\ []) when is_atom(module) do
+    default_config = apply(module, :config_schema, []) |> App.default_config()
+
+    config = Keyword.get(opts, :config, %{})
+    config = Map.merge(default_config, config)
+
     if module in available_apps() do
-      do_start_app(module)
+      do_start_app(module, config)
     else
       Logger.error("App #{module} not found")
       {:error, :app_not_found}
     end
   end
 
-  defp do_start_app(module) when is_atom(module) do
+  defp do_start_app(module, config) when is_atom(module) do
     app_id = generate_app_id()
     name = {:via, Registry, {Octopus.AppRegistry, app_id, module}}
 
@@ -60,7 +65,7 @@ defmodule Octopus.AppSupervisor do
       Mixer.select_app(app_id)
     end
 
-    case DynamicSupervisor.start_child(__MODULE__, {module, name: name}) do
+    case DynamicSupervisor.start_child(__MODULE__, {module, {config, name: name}}) do
       {:ok, pid} ->
         Phoenix.PubSub.broadcast(Octopus.PubSub, @topic, {:apps, {:started, app_id, module}})
         {:ok, pid}

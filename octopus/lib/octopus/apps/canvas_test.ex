@@ -1,6 +1,6 @@
 defmodule Octopus.Apps.CanvasTest do
   alias Octopus.Canvas
-  use Octopus.App
+  use Octopus.App, category: :test
 
   @tick_interval 50
 

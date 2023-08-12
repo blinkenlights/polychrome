@@ -1,5 +1,5 @@
 defmodule Octopus.Apps.Calibrator do
-  use Octopus.App
+  use Octopus.App, category: :test
   require Logger
 
   alias Octopus.{ColorPalette, Broadcaster}
@@ -28,8 +28,8 @@ defmodule Octopus.Apps.Calibrator do
   @first_color "808080"
   @display_cal_endpoint "http://localhost:8080/ajax/messages"
   @red_correction 1.0
-  @green_correction 0.945
-  @blue_correction 0.44
+  @green_correction 0.86
+  @blue_correction 0.46
   @gamma_lookup [
     0,
     0,
@@ -294,8 +294,7 @@ defmodule Octopus.Apps.Calibrator do
   def init(_args) do
     data =
       0..(640 - 1)
-      |> Enum.map(fn _ -> 0 end)
-      |> List.update_at(@pixel_index, fn _ -> 1 end)
+      |> Enum.map(fn _ -> 1 end)
       |> IO.iodata_to_binary()
 
     state = %State{

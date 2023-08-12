@@ -1,5 +1,5 @@
 defmodule Octopus.Apps.DoomFire do
-  use Octopus.App
+  use Octopus.App, category: :animation
 
   alias Octopus.WebP
   alias Octopus.Canvas
