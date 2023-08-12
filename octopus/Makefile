@@ -1,4 +1,4 @@
-oldie_hostname = 192.168.23.12
+oldie_hostname =  oldie.taila332c.ts.net
 
 run:
 	iex -S mix phx.server
@@ -21,11 +21,9 @@ deploy-fly:
 	fly deploy
 
 deploy-oldie:
-	rsync -rl --delete --filter=':- .gitignore' --perms . $(oldie_hostname):/opt/octopus
-	ssh $(oldie_hostname) "user=$$(whoami); sudo chown -R $$user:$$user /opt/octopus"
-	ssh $(oldie_hostname) "cd /opt/octopus && make release"
-	ssh $(oldie_hostname) "sudo chown -R octopus:octopus /opt/octopus"
-	ssh $(oldie_hostname) "sudo chmod -R 775 /opt/octopus"
+	rsync -rl --delete --filter=':- .gitignore' . $(oldie_hostname):octopus
+	ssh $(oldie_hostname) "cd octopus && make release"
+	ssh $(oldie_hostname) "sudo rsync -r octopus/_build/prod/rel/octopus /opt"
 	ssh $(oldie_hostname) "sudo systemctl restart octopus.service"
 
 remote-shell:
