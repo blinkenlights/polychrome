@@ -1,33 +1,32 @@
 defmodule Octopus.Apps.Supermario.Animation.GameOver do
   alias Octopus.Apps.Supermario.Animation
-  alias Octopus.WebP
+  alias Octopus.{Canvas, Font}
 
-  # we need to now all current game pixels and the position of mario
-  # we rotage marios colour and draw a radial boom effect from marios position
-  def new() do
-    path = Path.join([:code.priv_dir(:octopus), "webp", "fairy-dust.webp"])
-    decoded_animation = WebP.decode_animation(path)
-    {width, height} = decoded_animation.size
-
+  # Show Game over moving from left to right
+  def new(windows_offset) do
     data = %{
-      frames: decoded_animation.frames,
-      width: width,
-      height: height
+      start_time: Time.utc_now(),
+      windows_offset: windows_offset
     }
 
     Animation.new(:game_over, data)
   end
 
   def draw(%Animation{start_time: start_time, data: data}) do
-    diff = Time.diff(Time.utc_now(), start_time, :millisecond)
+    font = Font.load("ddp-DoDonPachi (Cave)")
+    diff = Time.diff(Time.utc_now(), start_time, :microsecond)
+    offset = Enum.min([Integer.floor_div(diff, 150_000), 80])
 
-    data.frames
-    |> find_frame(diff)
-    |> Enum.chunk_every(data.width)
+    canvas =
+      "Game Over"
+      |> Canvas.from_string(font)
+
+    pixels =
+      for x <- 0..8,
+          y <- 0..8,
+          do: {{x + data.windows_offset * 8, y}, Canvas.get_pixel(canvas, {x + offset, y})},
+          into: %{}
+
+    %Canvas{canvas | pixels: pixels}
   end
-
-  defp find_frame([{pixels, timestamp} | _tail], timediff) when timediff < timestamp, do: pixels
-  defp find_frame([{pixels, _timestamp}], _timediff), do: pixels
-
-  defp find_frame([_hd | tail], diff), do: find_frame(tail, diff)
 end

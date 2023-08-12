@@ -131,7 +131,7 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   def tick(%Game{state: :gameover, current_animation: nil} = game) do
-    {:ok, %Game{game | current_animation: GameOver.new()}}
+    {:ok, %Game{game | current_animation: GameOver.new(@windows_offset)}}
   end
 
   def tick(%Game{state: :gameover, last_ticker: last_ticker} = game) do
@@ -328,6 +328,13 @@ defmodule Octopus.Apps.Supermario.Game do
     |> Mario.draw(mario)
     |> Level.draw(game, level)
     |> fill_canvas(canvas)
+  end
+
+  def draw(
+        %Game{current_animation: %Animation{animation_type: :game_over} = current_animation},
+        _canvas
+      ) do
+    Animation.draw(current_animation)
   end
 
   def draw(%Game{current_animation: current_animation}, canvas) do
