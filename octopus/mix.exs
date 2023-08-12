@@ -19,7 +19,7 @@ defmodule Octopus.MixProject do
   def application do
     [
       mod: {Octopus.Application, []},
-      extra_applications: [:logger, :runtime_tools]
+      extra_applications: [:logger, :runtime_tools, :os_mon]
     ]
   end
 
@@ -33,6 +33,10 @@ defmodule Octopus.MixProject do
   defp deps do
     [
       {:phoenix, "~> 1.7.2"},
+      {:phoenix_ecto, "~> 4.4"},
+      {:ecto_sql, "~> 3.10"},
+      {:ecto_sqlite3, ">= 0.0.0"},
+      {:ecto_sqlite3_extras, "~> 1.2.0"},
       {:phoenix_html, "~> 3.3"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 0.18"},
