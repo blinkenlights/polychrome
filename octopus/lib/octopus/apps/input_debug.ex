@@ -1,5 +1,5 @@
 defmodule Octopus.Apps.InputDebug do
-  use Octopus.App
+  use Octopus.App, category: :test
   require Logger
 
   alias Octopus.ColorPalette

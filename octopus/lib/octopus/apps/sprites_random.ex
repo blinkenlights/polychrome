@@ -1,5 +1,5 @@
 defmodule Octopus.Apps.Sprites do
-  use Octopus.App
+  use Octopus.App, category: :test
   require Logger
 
   alias Octopus.{Sprite, Canvas, Transitions}

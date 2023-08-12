@@ -1,5 +1,5 @@
 defmodule Octopus.Apps.SpaceInvaders do
-  use Octopus.App
+  use Octopus.App, category: :game
 
   alias Octopus.Canvas
   alias Octopus.Protobuf.{AudioFrame, InputEvent}

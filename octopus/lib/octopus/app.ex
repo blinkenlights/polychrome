@@ -14,6 +14,7 @@ defmodule Octopus.App do
   """
 
   alias Octopus.Canvas
+
   alias Octopus.Protobuf.{
     Frame,
     WFrame,
@@ -67,14 +68,16 @@ defmodule Octopus.App do
   """
   @callback handle_config(config :: any(), state :: any()) :: {:noreply, state :: any()}
 
-  defmacro __using__(_) do
+  defmacro __using__(opts) do
+    category = Keyword.get(opts, :category, :misc)
+
     quote do
       @behaviour Octopus.App
       use GenServer
       import Octopus.App
 
-      def start_link(init_args) do
-        GenServer.start_link(__MODULE__, :ok, init_args)
+      def start_link({config, init_args}) do
+        GenServer.start_link(__MODULE__, config, init_args)
       end
 
       def handle_info({:event, %InputEvent{} = input_event}, state) do
@@ -97,6 +100,8 @@ defmodule Octopus.App do
       end
 
       def icon, do: nil
+
+      def category(), do: unquote(category)
 
       def handle_input(_input_event, state) do
         {:noreply, state}

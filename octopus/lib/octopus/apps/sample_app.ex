@@ -1,5 +1,5 @@
 defmodule Octopus.Apps.SampleApp do
-  use Octopus.App
+  use Octopus.App, category: :animation
   require Logger
 
   alias Octopus.Canvas

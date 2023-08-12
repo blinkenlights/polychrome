@@ -3,7 +3,7 @@ defmodule Octopus.Apps.Starfield do
   This app draws a randomly scrolling starfield with a parallax effect.
   """
 
-  use Octopus.App
+  use Octopus.App, category: :animation
 
   alias Octopus.Canvas
 
