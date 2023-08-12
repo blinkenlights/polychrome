@@ -13,7 +13,11 @@ defmodule Octopus.Application do
       [
         # Core
         OctopusWeb.Telemetry,
+        Octopus.Repo,
         {Phoenix.PubSub, name: Octopus.PubSub},
+        {Ecto.Migrator,
+         repos: Application.fetch_env!(:octopus, :ecto_repos),
+         skip: System.get_env("SKIP_MIGRATIONS") == "true"},
         Octopus.Broadcaster,
         Octopus.Mixer,
         {Registry, keys: :unique, name: Octopus.AppRegistry},
