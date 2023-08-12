@@ -7,7 +7,7 @@ defmodule Octopus.Apps.Text do
   @animation_steps 50
   @animation_interval 15
   @letter_delay 5
-  @easing_interval 500
+  @easing_interval 150
 
   defmodule State do
     defstruct [:text, :variant, :font, :animation, :easing_interval]

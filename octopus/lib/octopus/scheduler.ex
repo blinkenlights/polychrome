@@ -5,12 +5,10 @@ defmodule Octopus.Scheduler do
   alias Octopus.{AppSupervisor, Mixer}
 
   @schedule [
-    %{module: Octopus.Apps.Text, config: %{text: "POLYCHROME"}, timeout: 120_000},
-    %{module: Octopus.Apps.Text, config: %{text: "MILDENBERG"}, timeout: 120_000},
-    %{module: Octopus.Apps.Text, config: %{text: "WILLKOMMEN"}, timeout: 120_000},
-    %{module: Octopus.Apps.Text, config: %{text: "HACKSPACES"}, timeout: 120_000},
-    %{module: Octopus.Apps.Text, config: %{text: "MAKESPACES"}, timeout: 120_000},
-    %{module: Octopus.Apps.Text, config: %{text: "EXPERIENCE"}, timeout: 120_000}
+    %{module: Octopus.Apps.Text, config: %{text: "POLYCHROME"}, timeout: 90_000},
+    %{module: Octopus.Apps.Text, config: %{text: "MILDENBERG"}, timeout: 90_000},
+    %{module: Octopus.Apps.Text, config: %{text: "WILLKOMMEN"}, timeout: 90_000},
+    %{module: Octopus.Apps.Text, config: %{text: "EXPERIENCE"}, timeout: 10_000}
   ]
 
   defmodule State do
