@@ -3,10 +3,11 @@ defmodule Octopus.Apps.Supermario.Animation.GameOver do
   alias Octopus.{Canvas, Font}
 
   # Show Game over moving from left to right
-  def new(windows_offset) do
+  def new(windows_offset, windows_shown) do
     data = %{
       start_time: Time.utc_now(),
-      windows_offset: windows_offset
+      windows_offset: windows_offset,
+      windows_shown: windows_shown
     }
 
     Animation.new(:game_over, data)
@@ -22,7 +23,7 @@ defmodule Octopus.Apps.Supermario.Animation.GameOver do
       |> Canvas.from_string(font)
 
     pixels =
-      for x <- 0..7,
+      for x <- 0..(data.windows_shown * 8 - 1),
           y <- 0..7,
           do: {{x + data.windows_offset * 8, y}, Canvas.get_pixel(canvas, {x + offset, y})},
           into: %{}

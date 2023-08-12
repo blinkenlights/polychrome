@@ -131,7 +131,7 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   def tick(%Game{state: :gameover, current_animation: nil} = game) do
-    {:ok, %Game{game | current_animation: GameOver.new(@windows_offset)}}
+    {:ok, %Game{game | current_animation: GameOver.new(@windows_offset, game.windows_shown)}}
   end
 
   def tick(%Game{state: :gameover, last_ticker: last_ticker} = game) do
@@ -300,7 +300,7 @@ defmodule Octopus.Apps.Supermario.Game do
     Level.has_bad_guy_on_postion?(level, current_position + x_position, y_position)
   end
 
-  # TODO between levels animation
+  #  between levels animation
   def draw(%Game{state: :paused, current_animation: nil}, canvas) do
     {:ok, %ExPng.Image{} = image} =
       ExPng.Image.from_file(Path.join([:code.priv_dir(:octopus), "images", "mario.png"]))
