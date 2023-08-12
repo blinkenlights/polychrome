@@ -1,5 +1,5 @@
 defmodule Octopus.Apps.Supermario do
-  use Octopus.App
+  use Octopus.App, category: :game
   require Logger
 
   alias Octopus.Apps.Supermario.Game
