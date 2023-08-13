@@ -5,7 +5,7 @@ defmodule Octopus.Apps.Supermario.Game do
   alias __MODULE__
   alias Octopus.Canvas
   alias Octopus.Apps.Supermario.{Animation, Level, Mario}
-  alias Octopus.Apps.Supermario.Animation.{GameOver, Intro, MarioDies}
+  alias Octopus.Apps.Supermario.Animation.{Completed, GameOver, Intro, MarioDies}
 
   @type t :: %__MODULE__{
           state: :starting | :running | :paused | :mario_dies | :gameover | :completed,
@@ -134,7 +134,16 @@ defmodule Octopus.Apps.Supermario.Game do
     {:ok, %Game{game | current_animation: GameOver.new(@windows_offset, game.windows_shown)}}
   end
 
-  def tick(%Game{state: :gameover, last_ticker: last_ticker} = game) do
+  def tick(%Game{state: :completed, current_animation: nil} = game) do
+    {:ok,
+     %Game{
+       game
+       | current_animation: Completed.new(@windows_offset, game.windows_shown, game.score)
+     }}
+  end
+
+  def tick(%Game{state: state, last_ticker: last_ticker} = game)
+      when state == :gameover or state == :completed do
     now = Time.utc_now()
 
     if Time.diff(now, last_ticker, :microsecond) > @intro_animation_ms do
@@ -331,9 +340,10 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   def draw(
-        %Game{current_animation: %Animation{animation_type: :game_over} = current_animation},
+        %Game{current_animation: %Animation{animation_type: animation_type} = current_animation},
         _canvas
-      ) do
+      )
+      when animation_type == :game_over or animation_type == :completed do
     Animation.draw(current_animation)
   end
 
