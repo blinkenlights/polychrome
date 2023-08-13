@@ -6,7 +6,7 @@ defmodule Octopus.Apps.FairyDust do
   @fps 60
 
   defmodule State do
-    defstruct [:fairy_dust, :time, :particles]
+    defstruct [:fairy_dust, :time, :particles, :speed]
   end
 
   defmodule Particle do
@@ -17,12 +17,26 @@ defmodule Octopus.Apps.FairyDust do
 
   def icon(), do: WebP.load("fairy-dust")
 
-  def init(_args) do
+  def config_schema do
+    %{
+      speed: {"Speed", :float, %{default: 0.5, min: 0.1, max: 1}}
+    }
+  end
+
+  def init(%{speed: speed}) do
     :timer.send_interval(trunc(1000 / @fps), :tick)
 
     fairy_dust = Image.load("fairy-dust")
 
-    {:ok, %State{fairy_dust: fairy_dust, time: 0, particles: []}}
+    {:ok, %State{fairy_dust: fairy_dust, time: 0, particles: [], speed: speed}}
+  end
+
+  def handle_config(%{speed: speed}, %State{} = state) do
+    {:noreply, %{state | speed: speed}}
+  end
+
+  def get_config(%State{speed: speed}) do
+    %{speed: speed}
   end
 
   defp update_particles(particles, dt) do
@@ -67,7 +81,7 @@ defmodule Octopus.Apps.FairyDust do
   end
 
   def handle_info(:tick, %State{} = state) do
-    dt = 1 / @fps
+    dt = 1 / @fps * state.speed
 
     canvas = Canvas.new((8 + 16) * 10, 8)
 
