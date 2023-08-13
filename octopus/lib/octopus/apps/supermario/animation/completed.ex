@@ -15,7 +15,6 @@ defmodule Octopus.Apps.Supermario.Animation.Completed do
   end
 
   def draw(%Animation{start_time: start_time, data: data}) do
-    # all_fonts = Font.list_available() |> Enum.sort()
     font = Font.load("ninj-Ninja Masters (ADK)")
     diff = Time.diff(Time.utc_now(), start_time, :microsecond)
     offset = Enum.min([Integer.floor_div(diff, 150_000), 160])

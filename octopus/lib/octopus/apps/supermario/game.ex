@@ -37,6 +37,7 @@ defmodule Octopus.Apps.Supermario.Game do
   @intro_animation_ms 3_000_000
   @dying_animation_ms 3_000_000
   @pause_animation_ms 4_000_000
+  @game_over_animation_ms 20_000_000
   # starting from window
   @windows_offset 3
 
@@ -131,14 +132,20 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   def tick(%Game{state: :gameover, current_animation: nil} = game) do
-    {:ok, %Game{game | current_animation: GameOver.new(@windows_offset, game.windows_shown)}}
+    {:ok,
+     %Game{
+       game
+       | current_animation: GameOver.new(@windows_offset, game.windows_shown),
+         last_ticker: Time.utc_now()
+     }}
   end
 
   def tick(%Game{state: :completed, current_animation: nil} = game) do
     {:ok,
      %Game{
        game
-       | current_animation: Completed.new(@windows_offset, game.windows_shown, game.score)
+       | current_animation: Completed.new(@windows_offset, game.windows_shown, game.score),
+         last_ticker: Time.utc_now()
      }}
   end
 
@@ -146,9 +153,22 @@ defmodule Octopus.Apps.Supermario.Game do
       when state == :gameover or state == :completed do
     now = Time.utc_now()
 
-    if Time.diff(now, last_ticker, :microsecond) > @intro_animation_ms do
-      # FIXME END GAME!!!
+    if Time.diff(now, last_ticker, :microsecond) > @game_over_animation_ms do
+      {:gameover, game}
+    else
       {:ok, game}
+    end
+  end
+
+  # called by tick in intervals
+  def update(%Game{} = game) do
+    game =
+      game
+      |> Level.update()
+      |> update_mario()
+
+    if Game.mario_dies?(game) do
+      mario_has_died(game)
     else
       {:ok, game}
     end
@@ -256,23 +276,9 @@ defmodule Octopus.Apps.Supermario.Game do
     end
   end
 
-  # called by tick in intervals
-  def update(%Game{} = game) do
-    game =
-      game
-      |> Level.update()
-      |> update_mario()
-
-    if Game.mario_dies?(game) do
-      mario_has_died(game)
-    else
-      {:ok, game}
-    end
-  end
-
   # last live: game over!!
   def mario_has_died(%Game{lives: 1} = game) do
-    {:game_over, %Game{game | state: :gameover}}
+    {:ok, %Game{game | state: :gameover}}
   end
 
   # init dying animation: get current pixels and mario position
@@ -285,7 +291,7 @@ defmodule Octopus.Apps.Supermario.Game do
         game.mario.y_position
       })
 
-    {:mario_dies,
+    {:ok,
      %Game{
        game
        | mario: game.mario,

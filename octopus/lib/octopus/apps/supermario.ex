@@ -3,7 +3,7 @@ defmodule Octopus.Apps.Supermario do
   require Logger
 
   alias Octopus.Apps.Supermario.Game
-  alias Octopus.Canvas
+  alias Octopus.{Canvas, Mixer}
   alias Octopus.Protobuf.InputEvent
   alias Octopus.Apps.Input.{ButtonState, JoyState}
 
@@ -35,27 +35,23 @@ defmodule Octopus.Apps.Supermario do
   end
 
   def handle_info(:tick, %State{canvas: canvas, game: game} = state) do
-    canvas = Canvas.clear(canvas)
+    case Game.tick(game) do
+      {:ok, game} ->
+        canvas = Canvas.clear(canvas)
 
-    game =
-      case Game.tick(game) do
-        {:ok, game} ->
+        canvas =
           game
+          |> Game.draw(canvas)
 
-        {:mario_dies, game} ->
-          game
+        canvas |> Canvas.to_frame() |> send_frame()
+        {:noreply, %State{state | game: game, canvas: canvas}}
 
-        # FIXME: show end screen
-        {:game_over, game} ->
-          game
-      end
+      {:gameover, _game} ->
+        Mixer.get_selected_app()
+        |> Octopus.AppSupervisor.stop_app()
 
-    canvas =
-      game
-      |> Game.draw(canvas)
-
-    canvas |> Canvas.to_frame() |> send_frame()
-    {:noreply, %State{state | game: game, canvas: canvas}}
+        {:noreply, nil}
+    end
   end
 
   # ignore input events while mario dies
