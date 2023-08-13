@@ -25,15 +25,15 @@ defmodule OctopusWeb.PlaylistLive do
 
   def render(assigns) do
     ~H"""
-    <div class="container mx-auto flex flex-row items-center">
-      <form phx-change="name-update">
-        <input class="text-2xl font-semibold leading-loose" type="text" name="name" value={@name} />
+    <div class="container mx-auto w-full flex flex-row py-2">
+      <form phx-change="name-update" class="w-full">
+        <input class="text-2xl font-semibold leading-loose w-full border-none" type="text" name="name" value={@name} />
       </form>
-      <button class="border mx-2 py-1 px-2 rounded  bg-slate-300" phx-click="save">Save</button>
+      <button class="border mx-2 py-1 px-2 rounded bg-slate-300" phx-click="save">Save</button>
     </div>
     <LiveMonacoEditor.code_editor
-      style="min-height: 700px; width: 100%;"
       value={@animations}
+      class="h-full w-full"
       opts={
         Map.merge(
           LiveMonacoEditor.default_opts(),

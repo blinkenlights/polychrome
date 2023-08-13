@@ -59,7 +59,8 @@ defmodule Octopus.MixProject do
       {:rustler, "~> 0.29.1"},
       {:telegram, github: "visciang/telegram", tag: "0.22.4"},
       {:chameleon, "~> 2.5"},
-      {:live_monaco_editor, "~> 0.1"}
+      {:live_monaco_editor,
+       github: "lukad/live_monaco_editor", branch: "display-contents-for-wrapper"}
     ]
   end
 
