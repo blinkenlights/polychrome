@@ -12,7 +12,7 @@ defmodule Octopus.Apps.Webpanimation do
   def name(), do: "Webp Animation"
 
   def init(_args) do
-    path = Path.join([:code.priv_dir(:octopus), "webp", "mario-run.webp"])
+    path = Path.join([:code.priv_dir(:octopus), "webp", "tmp.webp"])
     decoded_animation = WebP.decode_animation(path)
     {width, height} = decoded_animation.size
 
@@ -61,7 +61,7 @@ defmodule Octopus.Apps.Webpanimation do
       end)
 
     canvas
-    |> Canvas.to_frame()
+    |> Canvas.to_frame(drop: width >= 242)
     |> send_frame()
 
     Process.send_after(self(), :tick, duration)
