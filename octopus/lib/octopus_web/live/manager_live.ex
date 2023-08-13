@@ -117,6 +117,12 @@ defmodule OctopusWeb.ManagerLive do
             </button>
             <button
               class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
+              phx-click="playlist-edit"
+            >
+              ✎
+            </button>
+            <button
+              class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
               phx-click="playlist-delete"
             >
               🗑
@@ -217,6 +223,14 @@ defmodule OctopusWeb.ManagerLive do
 
   def handle_event("playlist-stop", _params, socket) do
     Scheduler.stop()
+    {:noreply, socket}
+  end
+
+  def handle_event("playlist-edit", _params, socket) do
+    socket =
+      socket
+      |> redirect(to: ~p"/playlist/#{socket.assigns.selected_playlist}")
+
     {:noreply, socket}
   end
 
