@@ -59,6 +59,14 @@ defmodule Octopus.PlaylistScheduler do
     GenServer.call(__MODULE__, :selected_playlist)
   end
 
+  def playlist_next() do
+    GenServer.cast(__MODULE__, :next_animation)
+  end
+
+  def playlist_previous() do
+    GenServer.cast(__MODULE__, :prev_animation)
+  end
+
   def broadcast_status() do
     GenServer.cast(__MODULE__, :broadcast_status)
   end
@@ -72,10 +80,14 @@ defmodule Octopus.PlaylistScheduler do
     index = length(playlist.animations) - 1
     Logger.info("Starting playlist #{inspect(playlist.name)}")
 
-    run_id = :crypto.strong_rand_bytes(16)
-    send(self(), {:next, run_id})
+    state =
+      %State{state | playlist_id: id, index: index}
+      |> new_run_id()
+      |> broadcast()
 
-    {:noreply, %State{state | playlist_id: id, index: index, run_id: run_id} |> broadcast()}
+    send(self(), {:next, state.run_id})
+
+    {:noreply, state}
   end
 
   def handle_cast(:stop, %State{} = state) do
@@ -90,6 +102,26 @@ defmodule Octopus.PlaylistScheduler do
 
   def handle_cast(:broadcast_status, %State{} = state) do
     broadcast(state)
+    {:noreply, state}
+  end
+
+  def handle_cast(:next_animation, %State{} = state) do
+    state = state |> new_run_id()
+
+    send(self(), {:next, state.run_id})
+    IO.inspect(state)
+    {:noreply, state}
+  end
+
+  def handle_cast(:prev_animation, %State{} = state) do
+    playlist = %Playlist{} = get_playlist(state.playlist_id)
+
+    state =
+      %State{state | index: Integer.mod(state.index - 2, length(playlist.animations))}
+      |> new_run_id()
+
+    send(self(), {:next, state.run_id})
+
     {:noreply, state}
   end
 
@@ -143,5 +175,10 @@ defmodule Octopus.PlaylistScheduler do
 
     Phoenix.PubSub.broadcast(Octopus.PubSub, @topic, msg)
     state
+  end
+
+  defp new_run_id(%State{} = state) do
+    run_id = :crypto.strong_rand_bytes(16)
+    %State{state | run_id: run_id}
   end
 end

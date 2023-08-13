@@ -119,6 +119,18 @@ defmodule OctopusWeb.ManagerLive do
             </button>
             <button
               class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
+              phx-click="playlist-prev"
+            >
+              ⏮
+            </button>
+            <button
+              class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
+              phx-click="playlist-next"
+            >
+              ⏭
+            </button>
+            <button
+              class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
               phx-click="playlist-edit"
               disabled={@selected_playlist == nil}
             >
@@ -214,6 +226,16 @@ defmodule OctopusWeb.ManagerLive do
 
   def handle_event("playlist-stop", _params, socket) do
     PlaylistScheduler.stop_playlist()
+    {:noreply, socket}
+  end
+
+  def handle_event("playlist-next", _params, socket) do
+    PlaylistScheduler.playlist_next()
+    {:noreply, socket}
+  end
+
+  def handle_event("playlist-prev", _params, socket) do
+    PlaylistScheduler.playlist_previous()
     {:noreply, socket}
   end
 

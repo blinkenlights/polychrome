@@ -16,7 +16,7 @@ defmodule Octopus.Apps.SpritesGrouped do
   @animation_steps 50
 
   @tick_interval 500
-  @skip_till_next_group 100
+  @skip_till_next_group 80
 
   @groups [
     mario: [0..7, 9, 12],
@@ -32,7 +32,7 @@ defmodule Octopus.Apps.SpritesGrouped do
     looney_toons: [150..159],
     disney: [208..215],
     marvel: [221..225, 228..232],
-    starwars: [240..247],
+    starwars: [240..247]
     # kirby: [13],
     # donkey_kong: [14, 15],
     # link: [16],
@@ -40,7 +40,7 @@ defmodule Octopus.Apps.SpritesGrouped do
     # lemming: [68],
     # dexter: [89, 90],
     # waldo: [220],
-    others: [13, 14, 16, 68, 47, 220]
+    # others: [13, 14, 16, 68, 47, 220]
 
     # powerpuff: [111..113],
     # marvel: [114..120],
