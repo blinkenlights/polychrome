@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 PrivateTmp=true
-ExecStart=/usr/local/bin/beak -c $(mktemp -d) -o 10 -i 0 -r "/opt/polychrome/beak/resources" -d "{{ device }}" -s
+ExecStart=/usr/local/bin/beak -c $(mktemp -d) -o 10 -i 0 -r "/opt/polychrome/beak/resources" -d "{{ device }}"
 Restart=always
 
 [Install]

@@ -8,7 +8,7 @@
 import Config
 
 config :octopus, :installation,
-  screens: System.get_env("OCTOPUS_SCREENS", "1") |> String.to_integer()
+  screens: System.get_env("OCTOPUS_SCREENS", "10") |> String.to_integer()
 
 config :octopus,
   ecto_repos: [Octopus.Repo],

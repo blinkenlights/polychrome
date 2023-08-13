@@ -4,7 +4,7 @@
   vars:
     polychrom_dir: "/opt/polychrome"
     resource_dir: "{{ polychrom_dir }}/beak/resources"
-    device: "HDA Intel PCH, 92HD91BXX Analog; Direct hardware device without any conversions"
+    device: "UMC1820, USB Audio; Direct hardware device without any conversions"
   tasks:
     - name: Update & Upgrade packages
       become: true
@@ -81,6 +81,42 @@
         user: "beak"
         state: present
         key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINkN6Gh946RDixD57F0DVCKDSWTgJWIdW5YXbokMXuwi"
+    - name: Create user reimerei
+      become: true
+      tags: users
+      user:
+        name: "reimerei"
+        shell: "/bin/zsh"
+        generate_ssh_key: true
+        append: true
+        groups:
+          - audio
+          - admin
+    - name: Set authorized keys
+      become: true
+      tags: users
+      ansible.posix.authorized_key:
+        user: "reimerei"
+        state: present
+        key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFk68ujMEgPVglDNnxqrht/0piGwofQy4GmPjgq4CvUV"
+    - name: Create user lukad
+      become: true
+      tags: users
+      user:
+        name: "luka"
+        shell: "/bin/zsh"
+        generate_ssh_key: true
+        append: true
+        groups:
+          - audio
+          - admin
+    - name: Set authorized keys
+      become: true
+      tags: users
+      ansible.posix.authorized_key:
+        user: "luka"
+        state: present
+        key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFLhYbZapSPXy9TNXwadzPvirszWdiYp85Z6wYqW1Pd/"
     - name: add systemd service
       become: true
       tags: deploy

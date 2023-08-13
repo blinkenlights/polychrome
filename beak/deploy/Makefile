@@ -10,6 +10,9 @@ install:
 a_setup: tags=setup
 a_setup: 
 	$(ansible_run) --diff
+a_users: tags=users
+a_users: 
+	$(ansible_run) --diff
 a_deploy: tags=deploy
 a_deploy:
 	$(ansible_run) --diff
