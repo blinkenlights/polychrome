@@ -69,8 +69,17 @@ defmodule Octopus.Apps.Supermario.Mario do
     end
   end
 
-  # no third jump should be possible
-  def jump(%Mario{jumps: _jumps} = mario, _game), do: mario
+  # in case we would jump more than allowed, check wether we jumped upon something
+  # when we cannot fall anymore and we wait a bit, lets jump again
+  def jump(%Mario{jumps: jumps, jumped_at: jumped_at} = mario, game) do
+    if !can_fall?(mario, game) &&
+         Time.diff(Time.utc_now(), jumped_at, :microsecond) > @fall_interval_ms * 3 do
+      do_jump(%Mario{mario | jumps: 0, jumped_at: nil})
+    else
+      # no third jump should be possible
+      mario
+    end
+  end
 
   # falling_since may be nil, when mario was not jumping before but ran over a hole
   # but then we are falling immediately
