@@ -63,14 +63,21 @@ defmodule Octopus.Apps.Supermario do
         _,
         %State{game: %Game{state: :mario_dies}} = state
       ),
-      do: {:noreply, state}
+      do: {:noreply, %State{state | button_state: nil}}
 
   # also ignore input events between levels
   def handle_input(
         _,
         %State{game: %Game{state: :paused}} = state
       ),
-      do: {:noreply, state}
+      do: {:noreply, %State{state | button_state: nil}}
+
+  def handle_input(
+        %InputEvent{} = event,
+        %State{button_state: nil} = state
+      ) do
+    handle_input(event, %{state | button_state: ButtonState.new()})
+  end
 
   def handle_input(
         %InputEvent{type: type, value: value},

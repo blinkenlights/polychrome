@@ -54,7 +54,7 @@ defmodule Octopus.Apps.Supermario.Mario do
   # first jump. we have to be on the ground, therefor `!can_fall?`
   def jump(%Mario{jumps: 0} = mario, game) do
     if can_jump?(mario, game) and !can_fall?(mario, game) do
-      %Mario{do_jump(mario) | jumps: 1, jumped_at: Time.utc_now()}
+      do_jump(mario)
     else
       mario
     end
@@ -63,7 +63,7 @@ defmodule Octopus.Apps.Supermario.Mario do
   # we can jump a second and third time in the air
   def jump(%Mario{jumps: jumps} = mario, game) when jumps == 1 or jumps == 2 do
     if can_jump?(mario, game) do
-      %Mario{do_jump(mario) | jumps: jumps + 1, jumped_at: Time.utc_now()}
+      do_jump(mario)
     else
       mario
     end
@@ -113,8 +113,15 @@ defmodule Octopus.Apps.Supermario.Mario do
     %Mario{mario | jumps: 0, jumped_at: nil}
   end
 
-  defp do_jump(%Mario{y_position: y_position} = mario) do
-    %Mario{mario | y_position: y_position - 1, falling_since: nil}
+  defp do_jump(%Mario{y_position: y_position, jumps: jumps} = mario) do
+
+    %Mario{
+      mario
+      | y_position: y_position - 1,
+        falling_since: nil,
+        jumps: jumps + 1,
+        jumped_at: Time.utc_now()
+    }
   end
 
   defp do_fall(%Mario{y_position: y_position} = mario) do
