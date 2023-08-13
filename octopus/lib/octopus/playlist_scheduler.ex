@@ -1,16 +1,12 @@
-defmodule Octopus.Scheduler do
+defmodule Octopus.PlaylistScheduler do
   use GenServer
   require Logger
 
-  alias Octopus.{AppSupervisor, Mixer}
+  alias Octopus.{AppSupervisor, Mixer, Repo}
+  alias Octopus.PlaylistScheduler.Playlist
 
-  @schedule [
-    %{module: Octopus.Apps.Text, config: %{text: "POLYCHROME"}, timeout: 10_000},
-    %{module: Octopus.Apps.Text, config: %{text: "MILDENBERG"}, timeout: 10_000},
-    %{module: Octopus.Apps.Text, config: %{text: "WILLKOMMEN"}, timeout: 10_000},
-    %{module: Octopus.Apps.Text, config: %{text: "EXPERIENCE"}, timeout: 10_000}
-  ]
-  @topic "scheduler"
+  @topic "playlist_scheduler"
+  @default_animation %{app: "Text", config: %{text: "POLYCHROME"}, timeout: 60_000}
 
   defmodule State do
     defstruct [:schedule, :current_app]
@@ -25,12 +21,37 @@ defmodule Octopus.Scheduler do
     broadcast_status()
   end
 
-  def start() do
-    GenServer.cast(__MODULE__, :start)
+  def start_playlist(name) do
+    GenServer.cast(__MODULE__, {:start, name})
   end
 
-  def stop() do
+  def stop_playlist() do
     GenServer.cast(__MODULE__, :stop)
+  end
+
+  def create_playlist!(name) do
+    %Playlist{}
+    |> Playlist.changeset(%{name: name, animations: [@default_animation]})
+    |> Repo.insert!()
+  end
+
+  def list_playlists() do
+    Repo.all(Playlist)
+  end
+
+  def delete_playlist!(%Playlist{} = playlist) do
+    playlist
+    |> Repo.delete!()
+  end
+
+  def update_playlist!(id, attrs) do
+    get_playlist(id)
+    |> Playlist.changeset(attrs)
+    |> Repo.update!()
+  end
+
+  def get_playlist(id) do
+    Repo.get(Playlist, id)
   end
 
   def broadcast_status() do

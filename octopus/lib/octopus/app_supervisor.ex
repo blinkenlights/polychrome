@@ -35,7 +35,11 @@ defmodule Octopus.AppSupervisor do
     {:ok, modules} = :application.get_key(:octopus, :modules)
 
     Enum.filter(modules, fn module ->
-      Octopus.App in (module.module_info(:attributes)[:behaviour] || [])
+      try do
+        Octopus.App in (module.__info__(:attributes)[:behaviour] || [])
+      rescue
+        _ -> false
+      end
     end)
   end
 
