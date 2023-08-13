@@ -166,12 +166,22 @@ defmodule Octopus.Apps.Supermario.Level do
   end
 
   defp init_bad_guys(2) do
+    level_2_color = [252, 188, 176]
     [
-      %BadGuy{x_position: 11, y_position: 6,  min_position: 2, max_position: 11, direction: :left, color: [252, 188, 176]},
-      %BadGuy{x_position: 9, y_position: 6,  min_position: 3, max_position: 11, direction: :left, color: [252, 188, 176]},
-      %BadGuy{x_position: 30, y_position: 6,  min_position: 25, max_position: 43, direction: :left, color: [252, 188, 176]},
-      %BadGuy{x_position: 38, y_position: 6,  min_position: 25, max_position: 43, direction: :left, color: [252, 188, 176]},
-      %BadGuy{x_position: 42, y_position: 6,  min_position: 25, max_position: 43, direction: :left, color: [252, 188, 176]}
+      %BadGuy{x_position: 11, y_position: 6,  min_position: 2, max_position: 11, direction: :left, color: level_2_color},
+      %BadGuy{x_position: 9, y_position: 6,  min_position: 3, max_position: 11, direction: :left, color: level_2_color},
+      %BadGuy{x_position: 30, y_position: 6,  min_position: 25, max_position: 43, direction: :left, color: level_2_color},
+      %BadGuy{x_position: 38, y_position: 6,  min_position: 25, max_position: 43, direction: :left, color: level_2_color},
+      %BadGuy{x_position: 42, y_position: 6,  min_position: 25, max_position: 43, direction: :left, color: level_2_color}
+    ]
+  end
+
+  defp init_bad_guys(3) do
+    level_3_color = [0, 0, 0]
+    [
+      %BadGuy{x_position: 8, y_position: 6,  min_position: 1, max_position: 8, direction: :left, color: level_3_color},
+      %BadGuy{x_position: 43, y_position: 2,  min_position: 43, max_position: 47, direction: :right, color: level_3_color},
+      %BadGuy{x_position: 74, y_position: 6,  min_position: 74, max_position: 77, direction: :right, color: level_3_color}
     ]
   end
 
@@ -1287,7 +1297,7 @@ defmodule Octopus.Apps.Supermario.Level do
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil],
       # row 6
-      [1, 1, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1,
+      [nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1,
        1, 1, 1, nil, nil, nil, 1, nil, 1, 1, 1, nil, nil, nil, nil,
        nil, nil, 1, nil, nil, 1, 1, nil, nil, nil, nil, 1, nil, nil, 1,
        1, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
@@ -1296,7 +1306,7 @@ defmodule Octopus.Apps.Supermario.Level do
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
        nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil],
       # row 7
-      [1, 1, 1, nil, nil, nil, nil, nil, nil, nil, 1, 1, 1, nil, 1,
+      [nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1, 1, 1, nil, 1,
        1, 1, 1, nil, nil, nil, 1, nil, 1, 1, 1, nil, nil, nil, nil,
        nil, nil, nil, nil, nil, 1, 1, nil, nil, nil, nil, 1, nil, nil, 1,
        1, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1, 1, nil, nil,
@@ -1396,7 +1406,6 @@ defmodule Octopus.Apps.Supermario.Level do
   defp init_mario_start_y_position(1), do: 6
   defp init_mario_start_y_position(2), do: 0
   defp init_mario_start_y_position(3), do: 4
-  defp init_mario_start_y_position(_), do: 6
 
   defp load_pixels(level), do: PngFile.load_image_for_level(level)
 end

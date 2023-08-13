@@ -37,7 +37,7 @@ defmodule Octopus.Apps.Supermario.Game do
   @intro_animation_ms 3_000_000
   @dying_animation_ms 3_000_000
   @pause_animation_ms 4_000_000
-  @game_over_animation_ms 20_000_000
+  @game_over_animation_ms 23_000_000
   # starting from window
   @windows_offset 3
 
@@ -101,9 +101,6 @@ defmodule Octopus.Apps.Supermario.Game do
     now = Time.utc_now()
 
     if Time.diff(now, last_ticker, :microsecond) > @pause_animation_ms do
-      # FIXME check max level => end game!!!, also check maxlevel is already done before????
-      #       second thought, this should have been done before the pause animation => CEHECK
-      #
       next_level = Level.next_level(level)
 
       {:ok,
@@ -140,12 +137,15 @@ defmodule Octopus.Apps.Supermario.Game do
      }}
   end
 
-  def tick(%Game{state: :completed, current_animation: nil} = game) do
+  def tick(%Game{state: :completed, current_animation: nil, score: score} = game) do
+    score = score + 100
+
     {:ok,
      %Game{
        game
-       | current_animation: Completed.new(@windows_offset, game.windows_shown, game.score),
-         last_ticker: Time.utc_now()
+       | current_animation: Completed.new(@windows_offset, game.windows_shown, score),
+         last_ticker: Time.utc_now(),
+         score: score
      }}
   end
 
