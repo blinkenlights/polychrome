@@ -10,7 +10,7 @@ defmodule Octopus.Apps.SampleApp do
   end
 
   @fps 60
-  @colors [[255, 255, 255], [255, 0, 0], [0, 255, 0], [255, 0, 255]]
+  @colors [{255, 255, 255}, {255, 0, 0}, {0, 255, 0}, {255, 0, 255}]
 
   def name(), do: "Sample App"
 
