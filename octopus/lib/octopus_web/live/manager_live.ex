@@ -208,6 +208,11 @@ defmodule OctopusWeb.ManagerLive do
     {:noreply, socket}
   end
 
+  def handle_event("playlist-stop", _params, socket) do
+    PlaylistScheduler.stop_playlist()
+    {:noreply, socket}
+  end
+
   def handle_event("playlist-" <> _, _, %Socket{assigns: %{selected_playlist: nil}} = socket) do
     socket =
       socket
@@ -217,12 +222,7 @@ defmodule OctopusWeb.ManagerLive do
   end
 
   def handle_event("playlist-start", _params, socket) do
-    Scheduler.start()
-    {:noreply, socket}
-  end
-
-  def handle_event("playlist-stop", _params, socket) do
-    Scheduler.stop()
+    PlaylistScheduler.start_playlist(socket.assigns.selected_playlist)
     {:noreply, socket}
   end
 
@@ -264,13 +264,7 @@ defmodule OctopusWeb.ManagerLive do
   end
 
   def handle_info({:scheduler, status}, socket) do
-    str =
-      case status do
-        {:running, app_id} -> "Running #{app_id}"
-        :stopped -> "Stopped"
-      end
-
-    {:noreply, assign(socket, playlist_status: str)}
+    {:noreply, assign(socket, playlist_status: status)}
   end
 
   defp assign_apps(socket) do

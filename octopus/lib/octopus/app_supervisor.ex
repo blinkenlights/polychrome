@@ -94,7 +94,7 @@ defmodule Octopus.AppSupervisor do
   @doc """
   Stops an specific instance of an app.
   """
-  def stop_app(app_id) when is_binary(app_id) do
+  def stop_app(app_id) do
     Phoenix.PubSub.broadcast(Octopus.PubSub, @topic, {:apps, {:stopped, app_id}})
 
     case Registry.lookup(Octopus.AppRegistry, app_id) do
