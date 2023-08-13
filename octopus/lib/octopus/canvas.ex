@@ -151,15 +151,16 @@ defmodule Octopus.Canvas do
   end
 
   @window_width 8
-  @window_gap 16
+  @window_gap 18
   @window_and_gap @window_gap + @window_width
 
   def to_frame(%Canvas{width: width, height: height} = canvas, opts \\ []) do
-    window_width = if Keyword.get(opts, :drop, false), do: @window_and_gap, else: @window_width
+    window_gap = if Keyword.get(opts, :drop, false), do: @window_gap, else: 0
+    window_width = @window_width + window_gap
     easing_interval = Keyword.get(opts, :easing_interval, 0)
 
     data =
-      for window <- 0..(div(width, window_width) - 1),
+      for window <- 0..(div(width + window_gap, window_width) - 1),
           y <- 0..(height - 1),
           x <- 0..7,
           {r, g, b} = get_pixel(canvas, {window * window_width + x, y}),

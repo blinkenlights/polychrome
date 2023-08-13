@@ -11,6 +11,7 @@ config :octopus, :installation,
   screens: System.get_env("OCTOPUS_SCREENS", "1") |> String.to_integer()
 
 config :octopus,
+  ecto_repos: [Octopus.Repo],
   generators: [binary_id: true],
   broadcast: false
 

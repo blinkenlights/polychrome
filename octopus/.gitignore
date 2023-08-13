@@ -44,3 +44,5 @@ src/program_parser.erl
 .vscode
 
 priv/native
+
+/octopus_*.db*

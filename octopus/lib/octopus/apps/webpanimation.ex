@@ -61,7 +61,7 @@ defmodule Octopus.Apps.Webpanimation do
       end)
 
     canvas
-    |> Canvas.to_frame()
+    |> Canvas.to_frame(drop: width >= 242)
     |> send_frame()
 
     Process.send_after(self(), :tick, duration)
