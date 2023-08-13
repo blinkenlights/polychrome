@@ -2,6 +2,16 @@
 
 Blinkenlights Polychrome light and sound installation in Mildenberg, Germany, 2023
 
+## Contributing Content
+
+There are several ways to contribute to polychrome.
+
+1. Submit an animation in the WebP format with the dimensions `242x8`. WebP animations go into [`octopus/priv/webp`](octopus/priv/webp).
+2. Write an application in elixir to generate dynamic content. See our [example app](octopus/lib/octopus/apps/sample_app.ex).
+3. Write a standalone program that sends Protobuf packets over UDP. See our [protobuf schema](protobuf/schema.proto).
+
+Please send us pull requests!
+
 ## Components
 
 | Name        | Description                                                                          | Documentation                           |
