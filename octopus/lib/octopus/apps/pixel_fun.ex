@@ -105,6 +105,14 @@ defmodule Octopus.Apps.PixelFun do
       |> Enum.map(fn source -> {source, Program.parse(source) |> elem(1)} end)
       |> Stream.cycle()
 
+    maybe_random_colors = fn ->
+      if config.random_colors do
+        generate_random_colors()
+      else
+        config.colors
+      end
+    end
+
     {:ok,
      %State{
        canvas: canvas,
@@ -112,10 +120,10 @@ defmodule Octopus.Apps.PixelFun do
        source: config.program,
        easing_interval: config.easing_interval,
        invert_colors: config.invert_colors,
-       last_colors: config.colors,
-       colors: config.colors,
+       last_colors: maybe_random_colors.(),
+       colors: maybe_random_colors.(),
        random_colors: config.random_colors,
-       target_colors: config.colors,
+       target_colors: maybe_random_colors.(),
        lerp_time: config.color_interval,
        color_interval: config.color_interval,
        cycle_functions: config.cycle_functions,
@@ -181,15 +189,7 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   def handle_info(:update_colors, %State{random_colors: true} = state) do
-    hue_a = :rand.uniform(360) - 1
-    hue_b = Integer.mod(hue_a + 90 + :rand.uniform(180) - 1, 360)
-    sat_a = 70 + :rand.uniform(29)
-    sat_b = 70 + :rand.uniform(29)
-    hsv_a = Chameleon.HSV.new(hue_a, sat_a, 100)
-    hsv_b = Chameleon.HSV.new(hue_b, sat_b, 100)
-    %Chameleon.RGB{r: r1, g: g1, b: b1} = Chameleon.convert(hsv_a, Chameleon.RGB)
-    %Chameleon.RGB{r: r2, g: g2, b: b2} = Chameleon.convert(hsv_b, Chameleon.RGB)
-    colors = {{r1, g1, b1}, {r2, g2, b2}}
+    colors = generate_random_colors()
 
     {:noreply,
      %State{
@@ -321,5 +321,17 @@ defmodule Octopus.Apps.PixelFun do
 
   defp lerp(a, b, t) do
     (1 - t) * a + t * b
+  end
+
+  defp generate_random_colors do
+    hue_a = :rand.uniform(360) - 1
+    hue_b = Integer.mod(hue_a + 90 + :rand.uniform(180) - 1, 360)
+    sat_a = 70 + :rand.uniform(29)
+    sat_b = 70 + :rand.uniform(29)
+    hsv_a = Chameleon.HSV.new(hue_a, sat_a, 100)
+    hsv_b = Chameleon.HSV.new(hue_b, sat_b, 100)
+    %Chameleon.RGB{r: r1, g: g1, b: b1} = Chameleon.convert(hsv_a, Chameleon.RGB)
+    %Chameleon.RGB{r: r2, g: g2, b: b2} = Chameleon.convert(hsv_b, Chameleon.RGB)
+    {{r1, g1, b1}, {r2, g2, b2}}
   end
 end
