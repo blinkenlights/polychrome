@@ -1,21 +1,27 @@
 defmodule OctopusWeb.ManagerLive do
   use OctopusWeb, :live_view
 
+  alias Phoenix.LiveView.Socket
   alias Octopus.Canvas
   alias Octopus.Layout.Mildenberg
-  alias Octopus.{Mixer, AppSupervisor}
+  alias Octopus.{Mixer, AppSupervisor, PlaylistScheduler}
+  alias Octopus.PlaylistScheduler.Playlist
   alias OctopusWeb.PixelsLive
 
   def mount(_params, _session, socket) do
     if connected?(socket) do
       Mixer.subscribe()
       AppSupervisor.subscribe()
+      PlaylistScheduler.subscribe()
     end
 
     socket =
       socket
       |> assign(pixel_layout: Mildenberg.layout(), configure_app: nil)
+      |> assign(playlist_status: "")
+      |> assign(selected_playlist: PlaylistScheduler.selected_playlist())
       |> assign_apps()
+      |> assign_playlist_options()
 
     {:ok, socket, temporary_assigns: [pixel_layout: nil]}
   end
@@ -80,6 +86,61 @@ defmodule OctopusWeb.ManagerLive do
           </table>
         </div>
 
+        <div class="flex flex-col m-2">
+          <div class="p-2 font-bold">
+            Playlist Scheduler
+          </div>
+          <div class="border p-2 flex flex-row flex-wrap gap-2">
+            <form phx-change="playlist-selected">
+              <select name="playlist">
+                <option disabled={true} selected={@selected_playlist == nil}>-</option>
+                <option
+                  :for={{id, name} <- @playlist_options}
+                  value={id}
+                  selected={id == @selected_playlist}
+                >
+                  <%= name %>
+                </option>
+              </select>
+            </form>
+
+            <button
+              class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
+              phx-click="playlist-start"
+              disabled={@selected_playlist == nil}
+            >
+              ▶
+            </button>
+            <button
+              class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
+              phx-click="playlist-stop"
+            >
+              ⏹︎
+            </button>
+            <button
+              class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
+              phx-click="playlist-edit"
+              disabled={@selected_playlist == nil}
+            >
+              ✎
+            </button>
+            <button
+              class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
+              phx-click="playlist-delete"
+              disabled={@selected_playlist == nil}
+            >
+              🗑
+            </button>
+            <p class="px-4 py-2"><%= @playlist_status %></p>
+            <button
+              class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
+              phx-click="playlist-new"
+            >
+              New
+            </button>
+          </div>
+        </div>
+
         <div :for={{category, apps} <- @available_apps}>
           <div class="flex flex-col m-2">
             <div class="p-2 font-bold">
@@ -133,6 +194,63 @@ defmodule OctopusWeb.ManagerLive do
     {:noreply, socket |> assign(configure_app: app_id)}
   end
 
+  def handle_event("playlist-selected", %{"playlist" => id}, socket) do
+    socket =
+      socket
+      |> assign(selected_playlist: id)
+
+    {:noreply, socket}
+  end
+
+  def handle_event("playlist-new", _params, socket) do
+    %Playlist{id: id} = PlaylistScheduler.create_playlist!("Playlist_#{System.os_time(:second)}")
+
+    socket =
+      socket
+      |> redirect(to: ~p"/playlist/#{id}")
+
+    {:noreply, socket}
+  end
+
+  def handle_event("playlist-stop", _params, socket) do
+    PlaylistScheduler.stop_playlist()
+    {:noreply, socket}
+  end
+
+  def handle_event("playlist-" <> _, _, %Socket{assigns: %{selected_playlist: nil}} = socket) do
+    socket =
+      socket
+      |> put_flash(:error, "No playlist selected")
+
+    {:noreply, socket}
+  end
+
+  def handle_event("playlist-start", _params, socket) do
+    PlaylistScheduler.start_playlist(socket.assigns.selected_playlist)
+    {:noreply, socket}
+  end
+
+  def handle_event("playlist-edit", _params, socket) do
+    socket =
+      socket
+      |> redirect(to: ~p"/playlist/#{socket.assigns.selected_playlist}")
+
+    {:noreply, socket}
+  end
+
+  def handle_event("playlist-delete", _params, socket) do
+    playlist = %Playlist{} = PlaylistScheduler.get_playlist(socket.assigns.selected_playlist)
+
+    PlaylistScheduler.delete_playlist!(playlist)
+
+    socket =
+      socket
+      |> put_flash(:info, "Playlist #{playlist.name} deleted")
+      |> assign_playlist_options()
+
+    {:noreply, socket}
+  end
+
   def handle_info({:apps, _}, socket) do
     {:noreply, socket |> assign_apps()}
   end
@@ -147,6 +265,10 @@ defmodule OctopusWeb.ManagerLive do
 
   def handle_info({:mixer, {:config, _config}}, socket) do
     {:noreply, socket}
+  end
+
+  def handle_info({:scheduler, status}, socket) do
+    {:noreply, assign(socket, playlist_status: status)}
   end
 
   defp assign_apps(socket) do
@@ -182,5 +304,14 @@ defmodule OctopusWeb.ManagerLive do
       end
 
     socket |> assign(available_apps: available_apps, running_apps: running_apps)
+  end
+
+  def assign_playlist_options(socket) do
+    playlist_options =
+      PlaylistScheduler.list_playlists()
+      |> Enum.map(fn %Playlist{id: id, name: name} -> {id, name} end)
+
+    socket
+    |> assign(playlist_options: playlist_options)
   end
 end

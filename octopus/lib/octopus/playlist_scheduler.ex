@@ -1,0 +1,147 @@
+defmodule Octopus.PlaylistScheduler do
+  use GenServer
+  require Logger
+
+  alias Octopus.{AppSupervisor, Mixer, Repo}
+  alias Octopus.PlaylistScheduler.Playlist
+  alias Octopus.PlaylistScheduler.Playlist.Animation
+
+  @topic "playlist_scheduler"
+  @default_animation %{app: "Text", config: %{text: "POLYCHROME"}, timeout: 60_000}
+
+  defmodule State do
+    defstruct [:playlist_id, :status, :run_id, :index, :app_id]
+  end
+
+  def start_link(_opts) do
+    GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
+  end
+
+  def subscribe() do
+    Phoenix.PubSub.subscribe(Octopus.PubSub, @topic)
+    broadcast_status()
+  end
+
+  def start_playlist(id) do
+    GenServer.cast(__MODULE__, {:start, id})
+  end
+
+  def stop_playlist() do
+    GenServer.cast(__MODULE__, :stop)
+  end
+
+  def create_playlist!(name) do
+    %Playlist{}
+    |> Playlist.changeset(%{name: name, animations: [@default_animation]})
+    |> Repo.insert!()
+  end
+
+  def list_playlists() do
+    Repo.all(Playlist)
+  end
+
+  def delete_playlist!(%Playlist{} = playlist) do
+    playlist
+    |> Repo.delete!()
+  end
+
+  def update_playlist!(id, attrs) do
+    get_playlist(id)
+    |> Playlist.changeset(attrs)
+    |> Repo.update!()
+  end
+
+  def get_playlist(id) do
+    Repo.get(Playlist, id)
+  end
+
+  def selected_playlist() do
+    GenServer.call(__MODULE__, :selected_playlist)
+  end
+
+  def broadcast_status() do
+    GenServer.cast(__MODULE__, :broadcast_status)
+  end
+
+  def init(:ok) do
+    {:ok, %State{status: :stopped}}
+  end
+
+  def handle_cast({:start, id}, %State{} = state) do
+    playlist = %Playlist{} = get_playlist(id)
+    index = length(playlist.animations) - 1
+    Logger.info("Starting playlist #{inspect(playlist.name)}")
+
+    run_id = :crypto.strong_rand_bytes(16)
+    send(self(), {:next, run_id})
+
+    {:noreply, %State{state | playlist_id: id, index: index, run_id: run_id} |> broadcast()}
+  end
+
+  def handle_cast(:stop, %State{} = state) do
+    Logger.info("Stopping playlist")
+
+    if state.app_id != nil do
+      AppSupervisor.stop_app(state.app_id)
+    end
+
+    {:noreply, %State{state | app_id: nil, run_id: nil} |> broadcast()}
+  end
+
+  def handle_cast(:broadcast_status, %State{} = state) do
+    broadcast(state)
+    {:noreply, state}
+  end
+
+  def handle_call(:selected_playlist, _from, %State{playlist_id: playlist_id} = state) do
+    {:reply, playlist_id, state}
+  end
+
+  def handle_info({:next, run_id}, %State{run_id: run_id} = state) do
+    playlist = %Playlist{} = get_playlist(state.playlist_id)
+    next_index = rem(state.index + 1, length(playlist.animations))
+
+    animation = %Animation{} = Enum.at(playlist.animations, next_index)
+
+    config =
+      animation.config
+      |> Enum.map(fn {k, v} -> {String.to_atom(k), v} end)
+      |> Enum.into(%{})
+
+    module = Module.concat(Octopus.Apps, animation.app)
+
+    Logger.info(
+      "Scheduling next app #{module} with config #{inspect(config)}. Timeout: #{animation.timeout}"
+    )
+
+    {:ok, pid} = AppSupervisor.start_app(module, config: config)
+    next_app_id = AppSupervisor.lookup_app_id(pid)
+    Mixer.select_app(next_app_id)
+    AppSupervisor.stop_app(state.app_id)
+
+    :timer.send_after(animation.timeout, self(), {:next, run_id})
+
+    {:noreply, %State{state | index: next_index, app_id: next_app_id} |> broadcast()}
+  end
+
+  def handle_info({:next, _}, state) do
+    {:noreply, state}
+  end
+
+  defp broadcast(%State{} = state) do
+    msg =
+      case state do
+        %State{app_id: nil} ->
+          {:scheduler, "Stopped"}
+
+        %State{} = state ->
+          playlist = %Playlist{} = get_playlist(state.playlist_id)
+
+          {:scheduler,
+           "Running #{inspect(playlist.name)} [#{state.index + 1} of #{length(playlist.animations)}]"}
+      end
+
+    Phoenix.PubSub.broadcast(Octopus.PubSub, @topic, msg)
+    state
+  end
+end

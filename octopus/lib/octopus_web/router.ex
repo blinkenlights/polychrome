@@ -20,6 +20,7 @@ defmodule OctopusWeb.Router do
     live "/sim", PixelsLive
     live "/app/:id", AppLive
     live "/", ManagerLive
+    live "/playlist/:id", PlaylistLive
   end
 
   # Other scopes may use custom stacks.
