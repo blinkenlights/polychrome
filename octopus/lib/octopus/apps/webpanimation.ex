@@ -6,32 +6,66 @@ defmodule Octopus.Apps.Webpanimation do
   alias Octopus.WebP
 
   defmodule State do
-    defstruct [:frames, :width, :height]
+    defstruct [:frames, :animation, :width, :height, :loop]
   end
 
   def name(), do: "Webp Animation"
 
-  def init(_args) do
-    path = Path.join([:code.priv_dir(:octopus), "webp", "mario-run.webp"])
-    decoded_animation = WebP.decode_animation(path)
-    {width, height} = decoded_animation.size
-
-    state = %State{
-      frames: convert_timestamps_to_duration(decoded_animation.frames),
-      width: width,
-      height: height
+  def config_schema() do
+    %{
+      animation: {"Animation", :string, %{default: "mario-run"}},
+      loop: {"Loop", :boolean, %{default: true}}
     }
+  end
 
-    Process.send_after(self(), :tick, 0)
+  def init(%{animation: animation, loop: loop}) do
+    state =
+      %State{frames: [], animation: nil, width: 0, height: 0, loop: loop}
+      |> load_animation(animation)
+
+    send(self(), :tick)
+
     {:ok, state}
   end
 
-  def handle_info(
-        :tick,
-        %State{frames: []}
-      ) do
-    Logger.info("Animation finished")
+  def get_config(%State{animation: animation, loop: loop}) do
+    %{animation: animation, loop: loop}
+  end
+
+  defp load_animation(%State{} = state, animation) do
+    path = Path.join([:code.priv_dir(:octopus), "webp", animation <> ".webp"])
+
+    if File.exists?(path) do
+      decoded_animation = WebP.decode_animation(path)
+      {width, height} = decoded_animation.size
+      frames = convert_timestamps_to_duration(decoded_animation.frames)
+
+      %State{state | animation: animation, frames: frames, width: width, height: height}
+    else
+      state
+    end
+  end
+
+  def handle_config(%{animation: animation, loop: loop}, %State{} = state) do
+    state =
+      if state.animation != animation do
+        send(self(), :tick)
+        load_animation(state, animation)
+      else
+        state
+      end
+
+    {:noreply, %State{state | loop: loop}}
+  end
+
+  def handle_info(:tick, %State{frames: [], loop: false}) do
     {:stop, :normal, nil}
+  end
+
+  def handle_info(:tick, %State{frames: [], loop: true} = state) do
+    state = load_animation(state, state.animation)
+    send(self(), :tick)
+    {:noreply, state}
   end
 
   def handle_info(
