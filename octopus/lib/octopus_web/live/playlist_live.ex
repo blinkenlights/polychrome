@@ -27,7 +27,7 @@ defmodule OctopusWeb.PlaylistLive do
     ~H"""
     <div class="container mx-auto flex flex-row items-center">
       <form phx-change="name-update">
-        <h1 class="text-2xl font-semibold leading-loose"><%= @name %></h1>
+        <input class="text-2xl font-semibold leading-loose" type="text" name="name" value={@name} />
       </form>
       <button class="border mx-2 py-1 px-2 rounded  bg-slate-300" phx-click="save">Save</button>
     </div>
@@ -53,6 +53,10 @@ defmodule OctopusWeb.PlaylistLive do
       |> clear_flash(:info)
 
     {:noreply, socket}
+  end
+
+  def handle_event("name-update", %{"name" => name}, socket) do
+    {:noreply, assign(socket, name: name)}
   end
 
   def handle_event("save", _params, socket) do
@@ -107,7 +111,8 @@ defmodule OctopusWeb.PlaylistLive do
     list = Jason.decode!(socket.assigns.animations)
 
     PlaylistScheduler.update_playlist!(socket.assigns.playlist_id, %{
-      animations: list
+      animations: list,
+      name: socket.assigns.name
     })
 
     socket
