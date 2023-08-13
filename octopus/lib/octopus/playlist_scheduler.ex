@@ -55,6 +55,10 @@ defmodule Octopus.PlaylistScheduler do
     Repo.get(Playlist, id)
   end
 
+  def selected_playlist() do
+    GenServer.call(__MODULE__, :selected_playlist)
+  end
+
   def broadcast_status() do
     GenServer.cast(__MODULE__, :broadcast_status)
   end
@@ -87,6 +91,10 @@ defmodule Octopus.PlaylistScheduler do
   def handle_cast(:broadcast_status, %State{} = state) do
     broadcast(state)
     {:noreply, state}
+  end
+
+  def handle_call(:selected_playlist, _from, %State{playlist_id: playlist_id} = state) do
+    {:reply, playlist_id, state}
   end
 
   def handle_info({:next, run_id}, %State{run_id: run_id} = state) do

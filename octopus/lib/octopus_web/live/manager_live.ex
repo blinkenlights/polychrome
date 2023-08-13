@@ -19,7 +19,7 @@ defmodule OctopusWeb.ManagerLive do
       socket
       |> assign(pixel_layout: Mildenberg.layout(), configure_app: nil)
       |> assign(playlist_status: "")
-      |> assign(selected_playlist: nil)
+      |> assign(selected_playlist: PlaylistScheduler.selected_playlist())
       |> assign_apps()
       |> assign_playlist_options()
 
@@ -90,9 +90,10 @@ defmodule OctopusWeb.ManagerLive do
           <div class="p-2 font-bold">
             Playlist Scheduler
           </div>
-          <div class="border p-2 flex flex-row flex-wrap">
+          <div class="border p-2 flex flex-row flex-wrap gap-2">
             <form phx-change="playlist-selected">
               <select name="playlist">
+                <option disabled={true} selected={@selected_playlist == nil}>-</option>
                 <option
                   :for={{id, name} <- @playlist_options}
                   value={id}
@@ -106,6 +107,7 @@ defmodule OctopusWeb.ManagerLive do
             <button
               class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
               phx-click="playlist-start"
+              disabled={@selected_playlist == nil}
             >
               ▶
             </button>
@@ -118,12 +120,14 @@ defmodule OctopusWeb.ManagerLive do
             <button
               class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
               phx-click="playlist-edit"
+              disabled={@selected_playlist == nil}
             >
               ✎
             </button>
             <button
               class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
               phx-click="playlist-delete"
+              disabled={@selected_playlist == nil}
             >
               🗑
             </button>
