@@ -160,8 +160,8 @@ defmodule Octopus.Apps.Supermario.Level do
       %BadGuy{x_position: 52, y_position: 6,  min_position: 52, max_position: 75, direction: :right, color: level_1_color},
       %BadGuy{x_position: 75, y_position: 6,  min_position: 52, max_position: 75, direction: :left, color: level_1_color},
       %BadGuy{x_position: 97, y_position: 3,  min_position: 97, max_position: 99, direction: :right, color: level_1_color},
-      %BadGuy{x_position: 101, y_position: 6,  min_position: 94, max_position: 101, direction: :left, color: level_1_color},
-      %BadGuy{x_position: 99, y_position: 6,  min_position: 94, max_position: 101, direction: :left, color: level_1_color}
+      %BadGuy{x_position: 101, y_position: 6,  min_position: 95, max_position: 101, direction: :left, color: level_1_color},
+      %BadGuy{x_position: 99, y_position: 6,  min_position: 95, max_position: 101, direction: :left, color: level_1_color}
     ]
   end
 
