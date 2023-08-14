@@ -225,6 +225,14 @@ defmodule OctopusWeb.ManagerLive do
     {:noreply, socket}
   end
 
+  def handle_event("playlist-edit", _params, socket) do
+    socket =
+      socket
+      |> redirect(to: ~p"/playlist/#{socket.assigns.selected_playlist}")
+
+    {:noreply, socket}
+  end
+
   def handle_event("playlist-stop", _params, socket) do
     PlaylistScheduler.stop_playlist()
     {:noreply, socket}
