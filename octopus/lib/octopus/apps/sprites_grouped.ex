@@ -165,15 +165,15 @@ defmodule Octopus.Apps.SpritesGrouped do
   end
 
   defp place_sprites([]), do: []
-  defp place_sprites([a]), do: [nil, nil, nil, nil, a, nil, nil, nil, nil, nil]
-  defp place_sprites([a, b]), do: [nil, nil, nil, a, nil, nil, b, nil, nil, nil]
-  defp place_sprites([a, b, c]), do: [nil, nil, a, nil, nil, b, nil, nil, c, nil]
-  defp place_sprites([a, b, c, d]), do: [nil, a, nil, b, nil, c, nil, d, nil, nil]
-  defp place_sprites([a, b, c, d, e]), do: [a, nil, b, nil, c, nil, d, nil, e, nil]
-  defp place_sprites([a, b, c, d, e, f]), do: [nil, a, b, nil, c, d, nil, e, f, nil]
-  defp place_sprites([a, b, c, d, e, f, g]), do: [a, b, nil, c, d, nil, e, f, nil, g]
+  defp place_sprites([a]), do: [nil, nil, nil, nil, nil, a, nil, nil, nil, nil]
+  defp place_sprites([a, b]), do: [nil, nil, nil, nil, a, b, nil, nil, nil, nil]
+  defp place_sprites([a, b, c]), do: [nil, nil, nil, nil, a, b, c, nil, nil, nil]
+  defp place_sprites([a, b, c, d]), do: [nil, nil, nil, a, b, c, d, nil, nil, nil]
+  defp place_sprites([a, b, c, d, e]), do: [nil, nil, nil, a, b, c, d, e, nil, nil]
+  defp place_sprites([a, b, c, d, e, f]), do: [nil, nil, a, b, c, d, e, f, nil, nil]
+  defp place_sprites([a, b, c, d, e, f, g]), do: [nil, nil, a, b, c, d, e, f, g, nil]
   defp place_sprites([a, b, c, d, e, f, g, h]), do: [nil, a, b, c, d, e, f, g, h, nil]
-  defp place_sprites([a, b, c, d, e, f, g, h, i]), do: [a, b, c, d, e, f, g, h, i, nil]
+  defp place_sprites([a, b, c, d, e, f, g, h, i]), do: [nil, a, b, c, d, e, f, g, h, i]
   defp place_sprites([a, b, c, d, e, f, g, h, i, j]), do: [a, b, c, d, e, f, g, h, i, j]
   # defp place_sprites(list), do: Enum.take_random(list, 10) |> place_sprites()
 
