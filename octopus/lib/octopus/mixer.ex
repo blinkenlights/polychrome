@@ -123,7 +123,7 @@ defmodule Octopus.Mixer do
     }
 
     broadcast_selected_app(state)
-
+    broadcast_rendered_app(state)
     {:noreply, state}
   end
 
@@ -135,6 +135,8 @@ defmodule Octopus.Mixer do
         last_selected_app: state.selected_app
     }
 
+    broadcast_selected_app(state)
+
     {:noreply, state}
   end
 
@@ -143,8 +145,15 @@ defmodule Octopus.Mixer do
   end
 
   def handle_info(:transition, %State{transition: {:out, time}} = state) when time <= 0 do
-    state = %State{state | transition: {:in, @transition_duration}}
+    state = %State{
+      state
+      | rendered_app: state.selected_app,
+        transition: {:in, @transition_duration}
+    }
+
     Broadcaster.set_luminance(0)
+
+    broadcast_rendered_app(state)
 
     schedule_transition()
 
@@ -205,13 +214,15 @@ defmodule Octopus.Mixer do
   end
 
   defp broadcast_selected_app(%State{} = state) do
-    AppSupervisor.send_event(state.selected_app, %ControlEvent{type: :APP_SELECTED})
-    AppSupervisor.send_event(state.last_selected_app, %ControlEvent{type: :APP_DESELECTED})
-
     Phoenix.PubSub.broadcast(
       Octopus.PubSub,
       @pubsub_topic,
       {:mixer, {:selected_app, state.selected_app}}
     )
+  end
+
+  defp broadcast_rendered_app(%State{} = state) do
+    AppSupervisor.send_event(state.selected_app, %ControlEvent{type: :APP_SELECTED})
+    AppSupervisor.send_event(state.last_selected_app, %ControlEvent{type: :APP_DESELECTED})
   end
 end
