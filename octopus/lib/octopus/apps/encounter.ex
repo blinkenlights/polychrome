@@ -152,14 +152,11 @@ defmodule Octopus.Apps.Encounter do
   end
 
   def handle_info({:NOTE_OFF, note, channel}, state) do
-    Logger.info("note off")
     send_frame(%SynthFrame{event_type: :NOTE_OFF, note: note, channel: channel})
     {:noreply, state}
   end
 
   def handle_info({:NOTE_ON, note, channel, config}, state) do
-    Logger.info("note on")
-
     send_frame(%SynthFrame{
       event_type: :NOTE_ON,
       channel: channel,
