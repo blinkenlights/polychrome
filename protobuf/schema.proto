@@ -131,9 +131,9 @@ enum InputType {
   AXIS_Y_2 = 13;
   
   BUTTON_A_1 = 14;
-  BUTTON_B_1 = 15;
-  BUTTON_A_2 = 16;
-  BUTTON_B_2 = 17;
+  BUTTON_A_2 = 15;
+  
+  BUTTON_MENU = 16;
 }
 
 message ControlEvent {
