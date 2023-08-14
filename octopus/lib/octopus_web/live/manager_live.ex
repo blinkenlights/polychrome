@@ -19,8 +19,8 @@ defmodule OctopusWeb.ManagerLive do
       socket
       |> assign(pixel_layout: Mildenberg.layout(), configure_app: nil)
       |> assign(playlist_status: "")
-      |> assign(selected_playlist: PlaylistScheduler.selected_playlist())
       |> assign_apps()
+      |> assign(selected_playlist: nil)
       |> assign_playlist_options()
 
     {:ok, socket, temporary_assigns: [pixel_layout: nil]}
@@ -117,7 +117,9 @@ defmodule OctopusWeb.ManagerLive do
             >
               ⏹︎
             </button>
-            <button
+            <.link
+              :if={@selected_playlist != nil}
+              navigate={~p"/playlist/#{@selected_playlist}"}
               class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
               phx-click="playlist-prev"
             >
@@ -132,10 +134,9 @@ defmodule OctopusWeb.ManagerLive do
             <button
               class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
               phx-click="playlist-edit"
-              disabled={@selected_playlist == nil}
             >
               ✎
-            </button>
+            </.link>
             <button
               class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
               phx-click="playlist-delete"
@@ -219,7 +220,7 @@ defmodule OctopusWeb.ManagerLive do
 
     socket =
       socket
-      |> redirect(to: ~p"/playlist/#{id}")
+      |> push_navigate(to: ~p"/playlist/#{id}")
 
     {:noreply, socket}
   end
@@ -249,14 +250,6 @@ defmodule OctopusWeb.ManagerLive do
 
   def handle_event("playlist-start", _params, socket) do
     PlaylistScheduler.start_playlist(socket.assigns.selected_playlist)
-    {:noreply, socket}
-  end
-
-  def handle_event("playlist-edit", _params, socket) do
-    socket =
-      socket
-      |> redirect(to: ~p"/playlist/#{socket.assigns.selected_playlist}")
-
     {:noreply, socket}
   end
 

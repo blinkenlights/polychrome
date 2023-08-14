@@ -25,11 +25,22 @@ defmodule OctopusWeb.PlaylistLive do
 
   def render(assigns) do
     ~H"""
-    <div class="container mx-auto w-full flex flex-row py-2">
+    <div class="container mx-auto w-full flex flex-row py-2 items-center">
       <form phx-change="name-update" class="w-full">
-        <input class="text-2xl font-semibold leading-loose w-full border-none" type="text" name="name" value={@name} />
+        <input
+          class="text-2xl font-semibold leading-loose w-full border-none"
+          type="text"
+          name="name"
+          value={@name}
+        />
       </form>
-      <button class="border mx-2 py-1 px-2 rounded bg-slate-300" phx-click="save">Save</button>
+      <button class="border mx-2 py-1 px-2 rounded bg-slate-300 h-12" phx-click="save">Save</button>
+      <.link
+        class="border mx-2 py-1 px-2 rounded bg-slate-300 h-12 flex items-center"
+        navigate={~p"/"}
+      >
+        Back
+      </.link>
     </div>
     <LiveMonacoEditor.code_editor
       value={@animations}
