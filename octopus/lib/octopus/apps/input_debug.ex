@@ -51,12 +51,6 @@ defmodule Octopus.Apps.InputDebug do
               1 -> {[:a], []}
               _ -> {[], [:a]}
             end
-
-          type in [:BUTTON_B_1, :BUTTON_B_2] ->
-            case value do
-              1 -> {[:b], []}
-              _ -> {[], [:b]}
-            end
         end
 
       new_js = Enum.reduce(releases, js, fn b, acc -> acc |> release(b) end)
@@ -91,10 +85,10 @@ defmodule Octopus.Apps.InputDebug do
 
     def handle_event(%ButtonState{} = bs, type, value) do
       case type do
-        type when type in [:AXIS_X_1, :AXIS_Y_1, :BUTTON_A_1, :BUTTON_B_1] ->
+        type when type in [:AXIS_X_1, :AXIS_Y_1, :BUTTON_A_1] ->
           %ButtonState{bs | joy1: bs.joy1 |> JoyState.handle_event(type, value)}
 
-        type when type in [:AXIS_X_2, :AXIS_Y_2, :BUTTON_A_2, :BUTTON_B_2] ->
+        type when type in [:AXIS_X_2, :AXIS_Y_2, :BUTTON_A_2] ->
           %ButtonState{bs | joy2: bs.joy2 |> JoyState.handle_event(type, value)}
 
         button ->
@@ -236,7 +230,10 @@ defmodule Octopus.Apps.InputDebug do
     {:noreply, %State{state | button_state: new_bs}}
   end
 
-  defp screen_button_color(sb_index), do: sb_index + 4
+  defp screen_button_color(6), do: 3
+  defp screen_button_color(10), do: 6
+  defp screen_button_color(9), do: 2
+  defp screen_button_color(sb_index), do: 7 + sb_index
 
   defp render_frame(%State{button_state: bs} = state) do
     # collect some painting
@@ -272,7 +269,6 @@ defmodule Octopus.Apps.InputDebug do
       |> Enum.map(fn {joy, {x, y}} ->
         [
           {:a, {0, 0}},
-          {:b, {2, 0}},
           {:u, {1, 1}},
           {:d, {1, 3}},
           {:l, {0, 2}},
@@ -284,12 +280,11 @@ defmodule Octopus.Apps.InputDebug do
            if JoyState.button?(joy, button) do
              case button do
                :a -> 8
-               :b -> 12
                _ -> 7
              end
            else
              cond do
-               button in [:a, :b] -> 2
+               button in [:a] -> 2
                true -> 5
              end
            end}
