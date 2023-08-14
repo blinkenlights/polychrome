@@ -117,26 +117,25 @@ defmodule OctopusWeb.ManagerLive do
             >
               ⏹︎
             </button>
-            <.link
-              :if={@selected_playlist != nil}
-              navigate={~p"/playlist/#{@selected_playlist}"}
+            <button
               class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
               phx-click="playlist-prev"
             >
               ⏮
-            </.link>
+            </button>
             <button
               class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
               phx-click="playlist-next"
             >
               ⏭
             </button>
-            <button
+            <.link
+              :if={@selected_playlist != nil}
+              navigate={~p"/playlist/#{@selected_playlist}"}
               class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
-              phx-click="playlist-edit"
             >
               ✎
-            </button>
+            </.link>
             <button
               class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
               phx-click="playlist-delete"
@@ -221,14 +220,6 @@ defmodule OctopusWeb.ManagerLive do
     socket =
       socket
       |> push_navigate(to: ~p"/playlist/#{id}")
-
-    {:noreply, socket}
-  end
-
-  def handle_event("playlist-edit", _params, socket) do
-    socket =
-      socket
-      |> redirect(to: ~p"/playlist/#{socket.assigns.selected_playlist}")
 
     {:noreply, socket}
   end
