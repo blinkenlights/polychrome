@@ -105,7 +105,7 @@ defmodule Joystick.EventHandler do
   defp direction_value(127, :abs_x), do: 0
   defp direction_value(255, :abs_x), do: 1
 
-  defp direction_value(0, :abs_y), do: 1
+  defp direction_value(0, :abs_y), do: -1
   defp direction_value(127, :abs_y), do: 0
-  defp direction_value(255, :abs_y), do: -1
+  defp direction_value(255, :abs_y), do: 1
 end
