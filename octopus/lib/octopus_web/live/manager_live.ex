@@ -124,7 +124,7 @@ defmodule OctopusWeb.ManagerLive do
               phx-click="playlist-prev"
             >
               ⏮
-            </button>
+            </.link>
             <button
               class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
               phx-click="playlist-next"
@@ -136,7 +136,7 @@ defmodule OctopusWeb.ManagerLive do
               phx-click="playlist-edit"
             >
               ✎
-            </.link>
+            </button>
             <button
               class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
               phx-click="playlist-delete"
