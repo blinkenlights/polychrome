@@ -125,31 +125,25 @@ defmodule Octopus.Apps.Encounter do
       end)
     end)
 
-    Stream.map(notes, fn note ->
-      {config, channel_selection} = track_configs[note.track]
-      channel = random_element(channel_selection)
-      Logger.info("note on #{note.midi}")
+    pid = self()
 
-      send_frame(%SynthFrame{
-        event_type: :NOTE_ON,
-        channel: channel,
-        config: config,
-        duration_ms: note.duration,
-        note: note.midi,
-        velocity: note.velocity
-      })
+    # we need to spwan the actual playing as a seperate thread here
+    spawn(fn ->
+      Stream.map(notes, fn note ->
+        {config, channel_selection} = track_configs[note.track]
+        channel = random_element(channel_selection)
 
-      pid = self()
+        send(pid, {:NOTE_ON, note, channel, config})
 
-      spawn(fn ->
-        :timer.sleep(note.duration)
-        Logger.info("note off #{note.midi}")
-        send(pid, {:NOTE_OFF, note.midi, channel})
+        spawn(fn ->
+          :timer.sleep(note.duration)
+          send(pid, {:NOTE_OFF, note.midi, channel})
+        end)
+
+        :timer.sleep(note.diffToNextNote)
       end)
-
-      :timer.sleep(note.diffToNextNote)
+      |> Stream.run()
     end)
-    |> Stream.run()
   end
 
   def random_element(list) do
@@ -157,20 +151,23 @@ defmodule Octopus.Apps.Encounter do
     Enum.at(list, random_index)
   end
 
-  def handle_info(:NOTE_OFF, note, channel) do
+  def handle_info({:NOTE_OFF, note, channel}, state) do
+    Logger.info("note off")
     send_frame(%SynthFrame{event_type: :NOTE_OFF, note: note, channel: channel})
+    {:noreply, state}
   end
 
-  def handle_info(:test, state) do
-    Logger.info("testing")
+  def handle_info({:NOTE_ON, note, channel, config}, state) do
+    Logger.info("note on")
 
-    # Canvas.new(8, 8)
-    # |> Canvas.to_frame()
-    # |> send_frame()
-    %SynthFrame{
-      channel: 1,
-      config: %SynthConfig{}
-    }
+    send_frame(%SynthFrame{
+      event_type: :NOTE_ON,
+      channel: channel,
+      config: config,
+      duration_ms: note.duration,
+      note: note.midi,
+      velocity: note.velocity
+    })
 
     {:noreply, state}
   end
