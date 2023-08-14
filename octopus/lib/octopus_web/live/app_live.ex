@@ -18,6 +18,7 @@ defmodule OctopusWeb.AppLive do
         module: module,
         name: name
       )
+      |> assign_playlist_config()
 
     {:ok, socket}
   end
@@ -32,6 +33,10 @@ defmodule OctopusWeb.AppLive do
         app_id={@app_id}
         app_module={@module}
       />
+      <h2 class="text-2xl font-semibold leading-loose">Config for Playlist</h2>
+      <code>
+        <%= @playlist_config %>
+      </code>
     </div>
     """
   end
@@ -46,5 +51,19 @@ defmodule OctopusWeb.AppLive do
 
   def handle_info(_, socket) do
     {:noreply, socket}
+  end
+
+  defp assign_playlist_config(socket) do
+    config = %{
+      app: Module.split(socket.assigns.module) |> List.last(),
+      config: AppSupervisor.config(socket.assigns.app_id),
+      timout: 60000
+    }
+
+    socket =
+      socket
+      |> assign(playlist_config: Jason.encode!(config))
+
+    socket
   end
 end
