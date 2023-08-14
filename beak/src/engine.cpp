@@ -172,7 +172,9 @@ Error Engine::configureSynth(int channel, synth::Oscillator::Parameters &osc,
                              const synth::Filter::Parameters &filter,
                              const juce::ADSR::Parameters &filterAdsr)
 {
-  auto synthNode = m_synthNodes.at(channel);
+  channel = std::min(channel, 10);
+  channel = std::max(channel, 1);
+  auto synthNode = m_synthNodes.at(channel - 1);
   if (auto proc = dynamic_cast<SynthProcessor *>(synthNode->getProcessor()))
   {
     proc->setVoiceParams(osc, adsr);
