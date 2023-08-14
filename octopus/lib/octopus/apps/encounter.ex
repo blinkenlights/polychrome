@@ -128,22 +128,30 @@ defmodule Octopus.Apps.Encounter do
     pid = self()
 
     # we need to spwan the actual playing as a seperate thread here
-    spawn(fn ->
-      Stream.map(notes, fn note ->
-        {config, channel_selection} = track_configs[note.track]
-        channel = random_element(channel_selection)
+    # spawn(fn ->
+    Stream.map(notes, fn note ->
+      {config, channel_selection} = track_configs[note.track]
+      channel = random_element(channel_selection)
 
-        send(pid, {:NOTE_ON, note, channel, config})
+      send_frame(%SynthFrame{
+        event_type: :NOTE_ON,
+        channel: channel,
+        config: config,
+        duration_ms: note.duration,
+        note: note.midi,
+        velocity: note.velocity
+      })
 
-        spawn(fn ->
-          :timer.sleep(note.duration)
-          send(pid, {:NOTE_OFF, note.midi, channel})
-        end)
-
-        :timer.sleep(note.diffToNextNote)
+      spawn(fn ->
+        :timer.sleep(note.duration)
+        send(pid, {:NOTE_OFF, note.midi, channel})
       end)
-      |> Stream.run()
+
+      :timer.sleep(note.diffToNextNote)
     end)
+    |> Stream.run()
+
+    # end)
   end
 
   def random_element(list) do
