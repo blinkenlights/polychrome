@@ -158,7 +158,7 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
 
   port = port != 0 ? port : defaultPort;                   // default port
   cacheDir = cacheDir.isEmpty() ? "/tmp/beak" : cacheDir;  // default cache dir
-  resourceDir = resourceDir.isEmpty() ? "./resource" : resourceDir;
+  resourceDir = resourceDir.isEmpty() ? "./resources" : resourceDir;
 
   // setup chaching
   Cache cache(cacheDir, resourceDir);
