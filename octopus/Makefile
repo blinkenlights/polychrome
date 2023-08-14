@@ -1,4 +1,4 @@
-oldie_hostname =  oldie.taila332c.ts.net
+oldie_hostname =  192.168.23.12
 
 run:
 	iex -S mix phx.server
