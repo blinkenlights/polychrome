@@ -130,6 +130,8 @@ Error Engine::configure(Config const &config)
 Error Engine::playSound(const juce::File &file, int channel)
 {
   Error err;
+  channel = std::min(channel, 10);
+  channel = std::max(channel, 1);
   auto playerNode = m_playerNodes.at(channel - 1);
   if (auto proc = dynamic_cast<SamplerProcessor *>(playerNode->getProcessor()))
   {
@@ -145,9 +147,12 @@ Error Engine::playSound(const juce::File &file, int channel)
 Error Engine::playSynth(const juce::MidiMessage &msg, int maxDurationMs)
 {
   Error err;
-  const int channel = msg.getChannel();
+  int channel = msg.getChannel();
   const int note = msg.getNoteNumber();
-  auto synthNode = m_synthNodes.at(channel);
+  channel = std::min(channel, 10);
+  channel = std::max(channel, 1);
+
+  auto synthNode = m_synthNodes.at(channel - 1);
   if (auto proc = dynamic_cast<SynthProcessor *>(synthNode->getProcessor()))
   {
     if (msg.isNoteOn())
