@@ -24,7 +24,7 @@ defmodule Octopus.Sprite do
         {:ok, %ExPng.Image{} = image} = ExPng.Image.from_file(path)
 
         x_start = rem(index * 8, image.width)
-        y_start = trunc(index * 8 / image.height) * 8
+        y_start = trunc(index * 8 / image.width) * 8
         pixel_indices = for x <- 0..7, y <- 0..7, do: {x, y}
 
         acc = Canvas.new(8, 8)
