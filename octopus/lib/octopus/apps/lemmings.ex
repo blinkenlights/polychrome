@@ -6,12 +6,20 @@ defmodule Octopus.Apps.Lemmings do
   alias Octopus.Protobuf.{InputEvent}
 
   defmodule Lemming do
-    defstruct frames: nil, anchor: {0, 0}, anim_step: 0, offsets: %{}
+    defstruct frames: nil, anchor: {-4, 0}, anim_step: 0, state: :walk_right, offsets: %{}
 
-    def turn(%Lemming{} = lem) do
+    def turn(%Lemming{anchor: {x, y}} = lem) do
+      {new_state, xoffset} =
+        cond do
+          lem.state == :walk_right -> {:walk_left, -2}
+          true -> {:walk_right, 2}
+        end
+
       %Lemming{
         lem
-        | frames: lem.frames |> Enum.map(&Canvas.flip_horizontal/1),
+        | state: new_state,
+          anchor: {x + xoffset, y},
+          frames: lem.frames |> Enum.map(&Canvas.flip_horizontal/1),
           offsets: lem.offsets |> Enum.map(fn {i, {x, y}} -> {i, {-x, y}} end) |> Enum.into(%{})
       }
     end
@@ -28,7 +36,7 @@ defmodule Octopus.Apps.Lemmings do
       %Lemming{
         (walking_right()
          |> turn())
-        | anchor: {242, 0}
+        | anchor: {240, 0}
       }
     end
 
@@ -42,6 +50,22 @@ defmodule Octopus.Apps.Lemmings do
           anim_step: rem(sprite.anim_step + 1, length(sprite.frames))
       }
     end
+
+    def boundaries(%Lemming{state: :walk_right, anchor: {x, _}} = lem, _, [bound | tail]) do
+      cond do
+        x == bound - 4 -> turn(lem)
+        true -> boundaries(lem, [], tail)
+      end
+    end
+
+    def boundaries(%Lemming{state: :walk_left, anchor: {x, _}} = lem, [bound | tail], _) do
+      cond do
+        x == bound - 4 -> turn(lem)
+        true -> boundaries(lem, tail, [])
+      end
+    end
+
+    def boundaries(%Lemming{} = lem, _, _), do: lem
 
     def sprite(%Lemming{} = lem) do
       lem.frames
@@ -75,13 +99,17 @@ defmodule Octopus.Apps.Lemmings do
     |> send_frame()
 
     state = %State{
-      lemmings: state.lemmings |> Enum.map(&Lemming.tick/1)
+      lemmings:
+        state.lemmings
+        |> Enum.map(fn lem ->
+          lem |> Lemming.tick() |> Lemming.boundaries([0], [242])
+        end)
     }
 
     {:noreply, state}
   end
 
-  def handle_input(%InputEvent{type: :BUTTON_1, value: 1}, state) do
+  def handle_input(%InputEvent{type: :AXIS_X_1, value: 1}, state) do
     state = %State{
       lemmings: [Lemming.walking_right() | state.lemmings]
     }
@@ -89,7 +117,7 @@ defmodule Octopus.Apps.Lemmings do
     {:noreply, state}
   end
 
-  def handle_input(%InputEvent{type: :BUTTON_2, value: 1}, state) do
+  def handle_input(%InputEvent{type: :AXIS_X_1, value: -1}, state) do
     state = %State{
       lemmings: [Lemming.walking_left() | state.lemmings]
     }
