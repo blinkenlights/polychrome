@@ -1,10 +1,11 @@
 defmodule Octopus.Apps.Encounter do
   use Octopus.App, category: :animation
   require Logger
+  alias Octopus.Canvas
   alias Octopus.Protobuf.{SynthFrame, SynthConfig, SynthAdsrConfig, ControlEvent}
 
   defmodule State do
-    defstruct [:notes, :config]
+    defstruct [:notes, :config, :canvas]
   end
 
   def name(), do: "Encounter"
@@ -16,9 +17,11 @@ defmodule Octopus.Apps.Encounter do
   def get_config(%State{} = _state) do
   end
 
+  @canvas_width 80
+  @canvas_height 8
+
   def init(_args) do
-    # send(self(), :test)
-    {:ok, %State{}}
+    {:ok, %State{canvas: Canvas.new(80, 8)}}
   end
 
   def play() do
@@ -124,32 +127,61 @@ defmodule Octopus.Apps.Encounter do
 
     pid = self()
 
-    Stream.map(notes, fn note ->
-      {config, channel_selection} = track_configs[note.track]
-      channel = random_element(channel_selection)
+    # clear canvas
+    Canvas.new(@canvas_width, @canvas_height) |> Canvas.to_frame() |> send_frame()
 
-      send_frame(%SynthFrame{
-        event_type: :NOTE_ON,
-        channel: channel,
-        config: config,
-        duration_ms: note.duration,
-        note: note.midi,
-        velocity: note.velocity
-      })
+    Task.start_link(fn ->
+      Stream.map(notes, fn note ->
+        {config, channel_selection} = track_configs[note.track]
+        channel = random_element(channel_selection)
 
-      spawn(fn ->
-        :timer.sleep(note.duration)
-        send_frame(%SynthFrame{event_type: :NOTE_OFF, note: note.midi, channel: channel}, pid)
+        send_frame(
+          %SynthFrame{
+            event_type: :NOTE_ON,
+            channel: channel,
+            config: config,
+            duration_ms: note.duration,
+            note: note.midi,
+            velocity: note.velocity
+          },
+          pid
+        )
+
+        send(pid, {:NOTE_ON, channel, note.midi})
+
+        Task.start_link(fn ->
+          :timer.sleep(note.duration)
+          send_frame(%SynthFrame{event_type: :NOTE_OFF, note: note.midi, channel: channel}, pid)
+          send(pid, {:NOTE_OFF, channel, note.midi})
+        end)
+
+        :timer.sleep(note.diffToNextNote)
       end)
-
-      :timer.sleep(note.diffToNextNote)
+      |> Stream.run()
     end)
-    |> Stream.run()
   end
 
   def random_element(list) do
     random_index = :rand.uniform(length(list)) - 1
     Enum.at(list, random_index)
+  end
+
+  def handle_info({:NOTE_ON, channel, _note}, %State{} = state) do
+    top_left = {(channel - 1) * 8, 0}
+    bottom_right = {elem(top_left, 0) + 7, 7}
+    canvas = state.canvas |> Canvas.fill_rect(top_left, bottom_right, {255, 255, 255})
+    canvas |> Canvas.to_frame() |> send_frame()
+
+    {:noreply, %{state | canvas: canvas}}
+  end
+
+  def handle_info({:NOTE_OFF, channel, _note}, %State{} = state) do
+    top_left = {(channel - 1) * 8, 0}
+    bottom_right = {elem(top_left, 0) + 7, 7}
+    canvas = state.canvas |> Canvas.clear_rect(top_left, bottom_right)
+    canvas |> Canvas.to_frame() |> send_frame()
+
+    {:noreply, %{state | canvas: canvas}}
   end
 
   def handle_control_event(%ControlEvent{type: :APP_SELECTED}, state) do
