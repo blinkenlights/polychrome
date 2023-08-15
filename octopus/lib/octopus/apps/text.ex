@@ -5,7 +5,7 @@ defmodule Octopus.Apps.Text do
   alias Octopus.Protobuf.{AudioFrame, ControlEvent}
   alias Octopus.{Canvas, Font, Transitions}
 
-  @animation_steps 50
+  @animation_steps 150
   @animation_interval 5
   @easing_interval 150
 
@@ -71,9 +71,20 @@ defmodule Octopus.Apps.Text do
           [final]
 
         "flipdot" ->
-          Transitions.flipdot(empty_window, final)
+          padding_start = List.duplicate(empty_window, index * state.letter_delay)
 
-        _ ->
+          padding_start =
+            if state.click do
+              padding_start ++ [{empty_window, :flip_sound, index + 1}]
+            else
+              padding_start
+            end
+
+          padding_end = List.duplicate(final, (9 - index) * state.letter_delay + 1)
+          transition = Transitions.flipdot(empty_window, final)
+          Stream.concat([padding_start, transition, padding_end])
+
+        "push" ->
           padding_start = List.duplicate(empty_window, index * state.letter_delay)
           padding_end = List.duplicate(final, (9 - index) * state.letter_delay + 1)
 
@@ -99,6 +110,10 @@ defmodule Octopus.Apps.Text do
         |> Enum.map(fn
           {canvas, :click, channel} ->
             send_frame(%AudioFrame{uri: "file://ui/switch3.wav", channel: channel})
+            canvas
+
+          {canvas, :flip_sound, channel} ->
+            send_frame(%AudioFrame{uri: "file://transition/flipdot1.wav", channel: channel})
             canvas
 
           canvas ->
