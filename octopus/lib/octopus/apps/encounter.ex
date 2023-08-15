@@ -1,10 +1,7 @@
 defmodule Octopus.Apps.Encounter do
   use Octopus.App, category: :animation
   require Logger
-  alias Octopus.Canvas
-  alias Octopus.Protobuf.RGBFrame
-  alias Octopus.Protobuf.{SynthFrame, ControlEvent}
-  alias Octopus.Protobuf.{SynthConfig, SynthAdsrConfig}
+  alias Octopus.Protobuf.{SynthFrame, SynthConfig, SynthAdsrConfig, ControlEvent}
 
   defmodule State do
     defstruct [:notes, :config]
@@ -16,7 +13,7 @@ defmodule Octopus.Apps.Encounter do
     %{}
   end
 
-  def get_config(%State{} = state) do
+  def get_config(%State{} = _state) do
   end
 
   def init(_args) do
@@ -127,8 +124,6 @@ defmodule Octopus.Apps.Encounter do
 
     pid = self()
 
-    # we need to spwan the actual playing as a seperate thread here
-    # spawn(fn ->
     Stream.map(notes, fn note ->
       {config, channel_selection} = track_configs[note.track]
       channel = random_element(channel_selection)
@@ -144,37 +139,17 @@ defmodule Octopus.Apps.Encounter do
 
       spawn(fn ->
         :timer.sleep(note.duration)
-        send(pid, {:NOTE_OFF, note.midi, channel})
+        send_frame(%SynthFrame{event_type: :NOTE_OFF, note: note.midi, channel: channel}, pid)
       end)
 
       :timer.sleep(note.diffToNextNote)
     end)
     |> Stream.run()
-
-    # end)
   end
 
   def random_element(list) do
     random_index = :rand.uniform(length(list)) - 1
     Enum.at(list, random_index)
-  end
-
-  def handle_info({:NOTE_OFF, note, channel}, state) do
-    send_frame(%SynthFrame{event_type: :NOTE_OFF, note: note, channel: channel})
-    {:noreply, state}
-  end
-
-  def handle_info({:NOTE_ON, note, channel, config}, state) do
-    send_frame(%SynthFrame{
-      event_type: :NOTE_ON,
-      channel: channel,
-      config: config,
-      duration_ms: note.duration,
-      note: note.midi,
-      velocity: note.velocity
-    })
-
-    {:noreply, state}
   end
 
   def handle_control_event(%ControlEvent{type: :APP_SELECTED}, state) do
