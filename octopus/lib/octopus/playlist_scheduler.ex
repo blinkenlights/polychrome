@@ -105,12 +105,16 @@ defmodule Octopus.PlaylistScheduler do
     {:noreply, state}
   end
 
+  def handle_cast(:next_animation, %State{run_id: nil} = state), do: {:noreply, state}
+
   def handle_cast(:next_animation, %State{} = state) do
     state = state |> new_run_id()
 
     send(self(), {:next, state.run_id})
     {:noreply, state}
   end
+
+  def handle_cast(:prev_animation, %State{run_id: nil} = state), do: {:noreply, state}
 
   def handle_cast(:prev_animation, %State{} = state) do
     playlist = %Playlist{} = get_playlist(state.playlist_id)
