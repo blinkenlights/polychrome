@@ -95,9 +95,13 @@ defmodule Octopus.Apps.FontTester do
   end
 
   defp next_variant(%State{variant: variant, current_font: %Font{} = font} = state) do
-    case Enum.count(font.variants) do
-      n when variant + 1 >= n -> %State{state | variant: 0}
-      _ -> %State{state | variant: variant + 1}
-    end
+    variant =
+      case Enum.count(font.variants) do
+        n when variant + 1 >= n -> 0
+        _ -> variant + 1
+      end
+      |> IO.inspect()
+
+    %State{state | variant: variant}
   end
 end
