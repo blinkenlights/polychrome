@@ -396,10 +396,9 @@ defmodule Octopus.Canvas do
 
   def flip_horizontal(%Canvas{} = canvas) do
     pixels =
-      for x <- 0..(canvas.width - 1),
-          y <- 0..(canvas.height - 1),
-          do: {{x, y}, Canvas.get_pixel(canvas, {canvas.width - 1 - x, y})},
-          into: %{}
+      canvas.pixels
+      |> Enum.map(fn {{x, y}, value} -> {{canvas.width - 1 - x, y}, value} end)
+      |> Enum.into(%{})
 
     %Canvas{canvas | pixels: pixels}
   end
