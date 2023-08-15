@@ -52,10 +52,10 @@ defmodule Octopus.Apps.Text do
     |> Enum.map(fn {char, index} ->
       final = Font.draw_char(font, char, state.variant, empty_window)
       padding_start = List.duplicate(empty_window, index * state.letter_delay)
-      padding_end = List.duplicate(final, (9 - index) * state.letter_delay)
+      padding_end = List.duplicate(final, (9 - index) * state.letter_delay + 1)
 
       padding_end =
-        if state.click && length(padding_end) > 0 do
+        if state.click do
           [padding_end_head | padding_end_tail] = padding_end
           [{padding_end_head, :click, index + 1} | padding_end_tail]
         else
