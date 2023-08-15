@@ -1,5 +1,5 @@
 defmodule Octopus.Apps.Lemmings do
-  use Octopus.App, category: :test
+  use Octopus.App, category: :animation
   require Logger
 
   alias Octopus.{Sprite, Canvas}
@@ -78,6 +78,8 @@ defmodule Octopus.Apps.Lemmings do
   end
 
   def name(), do: "Lemmings"
+
+  def icon(), do: Sprite.load("lemmings/LemmingWalk", 3)
 
   def init(_args) do
     state = %State{
