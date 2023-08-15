@@ -109,7 +109,6 @@ defmodule Octopus.PlaylistScheduler do
     state = state |> new_run_id()
 
     send(self(), {:next, state.run_id})
-    IO.inspect(state)
     {:noreply, state}
   end
 

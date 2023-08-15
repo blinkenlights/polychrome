@@ -2,7 +2,7 @@ defmodule Octopus.InputAdapter do
   use GenServer
   require Logger
 
-  alias Octopus.{Protobuf, Mixer}
+  alias Octopus.{Protobuf, Mixer, PlaylistScheduler}
   alias Octopus.Protobuf.InputEvent
 
   @local_port 4423

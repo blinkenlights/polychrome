@@ -2,7 +2,7 @@ defmodule Octopus.Mixer do
   use GenServer
   require Logger
 
-  alias Octopus.{Broadcaster, Protobuf, AppSupervisor}
+  alias Octopus.{Broadcaster, Protobuf, AppSupervisor, PlaylistScheduler}
 
   alias Octopus.Protobuf.{
     Frame,
@@ -45,6 +45,10 @@ defmodule Octopus.Mixer do
 
   defp send_frame(binary, frame, app_id) do
     GenServer.cast(__MODULE__, {:new_frame, {app_id, binary, frame}})
+  end
+
+  def handle_input(%InputEvent{type: :BUTTON_MENU, value: 1}) do
+    PlaylistScheduler.playlist_next()
   end
 
   def handle_input(%InputEvent{} = input_event) do

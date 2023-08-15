@@ -154,6 +154,7 @@ defmodule OctopusWeb.PixelsLive do
     "k" => :DIRECTION_2_DOWN,
     "l" => :DIRECTION_2_RIGHT,
     "u" => :BUTTON_A_2,
+    "m" => :BUTTON_MENU
   }
 
   def handle_event("keydown", %{"key" => key}, socket) when is_map_key(@key_map, key) do

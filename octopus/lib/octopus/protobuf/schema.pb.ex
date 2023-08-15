@@ -48,9 +48,8 @@ defmodule Octopus.Protobuf.InputType do
   field :AXIS_X_2, 12
   field :AXIS_Y_2, 13
   field :BUTTON_A_1, 14
-  field :BUTTON_B_1, 15
-  field :BUTTON_A_2, 16
-  field :BUTTON_B_2, 17
+  field :BUTTON_A_2, 15
+  field :BUTTON_MENU, 16
 end
 
 defmodule Octopus.Protobuf.ControlEventType do
