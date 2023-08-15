@@ -40,6 +40,14 @@ defmodule Octopus.Apps.Lemmings do
       }
     end
 
+    def stopper(pos) do
+      %Lemming{
+        anchor: {pos * (18 + 8), 0},
+        frames: Sprite.load(Path.join(["lemmings", "LemmingStopper"])),
+        state: :stopper
+      }
+    end
+
     def tick(%Lemming{} = sprite) do
       {dx, dy} = Map.get(sprite.offsets, sprite.anim_step, {0, 0})
       {x, y} = sprite.anchor
@@ -83,7 +91,11 @@ defmodule Octopus.Apps.Lemmings do
 
   def init(_args) do
     state = %State{
-      lemmings: [Lemming.walking_right()]
+      lemmings: [
+        Lemming.walking_left(),
+        Lemming.walking_right(),
+        Lemming.stopper(6)
+      ]
     }
 
     :timer.send_interval(100, :tick)
@@ -91,8 +103,21 @@ defmodule Octopus.Apps.Lemmings do
     {:ok, state}
   end
 
-  def handle_info(:tick, %State{} = state) do
+  defp tick(%State{} = state) do
+    state =
+      case state.t do
+        t when t in [1600, 3200] ->
+          %State{
+            state
+            | lemmings: [Lemming.walking_left(), Lemming.walking_right() | state.lemmings]
+          }
+
+        _ ->
+          state
+      end
+
     state.lemmings
+    #    |> IO.inspect()
     |> Enum.reduce(Canvas.new(242, 8), fn sprite, canvas ->
       canvas
       |> Canvas.overlay(Lemming.sprite(sprite), offset: sprite.anchor)
@@ -104,11 +129,14 @@ defmodule Octopus.Apps.Lemmings do
       lemmings:
         state.lemmings
         |> Enum.map(fn lem ->
-          lem |> Lemming.tick() |> Lemming.boundaries([0], [242])
-        end)
+          lem |> Lemming.tick() |> Lemming.boundaries([0, 7 * (18 + 8)], [242, 6 * (18 + 8) - 18])
+        end),
+      t: state.t + 1
     }
+  end
 
-    {:noreply, state}
+  def handle_info(:tick, %State{} = state) do
+    {:noreply, tick(state)}
   end
 
   def handle_input(%InputEvent{type: :AXIS_X_1, value: 1}, state) do
