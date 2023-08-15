@@ -166,10 +166,15 @@ defmodule Octopus.Apps.Encounter do
     Enum.at(list, random_index)
   end
 
-  def handle_info({:NOTE_ON, channel, _note}, %State{} = state) do
+  def handle_info({:NOTE_ON, channel, note}, %State{} = state) do
+
+    %Chameleon.RGB{r: r, g: g, b: b} =
+      Chameleon.HSV.new((note-20)/100 * 360, 100, 100) |> Chameleon.convert(Chameleon.RGB)
+
     top_left = {(channel - 1) * 8, 0}
+
     bottom_right = {elem(top_left, 0) + 7, 7}
-    canvas = state.canvas |> Canvas.fill_rect(top_left, bottom_right, {255, 255, 255})
+    canvas = state.canvas |> Canvas.fill_rect(top_left, bottom_right, {r, g, b})
     canvas |> Canvas.to_frame() |> send_frame()
 
     {:noreply, %{state | canvas: canvas}}
