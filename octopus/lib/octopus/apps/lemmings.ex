@@ -3,7 +3,7 @@ defmodule Octopus.Apps.Lemmings do
   require Logger
 
   alias Octopus.{Sprite, Canvas}
-  alias Octopus.Protobuf.{InputEvent}
+  alias Octopus.Protobuf.{AudioFrame, InputEvent}
 
   defmodule Lemming do
     defstruct frames: nil, anchor: {-4, 0}, anim_step: 0, state: :walk_right, offsets: %{}
@@ -99,7 +99,6 @@ defmodule Octopus.Apps.Lemmings do
     }
 
     :timer.send_interval(100, :tick)
-
     {:ok, state}
   end
 
@@ -135,22 +134,37 @@ defmodule Octopus.Apps.Lemmings do
     }
   end
 
+  def add_left(%State{} = state) do
+    send_frame(%AudioFrame{uri: "file://lemmings/letsgo.wav", channel: 1})
+
+    state = %State{
+      lemmings: [Lemming.walking_right() | state.lemmings]
+    }
+
+    state
+  end
+
+  def add_right(%State{} = state) do
+    send_frame(%AudioFrame{uri: "file://lemmings/letsgo.wav", channel: 10})
+
+    state = %State{
+      lemmings: [Lemming.walking_left() | state.lemmings]
+    }
+
+    state
+  end
+
   def handle_info(:tick, %State{} = state) do
     {:noreply, tick(state)}
   end
 
   def handle_input(%InputEvent{type: :AXIS_X_1, value: 1}, state) do
-    state = %State{
-      lemmings: [Lemming.walking_right() | state.lemmings]
-    }
-
+    state = add_left(state)
     {:noreply, state}
   end
 
   def handle_input(%InputEvent{type: :AXIS_X_1, value: -1}, state) do
-    state = %State{
-      lemmings: [Lemming.walking_left() | state.lemmings]
-    }
+    state = add_right(state)
 
     {:noreply, state}
   end
