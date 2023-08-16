@@ -82,7 +82,7 @@ defmodule Octopus.Apps.Supermario do
     new_button_state = ButtonState.handle_event(button_state, type, value)
 
     state =
-      if ButtonState.button?(new_button_state, :BUTTON_5) do
+      if ButtonState.button?(new_button_state, :BUTTON_A_2) do
         game = Game.jump(state.game)
         %{state | game: game}
       else
