@@ -1,6 +1,6 @@
 defmodule Octopus.Apps.Snake.Game do
   defmodule Worm do
-    @base_speed 40
+    @base_speed 20
     defstruct [:parts, :rem_t, :speed]
 
     def new() do
