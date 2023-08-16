@@ -20,18 +20,21 @@ defmodule Octopus.Apps.Supermario do
   def name(), do: "Supermario"
 
   def init(_args) do
+    state = init_state()
+    schedule_ticker(state.interval)
+    {:ok, state}
+  end
+
+  defp init_state do
     game = Game.new(@windows_shown)
     canvas = Canvas.new(80, 8)
 
-    state = %State{
+    %State{
       interval: @frame_time_ms,
       game: game,
       canvas: canvas,
       button_state: ButtonState.new()
     }
-
-    schedule_ticker(state.interval)
-    {:ok, state}
   end
 
   def handle_info(:tick, %State{canvas: canvas, game: game} = state) do
@@ -47,10 +50,9 @@ defmodule Octopus.Apps.Supermario do
         {:noreply, %State{state | game: game, canvas: canvas}}
 
       {:gameover, _game} ->
-        Mixer.get_selected_app()
-        |> Octopus.AppSupervisor.stop_app()
-
-        {:noreply, nil}
+        state = init_state()
+        schedule_ticker(state.interval)
+        {:noreply, state}
     end
   end
 
