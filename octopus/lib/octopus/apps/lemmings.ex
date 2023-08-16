@@ -82,7 +82,7 @@ defmodule Octopus.Apps.Lemmings do
   end
 
   defmodule State do
-    defstruct t: 0, lemmings: []
+    defstruct t: 0, lemmings: [], lemming_cooldown: 0
   end
 
   def name(), do: "Lemmings"
@@ -116,7 +116,6 @@ defmodule Octopus.Apps.Lemmings do
       end
 
     state.lemmings
-    #    |> IO.inspect()
     |> Enum.reduce(Canvas.new(242, 8), fn sprite, canvas ->
       canvas
       |> Canvas.overlay(Lemming.sprite(sprite), offset: sprite.anchor)
@@ -130,29 +129,36 @@ defmodule Octopus.Apps.Lemmings do
         |> Enum.map(fn lem ->
           lem |> Lemming.tick() |> Lemming.boundaries([0, 7 * (18 + 8)], [242, 6 * (18 + 8) - 18])
         end),
-      t: state.t + 1
+      t: state.t + 1,
+      lemming_cooldown: state.lemming_cooldown - 1
     }
   end
 
-  def add_left(%State{} = state) do
+  def add_left(%State{lemming_cooldown: lemming_cooldown} = state) when lemming_cooldown <= 0 do
     send_frame(%AudioFrame{uri: "file://lemmings/letsgo.wav", channel: 1})
 
     state = %State{
-      lemmings: [Lemming.walking_right() | state.lemmings]
+      lemmings: [Lemming.walking_right() | state.lemmings],
+      lemming_cooldown: 50,
     }
 
     state
   end
 
-  def add_right(%State{} = state) do
+  def add_left(state), do: state
+
+  def add_right(%State{lemming_cooldown: lemming_cooldown} = state) when lemming_cooldown <= 0 do
     send_frame(%AudioFrame{uri: "file://lemmings/letsgo.wav", channel: 10})
 
     state = %State{
-      lemmings: [Lemming.walking_left() | state.lemmings]
+      lemmings: [Lemming.walking_left() | state.lemmings],
+      lemming_cooldown: 50,
     }
 
     state
   end
+
+  def add_right(state), do: state
 
   def handle_info(:tick, %State{} = state) do
     {:noreply, tick(state)}
