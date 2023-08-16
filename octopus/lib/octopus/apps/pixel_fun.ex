@@ -40,7 +40,8 @@ defmodule Octopus.Apps.PixelFun do
       :functions,
       :pivot,
       :offset,
-      :move
+      :move,
+      :input
     ]
   end
 
@@ -57,7 +58,8 @@ defmodule Octopus.Apps.PixelFun do
       zoom_scale: {"Zoom Scale", :float, %{default: 2, min: 0, max: 10}},
       cycle_functions: {"Cycle Functions", :boolean, %{default: false}},
       cycle_functions_interval:
-        {"Cycle Functions Interval (s)", :float, %{default: 30, min: 1, max: 60 * 60}}
+        {"Cycle Functions Interval (s)", :float, %{default: 30, min: 1, max: 60 * 60}},
+      input: {"Input", :boolean, %{default: false}}
     }
   end
 
@@ -71,7 +73,8 @@ defmodule Octopus.Apps.PixelFun do
       cycle_functions_interval: state.cycle_functions_interval,
       translate_scale: state.translate_scale,
       rotate_scale: state.rotate_scale,
-      zoom_scale: state.zoom_scale
+      zoom_scale: state.zoom_scale,
+      input: state.input
     }
   end
 
@@ -110,7 +113,8 @@ defmodule Octopus.Apps.PixelFun do
        functions: functions,
        pivot: {@center_x, @center_y},
        offset: {0, 0},
-       move: {0, 0}
+       move: {0, 0},
+       input: config.input
      }}
   end
 
@@ -203,12 +207,12 @@ defmodule Octopus.Apps.PixelFun do
     {:noreply, %State{state | canvas: canvas, offset: {offset_x, offset_y}}}
   end
 
-  def handle_input(%InputEvent{type: axis, value: value}, %State{move: {_, y}} = state)
+  def handle_input(%InputEvent{type: axis, value: value}, %State{move: {_, y}, input: true} = state)
       when axis in [:AXIS_X_1, :AXIS_X_2] do
     {:noreply, %State{state | move: {-value, y}}}
   end
 
-  def handle_input(%InputEvent{type: axis, value: value}, %State{move: {x, _}} = state)
+  def handle_input(%InputEvent{type: axis, value: value}, %State{move: {x, _}, input: true} = state)
       when axis in [:AXIS_Y_1, :AXIS_Y_2] do
     {:noreply, %State{state | move: {x, -value}}}
   end
