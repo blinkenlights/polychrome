@@ -39,7 +39,7 @@ defmodule Octopus.Apps.Supermario.Game do
   @pause_animation_ms 4_000_000
   @game_over_animation_ms 23_000_000
   # starting from window
-  @windows_offset 3
+  @windows_offset 5
 
   def new(windows_shown) when windows_shown > 0 and windows_shown < 11 do
     level = Level.new()
