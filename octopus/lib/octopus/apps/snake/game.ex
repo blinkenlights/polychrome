@@ -106,7 +106,7 @@ defmodule Octopus.Apps.Snake.Game do
     end
   end
 
-  def render_frame(%Game{} = game) do
+  def render_canvas(%Game{} = game) do
     gamecanvas =
       Canvas.new(8, 8)
       |> Canvas.put_pixel(game.food, {0xFF, 0xFF, 0x00})
@@ -117,6 +117,6 @@ defmodule Octopus.Apps.Snake.Game do
         acc |> Canvas.put_pixel(pos, {0x10, 0xFF, 0x10})
       end)
 
-    Canvas.new(60, 8) |> Canvas.overlay(gamecanvas, offset: {8 * 4, 0}) |> Canvas.to_frame()
+    Canvas.new(60, 8) |> Canvas.overlay(gamecanvas, offset: {8 * 4, 0})
   end
 end

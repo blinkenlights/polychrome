@@ -144,6 +144,11 @@ defmodule Octopus.App do
     Mixer.handle_frame(app_id, frame)
   end
 
+  def send_canvas(%Canvas{} = canvas) do
+    app_id = AppSupervisor.lookup_app_id(self())
+    Mixer.handle_canvas(app_id, canvas)
+  end
+
   @spec default_config(config_schema()) :: map
   def default_config(config_schema) do
     config_schema

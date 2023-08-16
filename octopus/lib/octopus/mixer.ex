@@ -2,7 +2,7 @@ defmodule Octopus.Mixer do
   use GenServer
   require Logger
 
-  alias Octopus.{Broadcaster, Protobuf, AppSupervisor, PlaylistScheduler}
+  alias Octopus.{Broadcaster, Protobuf, AppSupervisor, PlaylistScheduler, Canvas}
 
   alias Octopus.Protobuf.{
     Frame,
@@ -22,6 +22,7 @@ defmodule Octopus.Mixer do
               last_selected_app: nil,
               rendered_app: nil,
               transition: nil,
+              buffer_canvas: Canvas.new(80, 8),
               max_luminance: 255
   end
 
@@ -43,6 +44,10 @@ defmodule Octopus.Mixer do
     |> send_frame(frame, app_id)
   end
 
+  def handle_canvas(app_id, canvas) do
+    GenServer.cast(__MODULE__, {:new_canvas, {app_id, canvas}})
+  end
+
   defp send_frame(binary, frame, app_id) do
     GenServer.cast(__MODULE__, {:new_frame, {app_id, binary, frame}})
   end
@@ -52,8 +57,14 @@ defmodule Octopus.Mixer do
   end
 
   def handle_input(%InputEvent{} = input_event) do
-    app_id = get_selected_app()
-    AppSupervisor.send_event(app_id, input_event)
+    case get_selected_app() do
+      {left, right} ->
+        AppSupervisor.send_event(left, input_event)
+        AppSupervisor.send_event(right, input_event)
+
+      app_id ->
+        AppSupervisor.send_event(app_id, input_event)
+    end
   end
 
   @doc """
@@ -92,7 +103,8 @@ defmodule Octopus.Mixer do
   end
 
   # broadcast frames from rendered app
-  def handle_cast({:new_frame, {app_id, binary, frame}}, %State{rendered_app: app_id} = state) do
+  def handle_cast({:new_frame, {app_id, binary, frame}}, %State{rendered_app: app_id} = state)
+      when is_binary(app_id) do
     send_frame(binary, frame)
     {:noreply, state}
   end
@@ -101,6 +113,39 @@ defmodule Octopus.Mixer do
   def handle_cast({:new_frame, {_app_id, _binary, _frame}}, state) do
     {:noreply, state}
   end
+
+  def handle_cast(
+        {:new_canvas, {left_app_id, canvas}},
+        %State{rendered_app: {left_app_id, _}} = state
+      ) do
+    canvas = Canvas.cut(canvas, {0, 0}, {39, 7})
+    canvas = Canvas.overlay(state.buffer_canvas, canvas, transparency: false)
+    frame = Canvas.to_frame(canvas)
+
+    Protobuf.split_and_encode(frame)
+    |> Enum.each(fn binary ->
+      send_frame(binary, frame)
+    end)
+
+    {:noreply, %State{state | buffer_canvas: canvas}}
+  end
+
+  def handle_cast(
+        {:new_canvas, {right_app_id, canvas}},
+        %State{rendered_app: {_, right_app_id}} = state
+      ) do
+    canvas = Canvas.overlay(state.buffer_canvas, canvas, offset: {40, 0}, transparency: false)
+    frame = Canvas.to_frame(canvas)
+
+    Protobuf.split_and_encode(frame)
+    |> Enum.each(fn binary ->
+      send_frame(binary, frame)
+    end)
+
+    {:noreply, %State{state | buffer_canvas: canvas}}
+  end
+
+  def handle_cast({:new_canvas, _}, state), do: {:noreply, state}
 
   ### App Transitions ###
   # Implemented with a simple state machine that is represented by the `transition` field in the state.
@@ -218,12 +263,20 @@ defmodule Octopus.Mixer do
   end
 
   defp broadcast_selected_app(%State{} = state) do
+    selected =
+      case state.selected_app do
+        {_, _} -> nil
+        app_id -> app_id
+      end
+
     Phoenix.PubSub.broadcast(
       Octopus.PubSub,
       @pubsub_topic,
-      {:mixer, {:selected_app, state.selected_app}}
+      {:mixer, {:selected_app, selected}}
     )
   end
+
+  defp broadcast_rendered_app(%State{selected_app: {_, _}} = state), do: state
 
   defp broadcast_rendered_app(%State{} = state) do
     AppSupervisor.send_event(state.selected_app, %ControlEvent{type: :APP_SELECTED})

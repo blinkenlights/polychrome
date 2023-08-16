@@ -46,7 +46,7 @@ defmodule Octopus.Apps.Supermario do
           game
           |> Game.draw(canvas)
 
-        canvas |> Canvas.to_frame() |> send_frame()
+        canvas |> send_canvas()
         {:noreply, %State{state | game: game, canvas: canvas}}
 
       {:gameover, _game} ->

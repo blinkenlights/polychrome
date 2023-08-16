@@ -42,8 +42,8 @@ defmodule Octopus.Apps.Snake do
     game = state.game |> Game.tick(bs.joy1)
 
     game
-    |> Game.render_frame()
-    |> send_frame()
+    |> Game.render_canvas()
+    |> send_canvas()
 
     %State{state | t: t + 1, game: game}
   end

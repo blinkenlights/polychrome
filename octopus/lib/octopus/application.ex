@@ -24,6 +24,7 @@ defmodule Octopus.Application do
         Octopus.AppSupervisor,
         Octopus.InputAdapter,
         Octopus.PlaylistScheduler,
+        Octopus.GameScheduler,
 
         # Caches
         Supervisor.child_spec({Cachex, name: ColorPalette}, id: make_ref()),
