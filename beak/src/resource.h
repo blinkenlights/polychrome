@@ -56,6 +56,6 @@ class Cache : public juce::URL::DownloadTaskListener
   juce::File m_cachePath;
   juce::File m_sampleDir;
   std::map<juce::String, InternalDataType> m_ressourceMap;
-  static constexpr double m_fileLengthLimitSeconds = 20;
+  static constexpr double m_fileLengthLimitSeconds = 400.0f;
 };
 }  // namespace beak
