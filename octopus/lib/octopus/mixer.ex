@@ -53,7 +53,7 @@ defmodule Octopus.Mixer do
   end
 
   def handle_input(%InputEvent{type: :BUTTON_MENU, value: 1}) do
-    PlaylistScheduler.playlist_next()
+    # PlaylistScheduler.playlist_next()
   end
 
   def handle_input(%InputEvent{} = input_event) do

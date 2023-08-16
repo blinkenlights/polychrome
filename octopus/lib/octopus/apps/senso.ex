@@ -52,10 +52,10 @@ defmodule Octopus.Apps.Senso do
     },
     filter_type: :LOWPASS,
     resonance: 2,
-    cutoff: 1000
+    cutoff: 5000
   }
 
-  @velocity 0.7
+  @velocity 1
 
   def name(), do: "Senso"
 
