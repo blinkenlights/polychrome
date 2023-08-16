@@ -4,6 +4,7 @@ defmodule Octopus.Apps.InputDebug do
 
   alias Octopus.ColorPalette
   alias Octopus.Protobuf.{Frame, InputEvent}
+  alias Octopus.Apps.Input.{ButtonState, JoyState}
 
   @frame_rate 60
   @frame_time_ms trunc(1000 / @frame_rate)
