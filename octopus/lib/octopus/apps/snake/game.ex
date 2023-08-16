@@ -130,9 +130,8 @@ defmodule Octopus.Apps.Snake.Game do
       Canvas.new(60, 8)
       |> Canvas.overlay(gamecanvas, offset: {8 * 4, 0})
 
-    canvas = Font.draw_char(font, first, 0, canvas, {0, 0})
-    canvas = Font.draw_char(font, second, 0, canvas, {8, 0})
-    canvas = Font.draw_char(font, ~c"0", 0, canvas, {16, 0})
+    canvas = Font.draw_char(font, first, 0, canvas, {8, 0})
+    canvas = Font.draw_char(font, second, 0, canvas, {16, 0})
     canvas
   end
 end
