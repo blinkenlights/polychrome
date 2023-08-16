@@ -45,11 +45,11 @@ defmodule Octopus.Broadcaster do
   end
 
   def init(:ok) do
-    target_ip = {192, 168, 23, 255}
-    # case Application.get_env(:octopus, :broadcast) do
-    #   true -> get_broadcast_ip()
-    #   false -> {127, 0, 0, 1}
-    # end
+    target_ip =
+      case Application.get_env(:octopus, :broadcast) do
+        true -> {192, 168, 23, 255}
+        false -> {127, 0, 0, 1}
+      end
 
     Logger.info("Broadcasting to #{inspect(target_ip)}. Port #{@remote_port}")
 

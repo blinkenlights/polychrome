@@ -44,3 +44,17 @@ liveSocket.connect();
 // >> liveSocket.enableLatencySim(1000)  // enabled for duration of browser session
 // >> liveSocket.disableLatencySim()
 window.liveSocket = liveSocket;
+
+// Monaco Editor
+window.addEventListener("lme:editor_mounted", (ev) => {
+  const hook = ev.detail.hook
+
+  // https://microsoft.github.io/monaco-editor/docs.html#interfaces/editor.IStandaloneCodeEditor.html
+  const editor = ev.detail.editor.standalone_code_editor
+
+  // push an event to the parent liveview containing the editor current value
+  // when the editor loses focus
+  editor.getModel().onDidChangeContent(() => {
+    hook.pushEvent("editor-update", { content: editor.getValue() })
+  })
+})

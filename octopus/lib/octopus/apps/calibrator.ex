@@ -367,7 +367,6 @@ defmodule Octopus.Apps.Calibrator do
       b: round(Enum.at(@gamma_lookup, b) * @blue_correction),
       w: 0
     }
-    |> IO.inspect()
 
     # %RGBW{r: 0, g: 0, b: 30, w: 255}
   end

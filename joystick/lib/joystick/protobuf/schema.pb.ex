@@ -1,7 +1,37 @@
+defmodule Joystick.Protobuf.SynthWaveform do
+  @moduledoc false
+
+  use Protobuf, enum: true, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :SINE, 0
+  field :SAW, 1
+  field :SQUARE, 2
+end
+
+defmodule Joystick.Protobuf.SynthFilterType do
+  @moduledoc false
+
+  use Protobuf, enum: true, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :BANDPASS, 0
+  field :HIGHPASS, 1
+  field :LOWPASS, 2
+end
+
+defmodule Joystick.Protobuf.SynthEventType do
+  @moduledoc false
+
+  use Protobuf, enum: true, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :CONFIG, 0
+  field :NOTE_ON, 1
+  field :NOTE_OFF, 2
+end
+
 defmodule Joystick.Protobuf.InputType do
   @moduledoc false
 
-  use Protobuf, enum: true, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, enum: true, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :BUTTON_1, 0
   field :BUTTON_2, 1
@@ -17,12 +47,26 @@ defmodule Joystick.Protobuf.InputType do
   field :AXIS_Y_1, 11
   field :AXIS_X_2, 12
   field :AXIS_Y_2, 13
+  field :BUTTON_A_1, 14
+  field :BUTTON_A_2, 15
+  field :BUTTON_MENU, 16
+end
+
+defmodule Joystick.Protobuf.ControlEventType do
+  @moduledoc false
+
+  use Protobuf, enum: true, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :APP_SELECTED, 0
+  field :APP_DESELECTED, 1
+  field :APP_STARTED, 2
+  field :APP_STOPPED, 3
 end
 
 defmodule Joystick.Protobuf.EasingMode do
   @moduledoc false
 
-  use Protobuf, enum: true, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, enum: true, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :LINEAR, 0
   field :EASE_IN_QUAD, 1
@@ -45,7 +89,7 @@ end
 defmodule Joystick.Protobuf.Packet do
   @moduledoc false
 
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   oneof :content, 0
 
@@ -53,7 +97,13 @@ defmodule Joystick.Protobuf.Packet do
   field :w_frame, 3, type: Joystick.Protobuf.WFrame, json_name: "wFrame", oneof: 0
   field :rgb_frame, 4, type: Joystick.Protobuf.RGBFrame, json_name: "rgbFrame", oneof: 0
   field :audio_frame, 5, type: Joystick.Protobuf.AudioFrame, json_name: "audioFrame", oneof: 0
+  field :synth_frame, 10, type: Joystick.Protobuf.SynthFrame, json_name: "synthFrame", oneof: 0
   field :input_event, 6, type: Joystick.Protobuf.InputEvent, json_name: "inputEvent", oneof: 0
+
+  field :control_event, 9,
+    type: Joystick.Protobuf.ControlEvent,
+    json_name: "controlEvent",
+    oneof: 0
 
   field :firmware_config, 1,
     type: Joystick.Protobuf.FirmwareConfig,
@@ -74,7 +124,7 @@ end
 defmodule Joystick.Protobuf.Frame do
   @moduledoc false
 
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :data, 1, type: :bytes, deprecated: false
   field :palette, 2, type: :bytes, deprecated: false
@@ -84,7 +134,7 @@ end
 defmodule Joystick.Protobuf.WFrame do
   @moduledoc false
 
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :data, 1, type: :bytes, deprecated: false
   field :palette, 2, type: :bytes, deprecated: false
@@ -94,7 +144,7 @@ end
 defmodule Joystick.Protobuf.RGBFrame do
   @moduledoc false
 
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :data, 1, type: :bytes, deprecated: false
   field :easing_interval, 2, type: :uint32, json_name: "easingInterval"
@@ -103,25 +153,92 @@ end
 defmodule Joystick.Protobuf.AudioFrame do
   @moduledoc false
 
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :uri, 1, type: :string
   field :channel, 2, type: :uint32
 end
 
+defmodule Joystick.Protobuf.SynthAdsrConfig do
+  @moduledoc false
+
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :attack, 1, type: :float
+  field :decay, 2, type: :float
+  field :sustain, 3, type: :float
+  field :release, 4, type: :float
+end
+
+defmodule Joystick.Protobuf.SynthReverbConfig do
+  @moduledoc false
+
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :room_size, 1, type: :float, json_name: "roomSize"
+  field :width, 2, type: :float
+  field :damping, 3, type: :float
+  field :freeze_mode, 4, type: :float, json_name: "freezeMode"
+  field :wet_level, 5, type: :float, json_name: "wetLevel"
+end
+
+defmodule Joystick.Protobuf.SynthConfig do
+  @moduledoc false
+
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :wave_form, 1, type: Joystick.Protobuf.SynthWaveform, json_name: "waveForm", enum: true
+  field :gain, 2, type: :float
+  field :adsr_config, 3, type: Joystick.Protobuf.SynthAdsrConfig, json_name: "adsrConfig"
+
+  field :filter_adsr_config, 4,
+    type: Joystick.Protobuf.SynthAdsrConfig,
+    json_name: "filterAdsrConfig"
+
+  field :filter_type, 5,
+    type: Joystick.Protobuf.SynthFilterType,
+    json_name: "filterType",
+    enum: true
+
+  field :cutoff, 6, type: :float
+  field :resonance, 7, type: :float
+  field :reverb_config, 8, type: Joystick.Protobuf.SynthReverbConfig, json_name: "reverbConfig"
+end
+
+defmodule Joystick.Protobuf.SynthFrame do
+  @moduledoc false
+
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :event_type, 1, type: Joystick.Protobuf.SynthEventType, json_name: "eventType", enum: true
+  field :channel, 2, type: :uint32
+  field :note, 3, type: :uint32
+  field :velocity, 4, type: :float
+  field :duration_ms, 5, type: :float, json_name: "durationMs"
+  field :config, 6, type: Joystick.Protobuf.SynthConfig
+end
+
 defmodule Joystick.Protobuf.InputEvent do
   @moduledoc false
 
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :type, 1, type: Joystick.Protobuf.InputType, enum: true
   field :value, 3, type: :int32
 end
 
+defmodule Joystick.Protobuf.ControlEvent do
+  @moduledoc false
+
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :type, 1, type: Joystick.Protobuf.ControlEventType, enum: true
+end
+
 defmodule Joystick.Protobuf.FirmwareConfig do
   @moduledoc false
 
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :luminance, 1, type: :uint32
   field :easing_mode, 2, type: Joystick.Protobuf.EasingMode, json_name: "easingMode", enum: true
@@ -133,7 +250,7 @@ end
 defmodule Joystick.Protobuf.FirmwarePacket do
   @moduledoc false
 
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   oneof :content, 0
 
@@ -148,19 +265,27 @@ end
 defmodule Joystick.Protobuf.FirmwareInfo do
   @moduledoc false
 
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :hostname, 1, type: :string, deprecated: false
   field :build_time, 2, type: :string, json_name: "buildTime", deprecated: false
   field :panel_index, 3, type: :uint32, json_name: "panelIndex"
-  field :fps, 4, type: :uint32
+  field :frames_per_second, 4, type: :uint32, json_name: "framesPerSecond"
   field :config_phash, 5, type: :uint32, json_name: "configPhash"
+  field :mac, 6, type: :string, deprecated: false
+  field :ipv4, 7, type: :string, deprecated: false
+  field :ipv6_local, 8, type: :string, json_name: "ipv6Local", deprecated: false
+  field :ipv6_global, 9, type: :string, json_name: "ipv6Global", deprecated: false
+  field :packets_per_second, 10, type: :uint32, json_name: "packetsPerSecond"
+  field :uptime, 11, type: :uint64
+  field :heap_size, 12, type: :uint32, json_name: "heapSize"
+  field :free_heap, 13, type: :uint32, json_name: "freeHeap"
 end
 
 defmodule Joystick.Protobuf.RemoteLog do
   @moduledoc false
 
-  use Protobuf, protoc_gen_elixir_version: "0.12.0", syntax: :proto3
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :message, 1, type: :string, deprecated: false
 end

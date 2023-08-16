@@ -9,6 +9,112 @@ defmodule Octopus.Apps.InputDebug do
   @frame_rate 60
   @frame_time_ms trunc(1000 / @frame_rate)
 
+  defmodule JoyState do
+    defstruct [:buttons]
+
+    def new() do
+      %JoyState{
+        buttons: MapSet.new()
+      }
+    end
+
+    def press(%JoyState{} = js, button) do
+      %JoyState{
+        buttons: js.buttons |> MapSet.put(button)
+      }
+    end
+
+    def release(%JoyState{} = js, button) do
+      %JoyState{
+        buttons: js.buttons |> MapSet.delete(button)
+      }
+    end
+
+    def handle_event(%JoyState{} = js, type, value) do
+      {presses, releases} =
+        cond do
+          type in [:AXIS_X_1, :AXIS_X_2] ->
+            case value do
+              1 -> {[:r], [:l]}
+              0 -> {[], [:r, :l]}
+              -1 -> {[:l], [:r]}
+            end
+
+          type in [:AXIS_Y_1, :AXIS_Y_2] ->
+            case value do
+              1 -> {[:d], [:u]}
+              0 -> {[], [:d, :u]}
+              -1 -> {[:u], [:d]}
+            end
+
+          type in [:BUTTON_A_1, :BUTTON_A_2] ->
+            case value do
+              1 -> {[:a], []}
+              _ -> {[], [:a]}
+            end
+        end
+
+      new_js = Enum.reduce(releases, js, fn b, acc -> acc |> release(b) end)
+      Enum.reduce(presses, new_js, fn b, acc -> acc |> press(b) end)
+    end
+
+    def button?(%JoyState{buttons: buttons}, button), do: buttons |> MapSet.member?(button)
+  end
+
+  defmodule ButtonState do
+    defstruct [:buttons, :joy1, :joy2]
+
+    @button_map 1..10
+                |> Enum.map(fn i -> {"BUTTON_#{i}" |> String.to_atom(), i - 1} end)
+                |> Enum.into(%{})
+
+    def new() do
+      %ButtonState{
+        buttons: MapSet.new(),
+        joy1: JoyState.new(),
+        joy2: JoyState.new()
+      }
+    end
+
+    def press(%ButtonState{buttons: buttons} = bs, button) do
+      %ButtonState{bs | buttons: buttons |> MapSet.put(button)}
+    end
+
+    def release(%ButtonState{buttons: buttons} = bs, button) do
+      %ButtonState{bs | buttons: buttons |> MapSet.delete(button)}
+    end
+
+    def handle_event(%ButtonState{} = bs, type, value) do
+      case type do
+        type when type in [:AXIS_X_1, :AXIS_Y_1, :BUTTON_A_1] ->
+          %ButtonState{bs | joy1: bs.joy1 |> JoyState.handle_event(type, value)}
+
+        type when type in [:AXIS_X_2, :AXIS_Y_2, :BUTTON_A_2] ->
+          %ButtonState{bs | joy2: bs.joy2 |> JoyState.handle_event(type, value)}
+
+        button ->
+          case value do
+            1 -> bs |> press({:sb, button_to_index(button)}) |> press(button)
+            0 -> bs |> release({:sb, button_to_index(button)}) |> release(button)
+          end
+      end
+    end
+
+    def button_to_index(button) do
+      Map.get(@button_map, button)
+    end
+
+    def index_to_button(index) do
+      "BUTTON_#{index + 1}" |> String.to_existing_atom()
+    end
+
+    def screen_button?(%ButtonState{buttons: buttons}, index),
+      do: MapSet.member?(buttons, index_to_button(index))
+
+    def button?(%ButtonState{buttons: buttons}, button),
+      do: MapSet.member?(buttons, button)
+  end
+
   defmodule Screen do
     defstruct [:pixels]
 
@@ -125,7 +231,10 @@ defmodule Octopus.Apps.InputDebug do
     {:noreply, %State{state | button_state: new_bs}}
   end
 
-  defp screen_button_color(sb_index), do: sb_index + 4
+  defp screen_button_color(6), do: 3
+  defp screen_button_color(10), do: 6
+  defp screen_button_color(9), do: 2
+  defp screen_button_color(sb_index), do: 7 + sb_index
 
   defp render_frame(%State{button_state: bs} = state) do
     # collect some painting
@@ -161,7 +270,6 @@ defmodule Octopus.Apps.InputDebug do
       |> Enum.map(fn {joy, {x, y}} ->
         [
           {:a, {0, 0}},
-          {:b, {2, 0}},
           {:u, {1, 1}},
           {:d, {1, 3}},
           {:l, {0, 2}},
@@ -173,12 +281,11 @@ defmodule Octopus.Apps.InputDebug do
            if JoyState.button?(joy, button) do
              case button do
                :a -> 8
-               :b -> 12
                _ -> 7
              end
            else
              cond do
-               button in [:a, :b] -> 2
+               button in [:a] -> 2
                true -> 5
              end
            end}

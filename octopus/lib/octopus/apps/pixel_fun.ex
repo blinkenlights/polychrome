@@ -29,7 +29,6 @@ defmodule Octopus.Apps.PixelFun do
       :colors,
       :last_colors,
       :target_colors,
-      :random_colors,
       :lerp_time,
       :translate_scale,
       :rotate_scale,
@@ -50,27 +49,12 @@ defmodule Octopus.Apps.PixelFun do
       easing_interval: {"Afterglow", :int, %{default: 50, min: 0, max: 500}},
       color_interval: {"Color change Interval (s)", :float, %{default: 5, min: 1, max: 20}},
       invert_colors: {"Invert Colors", :boolean, %{default: false}},
-      random_colors: {"Random Colors", :boolean, %{default: false}},
       translate_scale: {"Translate Scale", :float, %{default: 5, min: 0, max: 20}},
       rotate_scale: {"Rotation Scale", :float, %{default: 0.1, min: 0, max: 4}},
       zoom_scale: {"Zoom Scale", :float, %{default: 2, min: 0, max: 10}},
       cycle_functions: {"Cycle Functions", :boolean, %{default: false}},
       cycle_functions_interval:
-        {"Cycle Functions Interval (s)", :float, %{default: 30, min: 1, max: 60 * 60}},
-      colors: {
-        "Colors",
-        :select,
-        %{
-          default: 0,
-          options: [
-            {"Camp", {{0x3F, 0xFF, 0x21}, {0xFB, 0x48, 0xC4}}},
-            {"Mac Paint", {{0x8B, 0xC8, 0xFE}, {0x05, 0x1B, 0x2C}}},
-            {"Bitbee", {[0x29, 0x2B, 0x30], {0xCF, 0xAB, 0x4A}}},
-            {"Gato Roboto - Starboard", {{0x0A, 0x2E, 0x44}, {0xFC, 0xFF, 0xCC}}},
-            {"French Fries", {{0xFF, 0x0F, 0x0F}, {0xFF, 0xDF, 0x0F}}}
-          ]
-        }
-      }
+        {"Cycle Functions Interval (s)", :float, %{default: 30, min: 1, max: 60 * 60}}
     }
   end
 
@@ -79,8 +63,6 @@ defmodule Octopus.Apps.PixelFun do
       program: state.source,
       easing_interval: state.easing_interval,
       invert_colors: state.invert_colors,
-      colors: state.colors,
-      random_colors: state.random_colors,
       color_interval: state.color_interval,
       cycle_functions: state.cycle_functions,
       cycle_functions_interval: state.cycle_functions_interval,
@@ -112,10 +94,9 @@ defmodule Octopus.Apps.PixelFun do
        source: config.program,
        easing_interval: config.easing_interval,
        invert_colors: config.invert_colors,
-       last_colors: config.colors,
-       colors: config.colors,
-       random_colors: config.random_colors,
-       target_colors: config.colors,
+       colors: generate_random_colors(),
+       last_colors: generate_random_colors(),
+       target_colors: generate_random_colors(),
        lerp_time: config.color_interval,
        color_interval: config.color_interval,
        cycle_functions: config.cycle_functions,
@@ -133,8 +114,6 @@ defmodule Octopus.Apps.PixelFun do
           program: program,
           easing_interval: easing_interval,
           invert_colors: invert_colors,
-          colors: colors,
-          random_colors: random_colors,
           cycle_functions: cycle_functions,
           translate_scale: translate_scale,
           rotate_scale: rotate_scale,
@@ -157,8 +136,6 @@ defmodule Octopus.Apps.PixelFun do
          source: source,
          easing_interval: easing_interval,
          invert_colors: invert_colors,
-         colors: colors,
-         random_colors: random_colors,
          cycle_functions: cycle_functions,
          translate_scale: translate_scale,
          rotate_scale: rotate_scale,
@@ -180,16 +157,8 @@ defmodule Octopus.Apps.PixelFun do
     {:noreply, %{state | program: program}}
   end
 
-  def handle_info(:update_colors, %State{random_colors: true} = state) do
-    hue_a = :rand.uniform(360) - 1
-    hue_b = Integer.mod(hue_a + 90 + :rand.uniform(180) - 1, 360)
-    sat_a = 70 + :rand.uniform(29)
-    sat_b = 70 + :rand.uniform(29)
-    hsv_a = Chameleon.HSV.new(hue_a, sat_a, 100)
-    hsv_b = Chameleon.HSV.new(hue_b, sat_b, 100)
-    %Chameleon.RGB{r: r1, g: g1, b: b1} = Chameleon.convert(hsv_a, Chameleon.RGB)
-    %Chameleon.RGB{r: r2, g: g2, b: b2} = Chameleon.convert(hsv_b, Chameleon.RGB)
-    colors = {{r1, g1, b1}, {r2, g2, b2}}
+  def handle_info(:update_colors, %State{} = state) do
+    colors = generate_random_colors()
 
     {:noreply,
      %State{
@@ -199,8 +168,6 @@ defmodule Octopus.Apps.PixelFun do
          lerp_time: state.color_interval
      }}
   end
-
-  def handle_info(:update_colors, state), do: {:noreply, state}
 
   def handle_info(:cycle_functions, %State{cycle_functions: true, functions: functions} = state) do
     [{source, function}] = Enum.take(functions, 1)
@@ -236,7 +203,13 @@ defmodule Octopus.Apps.PixelFun do
 
     {pivot_x, pivot_y} = state.pivot
 
-    zoom = (:math.sin(seconds * 0.1) * 0.5 + 0.5) * state.zoom_scale
+    zoom =
+      if state.zoom_scale == 0 do
+        1.0
+      else
+        (:math.sin(seconds * 0.1) * 0.5 + 0.5) * state.zoom_scale
+      end
+
     rotation = seconds * state.rotate_scale
 
     {color_a, color_b} = state.colors
@@ -321,5 +294,17 @@ defmodule Octopus.Apps.PixelFun do
 
   defp lerp(a, b, t) do
     (1 - t) * a + t * b
+  end
+
+  defp generate_random_colors do
+    hue_a = :rand.uniform(360) - 1
+    hue_b = Integer.mod(hue_a + 90 + :rand.uniform(180) - 1, 360)
+    sat_a = 70 + :rand.uniform(29)
+    sat_b = 70 + :rand.uniform(29)
+    hsv_a = Chameleon.HSV.new(hue_a, sat_a, 100)
+    hsv_b = Chameleon.HSV.new(hue_b, sat_b, 100)
+    %Chameleon.RGB{r: r1, g: g1, b: b1} = Chameleon.convert(hsv_a, Chameleon.RGB)
+    %Chameleon.RGB{r: r2, g: g2, b: b2} = Chameleon.convert(hsv_b, Chameleon.RGB)
+    {{r1, g1, b1}, {r2, g2, b2}}
   end
 end

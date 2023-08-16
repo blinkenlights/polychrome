@@ -16,7 +16,7 @@ defmodule Octopus.Apps.SpritesGrouped do
   @animation_steps 50
 
   @tick_interval 500
-  @skip_till_next_group 100
+  @skip_till_next_group 80
 
   @groups [
     mario: [0..7, 9, 12],
@@ -32,7 +32,7 @@ defmodule Octopus.Apps.SpritesGrouped do
     looney_toons: [150..159],
     disney: [208..215],
     marvel: [221..225, 228..232],
-    starwars: [240..247],
+    starwars: [240..247]
     # kirby: [13],
     # donkey_kong: [14, 15],
     # link: [16],
@@ -40,7 +40,7 @@ defmodule Octopus.Apps.SpritesGrouped do
     # lemming: [68],
     # dexter: [89, 90],
     # waldo: [220],
-    others: [13, 14, 16, 68, 47, 220]
+    # others: [13, 14, 16, 68, 47, 220]
 
     # powerpuff: [111..113],
     # marvel: [114..120],
@@ -165,15 +165,15 @@ defmodule Octopus.Apps.SpritesGrouped do
   end
 
   defp place_sprites([]), do: []
-  defp place_sprites([a]), do: [nil, nil, nil, nil, a, nil, nil, nil, nil, nil]
-  defp place_sprites([a, b]), do: [nil, nil, nil, a, nil, nil, b, nil, nil, nil]
-  defp place_sprites([a, b, c]), do: [nil, nil, a, nil, nil, b, nil, nil, c, nil]
-  defp place_sprites([a, b, c, d]), do: [nil, a, nil, b, nil, c, nil, d, nil, nil]
-  defp place_sprites([a, b, c, d, e]), do: [a, nil, b, nil, c, nil, d, nil, e, nil]
-  defp place_sprites([a, b, c, d, e, f]), do: [nil, a, b, nil, c, d, nil, e, f, nil]
-  defp place_sprites([a, b, c, d, e, f, g]), do: [a, b, nil, c, d, nil, e, f, nil, g]
+  defp place_sprites([a]), do: [nil, nil, nil, nil, nil, a, nil, nil, nil, nil]
+  defp place_sprites([a, b]), do: [nil, nil, nil, nil, a, b, nil, nil, nil, nil]
+  defp place_sprites([a, b, c]), do: [nil, nil, nil, nil, a, b, c, nil, nil, nil]
+  defp place_sprites([a, b, c, d]), do: [nil, nil, nil, a, b, c, d, nil, nil, nil]
+  defp place_sprites([a, b, c, d, e]), do: [nil, nil, nil, a, b, c, d, e, nil, nil]
+  defp place_sprites([a, b, c, d, e, f]), do: [nil, nil, a, b, c, d, e, f, nil, nil]
+  defp place_sprites([a, b, c, d, e, f, g]), do: [nil, nil, a, b, c, d, e, f, g, nil]
   defp place_sprites([a, b, c, d, e, f, g, h]), do: [nil, a, b, c, d, e, f, g, h, nil]
-  defp place_sprites([a, b, c, d, e, f, g, h, i]), do: [a, b, c, d, e, f, g, h, i, nil]
+  defp place_sprites([a, b, c, d, e, f, g, h, i]), do: [nil, a, b, c, d, e, f, g, h, i]
   defp place_sprites([a, b, c, d, e, f, g, h, i, j]), do: [a, b, c, d, e, f, g, h, i, j]
   # defp place_sprites(list), do: Enum.take_random(list, 10) |> place_sprites()
 

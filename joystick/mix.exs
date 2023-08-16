@@ -31,8 +31,8 @@ defmodule Joystick.MixProject do
     [
       # Dependencies for all targets
       {:nerves, "~> 1.10", runtime: false},
-      {:shoehorn, "~> 0.9.1"},
-      {:ring_logger, "~> 0.9.0"},
+      {:shoehorn, "~> 0.9"},
+      {:ring_logger, "~> 0.9"},
       {:toolshed, "~> 0.3.0"},
       {:nerves_leds, "~> 0.8"},
       {:vintage_net, "~> 0.13"},

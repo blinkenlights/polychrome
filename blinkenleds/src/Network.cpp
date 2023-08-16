@@ -9,7 +9,11 @@
 #include <pb_encode.h>
 #include <Display.h>
 
+#ifdef PANEL_HOSTNAME
+String hostname = String(PANEL_HOSTNAME);
+#else
 String hostname = "blinkenleds-" + String(PANEL_INDEX);
+#endif
 
 #define UDP_PORT 1337
 #define UDP_BUFFER_SIZE 1500 // This needs to be increased for RGBFrames

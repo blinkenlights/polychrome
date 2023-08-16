@@ -136,7 +136,11 @@ defmodule Octopus.App do
   Send a frame to the mixer.
   """
   def send_frame(%frame_type{} = frame) when frame_type in @supported_frames do
-    app_id = AppSupervisor.lookup_app_id(self())
+    send_frame(frame, self())
+  end
+
+  def send_frame(%frame_type{} = frame, pid) when frame_type in @supported_frames do
+    app_id = AppSupervisor.lookup_app_id(pid)
     Mixer.handle_frame(app_id, frame)
   end
 
