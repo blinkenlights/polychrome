@@ -1,4 +1,6 @@
 defmodule Octopus.Apps.Snake.Game do
+  alias Octopus.Font
+
   defmodule Worm do
     @base_speed 20
     defstruct [:parts, :rem_t, :speed]
@@ -55,7 +57,7 @@ defmodule Octopus.Apps.Snake.Game do
     end
   end
 
-  defstruct [:worm, :food]
+  defstruct [:worm, :food, :score]
   alias Octopus.Canvas
   alias Octopus.Apps.Snake
   alias Snake.JoyState
@@ -66,7 +68,8 @@ defmodule Octopus.Apps.Snake.Game do
 
     %Game{
       worm: Worm.new(),
-      food: new_food(worm)
+      food: new_food(worm),
+      score: 0
     }
   end
 
@@ -90,7 +93,8 @@ defmodule Octopus.Apps.Snake.Game do
           %Game{
             game
             | worm: %Worm{wormy | speed: (wormy.speed - 1) |> Snake.Util.clamp(10, 60)},
-              food: new_food(wormy)
+              food: new_food(wormy),
+              score: game.score + 1
           }
 
         _ ->
@@ -117,6 +121,18 @@ defmodule Octopus.Apps.Snake.Game do
         acc |> Canvas.put_pixel(pos, {0x10, 0xFF, 0x10})
       end)
 
-    Canvas.new(60, 8) |> Canvas.overlay(gamecanvas, offset: {8 * 4, 0})
+    [first, second] =
+      game.score |> to_string() |> String.pad_leading(2, "0") |> String.to_charlist()
+
+    font = Font.load("ddp")
+
+    canvas =
+      Canvas.new(60, 8)
+      |> Canvas.overlay(gamecanvas, offset: {8 * 4, 0})
+
+    canvas = Font.draw_char(font, first, 0, canvas, {0, 0})
+    canvas = Font.draw_char(font, second, 0, canvas, {8, 0})
+    canvas = Font.draw_char(font, ~c"0", 0, canvas, {16, 0})
+    canvas
   end
 end
