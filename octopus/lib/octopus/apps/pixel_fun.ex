@@ -2,6 +2,7 @@ defmodule Octopus.Apps.PixelFun do
   use Octopus.App, category: :animation
 
   alias Octopus.Canvas
+  alias Octopus.Protobuf.InputEvent
   alias Octopus.Apps.PixelFun.Program
 
   @width 8 * get_screen_count() + 18 * (get_screen_count() - 1)
@@ -37,7 +38,9 @@ defmodule Octopus.Apps.PixelFun do
       :cycle_functions,
       :cycle_functions_interval,
       :functions,
-      :pivot
+      :pivot,
+      :offset,
+      :move
     ]
   end
 
@@ -105,7 +108,9 @@ defmodule Octopus.Apps.PixelFun do
        rotate_scale: config.rotate_scale,
        zoom_scale: config.zoom_scale,
        functions: functions,
-       pivot: {@center_x, @center_y}
+       pivot: {@center_x, @center_y},
+       offset: {0, 0},
+       move: {0, 0}
      }}
   end
 
@@ -184,6 +189,10 @@ defmodule Octopus.Apps.PixelFun do
   def handle_info(:tick, %State{} = state) do
     state = lerp_toward_target_colors(state)
 
+    {offset_x, offset_y} = state.offset
+    offset_x = offset_x + elem(state.move, 0) * 25 / 60
+    offset_y = offset_y + elem(state.move, 1) * 25 / 60
+
     canvas = state |> render()
 
     canvas
@@ -191,15 +200,34 @@ defmodule Octopus.Apps.PixelFun do
     |> Map.put(:easing_interval, state.easing_interval)
     |> send_frame()
 
-    {:noreply, %State{state | canvas: canvas}}
+    {:noreply, %State{state | canvas: canvas, offset: {offset_x, offset_y}}}
   end
+
+  def handle_input(%InputEvent{type: axis, value: value}, %State{move: {_, y}} = state)
+      when axis in [:AXIS_X_1, :AXIS_X_2] do
+    {:noreply, %State{state | move: {-value, y}}}
+  end
+
+  def handle_input(%InputEvent{type: axis, value: value}, %State{move: {x, _}} = state)
+      when axis in [:AXIS_Y_1, :AXIS_Y_2] do
+    {:noreply, %State{state | move: {x, -value}}}
+  end
+
+  def handle_input(_, state), do: {:noreply, state}
 
   defp render(%State{canvas: canvas, program: program} = state) do
     {seconds, micros} = Time.utc_now() |> Time.to_seconds_after_midnight()
     seconds = seconds + micros / 1_000_000
 
-    offset_x = :math.sin(0.3 + seconds * 0.17) * state.translate_scale
-    offset_y = :math.cos(0.7 + seconds * 0.05) * state.translate_scale
+    dt = 1 / 60
+
+    offset_x =
+      elem(state.offset, 0) +
+        :math.sin(0.3 + seconds * 0.17) * state.translate_scale + elem(state.move, 0) * 100 * dt
+
+    offset_y =
+      elem(state.offset, 1) +
+        :math.cos(0.7 + seconds * 0.05) * state.translate_scale + elem(state.move, 1) * 100 * dt
 
     {pivot_x, pivot_y} = state.pivot
 
