@@ -194,8 +194,8 @@ defmodule Octopus.Apps.PixelFun do
     state = lerp_toward_target_colors(state)
 
     {offset_x, offset_y} = state.offset
-    offset_x = offset_x + elem(state.move, 0) * 25 / 60
-    offset_y = offset_y + elem(state.move, 1) * 25 / 60
+    offset_x = offset_x + elem(state.move, 0) * 5 / 60
+    offset_y = offset_y + elem(state.move, 1) * 5 / 60
 
     canvas = state |> render()
 
