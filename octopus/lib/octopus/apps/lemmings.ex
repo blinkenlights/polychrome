@@ -2,87 +2,14 @@ defmodule Octopus.Apps.Lemmings do
   use Octopus.App, category: :animation
   require Logger
 
-  alias Octopus.{Sprite, Canvas}
-  alias Octopus.Protobuf.{AudioFrame, InputEvent}
+  alias Octopus.{Sprite, Canvas, Util}
+  alias Octopus.Protobuf.InputEvent
+  alias Lemming
 
-  defmodule Lemming do
-    defstruct frames: nil, anchor: {-4, 0}, anim_step: 0, state: :walk_right, offsets: %{}
-
-    def turn(%Lemming{anchor: {x, y}} = lem) do
-      {new_state, xoffset} =
-        cond do
-          lem.state == :walk_right -> {:walk_left, -2}
-          true -> {:walk_right, 2}
-        end
-
-      %Lemming{
-        lem
-        | state: new_state,
-          anchor: {x + xoffset, y},
-          frames: lem.frames |> Enum.map(&Canvas.flip_horizontal/1),
-          offsets: lem.offsets |> Enum.map(fn {i, {x, y}} -> {i, {-x, y}} end) |> Enum.into(%{})
-      }
-    end
-
-    def walking_right do
-      %Lemming{
-        anchor: {0, 0},
-        frames: Sprite.load(Path.join(["lemmings", "LemmingWalk"])),
-        offsets: 0..7 |> Enum.map(fn i -> {i, {1, 0}} end) |> Enum.into(%{})
-      }
-    end
-
-    def walking_left do
-      %Lemming{
-        (walking_right()
-         |> turn())
-        | anchor: {240, 0}
-      }
-    end
-
-    def stopper(pos) do
-      %Lemming{
-        anchor: {pos * (18 + 8), 0},
-        frames: Sprite.load(Path.join(["lemmings", "LemmingStopper"])),
-        state: :stopper
-      }
-    end
-
-    def tick(%Lemming{} = sprite) do
-      {dx, dy} = Map.get(sprite.offsets, sprite.anim_step, {0, 0})
-      {x, y} = sprite.anchor
-
-      %Lemming{
-        sprite
-        | anchor: {x + dx, y + dy},
-          anim_step: rem(sprite.anim_step + 1, length(sprite.frames))
-      }
-    end
-
-    def boundaries(%Lemming{state: :walk_right, anchor: {x, _}} = lem, _, [bound | tail]) do
-      cond do
-        x == bound - 4 -> turn(lem)
-        true -> boundaries(lem, [], tail)
-      end
-    end
-
-    def boundaries(%Lemming{state: :walk_left, anchor: {x, _}} = lem, [bound | tail], _) do
-      cond do
-        x == bound - 4 -> turn(lem)
-        true -> boundaries(lem, tail, [])
-      end
-    end
-
-    def boundaries(%Lemming{} = lem, _, _), do: lem
-
-    def sprite(%Lemming{} = lem) do
-      lem.frames
-      |> Enum.at(lem.anim_step)
-    end
-  end
+  @default_block_time 10
 
   defmodule State do
-    defstruct t: 0, lemmings: [], lemming_cooldown: 0
+    defstruct t: 0, lemmings: [], actions: %{}
   end
 
   def name(), do: "Lemmings"
@@ -123,23 +50,71 @@ defmodule Octopus.Apps.Lemmings do
     |> Canvas.to_frame(drop: true)
     |> send_frame()
 
-    state = %State{
-      lemmings:
-        state.lemmings
-        |> Enum.map(fn lem ->
-          lem |> Lemming.tick() |> Lemming.boundaries([0, 7 * (18 + 8)], [242, 6 * (18 + 8) - 18])
-        end),
-      t: state.t + 1,
-      lemming_cooldown: state.lemming_cooldown - 1
+    boundaries =
+      state.lemmings
+      |> Enum.reduce(
+        {[0], [242]},
+        fn
+          %Lemming{state: :stopper} = lem, {l, r} ->
+            window = Lemming.current_window(lem)
+            {[window * (18 + 8) | l], [(window - 1) * (18 + 8) - 18 | r]}
+
+          _, acc ->
+            acc
+        end
+      )
+
+    %State{
+      state
+      | lemmings:
+          state.lemmings
+          |> Enum.map(fn lem ->
+            lem
+            |> Lemming.tick()
+          end)
+          |> Enum.reject(&is_nil/1)
+          |> Enum.map(fn lem ->
+            lem
+            |> Lemming.boundaries(boundaries |> elem(0), boundaries |> elem(1))
+          end),
+        t: state.t + 1
     }
   end
 
-  def add_left(%State{lemming_cooldown: lemming_cooldown} = state) when lemming_cooldown <= 0 do
-    send_frame(%AudioFrame{uri: "file://lemmings/letsgo.wav", channel: 1})
+  def action_allowed?(action_map, action, now, min_distance) do
+    #    IO.inspect([action_map, action, now, min_distance])
+
+    case Map.get(action_map, action) do
+      nil -> true
+      t when t <= now - min_distance -> true
+      _ -> false
+    end
+  end
+
+  def update_action(action_map, action, now, min_distance) do
+    if (case Map.get(action_map, action) do
+          nil -> true
+          t when t <= now - min_distance -> true
+          _ -> false
+        end) do
+      action_map |> Map.put(action, now)
+    else
+      action_map
+    end
+  end
+
+  def add_left(%State{} = state) do
+    action = __ENV__.function |> elem(0)
+    new_lem = Lemming.walking_right()
+
+    if action_allowed?(state.actions, action, state.t, @default_block_time) do
+      new_lem |> Lemming.play_sample("letsgo")
+    end
 
     state = %State{
-      lemmings: [Lemming.walking_right() | state.lemmings],
-      lemming_cooldown: 50,
+      state
+      | lemmings: [new_lem | state.lemmings],
+        actions: state.actions |> update_action(action, state.t, @default_block_time)
     }
 
     state
@@ -147,12 +122,18 @@ defmodule Octopus.Apps.Lemmings do
 
   def add_left(state), do: state
 
-  def add_right(%State{lemming_cooldown: lemming_cooldown} = state) when lemming_cooldown <= 0 do
-    send_frame(%AudioFrame{uri: "file://lemmings/letsgo.wav", channel: 10})
+  def add_right(%State{} = state) do
+    action = __ENV__.function |> elem(0)
+    new_lem = Lemming.walking_left()
+
+    if action_allowed?(state.actions, action, state.t, @default_block_time) do
+      new_lem |> Lemming.play_sample("letsgo")
+    end
 
     state = %State{
-      lemmings: [Lemming.walking_left() | state.lemmings],
-      lemming_cooldown: 50,
+      state
+      | lemmings: [new_lem | state.lemmings],
+        actions: state.actions |> update_action(action, state.t, @default_block_time)
     }
 
     state
@@ -164,6 +145,10 @@ defmodule Octopus.Apps.Lemmings do
     {:noreply, tick(state)}
   end
 
+  @button_map 1..10
+              |> Enum.map(fn i -> {"BUTTON_#{i}" |> String.to_atom(), i - 1} end)
+              |> Enum.into(%{})
+
   def handle_input(%InputEvent{type: :AXIS_X_1, value: 1}, state) do
     state = add_left(state)
     {:noreply, state}
@@ -171,11 +156,69 @@ defmodule Octopus.Apps.Lemmings do
 
   def handle_input(%InputEvent{type: :AXIS_X_1, value: -1}, state) do
     state = add_right(state)
+    {:noreply, state}
+  end
+
+  def handle_input(
+        %InputEvent{type: :AXIS_Y_1, value: 1},
+        %State{lemmings: [%Lemming{state: lemstate} = lem | tail]} = state
+      )
+      when lemstate in [:stopper, :walk_right, :walk_left] do
+    state = %State{
+      state
+      | lemmings: [Lemming.explode(lem) | tail |> Enum.reverse()] |> Enum.reverse()
+    }
 
     {:noreply, state}
   end
 
+  def handle_input(%InputEvent{type: type, value: 1}, state) do
+    case @button_map[type] do
+      nil -> {:noreply, state}
+      number -> handle_number_button_press(state, number)
+    end
+  end
+
   def handle_input(_, state) do
     {:noreply, state}
+  end
+
+  def handle_number_button_press(%State{} = state, number) do
+    action = "Button_#{number + 1}" |> String.to_atom()
+    block_time = 5
+
+    {lems, existing_stopper} =
+      Enum.reduce(state.lemmings, {[], nil}, fn
+        %Lemming{state: :stopper} = lem, {list, nil} ->
+          if Lemming.current_window(lem) == number + 1 do
+            {list, lem}
+          else
+            {[lem | list], nil}
+          end
+
+        lem, {list, es} ->
+          {[lem | list], es}
+      end)
+
+    if action_allowed?(state.actions, action, state.t, block_time) do
+      new_lems =
+        if existing_stopper do
+          [existing_stopper |> Lemming.explode() | lems]
+        else
+          new_lem =
+            Lemming.button_lemming(number) |> Lemming.play_sample("yippee") |> IO.inspect()
+
+          [new_lem | state.lemmings]
+        end
+
+      {:noreply,
+       %State{
+         state
+         | lemmings: new_lems,
+           actions: state.actions |> update_action(action, state.t, block_time)
+       }}
+    else
+      {:noreply, state}
+    end
   end
 end

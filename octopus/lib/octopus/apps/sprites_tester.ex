@@ -24,7 +24,7 @@ defmodule Octopus.Apps.SpritesTester do
   end
 
   def handle_info(:tick, %State{} = state) do
-    IO.inspect(state.index)
+    #    IO.inspect(state.index)
 
     Sprite.load(@sprite_sheet, state.index)
     |> Canvas.to_frame()

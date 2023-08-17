@@ -1,4 +1,4 @@
-defmodule Octopus.Apps.Snake.Util do
+defmodule Octopus.Util do
   def clamp(v, min, _max) when v < min, do: min
   def clamp(v, _min, max) when v > max, do: max
   def clamp(v, _, _), do: v
