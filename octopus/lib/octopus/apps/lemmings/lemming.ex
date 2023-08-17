@@ -1,7 +1,12 @@
 alias Octopus.{Sprite, Util, Canvas}
 
 defmodule Lemming do
-  defstruct frames: nil, anchor: {-4, 0}, anim_step: 0, state: :walk_right, offsets: %{}
+  defstruct frames: nil,
+            anchor: {-4, 0},
+            anim_step: 0,
+            state: :walk_right,
+            offsets: %{},
+            self_destruct: 999_999_999
 
   def play_sample(%Lemming{} = lem, name) do
     channel = current_window(lem)
@@ -29,6 +34,28 @@ defmodule Lemming do
     }
   end
 
+  def explode(%Lemming{} = lem) do
+    %Lemming{
+      lem
+      | state: :ohno,
+        frames: Sprite.load(Path.join(["lemmings", "LemmingOhNo"])),
+        anim_step: 0,
+        offsets: %{}
+    }
+    |> Lemming.play_sample("ohno")
+  end
+
+  def explode_really(%Lemming{} = lem) do
+    %Lemming{
+      lem
+      | state: :explode,
+        frames: Sprite.load(Path.join(["lemmings", "LemmingExplode"])),
+        anim_step: 0,
+        offsets: %{}
+    }
+    |> Lemming.play_sample("thud")
+  end
+
   def walking_right do
     %Lemming{
       anchor: {0, 0},
@@ -51,6 +78,18 @@ defmodule Lemming do
       frames: Sprite.load(Path.join(["lemmings", "LemmingStopper"])),
       state: :stopper
     }
+  end
+
+  def button_lemming(number) do
+    stopper(number)
+  end
+
+  def tick(%Lemming{state: :ohno, anim_step: 7} = sprite) do
+    Lemming.explode_really(sprite)
+  end
+
+  def tick(%Lemming{state: :explode, anim_step: 10} = sprite) do
+    nil
   end
 
   def tick(%Lemming{} = sprite) do

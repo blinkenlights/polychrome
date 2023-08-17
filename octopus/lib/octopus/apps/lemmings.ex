@@ -50,6 +50,21 @@ defmodule Octopus.Apps.Lemmings do
     |> Canvas.to_frame(drop: true)
     |> send_frame()
 
+    boundaries =
+      state.lemmings
+      |> Enum.reduce(
+        {[0], [242]},
+        fn
+          %Lemming{state: :stopper} = lem, {l, r} ->
+            window = Lemming.current_window(lem) |> IO.inspect()
+            {[window * (18 + 8) | l], [(window - 1) * (18 + 8) - 18 | r]}
+
+          _, acc ->
+            acc
+        end
+      )
+      |> IO.inspect()
+
     %State{
       state
       | lemmings:
@@ -57,14 +72,18 @@ defmodule Octopus.Apps.Lemmings do
           |> Enum.map(fn lem ->
             lem
             |> Lemming.tick()
-            |> Lemming.boundaries([0, 7 * (18 + 8)], [242, 6 * (18 + 8) - 18])
+          end)
+          |> Enum.reject(&is_nil/1)
+          |> Enum.map(fn lem ->
+            lem
+            |> Lemming.boundaries(boundaries |> elem(0), boundaries |> elem(1))
           end),
         t: state.t + 1
     }
   end
 
   def action_allowed?(action_map, action, now, min_distance) do
-    IO.inspect([action_map, action, now, min_distance])
+    #    IO.inspect([action_map, action, now, min_distance])
 
     case Map.get(action_map, action) do
       nil -> true
@@ -114,7 +133,7 @@ defmodule Octopus.Apps.Lemmings do
 
     state = %State{
       state
-      | lemmings: [Lemming.walking_left() | state.lemmings],
+      | lemmings: [new_lem | state.lemmings],
         actions: state.actions |> update_action(action, state.t, @default_block_time)
     }
 
@@ -127,6 +146,10 @@ defmodule Octopus.Apps.Lemmings do
     {:noreply, tick(state)}
   end
 
+  @button_map 1..10
+              |> Enum.map(fn i -> {"BUTTON_#{i}" |> String.to_atom(), i - 1} end)
+              |> Enum.into(%{})
+
   def handle_input(%InputEvent{type: :AXIS_X_1, value: 1}, state) do
     state = add_left(state)
     {:noreply, state}
@@ -134,11 +157,45 @@ defmodule Octopus.Apps.Lemmings do
 
   def handle_input(%InputEvent{type: :AXIS_X_1, value: -1}, state) do
     state = add_right(state)
+    {:noreply, state}
+  end
+
+  def handle_input(%InputEvent{type: :AXIS_Y_1, value: 1}, %State{lemmings: [lem | tail]} = state) do
+    state = %State{
+      state
+      | lemmings: [Lemming.explode(lem) | tail] |> Enum.reverse()
+    }
 
     {:noreply, state}
   end
 
+  def handle_input(%InputEvent{type: type, value: 1}, state) do
+    case @button_map[type] do
+      nil -> {:noreply, state}
+      number -> handle_number_button_press(state, number)
+    end
+  end
+
   def handle_input(_, state) do
     {:noreply, state}
+  end
+
+  def handle_number_button_press(%State{} = state, number) do
+    action = "Button_#{number + 1}" |> String.to_atom()
+    block_time = 5
+
+    if action_allowed?(state.actions, action, state.t, block_time) do
+      new_lem =
+        Lemming.button_lemming(number) |> Lemming.play_sample("yippee") |> IO.inspect()
+
+      {:noreply,
+       %State{
+         state
+         | lemmings: [new_lem | state.lemmings],
+           actions: state.actions |> update_action(action, state.t, block_time)
+       }}
+    else
+      {:noreply, state}
+    end
   end
 end
