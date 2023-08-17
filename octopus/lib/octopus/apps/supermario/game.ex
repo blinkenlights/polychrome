@@ -319,7 +319,7 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   #  between levels animation
-  def draw(%Game{state: :paused, current_animation: nil}, canvas) do
+  def render_canvas(%Game{state: :paused, current_animation: nil}, canvas) do
     {:ok, %ExPng.Image{} = image} =
       ExPng.Image.from_file(Path.join([:code.priv_dir(:octopus), "images", "mario.png"]))
 
@@ -333,7 +333,7 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   # draw current pixels of level and mario
-  def draw(
+  def render_canvas(
         %Game{
           mario: mario,
           current_animation: nil,
@@ -348,7 +348,7 @@ defmodule Octopus.Apps.Supermario.Game do
     |> fill_canvas(canvas)
   end
 
-  def draw(
+  def render_canvas(
         %Game{current_animation: %Animation{animation_type: animation_type} = current_animation},
         _canvas
       )
@@ -356,7 +356,7 @@ defmodule Octopus.Apps.Supermario.Game do
     Animation.draw(current_animation)
   end
 
-  def draw(%Game{current_animation: current_animation}, canvas) do
+  def render_canvas(%Game{current_animation: current_animation}, canvas) do
     Animation.draw(current_animation)
     |> fill_canvas(canvas)
   end

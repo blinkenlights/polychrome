@@ -35,7 +35,7 @@ defmodule Octopus.Apps.Supermario do
         canvas = Canvas.clear(canvas)
 
         game
-        |> Game.draw(canvas)
+        |> Game.render_canvas(canvas)
         |> send_canvas()
 
         {:noreply, %State{state | game: game, canvas: canvas}}
