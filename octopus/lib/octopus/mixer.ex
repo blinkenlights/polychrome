@@ -2,6 +2,7 @@ defmodule Octopus.Mixer do
   use GenServer
   require Logger
 
+  alias Octopus.Protobuf.SoundToLightControlEvent
   alias Octopus.Protobuf.AudioFrame
   alias Octopus.GameScheduler
   alias Octopus.{Broadcaster, Protobuf, AppSupervisor, PlaylistScheduler, Canvas, GameScheduler}
@@ -59,6 +60,10 @@ defmodule Octopus.Mixer do
 
   def handle_input(%InputEvent{} = input_event) do
     GenServer.cast(__MODULE__, {:input_event, input_event})
+  end
+
+  def handle_input(%SoundToLightControlEvent{} = stl_event) do
+    GenServer.cast(__MODULE__, {:sound_to_light_control_event, stl_event})
   end
 
   @doc """
@@ -158,6 +163,15 @@ defmodule Octopus.Mixer do
     state =
       %State{state | last_input: System.os_time(:second)}
       |> do_handle_input(input_event)
+
+    {:noreply, state}
+  end
+
+  def handle_cast(
+        {:sound_to_light_control_event, %SoundToLightControlEvent{} = stl_event},
+        %State{} = state
+      ) do
+    AppSupervisor.send_event(state.selected_app, stl_event)
 
     {:noreply, state}
   end

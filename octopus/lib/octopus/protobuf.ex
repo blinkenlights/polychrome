@@ -1,7 +1,6 @@
 defmodule Octopus.Protobuf do
   require Logger
 
-  alias Octopus.Protobuf.RGBFrame
   alias Octopus.ColorPalette
 
   alias Octopus.Protobuf.{
@@ -14,7 +13,8 @@ defmodule Octopus.Protobuf do
     FirmwarePacket,
     InputEvent,
     ControlEvent,
-    SynthFrame
+    SynthFrame,
+    SoundToLightControlEvent
   }
 
   def encode(%Frame{data: data, palette: palette} = frame)
@@ -107,6 +107,9 @@ defmodule Octopus.Protobuf do
 
       %Packet{content: {:config, %FirmwareConfig{} = config}} ->
         {:ok, config}
+
+      %Packet{content: {:sound_to_light_control_event, %SoundToLightControlEvent{} = stl_event}} ->
+        {:ok, stl_event}
 
       _ ->
         {:error, :unexpected_content}

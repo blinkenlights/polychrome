@@ -23,6 +23,7 @@ message Packet {
     FirmwareConfig firmware_config = 1; 
     RGBFrame rgb_frame_part1 = 7;
     RGBFrame rgb_frame_part2 = 8;
+    SoundToLightControlEvent sound_to_light_control_event = 11;
   }
 }
 
@@ -146,6 +147,12 @@ enum ControlEventType{
   APP_DESELECTED = 1;   // Emitted by octopus when the app is no longer displayed
   APP_STARTED = 2;      // Emitted by apps when they start
   APP_STOPPED = 3;      // Emitted by apps when they are finished. Eg to signal that the next app can be selected.
+}
+
+message SoundToLightControlEvent {
+  float bass = 1;
+  float mid = 2;
+  float high = 3;
 }
 
 message FirmwareConfig {

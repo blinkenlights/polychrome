@@ -22,7 +22,8 @@ defmodule Octopus.App do
     AudioFrame,
     InputEvent,
     ControlEvent,
-    SynthFrame
+    SynthFrame,
+    SoundToLightControlEvent
   }
 
   alias Octopus.{Mixer, AppSupervisor}
@@ -42,7 +43,8 @@ defmodule Octopus.App do
   @doc """
   Optional callback to handle input events. An app will only receive input events if it is selected as active in the mixer.
   """
-  @callback handle_input(%InputEvent{}, state :: any) :: {:noreply, state :: any}
+  @callback handle_input(%InputEvent{} | %SoundToLightControlEvent{}, state :: any) ::
+              {:noreply, state :: any}
 
   @type config_option ::
           {String.t(), :int, %{min: integer(), max: integer(), default: integer()}}
@@ -83,6 +85,10 @@ defmodule Octopus.App do
       end
 
       def handle_info({:event, %InputEvent{} = input_event}, state) do
+        handle_input(input_event, state)
+      end
+
+      def handle_info({:event, %SoundToLightControlEvent{} = input_event}, state) do
         handle_input(input_event, state)
       end
 
