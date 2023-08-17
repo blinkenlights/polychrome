@@ -135,18 +135,18 @@ defmodule Octopus.Apps.Supermario.Game do
     {:ok,
      %Game{
        game
-       | current_animation: GameOver.new(@windows_offset, 4), #game.windows_shown
+       | current_animation: GameOver.new(@windows_offset, game.windows_shown),
          last_ticker: Time.utc_now()
      }}
   end
 
-  def tick(%Game{state: :completed, current_animation: nil, score: score} = game) do
+  def tick(%Game{state: :completed, current_animation: nil} = game) do
     score = score + 20
 
     {:ok,
      %Game{
        game
-       | current_animation: Completed.new(@windows_offset, game.windows_shown, score),
+       | current_animation: Completed.new(@windows_offset, game.windows_shown),
          last_ticker: Time.utc_now(),
          score: score
      }}
@@ -351,9 +351,11 @@ defmodule Octopus.Apps.Supermario.Game do
 
   def render_canvas(%Game{
     current_animation: %Animation{animation_type: animation_type} = current_animation}
+  = game
   )
       when animation_type == :game_over or animation_type == :completed do
     Animation.draw(current_animation)
+    |> render_score(game)
   end
 
   def render_canvas(%Game{current_animation: current_animation, layout: layout}) do
@@ -419,7 +421,7 @@ defmodule Octopus.Apps.Supermario.Game do
     %{
           base_canvas: Canvas.new(40, 8),
           score_base: 16,
-          playfield_base: 8 * 4,
+          playfield_base: 0,
           playfield_channel: 5
     }
   end
@@ -427,9 +429,9 @@ defmodule Octopus.Apps.Supermario.Game do
   defp layout(:left) do
     %{
         base_canvas: Canvas.new(40, 8),
-        core_base: 16,
-          playfield_base: 0,
-          playfield_channel: 6
+        score_base: 16,
+        playfield_base: 0,
+        playfield_channel: 6
       }
   end
 end

@@ -3,12 +3,11 @@ defmodule Octopus.Apps.Supermario.Animation.Completed do
   alias Octopus.{Canvas, Font}
 
   # Show Game over moving from left to right
-  def new(windows_offset, windows_shown, score) do
+  def new(windows_offset, windows_shown) do
     data = %{
       start_time: Time.utc_now(),
       windows_offset: windows_offset,
-      windows_shown: windows_shown,
-      score: score
+      windows_shown: windows_shown
     }
 
     Animation.new(:completed, data)
@@ -20,7 +19,7 @@ defmodule Octopus.Apps.Supermario.Animation.Completed do
     offset = Enum.min([Integer.floor_div(diff, 150_000), 160])
 
     canvas =
-      "You win! Score: #{data.score}"
+      "You win!"
       |> Canvas.from_string(font)
 
     pixels =
