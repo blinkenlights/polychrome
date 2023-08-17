@@ -121,7 +121,7 @@ defmodule Octopus.Apps.Snake.Game do
 
           %Game{
             game
-            | worm: %Worm{wormy | speed: (wormy.speed - 1) |> Snake.Util.clamp(10, 60)},
+            | worm: %Worm{wormy | speed: (wormy.speed - 1) |> Octopus.Util.clamp(10, 60)},
               food: new_food(wormy),
               score: game.score + 1
           }
