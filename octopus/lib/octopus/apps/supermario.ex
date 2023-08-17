@@ -14,27 +14,18 @@ defmodule Octopus.Apps.Supermario do
   @windows_shown 1
 
   defmodule State do
-    defstruct [:game, :interval, :canvas, :button_state]
+    defstruct [:game, :interval, :canvas, :button_state, :args]
   end
 
   def name(), do: "Supermario"
 
-  def init(_args) do
-    state = init_state()
+  def init(args \\ %{}) do
+    state = args
+    |> Map.put_new(:windows_shown, @windows_shown)
+    |> init_state()
+
     schedule_ticker(state.interval)
     {:ok, state}
-  end
-
-  defp init_state do
-    game = Game.new(@windows_shown)
-    canvas = Canvas.new(80, 8)
-
-    %State{
-      interval: @frame_time_ms,
-      game: game,
-      canvas: canvas,
-      button_state: ButtonState.new()
-    }
   end
 
   def handle_info(:tick, %State{canvas: canvas, game: game} = state) do
@@ -42,15 +33,14 @@ defmodule Octopus.Apps.Supermario do
       {:ok, game} ->
         canvas = Canvas.clear(canvas)
 
-        canvas =
-          game
-          |> Game.draw(canvas)
+        game
+        |> Game.draw(canvas)
+        |> send_canvas()
 
-        canvas |> send_canvas()
         {:noreply, %State{state | game: game, canvas: canvas}}
 
       {:gameover, _game} ->
-        state = init_state()
+        state = init_state(state.args)
         schedule_ticker(state.interval)
         {:noreply, state}
     end
@@ -120,5 +110,20 @@ defmodule Octopus.Apps.Supermario do
 
   def schedule_ticker(interval) do
     :timer.send_interval(interval, self(), :tick)
+  end
+
+  defp init_state(args) do
+    game = args
+    |> Map.get(:windows_shown)
+    |> Game.new()
+    canvas = Canvas.new(80, 8)
+
+    %State{
+      interval: @frame_time_ms,
+      game: game,
+      canvas: canvas,
+      button_state: ButtonState.new(),
+      args: args
+    }
   end
 end
