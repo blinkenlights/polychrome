@@ -375,8 +375,8 @@ defmodule Octopus.Apps.Supermario.Game do
       |> String.pad_leading(2, "0")
       |> String.to_charlist()
 
-    font = Font.load("gunb")
-    font_variant = 8
+    font = Font.load("deta")
+    font_variant = 6
 
     Font.pipe_draw_char(canvas, font, second, font_variant, {layout.score_base, 0})
     |> (fn c ->
