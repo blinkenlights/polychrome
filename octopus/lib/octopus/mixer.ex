@@ -2,7 +2,7 @@ defmodule Octopus.Mixer do
   use GenServer
   require Logger
 
-  alias Octopus.Apps.Supermario.Game
+  alias Octopus.Protobuf.AudioFrame
   alias Octopus.GameScheduler
   alias Octopus.{Broadcaster, Protobuf, AppSupervisor, PlaylistScheduler, Canvas, GameScheduler}
 
@@ -184,6 +184,11 @@ defmodule Octopus.Mixer do
     {:noreply, state}
   end
 
+  def handle_cast(:stop_audio_playback, state) do
+    do_stop_audio_playback()
+    {:noreply, state}
+  end
+
   ### App Transitions ###
   # Implemented with a simple state machine that is represented by the `transition` field in the state.
   # Possible values are `{:in, time_left}`, `{:out, time_left}` and `nil`.
@@ -314,8 +319,13 @@ defmodule Octopus.Mixer do
   defp broadcast_rendered_app(%State{selected_app: {_, _}} = state), do: state
 
   defp broadcast_rendered_app(%State{} = state) do
+    do_stop_audio_playback()
     AppSupervisor.send_event(state.selected_app, %ControlEvent{type: :APP_SELECTED})
     AppSupervisor.send_event(state.last_selected_app, %ControlEvent{type: :APP_DESELECTED})
+  end
+
+  def stop_audio_playback() do
+    GenServer.cast(__MODULE__, :stop_audio_playback)
   end
 
   defp do_handle_input(
@@ -369,4 +379,11 @@ defmodule Octopus.Mixer do
   end
 
   defp maybe_stop_game_scheduler(state), do: state
+
+  defp do_stop_audio_playback do
+    1..10
+    |> Enum.map(&%AudioFrame{stop: true, channel: &1})
+    |> Enum.map(&Protobuf.encode/1)
+    |> Enum.each(&Broadcaster.send_binary/1)
+  end
 end

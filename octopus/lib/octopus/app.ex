@@ -68,6 +68,8 @@ defmodule Octopus.App do
   """
   @callback handle_config(config :: any(), state :: any()) :: {:noreply, state :: any()}
 
+  @callback handle_control_event(%ControlEvent{}, state :: any()) :: {:noreply, state :: any()}
+
   defmacro __using__(opts) do
     category = Keyword.get(opts, :category, :misc)
 
