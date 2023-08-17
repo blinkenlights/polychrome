@@ -1,0 +1,5 @@
+build/
+.cache/
+docs/*
+!docs/.gitkeep
+clang-tidy-warnings.log
