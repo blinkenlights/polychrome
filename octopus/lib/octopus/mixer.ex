@@ -19,6 +19,7 @@ defmodule Octopus.Mixer do
   @transition_duration 300
   @transition_frame_time trunc(1000 / 60)
   @playlist_id 3
+  @game_time [0..15, 30..45] |> Enum.flat_map(&Enum.to_list/1)
 
   defmodule State do
     defstruct selected_app: nil,
@@ -332,8 +333,15 @@ defmodule Octopus.Mixer do
          %State{active_scheduler: :playlist} = state,
          %InputEvent{type: :BUTTON_MENU, value: 1}
        ) do
-    PlaylistScheduler.stop_playlist()
-    GameScheduler.start()
+    case DateTime.utc_now() do
+      %DateTime{minute: minute} when minute in @game_time ->
+        PlaylistScheduler.stop_playlist()
+        GameScheduler.start()
+
+      _ ->
+        :noop
+    end
+
     %State{state | active_scheduler: :game}
   end
 
@@ -374,7 +382,15 @@ defmodule Octopus.Mixer do
       PlaylistScheduler.start_playlist(@playlist_id)
       %State{state | active_scheduler: :playlist}
     else
-      state
+      %DateTime{minute: minute} = DateTime.utc_now()
+
+      if minute not in @game_time do
+        GameScheduler.stop()
+        PlaylistScheduler.start_playlist(@playlist_id)
+        %State{state | active_scheduler: :playlist}
+      else
+        state
+      end
     end
   end
 
