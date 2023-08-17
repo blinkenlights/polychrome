@@ -1,8 +1,8 @@
 defmodule Octopus.Apps.PixelFun do
   use Octopus.App, category: :animation
-
+  require Logger
   alias Octopus.Canvas
-  alias Octopus.Protobuf.InputEvent
+  alias Octopus.Protobuf.{InputEvent, SoundToLightControlEvent}
   alias Octopus.Apps.PixelFun.Program
 
   @width 8 * get_screen_count() + 18 * (get_screen_count() - 1)
@@ -41,7 +41,8 @@ defmodule Octopus.Apps.PixelFun do
       :pivot,
       :offset,
       :move,
-      :input
+      :input,
+      :audio_input
     ]
   end
 
@@ -114,7 +115,8 @@ defmodule Octopus.Apps.PixelFun do
        pivot: {@center_x, @center_y},
        offset: {0, 0},
        move: {0, 0},
-       input: config.input
+       input: config.input,
+       audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
      }}
   end
 
@@ -207,12 +209,23 @@ defmodule Octopus.Apps.PixelFun do
     {:noreply, %State{state | canvas: canvas, offset: {offset_x, offset_y}}}
   end
 
-  def handle_input(%InputEvent{type: axis, value: value}, %State{move: {_, y}, input: true} = state)
+  def handle_input(%SoundToLightControlEvent{bass: low, mid: mid, high: high}, state) do
+    # Logger.info("low: #{low}, mid: #{mid}, high: #{high}")
+    {:noreply, %State{state | audio_input: %{low: low, mid: mid, high: high}}}
+  end
+
+  def handle_input(
+        %InputEvent{type: axis, value: value},
+        %State{move: {_, y}, input: true} = state
+      )
       when axis in [:AXIS_X_1, :AXIS_X_2] do
     {:noreply, %State{state | move: {-value, y}}}
   end
 
-  def handle_input(%InputEvent{type: axis, value: value}, %State{move: {x, _}, input: true} = state)
+  def handle_input(
+        %InputEvent{type: axis, value: value},
+        %State{move: {x, _}, input: true} = state
+      )
       when axis in [:AXIS_Y_1, :AXIS_Y_2] do
     {:noreply, %State{state | move: {x, -value}}}
   end
@@ -269,14 +282,28 @@ defmodule Octopus.Apps.PixelFun do
       x_new = x_scaled + pivot_x - offset_x
       y_new = y_scaled + pivot_y - offset_y
 
-      {{x, y}, pixels(program, x_new, y_new, i, seconds, colors)}
+      {{x, y},
+       pixels(
+         program,
+         x_new,
+         y_new,
+         i,
+         seconds,
+         state.audio_input.low,
+         state.audio_input.mid,
+         state.audio_input.high,
+         colors
+       )}
     end
   end
 
   @default_env %{~c"pi" => :math.pi(), ~c"tau" => :math.pi() * 2}
 
-  defp pixels(expr, x, y, i, t, {color_a, color_b}) do
-    env = [%{~c"x" => x, ~c"y" => y, ~c"i" => i, ~c"t" => t}, @default_env]
+  defp pixels(expr, x, y, i, t, l, m, h, {color_a, color_b}) do
+    env = [
+      %{~c"x" => x, ~c"y" => y, ~c"i" => i, ~c"t" => t, ~c"l" => l, ~c"m" => m, ~c"h" => h},
+      @default_env
+    ]
 
     value =
       expr

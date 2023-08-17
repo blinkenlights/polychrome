@@ -2,6 +2,7 @@ defmodule Octopus.InputAdapter do
   use GenServer
   require Logger
 
+  alias Octopus.Protobuf.SoundToLightControlEvent
   alias Octopus.{Protobuf, Mixer, PlaylistScheduler}
   alias Octopus.Protobuf.InputEvent
 
@@ -27,6 +28,10 @@ defmodule Octopus.InputAdapter do
       {:ok, %InputEvent{} = input_event} ->
         # Logger.debug("#{__MODULE__}: Received input event: #{inspect(input_event)}")
         Mixer.handle_input(input_event)
+
+      {:ok, %SoundToLightControlEvent{} = stl_event} ->
+        # Logger.debug("#{__MODULE__}: Received stl event event: #{inspect(stl_event)}")
+        Mixer.handle_input(stl_event)
 
       {:ok, content} ->
         Logger.warning("#{__MODULE__}: Received unexpected packet: #{inspect(content)}")
