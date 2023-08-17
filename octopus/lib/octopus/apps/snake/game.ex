@@ -58,19 +58,43 @@ defmodule Octopus.Apps.Snake.Game do
     end
   end
 
-  defstruct [:worm, :food, :score]
+  defstruct [:worm, :food, :score, :layout]
   alias Octopus.Canvas
   alias Octopus.Apps.Snake
   alias Snake.JoyState
   alias Snake.Game
 
-  def new() do
+  def new(args) do
     worm = Worm.new()
+
+    title = Sprite.load("../images/snake", 0)
 
     %Game{
       worm: Worm.new(),
       food: new_food(worm),
-      score: 0
+      score: 0,
+      layout:
+        case args[:layout] do
+          nil ->
+            unless args[:side] == :left do
+              %{
+                base_canvas: Canvas.new(40, 8) |> Canvas.overlay(title),
+                score_base: 16,
+                playfield_base: 8 * 4
+              }
+            else
+              %{
+                base_canvas:
+                  Canvas.new(40, 8)
+                  |> Canvas.overlay(title, offset: {4 * 8, 0}),
+                score_base: 16,
+                playfield_base: 0
+              }
+            end
+
+          layout when layout != nil ->
+            layout
+        end
     }
   end
 
@@ -106,12 +130,12 @@ defmodule Octopus.Apps.Snake.Game do
       end
 
     cond do
-      Worm.dead?(new_game.worm) -> Game.new()
+      Worm.dead?(new_game.worm) -> Game.new(layout: new_game.layout)
       true -> new_game
     end
   end
 
-  def render_canvas(%Game{} = game) do
+  def render_canvas(%Game{layout: layout} = game) do
     gamecanvas =
       Canvas.new(8, 8)
       |> Canvas.put_pixel(game.food, {0xFF, 0xFF, 0x00})
@@ -123,21 +147,23 @@ defmodule Octopus.Apps.Snake.Game do
       end)
 
     [first, second] =
-      game.score |> to_string() |> String.pad_leading(2, "0") |> String.to_charlist()
+      (game.score + 8) |> to_string() |> String.pad_leading(2, "0") |> String.to_charlist()
 
     font = Font.load("gunb")
     font_variant = 8
 
     canvas =
-      Canvas.new(60, 8)
-      |> Canvas.overlay(Sprite.load("../images/snake", 0))
-      |> Canvas.overlay(gamecanvas, offset: {8 * 4, 0})
+      layout.base_canvas
+      |> Canvas.overlay(gamecanvas, offset: {layout.playfield_base, 0})
+      |> Font.pipe_draw_char(font, second, font_variant, {layout.score_base, 0})
+      |> (fn c ->
+            unless first == ?0 do
+              c |> Font.pipe_draw_char(font, first, font_variant, {layout.score_base - 8, 0})
+            else
+              c
+            end
+          end).()
 
-    if first != "0" do
-      canvas = Font.draw_char(font, first, font_variant, canvas, {8, 0})
-    end
-
-    canvas = Font.draw_char(font, second, font_variant, canvas, {16, 0})
     canvas
   end
 end

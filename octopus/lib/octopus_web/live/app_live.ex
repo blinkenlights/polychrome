@@ -57,7 +57,7 @@ defmodule OctopusWeb.AppLive do
     config = %{
       app: Module.split(socket.assigns.module) |> List.last(),
       config: AppSupervisor.config(socket.assigns.app_id),
-      timout: 60000
+      timeout: 60000
     }
 
     socket =

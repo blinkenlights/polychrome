@@ -45,6 +45,12 @@ defmodule Octopus.Font do
   end
 
   @doc """
+  Renders char but pipes better with canvas
+  """
+  def pipe_draw_char(canvas, font, char, variant, offset \\ {0, 0}),
+    do: draw_char(font, char, variant, canvas, offset)
+
+  @doc """
   Renders a single character onto a canvas and returns the canvas.
   """
   def draw_char(font, char, variant, canvas, offset \\ {0, 0})
