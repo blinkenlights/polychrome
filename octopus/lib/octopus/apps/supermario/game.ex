@@ -114,7 +114,7 @@ defmodule Octopus.Apps.Supermario.Game do
            last_ticker: now,
            current_position: 0,
            mario: Mario.new(next_level.mario_start_y_position),
-           score: game.score + 100
+           score: game.score + 20
        }}
     else
       {:ok, game}
@@ -141,7 +141,7 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   def tick(%Game{state: :completed, current_animation: nil, score: score} = game) do
-    score = score + 100
+    score = score + 20
 
     {:ok,
      %Game{
@@ -265,7 +265,7 @@ defmodule Octopus.Apps.Supermario.Game do
         %Game{
           game
           | level: Level.kill_bad_guy(level, absolute_x_position, y_position),
-            score: game.score + 20
+            score: game.score + 3
         }
       else
         game
