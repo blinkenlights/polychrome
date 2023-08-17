@@ -49,7 +49,6 @@ defmodule Octopus.Apps.Train do
     speed = speed * (1 / (1 + 0.1 / @fps))
 
     IO.inspect(state.speed)
-
     {:noreply, %State{state | time: state.time + 1 / @fps, speed: speed, x: state.x + speed}}
   end
 
@@ -72,7 +71,7 @@ defmodule Octopus.Apps.Train do
   end
 
   def handle_input(%InputEvent{type: :AXIS_X_1, value: value}, state) do
-    state = {:noreply, %State{state | acceleration: -0.1 * value}}
+    state = %State{state | acceleration: -0.1 * value}
     {:noreply, state}
   end
 
