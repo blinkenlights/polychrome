@@ -206,7 +206,7 @@ defmodule Octopus.Apps.Lemmings do
           [existing_stopper |> Lemming.explode() | lems]
         else
           new_lem =
-            Lemming.button_lemming(number) |> Lemming.play_sample("yippee") |> IO.inspect()
+            Lemming.button_lemming(number) |> Lemming.play_sample("yippee")
 
           [new_lem | state.lemmings]
         end
