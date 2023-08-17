@@ -2,6 +2,7 @@ defmodule Octopus.Apps.Snake do
   use Octopus.App, category: :game
   require Logger
 
+  alias Octopus.Sprite
   alias Octopus.Apps.Snake
   alias Octopus.Protobuf.InputEvent
   alias Snake.Game
@@ -15,6 +16,8 @@ defmodule Octopus.Apps.Snake do
   end
 
   def name(), do: "Snake"
+
+  def icon(), do: Sprite.load("../images/snake", 0)
 
   def init(_args) do
     state = %State{

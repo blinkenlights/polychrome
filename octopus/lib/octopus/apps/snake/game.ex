@@ -1,5 +1,6 @@
 defmodule Octopus.Apps.Snake.Game do
   alias Octopus.Font
+  alias Octopus.Sprite
 
   defmodule Worm do
     @base_speed 20
@@ -124,14 +125,19 @@ defmodule Octopus.Apps.Snake.Game do
     [first, second] =
       game.score |> to_string() |> String.pad_leading(2, "0") |> String.to_charlist()
 
-    font = Font.load("ddp")
+    font = Font.load("gunb")
+    font_variant = 8
 
     canvas =
       Canvas.new(60, 8)
+      |> Canvas.overlay(Sprite.load("../images/snake", 0))
       |> Canvas.overlay(gamecanvas, offset: {8 * 4, 0})
 
-    canvas = Font.draw_char(font, first, 0, canvas, {8, 0})
-    canvas = Font.draw_char(font, second, 0, canvas, {16, 0})
+    if first != "0" do
+      canvas = Font.draw_char(font, first, font_variant, canvas, {8, 0})
+    end
+
+    canvas = Font.draw_char(font, second, font_variant, canvas, {16, 0})
     canvas
   end
 end
