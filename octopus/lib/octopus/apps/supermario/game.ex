@@ -39,7 +39,7 @@ defmodule Octopus.Apps.Supermario.Game do
   @intro_animation_ms 3_000_000
   @dying_animation_ms 3_000_000
   @pause_animation_ms 4_000_000
-  @game_over_animation_ms 23_000_000
+  @game_over_animation_ms 18_000_000
   # starting from window
   @windows_offset 0
 
