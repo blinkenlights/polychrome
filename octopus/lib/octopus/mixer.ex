@@ -2,6 +2,7 @@ defmodule Octopus.Mixer do
   use GenServer
   require Logger
 
+  alias Octopus.Apps.Supermario.Game
   alias Octopus.GameScheduler
   alias Octopus.{Broadcaster, Protobuf, AppSupervisor, PlaylistScheduler, Canvas, GameScheduler}
 
@@ -327,6 +328,22 @@ defmodule Octopus.Mixer do
   end
 
   defp do_handle_input(state, %InputEvent{type: :BUTTON_MENU}), do: state
+
+  defp do_handle_input(%State{active_scheduler: :game} = state, %InputEvent{
+         type: :BUTTON_5,
+         value: 1
+       }) do
+    GameScheduler.next_game(:left)
+    state
+  end
+
+  defp do_handle_input(%State{active_scheduler: :game} = state, %InputEvent{
+         type: :BUTTON_6,
+         value: 1
+       }) do
+    GameScheduler.next_game(:right)
+    state
+  end
 
   defp do_handle_input(%State{} = state, %InputEvent{} = input_event) do
     case state.selected_app do
