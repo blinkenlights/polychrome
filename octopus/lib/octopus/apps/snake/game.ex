@@ -80,7 +80,8 @@ defmodule Octopus.Apps.Snake.Game do
               %{
                 base_canvas: Canvas.new(40, 8) |> Canvas.overlay(title),
                 score_base: 16,
-                playfield_base: 8 * 4
+                playfield_base: 8 * 4,
+                playfield_channel: 5
               }
             else
               %{
@@ -88,7 +89,8 @@ defmodule Octopus.Apps.Snake.Game do
                   Canvas.new(40, 8)
                   |> Canvas.overlay(title, offset: {4 * 8, 0}),
                 score_base: 16,
-                playfield_base: 0
+                playfield_base: 0,
+                playfield_channel: 6
               }
             end
 
@@ -115,6 +117,8 @@ defmodule Octopus.Apps.Snake.Game do
         {^food, _} ->
           wormy = %Worm{new_worm | parts: [hd(new_worm.parts) | game.worm.parts]}
 
+          Octopus.App.play_sample("snake/food_eaten.wav", game.layout.playfield_channel)
+
           %Game{
             game
             | worm: %Worm{wormy | speed: (wormy.speed - 1) |> Snake.Util.clamp(10, 60)},
@@ -130,8 +134,12 @@ defmodule Octopus.Apps.Snake.Game do
       end
 
     cond do
-      Worm.dead?(new_game.worm) -> Game.new(layout: new_game.layout)
-      true -> new_game
+      Worm.dead?(new_game.worm) ->
+        Octopus.App.play_sample("snake/death.wav", new_game.layout.playfield_channel)
+        Game.new(layout: new_game.layout)
+
+      true ->
+        new_game
     end
   end
 

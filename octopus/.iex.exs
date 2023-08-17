@@ -9,7 +9,8 @@ alias Octopus.{
   Broadcaster,
   Transitions,
   Canvas,
-  Sprite
+  Sprite,
+  GameScheduler
 }
 
 IEx.configure(inspect: [limit: :infinity])

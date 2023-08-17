@@ -132,6 +132,10 @@ defmodule Octopus.App do
     end
   end
 
+  def play_sample(sample_path, channel) do
+    send_frame(%AudioFrame{uri: Path.join("file://", sample_path), channel: channel}, self())
+  end
+
   @doc """
   Send a frame to the mixer.
   """
