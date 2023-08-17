@@ -169,7 +169,7 @@ defmodule Octopus.Mixer do
         {{_, right}, :left} -> {next_app_id, right}
         {{left, _}, :right} -> {left, next_app_id}
         {_, :left} -> {next_app_id, nil}
-        {:right, _} -> {nil, next_app_id}
+        {_, :right} -> {nil, next_app_id}
       end
 
     state = %State{
