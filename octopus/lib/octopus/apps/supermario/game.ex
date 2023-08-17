@@ -319,7 +319,7 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   #  between levels animation
-  def render_canvas(%Game{state: :paused, current_animation: nil}, canvas) do
+  def render_canvas(%Game{state: :paused, current_animation: nil, layout: layout}) do
     {:ok, %ExPng.Image{} = image} =
       ExPng.Image.from_file(Path.join([:code.priv_dir(:octopus), "images", "mario.png"]))
 
@@ -329,7 +329,7 @@ defmodule Octopus.Apps.Supermario.Game do
         [r, g, b]
       end)
     end)
-    |> fill_canvas(canvas)
+    |> fill_canvas(layout.base_canvas)
   end
 
   # draw current pixels of level and mario
@@ -337,28 +337,28 @@ defmodule Octopus.Apps.Supermario.Game do
         %Game{
           mario: mario,
           current_animation: nil,
-          level: level
-        } = game,
-        canvas
+          level: level,
+          layout: layout
+        } = game
       ) do
     game
     |> current_game_pixels
     |> Mario.draw(mario)
     |> Level.draw(game, level)
-    |> fill_canvas(canvas)
+    |> fill_canvas(layout.base_canvas)
   end
 
-  def render_canvas(
-        %Game{current_animation: %Animation{animation_type: animation_type} = current_animation},
-        _canvas
-      )
+  def render_canvas(%Game{
+    current_animation: %Animation{animation_type: animation_type} = current_animation}
+  )
       when animation_type == :game_over or animation_type == :completed do
     Animation.draw(current_animation)
   end
 
-  def render_canvas(%Game{current_animation: current_animation}, canvas) do
+  def render_canvas(%Game{current_animation: current_animation, layout: layout}) do
+
     Animation.draw(current_animation)
-    |> fill_canvas(canvas)
+    |> fill_canvas(layout.base_canvas)
   end
 
   defp current_game_pixels(%Game{

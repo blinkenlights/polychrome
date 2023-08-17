@@ -3,7 +3,6 @@ defmodule Octopus.Apps.Supermario do
   require Logger
 
   alias Octopus.Apps.Supermario.Game
-  alias Octopus.{Canvas, Mixer}
   alias Octopus.Protobuf.InputEvent
   alias Octopus.Apps.Input.{ButtonState, JoyState}
 
@@ -14,7 +13,7 @@ defmodule Octopus.Apps.Supermario do
   @windows_shown 1
 
   defmodule State do
-    defstruct [:game, :interval, :canvas, :button_state, :args, :side]
+    defstruct [:game, :interval, :button_state, :args, :side]
   end
 
   def name(), do: "Supermario"
@@ -29,16 +28,15 @@ defmodule Octopus.Apps.Supermario do
     {:ok, state}
   end
 
-  def handle_info(:tick, %State{canvas: canvas, game: game} = state) do
+  def handle_info(:tick, %State{game: game} = state) do
     case Game.tick(game) do
       {:ok, game} ->
-        canvas = Canvas.clear(canvas)
 
         game
-        |> Game.render_canvas(canvas)
+        |> Game.render_canvas()
         |> send_canvas()
 
-        {:noreply, %State{state | game: game, canvas: canvas}}
+        {:noreply, %State{state | game: game}}
 
       {:gameover, _game} ->
         state = init_state(state.args)
@@ -114,12 +112,10 @@ defmodule Octopus.Apps.Supermario do
   end
 
   defp init_state(args) do
-    canvas = Canvas.new(80, 8)
     game = Game.new(args)
     %State{
       interval: @frame_time_ms,
       game: game,
-      canvas: canvas,
       button_state: ButtonState.new(),
       args: args,
       side: args[:side]
