@@ -8,7 +8,7 @@ defmodule Octopus.Apps.Snake.Game do
 
     def new() do
       %Worm{
-        parts: [{{3, 7}, :r}, {{2, 7}, :r}, {{1, 7}, :r}],
+        parts: [{{2, 5}, :r}, {{1, 5}, :r}, {{0, 5}, :r}],
         rem_t: @base_speed,
         speed: @base_speed
       }
@@ -28,6 +28,19 @@ defmodule Octopus.Apps.Snake.Game do
         end
 
       move([{newpos, dir} | acc], tail, pdir)
+    end
+
+    def allowed_dirs(%Worm{parts: [_, {_, prev_dir} | _]} = _worm, dirs) do
+      disallowed_dir =
+        case prev_dir do
+          :u -> :d
+          :d -> :u
+          :l -> :r
+          :r -> :l
+        end
+
+      dirs
+      |> Enum.reject(fn dir -> dir == disallowed_dir end)
     end
 
     def tick(worm, [dir | _]), do: tick(worm, dir)
@@ -58,7 +71,7 @@ defmodule Octopus.Apps.Snake.Game do
     end
   end
 
-  defstruct [:worm, :food, :score, :layout]
+  defstruct [:worm, :food, :score, :layout, :moved]
   alias Octopus.Canvas
   alias Octopus.Apps.Snake
   alias Snake.JoyState
@@ -73,6 +86,7 @@ defmodule Octopus.Apps.Snake.Game do
       worm: Worm.new(),
       food: new_food(worm),
       score: 0,
+      moved: false,
       layout:
         case args[:layout] do
           nil ->
@@ -110,7 +124,9 @@ defmodule Octopus.Apps.Snake.Game do
   end
 
   def tick(%Game{food: food} = game, joy) do
-    new_worm = game.worm |> Worm.tick(JoyState.direction(joy))
+    dirs = game.worm |> Worm.allowed_dirs(JoyState.direction(joy))
+    moved = dirs != []
+    new_worm = game.worm |> Worm.tick(dirs)
 
     new_game =
       case hd(new_worm.parts) do
@@ -129,13 +145,17 @@ defmodule Octopus.Apps.Snake.Game do
         _ ->
           %Game{
             game
-            | worm: new_worm
+            | worm: new_worm,
+              moved: game.moved || moved
           }
       end
 
     cond do
       Worm.dead?(new_game.worm) ->
-        Octopus.App.play_sample("snake/death.wav", new_game.layout.playfield_channel)
+        if new_game.moved do
+          Octopus.App.play_sample("snake/death.wav", new_game.layout.playfield_channel)
+        end
+
         Game.new(layout: new_game.layout)
 
       true ->
