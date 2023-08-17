@@ -213,6 +213,7 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
                                 {
                                   PLOGE << err.what();
                                 }
+                                return;
                               }
 
                               if (auto [file, err] = cache.get(uri); !err)
