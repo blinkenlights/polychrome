@@ -3,7 +3,6 @@ defmodule Octopus.Apps.Supermario do
   require Logger
 
   alias Octopus.Apps.Supermario.Game
-  alias Octopus.{Canvas, Mixer}
   alias Octopus.Protobuf.InputEvent
   alias Octopus.Apps.Input.{ButtonState, JoyState}
 
@@ -14,43 +13,33 @@ defmodule Octopus.Apps.Supermario do
   @windows_shown 1
 
   defmodule State do
-    defstruct [:game, :interval, :canvas, :button_state]
+    defstruct [:game, :interval, :button_state, :args, :side]
   end
 
   def name(), do: "Supermario"
 
-  def init(_args) do
-    state = init_state()
+  def init(args \\ %{}) do
+    state = args
+    |> Map.put_new(:windows_shown, @windows_shown)
+    |> Map.put_new(:side, :right)
+    |> init_state()
+
     schedule_ticker(state.interval)
     {:ok, state}
   end
 
-  defp init_state do
-    game = Game.new(@windows_shown)
-    canvas = Canvas.new(80, 8)
-
-    %State{
-      interval: @frame_time_ms,
-      game: game,
-      canvas: canvas,
-      button_state: ButtonState.new()
-    }
-  end
-
-  def handle_info(:tick, %State{canvas: canvas, game: game} = state) do
+  def handle_info(:tick, %State{game: game} = state) do
     case Game.tick(game) do
       {:ok, game} ->
-        canvas = Canvas.clear(canvas)
 
-        canvas =
-          game
-          |> Game.draw(canvas)
+        game
+        |> Game.render_canvas()
+        |> send_canvas()
 
-        canvas |> send_canvas()
-        {:noreply, %State{state | game: game, canvas: canvas}}
+        {:noreply, %State{state | game: game}}
 
       {:gameover, _game} ->
-        state = init_state()
+        state = init_state(state.args)
         schedule_ticker(state.interval)
         {:noreply, state}
     end
@@ -84,7 +73,7 @@ defmodule Octopus.Apps.Supermario do
     new_button_state = ButtonState.handle_event(button_state, type, value)
 
     state =
-      if JoyState.button?(new_button_state.joy2, :a) do
+      if JoyState.button?(joybutton(state.side, new_button_state), :a) do
         game = Game.jump(state.game)
         %{state | game: game}
       else
@@ -92,7 +81,7 @@ defmodule Octopus.Apps.Supermario do
       end
 
     state =
-      if JoyState.button?(new_button_state.joy2, :r) do
+      if JoyState.button?(joybutton(state.side, new_button_state), :r) do
         case Game.move_right(state.game) do
           {:ok, game} ->
             %{state | game: game}
@@ -105,7 +94,7 @@ defmodule Octopus.Apps.Supermario do
             %{state | game: game}
         end
       else
-        if JoyState.button?(new_button_state.joy2, :l) do
+        if JoyState.button?(joybutton(state.side, new_button_state), :l) do
           case Game.move_left(state.game) do
             {:ok, game} ->
               %{state | game: game}
@@ -121,4 +110,18 @@ defmodule Octopus.Apps.Supermario do
   def schedule_ticker(interval) do
     :timer.send_interval(interval, self(), :tick)
   end
+
+  defp init_state(args) do
+    game = Game.new(args)
+    %State{
+      interval: @frame_time_ms,
+      game: game,
+      button_state: ButtonState.new(),
+      args: args,
+      side: args[:side]
+    }
+  end
+
+  defp joybutton(:right, button_state), do: button_state.joy2
+  defp joybutton(:left, button_state), do: button_state.joy1
 end

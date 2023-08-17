@@ -3,7 +3,7 @@ defmodule Octopus.Apps.Supermario.Game do
   handles the game logic
   """
   alias __MODULE__
-  alias Octopus.Canvas
+  alias Octopus.{Canvas, Font}
   alias Octopus.Apps.Supermario.{Animation, Level, Mario}
   alias Octopus.Apps.Supermario.Animation.{Completed, GameOver, Intro, MarioDies}
 
@@ -16,7 +16,8 @@ defmodule Octopus.Apps.Supermario.Game do
           level: Level.t(),
           mario: Mario.t(),
           current_animation: Animation.t() | nil,
-          lives: integer()
+          lives: integer(),
+          layout: map()
         }
   defstruct [
     :state,
@@ -28,7 +29,8 @@ defmodule Octopus.Apps.Supermario.Game do
     :mario,
     :current_animation,
     :lives,
-    :score
+    :score,
+    :layout
   ]
 
   # micro seconds between two moves
@@ -37,11 +39,11 @@ defmodule Octopus.Apps.Supermario.Game do
   @intro_animation_ms 3_000_000
   @dying_animation_ms 3_000_000
   @pause_animation_ms 4_000_000
-  @game_over_animation_ms 23_000_000
+  @game_over_animation_ms 18_000_000
   # starting from window
   @windows_offset 0
 
-  def new(windows_shown) when windows_shown > 0 and windows_shown < 11 do
+  def new(%{windows_shown: windows_shown, side: side}) do
     level = Level.new()
 
     %Game{
@@ -54,7 +56,8 @@ defmodule Octopus.Apps.Supermario.Game do
       mario: Mario.new(level.mario_start_y_position),
       current_animation: nil,
       lives: 3,
-      score: 0
+      score: 0,
+      layout: layout(side)
     }
   end
 
@@ -111,7 +114,7 @@ defmodule Octopus.Apps.Supermario.Game do
            last_ticker: now,
            current_position: 0,
            mario: Mario.new(next_level.mario_start_y_position),
-           score: game.score + 100
+           score: game.score + 20
        }}
     else
       {:ok, game}
@@ -137,13 +140,13 @@ defmodule Octopus.Apps.Supermario.Game do
      }}
   end
 
-  def tick(%Game{state: :completed, current_animation: nil, score: score} = game) do
-    score = score + 100
+  def tick(%Game{state: :completed, current_animation: nil} = game) do
+    score = score + 20
 
     {:ok,
      %Game{
        game
-       | current_animation: Completed.new(@windows_offset, game.windows_shown, score),
+       | current_animation: Completed.new(@windows_offset, game.windows_shown),
          last_ticker: Time.utc_now(),
          score: score
      }}
@@ -262,7 +265,7 @@ defmodule Octopus.Apps.Supermario.Game do
         %Game{
           game
           | level: Level.kill_bad_guy(level, absolute_x_position, y_position),
-            score: game.score + 20
+            score: game.score + 3
         }
       else
         game
@@ -316,7 +319,7 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   #  between levels animation
-  def draw(%Game{state: :paused, current_animation: nil}, canvas) do
+  def render_canvas(%Game{state: :paused, current_animation: nil, layout: layout}) do
     {:ok, %ExPng.Image{} = image} =
       ExPng.Image.from_file(Path.join([:code.priv_dir(:octopus), "images", "mario.png"]))
 
@@ -326,36 +329,61 @@ defmodule Octopus.Apps.Supermario.Game do
         [r, g, b]
       end)
     end)
-    |> fill_canvas(canvas)
+    |> fill_canvas(layout.base_canvas, layout.playfield_base)
   end
 
   # draw current pixels of level and mario
-  def draw(
+  def render_canvas(
         %Game{
           mario: mario,
           current_animation: nil,
-          level: level
-        } = game,
-        canvas
+          level: level,
+          layout: layout
+        } = game
       ) do
     game
     |> current_game_pixels
     |> Mario.draw(mario)
     |> Level.draw(game, level)
-    |> fill_canvas(canvas)
+    |> fill_canvas(layout.base_canvas, layout.playfield_base)
+    |> render_score(game)
   end
 
-  def draw(
-        %Game{current_animation: %Animation{animation_type: animation_type} = current_animation},
-        _canvas
-      )
+  def render_canvas(%Game{
+    current_animation: %Animation{animation_type: animation_type} = current_animation}
+  = game
+  )
       when animation_type == :game_over or animation_type == :completed do
     Animation.draw(current_animation)
+    |> render_score(game)
   end
 
-  def draw(%Game{current_animation: current_animation}, canvas) do
-    Animation.draw(current_animation)
-    |> fill_canvas(canvas)
+  def render_canvas(%Game{current_animation: current_animation, layout: layout}) do
+    fill_canvas(
+      Animation.draw(current_animation),
+      layout.base_canvas,
+      layout.playfield_base
+    )
+  end
+
+  defp render_score(canvas, %Game{layout: layout, score: score}) do
+    [first, second] =
+        score
+        |> to_string()
+        |> String.pad_leading(2, "0")
+        |> String.to_charlist()
+
+    font = Font.load("gunb")
+    font_variant = 8
+    Font.pipe_draw_char(canvas, font, second, font_variant, {layout.score_base, 0})
+    |> (fn c ->
+          unless first == ?0 do
+            c |> Font.pipe_draw_char(font, first, font_variant, {layout.score_base - 8, 0})
+          else
+            c
+          end
+        end).()
+
   end
 
   defp current_game_pixels(%Game{
@@ -368,7 +396,8 @@ defmodule Octopus.Apps.Supermario.Game do
     end)
   end
 
-  defp fill_canvas(visible_level_pixels, canvas) do
+  defp fill_canvas(visible_level_pixels, base_canvas, playfield_base) do
+    canvas = Canvas.new(8, 8)
     {canvas, _} =
       Enum.reduce(visible_level_pixels, {canvas, 0}, fn row, {canvas, y} ->
         {canvas, _, y} =
@@ -376,7 +405,7 @@ defmodule Octopus.Apps.Supermario.Game do
             canvas =
               Canvas.put_pixel(
                 canvas,
-                {x + @windows_offset * 8, y},
+                {x, y},
                 {r, g, b}
               )
 
@@ -385,7 +414,24 @@ defmodule Octopus.Apps.Supermario.Game do
 
         {canvas, y + 1}
       end)
+    Canvas.overlay(base_canvas, canvas, offset: {playfield_base, 0})
+  end
 
-    canvas
+  defp layout(:right) do
+    %{
+          base_canvas: Canvas.new(40, 8),
+          score_base: 16,
+          playfield_base: 0,
+          playfield_channel: 5
+    }
+  end
+
+  defp layout(:left) do
+    %{
+        base_canvas: Canvas.new(40, 8),
+        score_base: 16,
+        playfield_base: 0,
+        playfield_channel: 6
+      }
   end
 end
