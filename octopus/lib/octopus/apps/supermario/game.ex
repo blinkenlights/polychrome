@@ -141,7 +141,7 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   def tick(%Game{state: :completed, current_animation: nil} = game) do
-    score = score + 20
+    score = game.score + 20
 
     {:ok,
      %Game{
@@ -349,10 +349,12 @@ defmodule Octopus.Apps.Supermario.Game do
     |> render_score(game)
   end
 
-  def render_canvas(%Game{
-    current_animation: %Animation{animation_type: animation_type} = current_animation}
-  = game
-  )
+  def render_canvas(
+        %Game{
+          current_animation: %Animation{animation_type: animation_type} = current_animation
+        } =
+          game
+      )
       when animation_type == :game_over or animation_type == :completed do
     Animation.draw(current_animation)
     |> render_score(game)
@@ -368,13 +370,14 @@ defmodule Octopus.Apps.Supermario.Game do
 
   defp render_score(canvas, %Game{layout: layout, score: score}) do
     [first, second] =
-        score
-        |> to_string()
-        |> String.pad_leading(2, "0")
-        |> String.to_charlist()
+      score
+      |> to_string()
+      |> String.pad_leading(2, "0")
+      |> String.to_charlist()
 
     font = Font.load("gunb")
     font_variant = 8
+
     Font.pipe_draw_char(canvas, font, second, font_variant, {layout.score_base, 0})
     |> (fn c ->
           unless first == ?0 do
@@ -383,7 +386,6 @@ defmodule Octopus.Apps.Supermario.Game do
             c
           end
         end).()
-
   end
 
   defp current_game_pixels(%Game{
@@ -398,6 +400,7 @@ defmodule Octopus.Apps.Supermario.Game do
 
   defp fill_canvas(visible_level_pixels, base_canvas, playfield_base) do
     canvas = Canvas.new(8, 8)
+
     {canvas, _} =
       Enum.reduce(visible_level_pixels, {canvas, 0}, fn row, {canvas, y} ->
         {canvas, _, y} =
@@ -414,24 +417,25 @@ defmodule Octopus.Apps.Supermario.Game do
 
         {canvas, y + 1}
       end)
+
     Canvas.overlay(base_canvas, canvas, offset: {playfield_base, 0})
   end
 
   defp layout(:right) do
     %{
-          base_canvas: Canvas.new(40, 8),
-          score_base: 16,
-          playfield_base: 0,
-          playfield_channel: 5
+      base_canvas: Canvas.new(40, 8),
+      score_base: 16,
+      playfield_base: 0,
+      playfield_channel: 5
     }
   end
 
   defp layout(:left) do
     %{
-        base_canvas: Canvas.new(40, 8),
-        score_base: 16,
-        playfield_base: 0,
-        playfield_channel: 6
-      }
+      base_canvas: Canvas.new(40, 8),
+      score_base: 16,
+      playfield_base: 0,
+      playfield_channel: 6
+    }
   end
 end
