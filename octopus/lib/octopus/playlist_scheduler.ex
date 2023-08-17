@@ -76,18 +76,23 @@ defmodule Octopus.PlaylistScheduler do
   end
 
   def handle_cast({:start, id}, %State{} = state) do
-    playlist = %Playlist{} = get_playlist(id)
-    index = length(playlist.animations) - 1
-    Logger.info("Starting playlist #{inspect(playlist.name)}")
+    case get_playlist(id) do
+      playlist = %Playlist{} ->
+        index = length(playlist.animations) - 1
+        Logger.info("Starting playlist #{inspect(playlist.name)}")
 
-    state =
-      %State{state | playlist_id: id, index: index}
-      |> new_run_id()
-      |> broadcast()
+        state =
+          %State{state | playlist_id: id, index: index}
+          |> new_run_id()
+          |> broadcast()
 
-    send(self(), {:next, state.run_id})
+        send(self(), {:next, state.run_id})
 
-    {:noreply, state}
+        {:noreply, state}
+
+      nil ->
+        {:noreply, state}
+    end
   end
 
   def handle_cast(:stop, %State{} = state) do

@@ -95,6 +95,10 @@ defmodule Octopus.AppSupervisor do
   Stops an specific instance of an app.
   """
   def stop_app(app_id) do
+    if app_id == Mixer.get_selected_app() do
+      Mixer.stop_audio_playback()
+    end
+
     Phoenix.PubSub.broadcast(Octopus.PubSub, @topic, {:apps, {:stopped, app_id}})
 
     case Registry.lookup(Octopus.AppRegistry, app_id) do

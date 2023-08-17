@@ -136,10 +136,9 @@ void SamplerProcessor::playSample(juce::File const &file)
 
 void SamplerProcessor::stopPlayback()
 {
-  for (auto it = m_transportSources.begin(); it != m_transportSources.end();)
+  for (auto it = m_transportSources.begin(); it != m_transportSources.end(); ++it)
   {
     (*it)->stop();
-    it = m_transportSources.erase(it);
   }
 }
 

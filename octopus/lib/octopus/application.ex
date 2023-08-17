@@ -19,12 +19,12 @@ defmodule Octopus.Application do
          repos: Application.fetch_env!(:octopus, :ecto_repos),
          skip: System.get_env("SKIP_MIGRATIONS") == "true"},
         Octopus.Broadcaster,
-        Octopus.Mixer,
         {Registry, keys: :unique, name: Octopus.AppRegistry},
         Octopus.AppSupervisor,
         Octopus.InputAdapter,
         Octopus.PlaylistScheduler,
         Octopus.GameScheduler,
+        Octopus.Mixer,
 
         # Caches
         Supervisor.child_spec({Cachex, name: ColorPalette}, id: make_ref()),
