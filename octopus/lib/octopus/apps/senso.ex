@@ -1,5 +1,5 @@
 defmodule Octopus.Apps.Senso do
-  use Octopus.App, category: :test
+  use Octopus.App, category: :game
   require Logger
 
   alias Telegram.Bot.ChatBot.Chat.Session.Server.State
