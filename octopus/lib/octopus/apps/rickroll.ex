@@ -8,7 +8,7 @@ defmodule Octopus.Apps.Rickroll do
 
   require Logger
 
-  def name, do: "Rickroll"
+  def name, do: "Do Not Click"
 
   def init(_) do
     animation = WebP.load_animation("rickroll-fullwidth")
