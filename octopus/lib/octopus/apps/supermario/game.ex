@@ -3,7 +3,7 @@ defmodule Octopus.Apps.Supermario.Game do
   handles the game logic
   """
   alias __MODULE__
-  alias Octopus.Canvas
+  alias Octopus.{Canvas, Font}
   alias Octopus.Apps.Supermario.{Animation, Level, Mario}
   alias Octopus.Apps.Supermario.Animation.{Completed, GameOver, Intro, MarioDies}
 
@@ -346,6 +346,7 @@ defmodule Octopus.Apps.Supermario.Game do
     |> Mario.draw(mario)
     |> Level.draw(game, level)
     |> fill_canvas(layout.base_canvas)
+    |> render_score(game)
   end
 
   def render_canvas(%Game{
@@ -359,6 +360,28 @@ defmodule Octopus.Apps.Supermario.Game do
 
     Animation.draw(current_animation)
     |> fill_canvas(layout.base_canvas)
+  end
+
+  defp render_score(canvas, %Game{layout: layout, score: score}) do
+    [first, second] =
+        score
+        |> to_string()
+        |> String.pad_leading(2, "0")
+        |> String.to_charlist()
+
+    font = Font.load("gunb")
+    font_variant = 8
+    layout.base_canvas
+    |> Canvas.overlay(canvas, offset: {layout.playfield_base, 0})
+    |> Font.pipe_draw_char(font, second, font_variant, {layout.score_base, 0})
+    |> (fn c ->
+          unless first == ?0 do
+            c |> Font.pipe_draw_char(font, first, font_variant, {layout.score_base - 8, 0})
+          else
+            c
+          end
+        end).()
+
   end
 
   defp current_game_pixels(%Game{
