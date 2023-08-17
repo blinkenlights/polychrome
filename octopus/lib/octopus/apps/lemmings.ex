@@ -2,7 +2,7 @@ defmodule Octopus.Apps.Lemmings do
   use Octopus.App, category: :animation
   require Logger
 
-  alias Octopus.{Sprite, Canvas, Util}
+  alias Octopus.{Sprite, Canvas}
   alias Octopus.Protobuf.InputEvent
   alias Lemming
 
@@ -21,7 +21,7 @@ defmodule Octopus.Apps.Lemmings do
       lemmings: [
         Lemming.walking_left(),
         Lemming.walking_right(),
-        Lemming.stopper(6)
+        Lemming.stopper(:rand.uniform(5) + 3)
       ]
     }
 
@@ -39,7 +39,20 @@ defmodule Octopus.Apps.Lemmings do
           }
 
         _ ->
-          state
+          if rem(state.t, 80) == 0 do
+            if length(state.lemmings) < 5 do
+              {:noreply, state} = handle_number_button_press(state, :rand.uniform(10) - 1)
+              state
+            else
+              if length(state.lemmings) > 8 do
+                %State{state | lemmings: explode_first(state.lemmings)}
+              else
+                state
+              end
+            end
+          else
+            state
+          end
       end
 
     state.lemmings
@@ -141,6 +154,18 @@ defmodule Octopus.Apps.Lemmings do
 
   def add_right(state), do: state
 
+  def explode_first(lems) do
+    explode_first(lems, [])
+  end
+
+  def explode_first([%Lemming{state: state} = lem | tail], acc)
+      when state in [:stopper, :walk_left, :walk_right] do
+    ([Lemming.explode(lem) | tail] ++ acc) |> Enum.reverse()
+  end
+
+  def explode_first([lem | tail], acc), do: explode_first(tail, [lem | acc])
+  def explode_first([], acc), do: acc
+
   def handle_info(:tick, %State{} = state) do
     {:noreply, tick(state)}
   end
@@ -161,15 +186,21 @@ defmodule Octopus.Apps.Lemmings do
 
   def handle_input(
         %InputEvent{type: :AXIS_Y_1, value: 1},
-        %State{lemmings: [%Lemming{state: lemstate} = lem | tail]} = state
-      )
-      when lemstate in [:stopper, :walk_right, :walk_left] do
-    state = %State{
-      state
-      | lemmings: [Lemming.explode(lem) | tail |> Enum.reverse()] |> Enum.reverse()
-    }
+        %State{lemmings: lems} = state
+      ) do
+    action = :explode_random
+    block_time = 5
 
-    {:noreply, state}
+    if action_allowed?(state.actions, action, state.t, block_time) do
+      {:noreply,
+       %State{
+         state
+         | lemmings: explode_first(lems),
+           actions: state.actions |> update_action(action, state.t, block_time)
+       }}
+    else
+      {:noreply, state}
+    end
   end
 
   def handle_input(%InputEvent{type: type, value: 1}, state) do
