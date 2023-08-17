@@ -16,7 +16,8 @@ defmodule Octopus.Apps.Supermario.Game do
           level: Level.t(),
           mario: Mario.t(),
           current_animation: Animation.t() | nil,
-          lives: integer()
+          lives: integer(),
+          layout: map()
         }
   defstruct [
     :state,
@@ -28,7 +29,8 @@ defmodule Octopus.Apps.Supermario.Game do
     :mario,
     :current_animation,
     :lives,
-    :score
+    :score,
+    :layout
   ]
 
   # micro seconds between two moves
@@ -41,7 +43,7 @@ defmodule Octopus.Apps.Supermario.Game do
   # starting from window
   @windows_offset 0
 
-  def new(windows_shown) when windows_shown > 0 and windows_shown < 11 do
+  def new(%{windows_shown: windows_shown, side: side}) do
     level = Level.new()
 
     %Game{
@@ -54,7 +56,8 @@ defmodule Octopus.Apps.Supermario.Game do
       mario: Mario.new(level.mario_start_y_position),
       current_animation: nil,
       lives: 3,
-      score: 0
+      score: 0,
+      layout: layout(side)
     }
   end
 
@@ -387,5 +390,23 @@ defmodule Octopus.Apps.Supermario.Game do
       end)
 
     canvas
+  end
+
+  defp layout(:right) do
+    %{
+          base_canvas: Canvas.new(40, 8),
+          score_base: 16,
+          playfield_base: 8 * 4,
+          playfield_channel: 5
+    }
+  end
+
+  defp layout(:left) do
+    %{
+        base_canvas: Canvas.new(40, 8),
+        core_base: 16,
+          playfield_base: 0,
+          playfield_channel: 6
+      }
   end
 end

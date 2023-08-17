@@ -114,12 +114,8 @@ defmodule Octopus.Apps.Supermario do
   end
 
   defp init_state(args) do
-    game = args
-    |> Map.get(:windows_shown)
-    |> Game.new()
-
     canvas = Canvas.new(80, 8)
-
+    game = Game.new(args)
     %State{
       interval: @frame_time_ms,
       game: game,
