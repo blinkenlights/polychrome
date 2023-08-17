@@ -434,7 +434,7 @@ defmodule Octopus.Apps.Supermario.Game do
     %{
       base_canvas: Canvas.new(40, 8),
       score_base: 16,
-      playfield_base: 0,
+      playfield_base: 32,
       playfield_channel: 6
     }
   end
