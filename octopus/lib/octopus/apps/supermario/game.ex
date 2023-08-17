@@ -135,7 +135,7 @@ defmodule Octopus.Apps.Supermario.Game do
     {:ok,
      %Game{
        game
-       | current_animation: GameOver.new(@windows_offset, game.windows_shown),
+       | current_animation: GameOver.new(@windows_offset, 4), #game.windows_shown
          last_ticker: Time.utc_now()
      }}
   end
@@ -329,7 +329,7 @@ defmodule Octopus.Apps.Supermario.Game do
         [r, g, b]
       end)
     end)
-    |> fill_canvas(layout.base_canvas)
+    |> fill_canvas(layout.base_canvas, layout.playfield_base)
   end
 
   # draw current pixels of level and mario
@@ -345,8 +345,8 @@ defmodule Octopus.Apps.Supermario.Game do
     |> current_game_pixels
     |> Mario.draw(mario)
     |> Level.draw(game, level)
-    |> fill_canvas(layout.base_canvas)
-    |> render_score(game)
+    |> fill_canvas(layout.base_canvas, layout.playfield_base)
+    # |> render_score(game)
   end
 
   def render_canvas(%Game{
@@ -357,9 +357,11 @@ defmodule Octopus.Apps.Supermario.Game do
   end
 
   def render_canvas(%Game{current_animation: current_animation, layout: layout}) do
-
-    Animation.draw(current_animation)
-    |> fill_canvas(layout.base_canvas)
+    fill_canvas(
+      Animation.draw(current_animation),
+      layout.base_canvas,
+      layout.playfield_base
+    )
   end
 
   defp render_score(canvas, %Game{layout: layout, score: score}) do
@@ -371,9 +373,7 @@ defmodule Octopus.Apps.Supermario.Game do
 
     font = Font.load("gunb")
     font_variant = 8
-    layout.base_canvas
-    |> Canvas.overlay(canvas, offset: {layout.playfield_base, 0})
-    |> Font.pipe_draw_char(font, second, font_variant, {layout.score_base, 0})
+    Font.pipe_draw_char(font, second, font_variant, {layout.score_base, 0})
     |> (fn c ->
           unless first == ?0 do
             c |> Font.pipe_draw_char(font, first, font_variant, {layout.score_base - 8, 0})
@@ -394,7 +394,8 @@ defmodule Octopus.Apps.Supermario.Game do
     end)
   end
 
-  defp fill_canvas(visible_level_pixels, canvas) do
+  defp fill_canvas(visible_level_pixels, base_canvas, playfield_base) do
+    canvas = Canvas.new(8, 8)
     {canvas, _} =
       Enum.reduce(visible_level_pixels, {canvas, 0}, fn row, {canvas, y} ->
         {canvas, _, y} =
@@ -402,7 +403,7 @@ defmodule Octopus.Apps.Supermario.Game do
             canvas =
               Canvas.put_pixel(
                 canvas,
-                {x + @windows_offset * 8, y},
+                {x, y},
                 {r, g, b}
               )
 
@@ -411,8 +412,7 @@ defmodule Octopus.Apps.Supermario.Game do
 
         {canvas, y + 1}
       end)
-
-    canvas
+    Canvas.overlay(base_canvas, canvas, offset: {playfield_base, 0})
   end
 
   defp layout(:right) do
