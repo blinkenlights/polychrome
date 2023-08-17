@@ -84,7 +84,6 @@ defmodule Octopus.Apps.Senso do
     window = Enum.at(state.expected_sequence, state.index) |> trunc()
     top_left = {(window - 1) * 8, 0}
     bottom_right = {elem(top_left, 0) + 7, 7}
-    IO.inspect(window)
 
     Canvas.new(80, 8)
     |> Canvas.fill_rect(top_left, bottom_right, get_color(window))
@@ -161,7 +160,6 @@ defmodule Octopus.Apps.Senso do
       when button in @supported_buttons do
     btn_num = btn_to_int(button)
 
-    IO.inspect(btn_num)
     top_left = {(btn_num - 1) * 8, 0}
     bottom_right = {elem(top_left, 0) + 7, 7}
 
