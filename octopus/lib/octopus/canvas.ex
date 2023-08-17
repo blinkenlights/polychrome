@@ -196,8 +196,8 @@ defmodule Octopus.Canvas do
     pixels =
       for x <- 0..(width - 1),
           y <- 0..(height - 1),
-          new_x = rem(x + dx, width),
-          new_y = rem(y + dy, height),
+          new_x = Integer.mod(x + dx, width),
+          new_y = Integer.mod(y + dy, height),
           into: %{},
           do: {{new_x, new_y}, Canvas.get_pixel(canvas, {x, y})}
 
