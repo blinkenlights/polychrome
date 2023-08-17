@@ -184,13 +184,16 @@ Error Cache::storeItem(juce::String const& key, DataType const& value, juce::Str
     return Error(err);
   }
 
-  // check for maximum duration
-  auto duration = (float)reader->lengthInSamples / reader->sampleRate;
-  if (duration > m_fileLengthLimitSeconds)
+  // check for maximum duration (consider rickroll case)
+  if (value.getFileName() != "rickroll.wav")
   {
-    auto err = fmt::format("file '{}' is longer than maximum size of {}s",
-                           value.getFullPathName().toStdString(), m_fileLengthLimitSeconds);
-    return Error(err);
+    auto duration = (float)reader->lengthInSamples / reader->sampleRate;
+    if (duration > m_fileLengthLimitSeconds)
+    {
+      auto err = fmt::format("file '{}' is longer than maximum size of {}s",
+                             value.getFullPathName().toStdString(), m_fileLengthLimitSeconds);
+      return Error(err);
+    }
   }
 
   m_ressourceMap[key] = {
