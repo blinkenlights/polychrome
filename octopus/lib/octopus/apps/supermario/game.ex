@@ -346,7 +346,7 @@ defmodule Octopus.Apps.Supermario.Game do
     |> Mario.draw(mario)
     |> Level.draw(game, level)
     |> fill_canvas(layout.base_canvas, layout.playfield_base)
-    # |> render_score(game)
+    |> render_score(game)
   end
 
   def render_canvas(%Game{
@@ -373,7 +373,7 @@ defmodule Octopus.Apps.Supermario.Game do
 
     font = Font.load("gunb")
     font_variant = 8
-    Font.pipe_draw_char(font, second, font_variant, {layout.score_base, 0})
+    Font.pipe_draw_char(canvas, font, second, font_variant, {layout.score_base, 0})
     |> (fn c ->
           unless first == ?0 do
             c |> Font.pipe_draw_char(font, first, font_variant, {layout.score_base - 8, 0})
