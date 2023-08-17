@@ -14,7 +14,7 @@ defmodule Octopus.Apps.Supermario do
   @windows_shown 1
 
   defmodule State do
-    defstruct [:game, :interval, :canvas, :button_state, :args]
+    defstruct [:game, :interval, :canvas, :button_state, :args, :side]
   end
 
   def name(), do: "Supermario"
@@ -22,6 +22,7 @@ defmodule Octopus.Apps.Supermario do
   def init(args \\ %{}) do
     state = args
     |> Map.put_new(:windows_shown, @windows_shown)
+    |> Map.put_new(:side, :right)
     |> init_state()
 
     schedule_ticker(state.interval)
@@ -74,7 +75,7 @@ defmodule Octopus.Apps.Supermario do
     new_button_state = ButtonState.handle_event(button_state, type, value)
 
     state =
-      if JoyState.button?(new_button_state.joy2, :a) do
+      if JoyState.button?(joybutton(state.side, new_button_state), :a) do
         game = Game.jump(state.game)
         %{state | game: game}
       else
@@ -82,7 +83,7 @@ defmodule Octopus.Apps.Supermario do
       end
 
     state =
-      if JoyState.button?(new_button_state.joy2, :r) do
+      if JoyState.button?(joybutton(state.side, new_button_state), :r) do
         case Game.move_right(state.game) do
           {:ok, game} ->
             %{state | game: game}
@@ -95,7 +96,7 @@ defmodule Octopus.Apps.Supermario do
             %{state | game: game}
         end
       else
-        if JoyState.button?(new_button_state.joy2, :l) do
+        if JoyState.button?(joybutton(state.side, new_button_state), :l) do
           case Game.move_left(state.game) do
             {:ok, game} ->
               %{state | game: game}
@@ -116,6 +117,7 @@ defmodule Octopus.Apps.Supermario do
     game = args
     |> Map.get(:windows_shown)
     |> Game.new()
+
     canvas = Canvas.new(80, 8)
 
     %State{
@@ -123,7 +125,11 @@ defmodule Octopus.Apps.Supermario do
       game: game,
       canvas: canvas,
       button_state: ButtonState.new(),
-      args: args
+      args: args,
+      side: args[:side]
     }
   end
+
+  defp joybutton(:right, button_state), do: button_state.joy2
+  defp joybutton(:left, button_state), do: button_state.joy1
 end
