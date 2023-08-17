@@ -73,6 +73,7 @@ class Engine
  public:
   [[nodiscard]] Error configure(Config const &config);
   [[nodiscard]] virtual Error playSound(const juce::File &file, int channel);
+  [[nodiscard]] virtual Error stopPlayback(int channel);
   [[nodiscard]] virtual Error playSynth(const juce::MidiMessage &msg, int maxDurationMs = 1000);
   [[nodiscard]] virtual Error configureSynth(int channel, synth::Oscillator::Parameters &osc,
                                              const juce::ADSR::Parameters &adsr,

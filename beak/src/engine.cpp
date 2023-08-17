@@ -144,6 +144,23 @@ Error Engine::playSound(const juce::File &file, int channel)
   return err;
 }
 
+Error Engine::stopPlayback(int channel)
+{
+  Error err;
+  channel = std::min(channel, 10);
+  channel = std::max(channel, 1);
+  auto playerNode = m_playerNodes.at(channel - 1);
+  if (auto proc = dynamic_cast<SamplerProcessor *>(playerNode->getProcessor()))
+  {
+    proc->stopPlayback();
+  }
+  else
+  {
+    err = Error("not a SamplerProcessor");
+  }
+  return err;
+}
+
 Error Engine::playSynth(const juce::MidiMessage &msg, int maxDurationMs)
 {
   Error err;

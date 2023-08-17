@@ -207,6 +207,14 @@ void MainApp::serverCmd(juce::ArgumentList const &args)
                             {
                               auto uri = packet->audio_frame().uri();
                               auto channel = static_cast<int>(packet->audio_frame().channel());
+                              if (packet->audio_frame().stop())
+                              {
+                                if (auto err = engine->stopPlayback(channel))
+                                {
+                                  PLOGE << err.what();
+                                }
+                              }
+
                               if (auto [file, err] = cache.get(uri); !err)
                               {
                                 if (auto err = engine->playSound(file.value(), channel))

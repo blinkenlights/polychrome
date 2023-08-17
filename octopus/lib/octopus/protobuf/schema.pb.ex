@@ -150,6 +150,7 @@ defmodule Octopus.Protobuf.AudioFrame do
 
   field :uri, 1, type: :string
   field :channel, 2, type: :uint32
+  field :stop, 3, type: :bool
 end
 
 defmodule Octopus.Protobuf.SynthAdsrConfig do

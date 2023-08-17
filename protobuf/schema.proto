@@ -51,6 +51,7 @@ message RGBFrame {
 message AudioFrame {
   string uri = 1; // supports file://<path>, http(s)://<url> with .wav or .aiff files
   uint32 channel = 2;
+  bool stop = 3; // stops playback on specified channel if true
 }
 
 

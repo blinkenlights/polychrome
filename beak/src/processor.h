@@ -38,6 +38,7 @@ class ProcessorBase : public juce::AudioProcessor
 
  protected:
   juce::String m_name;
+  std::set<juce::AudioTransportSource *> m_transportSources;
 
  private:
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ProcessorBase)
@@ -78,6 +79,7 @@ class SamplerProcessor : public ProcessorBase, public juce::ChangeListener
   void reset() override;
   void releaseResources() override;
   void playSample(juce::File const &file);
+  void stopPlayback();
 
   void changeListenerCallback(juce::ChangeBroadcaster *source) override;
 
