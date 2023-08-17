@@ -76,7 +76,7 @@ defmodule Octopus.Apps.Snake.Game do
       layout:
         case args[:layout] do
           nil ->
-            unless args[:side] == :left do
+            unless args[:side] == :right do
               %{
                 base_canvas: Canvas.new(40, 8) |> Canvas.overlay(title),
                 score_base: 16,
@@ -147,7 +147,7 @@ defmodule Octopus.Apps.Snake.Game do
       end)
 
     [first, second] =
-      (game.score + 8) |> to_string() |> String.pad_leading(2, "0") |> String.to_charlist()
+      game.score |> to_string() |> String.pad_leading(2, "0") |> String.to_charlist()
 
     font = Font.load("gunb")
     font_variant = 8

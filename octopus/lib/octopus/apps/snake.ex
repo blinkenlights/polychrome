@@ -12,7 +12,7 @@ defmodule Octopus.Apps.Snake do
   @frame_time_ms trunc(1000 / @frame_rate)
 
   defmodule State do
-    defstruct [:game, :button_state, :t]
+    defstruct [:game, :button_state, :t, :side]
   end
 
   def name(), do: "Snake"
@@ -23,7 +23,8 @@ defmodule Octopus.Apps.Snake do
     state = %State{
       button_state: ButtonState.new(),
       game: Game.new(args),
-      t: 0
+      t: 0,
+      side: args[:side] || :left
     }
 
     :timer.send_interval(@frame_time_ms, :tick)
@@ -41,8 +42,15 @@ defmodule Octopus.Apps.Snake do
     {:noreply, %State{state | button_state: bs |> ButtonState.handle_event(type, value)}}
   end
 
-  defp tick(%State{t: t, button_state: %ButtonState{} = bs} = state) do
-    game = state.game |> Game.tick(bs.joy1)
+  defp tick(%State{t: t, button_state: %ButtonState{} = bs, side: side} = state) do
+    game =
+      state.game
+      |> Game.tick(
+        case side do
+          :right -> bs.joy2
+          _ -> bs.joy1
+        end
+      )
 
     game
     |> Game.render_canvas()
