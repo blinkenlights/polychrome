@@ -39,8 +39,8 @@ defmodule Octopus.Apps.Lemmings do
           }
 
         _ ->
-          if rem(state.t, 80) == 0 do
-            if length(state.lemmings) < 5 do
+          if rem(state.t, 80) == 70 do
+            if length(state.lemmings) < 6 do
               {:noreply, state} = handle_number_button_press(state, :rand.uniform(10) - 1)
               state
             else
@@ -126,8 +126,13 @@ defmodule Octopus.Apps.Lemmings do
 
     state = %State{
       state
-      | lemmings: [new_lem | state.lemmings],
-        actions: state.actions |> update_action(action, state.t, @default_block_time)
+      | lemmings:
+          if action_allowed?(state.actions, action, state.t, 5) do
+            [new_lem | state.lemmings]
+          else
+            state.lemmings
+          end,
+        actions: state.actions |> update_action(action, state.t, 5)
     }
 
     state
@@ -145,8 +150,13 @@ defmodule Octopus.Apps.Lemmings do
 
     state = %State{
       state
-      | lemmings: [new_lem | state.lemmings],
-        actions: state.actions |> update_action(action, state.t, @default_block_time)
+      | lemmings:
+          if action_allowed?(state.actions, action, state.t, 5) do
+            [new_lem | state.lemmings]
+          else
+            state.lemmings
+          end,
+        actions: state.actions |> update_action(action, state.t, 5)
     }
 
     state
@@ -184,10 +194,42 @@ defmodule Octopus.Apps.Lemmings do
     {:noreply, state}
   end
 
+  def handle_input(%InputEvent{type: :AXIS_X_2, value: -1}, state) do
+    state = add_right(state)
+    {:noreply, state}
+  end
+
+  def handle_input(%InputEvent{type: :AXIS_X_2, value: 1}, state) do
+    state = add_left(state)
+    {:noreply, state}
+  end
+
   def handle_input(
         %InputEvent{type: :AXIS_Y_1, value: 1},
-        %State{lemmings: lems} = state
+        %State{} = state
       ) do
+    handle_kill(state)
+  end
+
+  def handle_input(
+        %InputEvent{type: :AXIS_Y_2, value: 1},
+        %State{} = state
+      ) do
+    handle_kill(state)
+  end
+
+  def handle_input(%InputEvent{type: type, value: 1}, state) do
+    case @button_map[type] do
+      nil -> {:noreply, state}
+      number -> handle_number_button_press(state, number)
+    end
+  end
+
+  def handle_input(_, state) do
+    {:noreply, state}
+  end
+
+  def handle_kill(%State{lemmings: lems} = state) do
     action = :explode_random
     block_time = 5
 
@@ -203,20 +245,9 @@ defmodule Octopus.Apps.Lemmings do
     end
   end
 
-  def handle_input(%InputEvent{type: type, value: 1}, state) do
-    case @button_map[type] do
-      nil -> {:noreply, state}
-      number -> handle_number_button_press(state, number)
-    end
-  end
-
-  def handle_input(_, state) do
-    {:noreply, state}
-  end
-
   def handle_number_button_press(%State{} = state, number) do
     action = "Button_#{number + 1}" |> String.to_atom()
-    block_time = 5
+    block_time = 12
 
     {lems, existing_stopper} =
       Enum.reduce(state.lemmings, {[], nil}, fn
