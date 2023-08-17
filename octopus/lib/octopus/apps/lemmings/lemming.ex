@@ -56,6 +56,16 @@ defmodule Lemming do
     |> Lemming.play_sample("thud")
   end
 
+  def splat(%Lemming{} = lem) do
+    %Lemming{
+      anchor: lem.anchor,
+      state: :splat,
+      frames: Sprite.load(Path.join(["lemmings", "LemmingSplat"])),
+      anim_step: 0
+    }
+    |> Lemming.play_sample("splat")
+  end
+
   def walking_right do
     %Lemming{
       anchor: {-4, 0},
@@ -80,27 +90,82 @@ defmodule Lemming do
     }
   end
 
+  def faller(pos) do
+    new_lem = %Lemming{
+      state: :fall,
+      anchor: {pos * (18 + 8), -8},
+      frames: Sprite.load(Path.join(["lemmings", "LemmingFall"]))
+    }
+
+    new_lem =
+      if :rand.uniform(2) == 1 do
+        %Lemming{new_lem | frames: new_lem.frames |> Enum.map(&Canvas.flip_horizontal/1)}
+      else
+        new_lem
+      end
+
+    %Lemming{
+      new_lem
+      | offsets:
+          0..(length(new_lem.frames) - 1) |> Enum.map(fn i -> {i, {0, 1}} end) |> Enum.into(%{})
+    }
+  end
+
   def button_lemming(number) do
-    stopper(number)
+    faller(number)
   end
 
   def tick(%Lemming{state: :ohno, anim_step: 7} = sprite) do
     Lemming.explode_really(sprite)
   end
 
-  def tick(%Lemming{state: :explode, anim_step: 10} = sprite) do
-    nil
+  def tick(%Lemming{state: :fall, anchor: {_, 0}} = sprite) do
+    case :rand.uniform(5) do
+      5 ->
+        Lemming.splat(sprite)
+
+      4 ->
+        %Lemming{
+          Lemming.walking_right()
+          | anchor: sprite.anchor
+        }
+
+      3 ->
+        %Lemming{
+          Lemming.walking_left()
+          | anchor: sprite.anchor
+        }
+
+      2 ->
+        sprite |> Lemming.play_sample("thunk")
+        Lemming.stopper(Lemming.current_window(sprite) - 1)
+
+      1 ->
+        inner_tick(sprite) |> Lemming.play_sample("ohno")
+    end
   end
 
   def tick(%Lemming{} = sprite) do
+    inner_tick(sprite)
+  end
+
+  defp inner_tick(%Lemming{anchor: {0, 20}}), do: nil
+
+  defp inner_tick(%Lemming{} = sprite) do
     {dx, dy} = Map.get(sprite.offsets, sprite.anim_step, {0, 0})
     {x, y} = sprite.anchor
 
-    %Lemming{
+    ticked = %Lemming{
       sprite
       | anchor: {x + dx, y + dy},
         anim_step: rem(sprite.anim_step + 1, length(sprite.frames))
     }
+
+    if ticked.anim_step == 0 && ticked.state in [:splat, :explode] do
+      nil
+    else
+      ticked
+    end
   end
 
   def boundaries(%Lemming{state: :walk_right, anchor: {x, _}} = lem, _, [bound | tail]) do
