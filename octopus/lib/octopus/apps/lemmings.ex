@@ -56,14 +56,13 @@ defmodule Octopus.Apps.Lemmings do
         {[0], [242]},
         fn
           %Lemming{state: :stopper} = lem, {l, r} ->
-            window = Lemming.current_window(lem) |> IO.inspect()
+            window = Lemming.current_window(lem)
             {[window * (18 + 8) | l], [(window - 1) * (18 + 8) - 18 | r]}
 
           _, acc ->
             acc
         end
       )
-      |> IO.inspect()
 
     %State{
       state
@@ -160,10 +159,14 @@ defmodule Octopus.Apps.Lemmings do
     {:noreply, state}
   end
 
-  def handle_input(%InputEvent{type: :AXIS_Y_1, value: 1}, %State{lemmings: [lem | tail]} = state) do
+  def handle_input(
+        %InputEvent{type: :AXIS_Y_1, value: 1},
+        %State{lemmings: [%Lemming{state: lemstate} = lem | tail]} = state
+      )
+      when lemstate in [:stopper, :walk_right, :walk_left] do
     state = %State{
       state
-      | lemmings: [Lemming.explode(lem) | tail] |> Enum.reverse()
+      | lemmings: [Lemming.explode(lem) | tail |> Enum.reverse()] |> Enum.reverse()
     }
 
     {:noreply, state}
@@ -184,14 +187,34 @@ defmodule Octopus.Apps.Lemmings do
     action = "Button_#{number + 1}" |> String.to_atom()
     block_time = 5
 
+    {lems, existing_stopper} =
+      Enum.reduce(state.lemmings, {[], nil}, fn
+        %Lemming{state: :stopper} = lem, {list, nil} ->
+          if Lemming.current_window(lem) == number + 1 do
+            {list, lem}
+          else
+            {[lem | list], nil}
+          end
+
+        lem, {list, es} ->
+          {[lem | list], es}
+      end)
+
     if action_allowed?(state.actions, action, state.t, block_time) do
-      new_lem =
-        Lemming.button_lemming(number) |> Lemming.play_sample("yippee") |> IO.inspect()
+      new_lems =
+        if existing_stopper do
+          [existing_stopper |> Lemming.explode() | lems]
+        else
+          new_lem =
+            Lemming.button_lemming(number) |> Lemming.play_sample("yippee") |> IO.inspect()
+
+          [new_lem | state.lemmings]
+        end
 
       {:noreply,
        %State{
          state
-         | lemmings: [new_lem | state.lemmings],
+         | lemmings: new_lems,
            actions: state.actions |> update_action(action, state.t, block_time)
        }}
     else

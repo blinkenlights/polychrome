@@ -58,7 +58,7 @@ defmodule Lemming do
 
   def walking_right do
     %Lemming{
-      anchor: {0, 0},
+      anchor: {-4, 0},
       frames: Sprite.load(Path.join(["lemmings", "LemmingWalk"])),
       offsets: 0..7 |> Enum.map(fn i -> {i, {1, 0}} end) |> Enum.into(%{})
     }
