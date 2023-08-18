@@ -25,7 +25,7 @@ defmodule Octopus.Apps.Matrix do
             y: :rand.uniform(8) - 12,
             speed: 6.0 + :rand.uniform() * 10.0,
             age: 0.0,
-            max_age: 1 + :rand.uniform() * 4,
+            max_age: 3 + :rand.uniform() * 3,
             color: {:rand.uniform(30), 220 + :rand.uniform(30), :rand.uniform(30)}
           }
         end)
@@ -57,6 +57,7 @@ defmodule Octopus.Apps.Matrix do
 
       canvas =
         particles
+        |> Enum.sort_by(fn %Particle{y: y} -> y end)
         |> Enum.reduce(canvas, fn %Particle{x: x, y: y, age: age} = particle, canvas ->
           trail_length = 8
 
@@ -84,15 +85,16 @@ defmodule Octopus.Apps.Matrix do
     canvas = Canvas.new(80, 8)
     particles = []
     :timer.send_interval(trunc(1000 / 60), :tick)
-    :timer.send_interval(100, :spawn_particles)
-    :timer.send_interval(250, :change_factors)
+    :timer.send_interval(50, :spawn_particles)
+    :timer.send_interval(1000, :change_factors)
+    send(self(), :change_factors)
     {:ok, %State{canvas: canvas, particles: particles, factors: %{}}}
   end
 
   def handle_info(:spawn_particles, %State{} = state) do
     state =
       if Enum.count(state.particles) < 200 do
-        State.spawn_particles(state, 20)
+        State.spawn_particles(state, 1)
       else
         state
       end
