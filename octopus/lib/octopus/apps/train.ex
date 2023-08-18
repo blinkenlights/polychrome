@@ -4,7 +4,6 @@ defmodule Octopus.Apps.Train do
   alias Octopus.{Canvas, Image}
   alias Octopus.Protobuf.InputEvent
 
-  @landscape Image.list_images() |> hd()
   @fps 60
 
   defmodule State do
@@ -14,7 +13,7 @@ defmodule Octopus.Apps.Train do
   def name(), do: "Train Simulator"
 
   def init(_args) do
-    canvas = Image.load(@landscape)
+    canvas = Image.load("landscape")
 
     :timer.send_interval(trunc(1000 / @fps), :tick)
     :timer.send_interval(10_000, :change_acceleration)
