@@ -36,10 +36,10 @@ defmodule Octopus.Apps.Supermario.Game do
   # micro seconds between two moves
   @update_interval_ms 10_000
   @move_interval_ms 100_000
-  @intro_animation_ms 3_000_000
-  @dying_animation_ms 3_000_000
-  @pause_animation_ms 4_000_000
-  @game_over_animation_ms 18_000_000
+  @intro_animation_ms 1_500_000
+  @dying_animation_ms 2_000_000
+  @pause_animation_ms 3_000_000
+  @game_over_animation_ms 4_000_000
   # starting from window
   @windows_offset 0
 
@@ -351,12 +351,14 @@ defmodule Octopus.Apps.Supermario.Game do
 
   def render_canvas(
         %Game{
-          current_animation: %Animation{animation_type: animation_type} = current_animation
+          current_animation: %Animation{animation_type: animation_type} = current_animation,
+          layout: layout
         } =
           game
       )
       when animation_type == :game_over or animation_type == :completed do
-    Animation.draw(current_animation)
+    layout.base_canvas
+    |> Canvas.overlay(Animation.draw(current_animation), offset: {layout.playfield_base, 0})
     |> render_score(game)
   end
 

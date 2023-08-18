@@ -14,13 +14,13 @@ defmodule Octopus.Apps.Supermario.Animation.GameOver do
   end
 
   def draw(%Animation{start_time: start_time, data: data}) do
-    font = Font.load("ddp-DoDonPachi (Cave)")
+    font = Font.load("gond")
     diff = Time.diff(Time.utc_now(), start_time, :microsecond)
-    offset = Enum.min([Integer.floor_div(diff, 150_000), 80])
+    offset = Enum.min([Integer.floor_div(diff, div(4_000_000, 9)), 9]) * 8
 
     canvas =
       "Game Over"
-      |> Canvas.from_string(font)
+      |> Canvas.from_string(font, 5)
 
     pixels =
       for x <- 0..(data.windows_shown * 8 - 1),
