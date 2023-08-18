@@ -140,35 +140,14 @@ defmodule Octopus.Mixer do
         {:new_canvas, {left_app_id, canvas}},
         %State{rendered_app: {left_app_id, _}} = state
       ) do
-    canvas = Canvas.cut(canvas, {0, 0}, {39, 7})
-    canvas = Canvas.overlay(state.buffer_canvas, canvas, transparency: false)
-    frame = Canvas.to_frame(canvas)
-
-    Protobuf.split_and_encode(frame)
-    |> Enum.each(fn binary ->
-      send_frame(binary, frame)
-    end)
-
-    state = maybe_stop_game_scheduler(state)
-
-    {:noreply, %State{state | buffer_canvas: canvas}}
+    handle_new_canvas(state, canvas, {0, 0})
   end
 
   def handle_cast(
         {:new_canvas, {right_app_id, canvas}},
         %State{rendered_app: {_, right_app_id}} = state
       ) do
-    canvas = Canvas.overlay(state.buffer_canvas, canvas, offset: {40, 0}, transparency: false)
-    frame = Canvas.to_frame(canvas)
-
-    Protobuf.split_and_encode(frame)
-    |> Enum.each(fn binary ->
-      send_frame(binary, frame)
-    end)
-
-    state = maybe_stop_game_scheduler(state)
-
-    {:noreply, %State{state | buffer_canvas: canvas}}
+    handle_new_canvas(state, canvas, {40, 0})
   end
 
   def handle_cast({:new_canvas, _}, state), do: {:noreply, state}
@@ -215,6 +194,29 @@ defmodule Octopus.Mixer do
   def handle_cast(:stop_audio_playback, state) do
     do_stop_audio_playback()
     {:noreply, state}
+  end
+
+  defp handle_new_canvas(%State{} = state, %Canvas{} = canvas, offset) do
+    new_canvas =
+      canvas
+      |> Canvas.cut({0, 0}, {39, 7})
+
+    buffer_canvas =
+      state.buffer_canvas
+      |> Canvas.overlay(new_canvas, offset: offset, transparency: false)
+
+    frame =
+      buffer_canvas
+      |> Canvas.to_frame()
+
+    Protobuf.split_and_encode(frame)
+    |> Enum.each(fn binary ->
+      send_frame(binary, frame)
+    end)
+
+    state = maybe_stop_game_scheduler(state)
+
+    {:noreply, %State{state | buffer_canvas: buffer_canvas}}
   end
 
   ### App Transitions ###
