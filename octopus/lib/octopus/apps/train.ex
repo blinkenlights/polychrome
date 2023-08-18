@@ -47,7 +47,6 @@ defmodule Octopus.Apps.Train do
     # Apply friction
     speed = speed * (1 / (1 + 0.1 / @fps))
 
-    IO.inspect(state.speed)
     {:noreply, %State{state | time: state.time + 1 / @fps, speed: speed, x: state.x + speed}}
   end
 

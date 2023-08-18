@@ -22,6 +22,7 @@ defmodule OctopusWeb.ManagerLive do
       |> assign_apps()
       |> assign(selected_playlist: nil)
       |> assign_playlist_options()
+      |> assign(scheduling_active?: Mixer.scheduling_active?())
 
     {:ok, socket, temporary_assigns: [pixel_layout: nil]}
   end
@@ -85,6 +86,13 @@ defmodule OctopusWeb.ManagerLive do
             </tbody>
           </table>
         </div>
+
+        <button
+          phx-click="toggle-scheduling"
+          class="border py-1 px-2 rounded bg-slate-300 hover:bg-slate-400 m-2"
+        >
+          <%= if @scheduling_active?, do: "Deactivate ", else: "Activate " %> Scheduling
+        </button>
 
         <div class="flex flex-col m-2">
           <div class="p-2 font-bold">
@@ -193,6 +201,11 @@ defmodule OctopusWeb.ManagerLive do
     {:noreply, socket}
   end
 
+  def handle_event("toggle-scheduling", _, socket) do
+    Mixer.set_scheduling(!socket.assigns.scheduling_active?)
+    {:noreply, socket}
+  end
+
   def handle_event("select", %{"app-id" => app_id}, socket) do
     Mixer.select_app(app_id)
     {:noreply, socket}
@@ -279,6 +292,10 @@ defmodule OctopusWeb.ManagerLive do
 
   def handle_info({:mixer, {:config, _config}}, socket) do
     {:noreply, socket}
+  end
+
+  def handle_info({:mixer, {:scheduling_active, scheduling_active?}}, socket) do
+    {:noreply, socket |> assign(scheduling_active?: scheduling_active?)}
   end
 
   def handle_info({:scheduler, status}, socket) do

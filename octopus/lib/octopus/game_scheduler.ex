@@ -2,8 +2,7 @@ defmodule Octopus.GameScheduler do
   use GenServer
   require Logger
 
-  alias Jason.Encoder.Octopus.PlaylistScheduler
-  alias Octopus.{AppSupervisor, Mixer, Rep, PlaylistScheduler}
+  alias Octopus.{AppSupervisor, Mixer, Rep}
 
   @games [Octopus.Apps.Blocks, Octopus.Apps.Snake, Octopus.Apps.Supermario]
 
@@ -49,13 +48,17 @@ defmodule Octopus.GameScheduler do
     {:noreply, %State{state | status: :stopped, app_ids: %{}}}
   end
 
-  def handle_cast({:next_game, side}, state) do
+  def handle_cast({:next_game, side}, %State{status: :running} = state) do
     index = rem(state.app_indices[side] + 1, length(@games))
 
     state =
       %{state | app_indices: Map.put(state.app_indices, side, index)}
       |> start_game(side)
 
+    {:noreply, state}
+  end
+
+  def handle_cast({:next_game, _}, %State{status: :stopped} = state) do
     {:noreply, state}
   end
 
