@@ -89,6 +89,10 @@ defmodule Octopus.Mixer do
     GenServer.cast(__MODULE__, {:set_scheduling, active?})
   end
 
+  def scheduling_active? do
+    GenServer.call(__MODULE__, :scheduling_active?)
+  end
+
   @doc """
   Subscribes to the mixer topic.
 
@@ -115,6 +119,10 @@ defmodule Octopus.Mixer do
 
   def handle_call(:get_selected_app, _, %State{selected_app: selected_app} = state) do
     {:reply, selected_app, state}
+  end
+
+  def handle_call(:scheduling_active?, _, %State{scheduling_active?: scheduling_active?} = state) do
+    {:reply, scheduling_active?, state}
   end
 
   def handle_cast({:new_frame, {app_id, binary, f}}, %State{rendered_app: rendered_app} = state) do
@@ -260,6 +268,12 @@ defmodule Octopus.Mixer do
       GameScheduler.stop()
       PlaylistScheduler.stop_playlist()
     end
+
+    Phoenix.PubSub.broadcast(
+      Octopus.PubSub,
+      @pubsub_topic,
+      {:mixer, {:scheduling_active, active?}}
+    )
 
     state = %State{state | scheduling_active?: active?}
     {:noreply, state}
