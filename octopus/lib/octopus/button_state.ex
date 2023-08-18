@@ -1,9 +1,8 @@
-defmodule Octopus.Apps.Snake.ButtonState do
+defmodule Octopus.ButtonState do
   defstruct [:buttons, :joy1, :joy2]
 
-  alias Octopus.Apps.Snake
-  alias Snake.ButtonState
-  alias Snake.JoyState
+  alias Octopus.JoyState
+  alias Octopus.ButtonState
 
   @button_map 1..10
               |> Enum.map(fn i -> {"BUTTON_#{i}" |> String.to_atom(), i - 1} end)

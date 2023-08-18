@@ -1,12 +1,12 @@
-defmodule Octopus.Apps.Snake do
+defmodule Octopus.Apps.Blocks do
   use Octopus.App, category: :game
   require Logger
 
   alias Octopus.Sprite
-  alias Octopus.Apps.Snake
-  alias Octopus.ButtonState
+  alias Octopus.Apps.Blocks
   alias Octopus.Protobuf.InputEvent
-  alias Snake.Game
+  alias Octopus.ButtonState
+  alias Blocks.Game
 
   @frame_rate 60
   @frame_time_ms trunc(1000 / @frame_rate)
@@ -15,9 +15,9 @@ defmodule Octopus.Apps.Snake do
     defstruct [:game, :button_state, :t, :side]
   end
 
-  def name(), do: "Snake"
+  def name(), do: "Blocks"
 
-  def icon(), do: Sprite.load("../images/snake", 0)
+  #   def icon(), do: Sprite.load("../images/snake", 0)
 
   def init(args) do
     state = %State{

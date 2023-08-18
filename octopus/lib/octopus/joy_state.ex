@@ -1,8 +1,7 @@
-defmodule Octopus.Apps.Snake.JoyState do
+defmodule Octopus.JoyState do
   defstruct [:buttons]
 
-  alias Octopus.Apps.Snake
-  alias Snake.JoyState
+  alias Octopus.JoyState
 
   def new() do
     %JoyState{

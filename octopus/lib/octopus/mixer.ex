@@ -20,7 +20,7 @@ defmodule Octopus.Mixer do
   @transition_duration 300
   @transition_frame_time trunc(1000 / 60)
   @playlist_id 3
-  @game_time [0..14, 30..44] |> Enum.flat_map(&Enum.to_list/1)
+  @game_time [0..94, 30..44] |> Enum.flat_map(&Enum.to_list/1)
 
   defmodule State do
     defstruct selected_app: nil,
