@@ -1,8 +1,14 @@
 defmodule Octopus.Apps.Tla do
   use Octopus.App, category: :animation
 
+  alias Octopus.Transitions
   alias Octopus.Canvas
   alias Octopus.Font
+
+  @letter_delay 50
+  @easing_interval 150
+  @animation_interval 10
+  @animation_steps 50
 
   defmodule Words do
     defstruct [:words, :lookup]
@@ -13,7 +19,7 @@ defmodule Octopus.Apps.Tla do
         |> File.read!()
         |> String.split()
         |> Enum.shuffle()
-        |> Enum.take(2000)
+        |> Enum.take(500)
         |> Enum.map(&String.upcase/1)
         |> Enum.with_index()
 
@@ -71,81 +77,88 @@ defmodule Octopus.Apps.Tla do
   def init(_) do
     path = Path.join([:code.priv_dir(:octopus), "words", "words.txt"])
     words = Words.load(path)
-    :timer.send_interval(5000, :next_word)
 
     current_word = Enum.random(words.words)
     font = Font.load("ddp-DoDonPachi (Cave)")
 
-    chars = current_word |> String.graphemes() |> Enum.map(&[{&1, {0, 0}}])
-
-    :timer.send_interval(100, :tick)
+    :timer.send_interval(5000, :tick)
 
     {:ok,
      %{
        words: words,
        last_words: [],
        font: font,
-       chars: chars,
        current_word: current_word
      }}
   end
 
-  def handle_info(:tick, %{chars: chars} = state) do
-    chars
-    |> Enum.map(fn chars ->
-      canvas = Canvas.new(8, length(chars))
+  def handle_info(:tick, %{} = state) do
+    last_words = [state.current_word | state.last_words] |> Enum.take(100)
+    next_word = Words.next(state.words, state.current_word, last_words)
 
-      chars
-      |> Enum.reduce(canvas, fn {char, offset}, canvas ->
-        Canvas.put_string(canvas, offset, char, state.font)
-      end)
-      |> Canvas.cut({0, 0}, {7, 7})
+    state.current_word
+    |> dbg()
+    |> String.graphemes()
+    |> Enum.zip(String.graphemes(next_word))
+    |> Enum.with_index()
+    |> Enum.map(fn
+      # {{old_char, old_char}, _index} ->
+      #   old_canvas = Canvas.new(8, 8) |> Canvas.put_string({0, 0}, old_char, state.font)
+      #   total_distance = distance(state.current_word, next_word) + @animation_steps + 1
+      #   List.duplicate(old_canvas, total_distance)
+
+      {{old_char, new_char}, index} ->
+        old_canvas = Canvas.new(8, 8) |> Canvas.put_string({0, 0}, old_char, state.font)
+        new_canvas = Canvas.new(8, 8) |> Canvas.put_string({0, 0}, new_char, state.font)
+
+        distance = partial_distance(state.current_word, next_word, index)
+        total_distance = distance(state.current_word, next_word)
+
+        padding_start = List.duplicate(old_canvas, distance * @letter_delay)
+        padding_end = List.duplicate(new_canvas, (total_distance - distance) * @letter_delay + 1)
+
+        transition =
+          Transitions.push(old_canvas, new_canvas,
+            direction: Enum.random([:left, :right, :top, :bottom]),
+            steps: @animation_steps
+          )
+
+        Stream.concat([padding_start, transition, padding_end])
     end)
-    |> Enum.reverse()
-    |> Enum.reduce(&Canvas.join/2)
-    |> Canvas.to_frame()
-    |> send_frame()
+    |> Stream.zip()
+    |> Stream.map(fn tuple ->
+      tuple
+      |> Tuple.to_list()
+      |> Enum.reverse()
+      # audio here
+      |> Enum.reduce(&Canvas.join/2)
+      |> Canvas.to_frame(easing_interval: @easing_interval)
+      |> send_frame()
 
-    chars =
-      chars
-      |> Enum.map(fn foo ->
-        if length(foo) > 1 do
-          Enum.map(foo, fn {char, {x, y}} ->
-            {char, {x, y - 1}}
-          end)
-          |> Enum.drop_while(fn {_chars, {_, y}} -> y < -8 end)
-        else
-          foo
-        end
-      end)
+      :timer.sleep(@animation_interval)
+    end)
+    |> Stream.run()
 
-    {:noreply, %{state | chars: chars}}
+    {:noreply, %{state | last_words: last_words, current_word: next_word}}
   end
 
-  def handle_info(
-        :next_word,
-        %{
-          words: words,
-          current_word: current_word,
-          chars: chars,
-          last_words: last_words,
-          font: _font
-        } = state
-      ) do
-    last_words = [current_word | last_words] |> Enum.take(100)
-    next_word = Words.next(words, current_word, last_words)
+  defp partial_distance(old_word, last_word, index) do
+    old_word = old_word |> String.graphemes() |> Enum.take(index - 1) |> Enum.join()
+    last_word = last_word |> String.graphemes() |> Enum.take(index - 1) |> Enum.join()
+    distance(old_word, last_word)
+  end
 
-    chars =
-      chars
-      |> Enum.zip(String.graphemes(next_word))
-      |> Enum.map(fn {chars, new_char} ->
-        if Enum.any?(chars, fn {char, _} -> new_char == char end) do
-          chars
-        else
-          chars ++ [{new_char, {0, length(chars) * 9}}]
-        end
-      end)
+  defp distance(a, b) do
+    do_distance(a |> String.graphemes(), b |> String.graphemes(), 0)
+  end
 
-    {:noreply, %{state | last_words: last_words, chars: chars, current_word: next_word}}
+  defp do_distance([], [], distance), do: distance
+
+  defp do_distance([a | rest_a], [b | rest_b], distance) do
+    if a == b do
+      do_distance(rest_a, rest_b, distance)
+    else
+      do_distance(rest_a, rest_b, distance + 1)
+    end
   end
 end
