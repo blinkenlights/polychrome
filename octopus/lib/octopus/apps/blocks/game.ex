@@ -241,8 +241,11 @@ defmodule Octopus.Apps.Blocks.Game do
         %Game{
           game
           | tile: new_tile(),
-            board: game.board |> Canvas.overlay(tile_board_overlay(game.tile))
+            board: game.board |> Canvas.overlay(tile_board_overlay(game.tile)),
+            actions: Map.put(game.actions, :down, game.t + 20)
         }
+
+        #        |> IO.inspect()
       else
         %Game{game | tile: moved_tile}
       end
@@ -303,10 +306,18 @@ defmodule Octopus.Apps.Blocks.Game do
   end
 
   defp try_action(:down = action, game) do
+    new_game =
+      game
+      |> move_or_place_tile()
+
     %Game{
-      (game
-       |> move_or_place_tile())
-      | actions: Map.put(game.actions, action, game.t)
+      new_game
+      | actions:
+          Map.put(
+            game.actions,
+            action,
+            Enum.max([game.t, Map.get(new_game.actions, action, game.t)])
+          )
     }
     ## todo needs a better place
     |> score_and_remove_lines()
@@ -389,8 +400,17 @@ defmodule Octopus.Apps.Blocks.Game do
       |> Enum.reject(fn k -> Map.get(new_game.actions, k) end)
       |> Enum.reduce(new_game, &try_action/2)
 
+    speed =
+      cond do
+        game.score > 50 -> 30
+        game.score > 30 -> 40
+        game.score > 20 -> 45
+        game.score > 10 -> 55
+        true -> 60
+      end
+
     %Game{
-      case rem(new_game.t, 60) do
+      case rem(new_game.t, speed) do
         0 ->
           new_game
           |> move_or_place_tile()
