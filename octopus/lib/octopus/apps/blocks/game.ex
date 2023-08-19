@@ -7,6 +7,7 @@ defmodule Octopus.Apps.Blocks.Game do
             layout: %{},
             moved: false,
             actions: %{},
+            animation: nil,
             t: 1
 
   alias Phoenix.LiveDashboard.TitleBarComponent
@@ -122,6 +123,42 @@ defmodule Octopus.Apps.Blocks.Game do
              [1, 1, 1, 0],
              [0, 1, 0, 0]],
            ],
+           [
+            [[0, 0, 0, 0],
+             [0, 0, 0, 0],
+             [1, 0, 0, 0],
+             [1, 1, 1, 0]],
+            [[0, 0, 0, 0],
+             [0, 1, 1, 0],
+             [0, 1, 0, 0],
+             [0, 1, 0, 0]],
+             [[0, 0, 0, 0],
+             [0, 0, 0, 0],
+             [1, 1, 1, 0],
+             [0, 0, 1, 0]],
+             [[0, 0, 0, 0],
+             [0, 1, 0, 0],
+             [0, 1, 0, 0],
+             [1, 1, 0, 0]],
+           ],
+           [
+            [[0, 0, 0, 0],
+             [0, 0, 0, 0],
+             [0, 0, 1, 0],
+             [1, 1, 1, 0]],
+            [[0, 0, 0, 0],
+             [0, 1, 0, 0],
+             [0, 1, 0, 0],
+             [0, 1, 1, 0]],
+             [[0, 0, 0, 0],
+             [0, 0, 0, 0],
+             [1, 1, 1, 0],
+             [1, 0, 0, 0]],
+             [[0, 0, 0, 0],
+             [1, 1, 0, 0],
+             [0, 1, 0, 0],
+             [0, 1, 0, 0]],
+           ],
           ]
          """)
          |> elem(0)
@@ -215,6 +252,26 @@ defmodule Octopus.Apps.Blocks.Game do
     new_game
   end
 
+  def score_and_remove_lines(%Game{board: board} = game) do
+    lines =
+      0..(board.height - 1)
+      |> Enum.reduce([], fn y, acc ->
+        line = 0..(board.width - 1) |> Enum.map(fn x -> board.pixels |> Map.get({x, y}) end)
+
+        if line |> Enum.any?(&is_nil/1) do
+          acc
+        else
+          [{y, line} | acc]
+        end
+      end)
+
+    lines
+    |> case do
+      [] -> game
+      lines -> %Game{game | animation: %{type: :lines, t: 40, lines: lines}}
+    end
+  end
+
   def check_gameover(%Game{tile: tile, board: board} = game) do
     if tile_hits?(board, tile) do
       new(layout: game.layout)
@@ -240,6 +297,7 @@ defmodule Octopus.Apps.Blocks.Game do
       | actions: Map.put(game.actions, action, game.t)
     }
     ## todo needs a better place
+    |> score_and_remove_lines()
     |> check_gameover()
   end
 
@@ -279,7 +337,32 @@ defmodule Octopus.Apps.Blocks.Game do
     }
   end
 
-  def tick(%Game{} = game, %JoyState{} = joy) do
+  def remove_lines_from_board(%Canvas{} = board, lines) do
+    %Canvas{
+      board
+      | pixels:
+          lines
+          |> Enum.reverse()
+          |> Enum.reduce(board.pixels, fn {line_y, _}, acc ->
+            acc
+            |> Enum.map(fn
+              {{_, ^line_y}, _} ->
+                nil
+
+              {{x, y} = pos, v} ->
+                if y < line_y do
+                  {{x, y + 1}, v}
+                else
+                  {pos, v}
+                end
+            end)
+            |> Enum.reject(&is_nil/1)
+            |> Enum.into(%{})
+          end)
+    }
+  end
+
+  def tick(%Game{animation: nil} = game, %JoyState{} = joy) do
     desired_actions =
       joy.buttons
       |> Enum.map(fn btn -> game.layout.button_map[btn] end)
@@ -299,6 +382,7 @@ defmodule Octopus.Apps.Blocks.Game do
         0 ->
           new_game
           |> move_or_place_tile()
+          |> score_and_remove_lines()
           |> check_gameover()
 
         _ ->
@@ -306,6 +390,53 @@ defmodule Octopus.Apps.Blocks.Game do
       end
       | t: new_game.t + 1
     }
+  end
+
+  def tick(%Game{animation: anim} = game, _joy) do
+    case anim[:t] do
+      0 ->
+        %Game{
+          case anim[:lines] do
+            lines ->
+              delta =
+                case length(lines) do
+                  4 -> 10
+                  3 -> 6
+                  2 -> 3
+                  1 -> 1
+                end
+
+              %Game{
+                game
+                | score: game.score + delta,
+                  board: remove_lines_from_board(game.board, lines)
+              }
+
+            _ ->
+              game
+          end
+          | animation: nil
+        }
+
+      t ->
+        %Game{game | animation: Map.put(anim, :t, t - 1)}
+    end
+  end
+
+  def overlay_anim(%Canvas{} = canvas, anim) do
+    case {anim[:lines], rem(div(anim[:t], 4), 2)} do
+      {lines, 1} ->
+        canvas
+        |> Canvas.overlay(
+          lines
+          |> Enum.reduce(Canvas.new(8, 16), fn {y, _}, acc ->
+            Canvas.line(acc, {0, y}, {7, y}, {255, 255, 128})
+          end)
+        )
+
+      _ ->
+        canvas
+    end
   end
 
   def render_canvas(%Game{layout: layout} = game) do
@@ -316,8 +447,17 @@ defmodule Octopus.Apps.Blocks.Game do
     font_variant = 8
 
     gamecanvas =
-      game.board
-      |> Canvas.overlay(Tile.tile_canvas(game.tile), offset: game.tile.pos)
+      case game.animation do
+        nil ->
+          game.board
+          |> Canvas.overlay(Tile.tile_canvas(game.tile), offset: game.tile.pos)
+
+        anim ->
+          game.board |> overlay_anim(anim)
+      end
+
+    gamecanvas =
+      gamecanvas
       |> Canvas.rotate(layout.playfield_rotation)
 
     canvas =
