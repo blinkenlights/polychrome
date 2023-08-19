@@ -3,20 +3,21 @@ defmodule Octopus.Apps.Matrix do
 
   defmodule Particle do
     defstruct [:x, :y, :z, :speed, :color, :age, :max_age, :tail]
+  end
 
-    # Returns an rgb tuple for the particle dependent on its age and max_age
-    # The color is a shade of green
-    def color(%Particle{age: age, max_age: max_age, x: x, y: y, z: z, color: {r, g, b}}, factors) do
-      # factor = Map.get(factors, {trunc(x), trunc(y)}, 1 - age / max_age)
-      # {trunc(r * factor) |> max(0), trunc(g * factor) |> max(0), trunc(b * factor) |> max(0)}
-      {trunc(r * z) |> max(0), trunc(g * z) |> max(0), trunc(b * z) |> max(0)}
-    end
+  def config_schema do
+    %{
+      afterglow: {"Afterglow", :int, %{default: 50, min: 0, max: 500}},
+    }
   end
 
   defmodule State do
+    @greens [{164, 223, 179}, {89, 141, 88}, {33, 58, 11}]
+    @pinks [{251, 72, 196}, {165, 52, 167}, {77, 40, 92}]
+
     alias Octopus.Canvas
 
-    defstruct [:canvas, :particles, :factors]
+    defstruct [:canvas, :particles]
 
     def spawn_particles(%State{particles: particles} = state, amount) do
       new_particles =
@@ -25,13 +26,10 @@ defmodule Octopus.Apps.Matrix do
             x: :rand.uniform(80),
             y: :rand.uniform(8) - 12,
             z: :rand.uniform() * 0.5 + 0.5,
-            speed: 6.0 + :rand.uniform() * 10.0,
+            speed: 3.0 + :rand.uniform() * 18.0,
             age: 0.0,
-            max_age: 3 + :rand.uniform() * 3,
-            tail:
-              Enum.map(1..(4 + :rand.uniform(3)), fn _ ->
-                Enum.random([{:rand.uniform(20), 160 + :rand.uniform(55), :rand.uniform(20)}])
-              end),
+            max_age: 5 + :rand.uniform() * 6,
+            tail: Enum.map(1..(4 + :rand.uniform(3)), fn _ -> Enum.random(@greens) end),
             color: {:rand.uniform(40), 200 + :rand.uniform(55), :rand.uniform(40)}
           }
         end)
@@ -58,24 +56,50 @@ defmodule Octopus.Apps.Matrix do
       %State{state | particles: particles}
     end
 
-    def render(%State{canvas: _canvas, particles: particles, factors: factors} = state) do
+    def render(%State{particles: particles} = state) do
       canvas = Canvas.new(80, 8)
 
       canvas =
         particles
         |> Enum.sort_by(fn %Particle{z: z} -> z end)
-        |> Enum.reduce(canvas, fn %Particle{x: x, y: y, age: age} = particle, canvas ->
+        |> Enum.reduce(canvas, fn %Particle{x: x, y: y, age: _age} = particle, canvas ->
           canvas =
             particle.tail
             |> Enum.with_index()
-            |> Enum.reduce(canvas, fn {color, i}, canvas ->
-              Canvas.put_pixel(canvas, {x, y - (i + 1)}, color)
+            |> Enum.reduce(canvas, fn {color, i}, c ->
+              Canvas.put_pixel(c, {trunc(x), trunc(y - i - 1)}, color)
             end)
 
           Canvas.put_pixel(canvas, {trunc(x), trunc(y)}, {150, 255, 150})
         end)
 
       %State{state | canvas: canvas}
+    end
+
+    def change_colors(%State{particles: particles} = state) do
+      particles =
+        particles
+        |> Enum.map(fn %Particle{tail: tail} = particle ->
+          tail =
+            Enum.map(tail, fn color ->
+              rand = :rand.uniform()
+
+              cond do
+                rand > 0.98 and color not in @pinks ->
+                  if :rand.uniform() > 0.5, do: List.first(@greens), else: {0,0,0}
+
+                rand > 0.9 and color not in @pinks ->
+                  @greens |> Enum.drop(1) |> Enum.random()
+
+                true ->
+                  color
+              end
+            end)
+
+          %Particle{particle | tail: tail}
+        end)
+
+      %State{state | particles: particles}
     end
   end
 
@@ -88,15 +112,18 @@ defmodule Octopus.Apps.Matrix do
     particles = []
     :timer.send_interval(trunc(1000 / 60), :tick)
     :timer.send_interval(50, :spawn_particles)
-    :timer.send_interval(1000, :change_factors)
-    send(self(), :change_factors)
-    {:ok, %State{canvas: canvas, particles: particles, factors: %{}}}
+    :timer.send_interval(50, :change_colors)
+    {:ok, %State{canvas: canvas, particles: particles}}
+  end
+
+  def handle_info(:change_colors, %State{} = state) do
+    {:noreply, State.change_colors(state)}
   end
 
   def handle_info(:spawn_particles, %State{} = state) do
     state =
       if Enum.count(state.particles) < 200 do
-        State.spawn_particles(state, 1)
+        State.spawn_particles(state, 3)
       else
         state
       end
@@ -106,17 +133,7 @@ defmodule Octopus.Apps.Matrix do
 
   def handle_info(:tick, %State{} = state) do
     state = state |> State.update(1 / 60) |> State.render()
-    state.canvas |> Canvas.to_frame() |> send_frame()
+    state.canvas |> Canvas.to_frame(easing_interval: 50) |> send_frame()
     {:noreply, state}
-  end
-
-  def handle_info(:change_factors, %State{} = state) do
-    factors =
-      Enum.map(0..32, fn _ ->
-        {{:rand.uniform(79), :rand.uniform(7)}, :rand.uniform() * 0.2 + 0.8}
-      end)
-      |> Enum.into(%{})
-
-    {:noreply, %State{state | factors: factors}}
   end
 end
