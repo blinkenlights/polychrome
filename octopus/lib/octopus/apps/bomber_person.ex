@@ -6,7 +6,7 @@ defmodule Octopus.Apps.BomberPersonApp do
   alias Octopus.Protobuf.InputEvent
 
   defmodule State do
-    defstruct [:canvas, :players, :map, :bombs, :explosions]
+    defstruct [:game_state, :canvas, :players, :map, :bombs, :explosions]
   end
 
   defmodule Player do
@@ -31,12 +31,15 @@ defmodule Octopus.Apps.BomberPersonApp do
   def color(:crate), do: {80, 57, 0}
   def color(:bomb), do: {180, 0, 0}
   def color(:explosion), do: {255, 150, 0}
+  def color(:player_1_victory), do: {0, 180, 0}
+  def color(:player_2_victory), do: {0, 0, 180}
   def color(_), do: {255, 255, 255}
 
   def name(), do: "Bomber Person"
 
   def init(_args) do
     state = %State{
+      game_state: :running,
       canvas: Canvas.new(8, 8),
       players: %{
         1 => %Player{position: {0, 0}, color: {0, 255, 0}},
@@ -88,7 +91,27 @@ defmodule Octopus.Apps.BomberPersonApp do
     {:ok, state}
   end
 
-  def handle_info(:tick, %State{bombs: bombs, map: map, explosions: explosions} = state) do
+  def handle_info(:tick, %State{game_state: game_state} = state) do
+    case game_state do
+      :running -> update_game(state)
+      :player_1_victory -> show_victory(state)
+      :player_2_victory -> show_victory(state)
+    end
+  end
+
+  def show_victory(%State{game_state: game_state, canvas: canvas} = state) do
+    canvas = state.canvas
+      |> Canvas.clear()
+      |> Canvas.fill_rect({0, 0}, {@grid_size, @grid_size}, color(game_state))
+
+    canvas
+      |> Canvas.to_frame()
+      |> send_frame()
+
+    {:noreply, %State{state | canvas: canvas}}
+  end
+
+  def update_game(%State{game_state: game_state, bombs: bombs, map: map, explosions: explosions} = state) do
     # Explode bombs and create explosion tiles.
     new_explosions = for {coordinate, bomb} <- bombs, bomb.remaining_ticks <= 0, do: coordinate
     map = Enum.reduce(new_explosions, map, fn coordinate, map -> Map.delete(map, coordinate) end)
@@ -104,6 +127,17 @@ defmodule Octopus.Apps.BomberPersonApp do
         end
       end)
 
+    # Explode players.
+    player_1_position = state.players[1].position
+    player_2_position = state.players[2].position
+    game_state = Enum.reduce(explosions, :running, fn %Explosion{position: coordinate}, game_state ->
+      case game_state do
+        :running when coordinate == player_1_position -> :player_2_victory
+        :running when coordinate == player_2_position -> :player_1_victory
+        _ -> game_state
+      end
+    end)
+
     # Tick bombs and explosion tiles.
     bombs = for {coordinate, bomb} <- bombs, bomb.remaining_ticks > 0, into: %{} do
       {coordinate, %Bomb{bomb | remaining_ticks: bomb.remaining_ticks - 1 }}
@@ -112,7 +146,7 @@ defmodule Octopus.Apps.BomberPersonApp do
       %Explosion{explosion | remaining_ticks: explosion.remaining_ticks - 1 }
     end
 
-    state = %State{state | bombs: bombs, explosions: explosions, map: map}
+    state = %State{state | game_state: game_state, bombs: bombs, explosions: explosions, map: map}
     canvas = render_canvas(state)
 
     {:noreply, %State{state | canvas: canvas}}
