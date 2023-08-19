@@ -217,7 +217,7 @@ defmodule Octopus.Canvas do
           into: %{},
           do: {{new_x, new_y}, Canvas.get_pixel(canvas, {x, y})}
 
-    %Canvas{canvas | pixels: pixels}
+    %Canvas{canvas | pixels: pixels, width: height, height: width}
   end
 
   def rotate(%Canvas{width: width, height: height} = canvas, :ccw) do
@@ -229,7 +229,7 @@ defmodule Octopus.Canvas do
           into: %{},
           do: {{new_x, new_y}, Canvas.get_pixel(canvas, {x, y})}
 
-    %Canvas{canvas | pixels: pixels}
+    %Canvas{canvas | pixels: pixels, width: height, height: width}
   end
 
   @doc """
