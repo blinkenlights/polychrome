@@ -62,33 +62,67 @@ defmodule Octopus.Apps.Blocks.Game do
     end
 
     def rotate(%Tile{} = tile) do
-      %Tile{tile | index: rem(tile.index, length(tile.rotations))}
+      %Tile{tile | index: rem(tile.index + 1, length(tile.rotations))}
     end
   end
 
   @tiles Code.eval_string("""
          [
-         [
-         [[0, 0, 0, 0],
-         [0, 0, 0, 0],
-         [0, 0, 1, 1],
-         [0, 1, 1, 0]],
-         [[0, 0, 0, 0],
-         [0, 1, 0, 0],
-         [0, 1, 1, 0],
-         [0, 0, 1, 0]]
-         ],
-         [
-           [[0, 1, 0, 0],
-           [0, 1, 0, 0],
-           [0, 1, 0, 0],
-           [0, 1, 0, 0]],
+          [
            [[0, 0, 0, 0],
-           [0, 0, 0, 0],
-           [1, 1, 1, 1],
-           [0, 0, 0, 0]]
+            [0, 0, 0, 0],
+            [0, 0, 1, 1],
+            [0, 1, 1, 0]],
+           [[0, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 1, 1, 0],
+            [0, 0, 1, 0]]
+          ],
+          [
+           [[0, 1, 0, 0],
+            [0, 1, 0, 0],
+            [0, 1, 0, 0],
+            [0, 1, 0, 0]],
+           [[0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [1, 1, 1, 1],
+            [0, 0, 0, 0]]
            ],
-         ]
+           [
+            [[0, 0, 0, 0],
+             [0, 0, 0, 0],
+             [0, 1, 1, 0],
+             [0, 1, 1, 0]]
+           ],
+           [
+            [[0, 0, 0, 0],
+             [0, 0, 0, 0],
+             [1, 1, 0, 0],
+             [0, 1, 1, 0]],
+            [[0, 0, 0, 0],
+             [0, 0, 1, 0],
+             [0, 1, 1, 0],
+             [0, 1, 0, 0]]
+           ],
+           [
+            [[0, 0, 0, 0],
+             [0, 0, 0, 0],
+             [0, 1, 0, 0],
+             [1, 1, 1, 0]],
+            [[0, 0, 0, 0],
+             [0, 1, 0, 0],
+             [0, 1, 1, 0],
+             [0, 1, 0, 0]],
+             [[0, 0, 0, 0],
+             [0, 1, 0, 0],
+             [1, 1, 0, 0],
+             [0, 1, 0, 0]],
+             [[0, 0, 0, 0],
+             [0, 0, 0, 0],
+             [1, 1, 1, 0],
+             [0, 1, 0, 0]],
+           ],
+          ]
          """)
          |> elem(0)
 
@@ -135,7 +169,7 @@ defmodule Octopus.Apps.Blocks.Game do
                 playfield_base: 0,
                 playfield_channel: 6,
                 playfield_rotation: :ccw,
-                button_map: %{d: :right, u: :left, l: :drop, a: :rotate}
+                button_map: %{d: :right, u: :left, l: :down, r: :drop, a: :rotate}
               }
             end
 
@@ -190,11 +224,23 @@ defmodule Octopus.Apps.Blocks.Game do
   end
 
   defp take_tile_if_possible(%Game{} = game, action, %Tile{} = new_tile) do
+    #    IO.inspect({:take, game.actions, action, new_tile})
+
     unless tile_hits?(game.board, new_tile) do
       %Game{game | tile: new_tile, actions: Map.put(game.actions, action, game.t)}
     else
       game
     end
+  end
+
+  defp try_action(:down = action, game) do
+    %Game{
+      (game
+       |> move_or_place_tile())
+      | actions: Map.put(game.actions, action, game.t)
+    }
+    ## todo needs a better place
+    |> check_gameover()
   end
 
   defp try_action(:rotate = action, game) do
@@ -223,7 +269,13 @@ defmodule Octopus.Apps.Blocks.Game do
   def clear_non_desired_actions(%Game{} = game, actions) do
     %Game{
       game
-      | actions: game.actions |> Enum.reject(fn {k, _v} -> !(k in actions) end) |> Enum.into(%{})
+      | actions:
+          game.actions
+          |> Enum.reject(fn
+            {:down, old_t} -> game.t - old_t > 4
+            {k, _v} -> !(k in actions)
+          end)
+          |> Enum.into(%{})
     }
   end
 
@@ -232,7 +284,6 @@ defmodule Octopus.Apps.Blocks.Game do
       joy.buttons
       |> Enum.map(fn btn -> game.layout.button_map[btn] end)
       |> Enum.reject(fn action -> is_nil(action) end)
-      |> IO.inspect(label: "Desired Actions")
 
     new_game =
       game
@@ -241,11 +292,10 @@ defmodule Octopus.Apps.Blocks.Game do
     new_game =
       desired_actions
       |> Enum.reject(fn k -> Map.get(new_game.actions, k) end)
-      |> IO.inspect(label: "Events #{new_game.actions}")
-      |> Enum.reduce(game, &try_action/2)
+      |> Enum.reduce(new_game, &try_action/2)
 
     %Game{
-      case rem(game.t, 60) do
+      case rem(new_game.t, 60) do
         0 ->
           new_game
           |> move_or_place_tile()
