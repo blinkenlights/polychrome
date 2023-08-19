@@ -4,7 +4,7 @@ defmodule Octopus.GameScheduler do
 
   alias Octopus.{AppSupervisor, Mixer, Rep}
 
-  @games [Octopus.Apps.Snake, Octopus.Apps.Supermario]
+  @games [Octopus.Apps.Blocks, Octopus.Apps.Snake, Octopus.Apps.Supermario]
 
   defmodule State do
     defstruct app_ids: %{}, app_indices: %{left: 0, right: 1}, status: :stopped

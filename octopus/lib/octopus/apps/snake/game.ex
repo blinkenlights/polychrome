@@ -73,8 +73,8 @@ defmodule Octopus.Apps.Snake.Game do
 
   defstruct [:worm, :food, :score, :layout, :moved]
   alias Octopus.Canvas
+  alias Octopus.JoyState
   alias Octopus.Apps.Snake
-  alias Snake.JoyState
   alias Snake.Game
 
   def new(args) do
