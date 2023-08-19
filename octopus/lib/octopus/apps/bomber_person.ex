@@ -204,28 +204,44 @@ defmodule Octopus.Apps.BomberPersonApp do
     }}
   end
 
-  def handle_input(%InputEvent{type: type, value: value}, state) do
-    player_1 = state.players[1]
-    %Player{position: {player_1_x, player_1_y}} = state.players[1]
+  def handle_input(%InputEvent{type: :BUTTON_A_2, value: 1}, state) do
+    coordinate = state.players[2].position
 
-    {player_1_x, player_1_y} = case type do
-      :AXIS_X_1 -> {player_1_x + value, player_1_y}
-      :AXIS_Y_1 -> {player_1_x, player_1_y + value}
-      _ -> {player_1_x, player_1_y}
+    {:noreply, %State{state |
+      map: state.map |> Map.put(coordinate, :bomb),
+      bombs: state.bombs |> Map.put(coordinate, %Bomb{remaining_ticks: @bomb_ticks}),
+    }}
+  end
+
+  # def handle_input(%InputEvent{type: type, value: value}, state) do
+  def handle_input(%InputEvent{} = event, state) do
+    state = handle_player_axis(event, state, 1, {:AXIS_X_1, :AXIS_Y_1})
+    state = handle_player_axis(event, state, 2, {:AXIS_X_2, :AXIS_Y_2})
+    {:noreply, state}
+  end
+
+  def handle_player_axis(%InputEvent{type: type, value: value}, state, index, {axis_x, axis_y}) do
+    player = state.players[index]
+    %Player{position: {player_x, player_y}} = player
+
+    {player_x, player_y} = case type do
+      ^axis_x -> {player_x + value, player_y}
+      ^axis_y -> {player_x, player_y + value}
+      _ -> {player_x, player_y}
     end
 
-    position_1 = {
-      player_1_x |> Util.clamp(0, @grid_size),
-      player_1_y |> Util.clamp(0, @grid_size),
+    position = {
+      player_x |> Util.clamp(0, @grid_size),
+      player_y |> Util.clamp(0, @grid_size),
     }
 
-    position_1 = cond do
-      state.map |> Map.has_key?(position_1) -> player_1.position
-      true -> position_1
+    position = cond do
+      state.map |> Map.has_key?(position) -> player.position
+      true -> position
     end
 
-    player_1 = %Player{player_1 | position: position_1}
-    {:noreply, %State{state | players: state.players |> Map.put(1, player_1)}}
+    player = %Player{player | position: position}
+    %State{state | players: state.players |> Map.put(index, player)}
   end
 
   def handle_input(_input_event, state) do
