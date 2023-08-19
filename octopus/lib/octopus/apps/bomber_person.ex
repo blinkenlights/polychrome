@@ -248,9 +248,13 @@ defmodule Octopus.Apps.BomberPersonApp do
 
   # def handle_input(%InputEvent{type: type, value: value}, state) do
   def handle_input(%InputEvent{} = event, state) do
-    state = handle_player_axis(event, state, 1, {:AXIS_X_1, :AXIS_Y_1})
-    state = handle_player_axis(event, state, 2, {:AXIS_X_2, :AXIS_Y_2})
-    {:noreply, state}
+    if state.game_state == :running do
+      state = handle_player_axis(event, state, 1, {:AXIS_X_1, :AXIS_Y_1})
+      state = handle_player_axis(event, state, 2, {:AXIS_X_2, :AXIS_Y_2})
+      {:noreply, state}
+    else
+      {:noreply, state}
+    end
   end
 
   def handle_player_axis(%InputEvent{type: type, value: value}, state, index, {axis_x, axis_y}) do
