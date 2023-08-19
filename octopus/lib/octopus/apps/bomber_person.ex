@@ -89,41 +89,63 @@ defmodule Octopus.Apps.BomberPersonApp do
   end
 
   def handle_info(:tick, %State{bombs: bombs, map: map, explosions: explosions} = state) do
+    # Explode bombs and create explosion tiles.
     new_explosions = for {coordinate, bomb} <- bombs, bomb.remaining_ticks <= 0, do: coordinate
-    map = Enum.reduce(new_explosions, map, fn coordinate, map -> map |> Map.delete(coordinate) end)
+    map = Enum.reduce(new_explosions, map, fn coordinate, map -> Map.delete(map, coordinate) end)
+    new_explosions = List.flatten(for coordinate <- new_explosions do explode(coordinate, map) end)
+    explosions = explosions ++ new_explosions
 
-    explosions = explosions ++ List.flatten(for coordinate <- new_explosions do
-      [%Explosion{position: coordinate, remaining_ticks: @explosion_ticks}] ++
-      explode(coordinate, {1, 0}, map) ++
-      explode(coordinate, {-1, 0}, map) ++
-      explode(coordinate, {0, 1}, map) ++
-      explode(coordinate, {0, -1}, map)
-    end)
+    # Explode crates.
+    map = Enum.reduce(new_explosions, map, fn
+      %Explosion{position: coordinate}, map ->
+        case map do
+          %{^coordinate => :crate} -> Map.delete(map, coordinate)
+          _ -> map
+        end
+      end)
 
-    # Logger.warning("Explosions: #{length}")
+    # Tick bombs and explosion tiles.
+    bombs = for {coordinate, bomb} <- bombs, bomb.remaining_ticks > 0, into: %{} do
+      {coordinate, %Bomb{bomb | remaining_ticks: bomb.remaining_ticks - 1 }}
+    end
+    explosions = for explosion <- explosions, explosion.remaining_ticks > 0 do
+      %Explosion{explosion | remaining_ticks: explosion.remaining_ticks - 1 }
+    end
 
-    bombs = for {coordinate, bomb} <- bombs, bomb.remaining_ticks > 0, into: %{}, do: {coordinate, %Bomb{bomb | remaining_ticks: bomb.remaining_ticks - 1 }}
+    state = %State{state | bombs: bombs, explosions: explosions, map: map}
+    canvas = render_canvas(state)
 
+    {:noreply, %State{state | canvas: canvas}}
+  end
+
+  def render_canvas(state) do
     canvas = state.canvas |> Canvas.clear()
 
-    canvas = Enum.reduce(map, canvas,
-      fn {coordinate, cell}, canvas ->
-        canvas |> Canvas.put_pixel(coordinate, color(cell))
-      end)
+    canvas = Enum.reduce(state.map, canvas, fn {coordinate, cell}, canvas ->
+      canvas |> Canvas.put_pixel(coordinate, color(cell))
+    end)
 
-    canvas = Enum.reduce(explosions, canvas,
-      fn %Explosion{position: coordinate}, canvas ->
-        canvas |> Canvas.put_pixel(coordinate, color(:explosion))
-      end)
+    canvas = Enum.reduce(state.explosions, canvas, fn %Explosion{position: coordinate}, canvas ->
+      canvas |> Canvas.put_pixel(coordinate, color(:explosion))
+    end)
 
-    canvas = Enum.reduce(state.players, canvas,
-      fn {_, player}, canvas -> canvas |> Canvas.put_pixel(player.position, player.color) end)
+    canvas = Enum.reduce(state.players, canvas, fn {_, player}, canvas ->
+      canvas |> Canvas.put_pixel(player.position, player.color)
+    end)
 
     canvas
     |> Canvas.to_frame()
     |> send_frame()
 
-    {:noreply, %State{state | canvas: canvas, bombs: bombs, explosions: explosions, map: map}}
+    canvas
+  end
+
+  def explode(coordinate, map) do
+    [%Explosion{position: coordinate, remaining_ticks: @explosion_ticks}] ++
+      explode(coordinate, {1, 0}, map) ++
+      explode(coordinate, {-1, 0}, map) ++
+      explode(coordinate, {0, 1}, map) ++
+      explode(coordinate, {0, -1}, map)
   end
 
   def explode({x, y}, {dx, dy}, map) do
