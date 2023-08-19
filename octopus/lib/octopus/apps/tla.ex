@@ -73,7 +73,14 @@ defmodule Octopus.Apps.Tla do
 
   def name, do: "TLA"
 
-  def init(_) do
+  def config_schema do
+    %{
+      afterglow: {"Afterglow", :int, %{default: 50, min: 0, max: 500}},
+      last_word_list_size: {"Last word list size", :int, %{default: 250, min: 0, max: 500}}
+    }
+  end
+
+  def init(config) do
     path = Path.join([:code.priv_dir(:octopus), "words", "500-10-letter-words.txt"])
     words = Words.load(path)
     :timer.send_interval(5000, :next_word)
@@ -93,8 +100,16 @@ defmodule Octopus.Apps.Tla do
        font: font,
        font_variants_count: font_variants_count,
        chars: chars,
-       current_word: current_word
+       current_word: current_word,
+       afterglow: config.afterglow,
+       last_word_list_size: config.last_word_list_size
      }}
+  end
+
+  def get_config(state), do: Map.take(state, [:afterglow, :last_word_list_size])
+
+  def handle_config(%{afterglow: afterglow, last_word_list_size: last_word_list_size}, state) do
+    {:noreply, %{state | afterglow: afterglow, last_word_list_size: last_word_list_size}}
   end
 
   def handle_info(:tick, %{chars: chars} = state) do
@@ -110,7 +125,7 @@ defmodule Octopus.Apps.Tla do
     end)
     |> Enum.reverse()
     |> Enum.reduce(&Canvas.join/2)
-    |> Canvas.to_frame()
+    |> Canvas.to_frame(easing_interval: state.afterglow)
     |> send_frame()
 
     chars =
@@ -139,7 +154,7 @@ defmodule Octopus.Apps.Tla do
           font: _font
         } = state
       ) do
-    last_words = [current_word | last_words] |> Enum.take(50)
+    last_words = [current_word | last_words] |> Enum.take(state.last_word_list_size)
     next_word = Words.next(words, current_word, last_words)
 
     chars =
