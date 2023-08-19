@@ -152,7 +152,6 @@ defmodule Octopus.Canvas do
 
   @window_width 8
   @window_gap 18
-  @window_and_gap @window_gap + @window_width
 
   def to_frame(%Canvas{width: width, height: height} = canvas, opts \\ []) do
     window_gap = if Keyword.get(opts, :drop, false), do: @window_gap, else: 0

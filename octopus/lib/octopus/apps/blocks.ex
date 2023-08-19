@@ -6,6 +6,8 @@ defmodule Octopus.Apps.Blocks do
   alias Octopus.Apps.Blocks
   alias Octopus.Protobuf.InputEvent
   alias Octopus.ButtonState
+  alias Octopus.Canvas
+  alias Octopus.Font
   alias Blocks.Game
 
   @frame_rate 60
@@ -17,7 +19,7 @@ defmodule Octopus.Apps.Blocks do
 
   def name(), do: "Blocks"
 
-  #   def icon(), do: Sprite.load("../images/snake", 0)
+  def icon(), do: Canvas.from_string("T", Font.load("robot"))
 
   def init(args) do
     state = %State{

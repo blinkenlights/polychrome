@@ -12,7 +12,6 @@ defmodule Octopus.Apps.Blocks.Game do
 
   alias Phoenix.LiveDashboard.TitleBarComponent
   alias Octopus.Font
-  alias Octopus.Sprite
   alias Octopus.JoyState
   alias Octopus.Apps.Blocks
   alias Blocks.Game
@@ -107,20 +106,20 @@ defmodule Octopus.Apps.Blocks.Game do
            ],
            [
             [[0, 0, 0, 0],
-             [0, 0, 0, 0],
              [0, 1, 0, 0],
-             [1, 1, 1, 0]],
+             [1, 1, 1, 0],
+             [0, 0, 0, 0],],
             [[0, 0, 0, 0],
              [0, 1, 0, 0],
              [0, 1, 1, 0],
              [0, 1, 0, 0]],
              [[0, 0, 0, 0],
-             [0, 1, 0, 0],
-             [1, 1, 0, 0],
-             [0, 1, 0, 0]],
-             [[0, 0, 0, 0],
              [0, 0, 0, 0],
              [1, 1, 1, 0],
+             [0, 1, 0, 0]],
+             [[0, 0, 0, 0],
+             [0, 1, 0, 0],
+             [1, 1, 0, 0],
              [0, 1, 0, 0]],
            ],
            [
@@ -174,9 +173,11 @@ defmodule Octopus.Apps.Blocks.Game do
   ]
 
   def new_tile() do
+    index = 1..length(@tiles) |> Enum.random()
+
     Tile.new(
-      @tiles |> Enum.random(),
-      @colors |> Enum.random()
+      @tiles |> Enum.at(index - 1),
+      @colors |> Enum.at(index - 1)
     )
   end
 
@@ -280,10 +281,19 @@ defmodule Octopus.Apps.Blocks.Game do
     end
   end
 
+  defp tile_channel(%Game{layout: layout}, %Tile{pos: {_x, y}}) do
+    (layout.playfield_channel - div(y, 8)) |> Octopus.Util.clamp(1, 10)
+  end
+
   defp take_tile_if_possible(%Game{} = game, action, %Tile{} = new_tile) do
     #    IO.inspect({:take, game.actions, action, new_tile})
 
     unless tile_hits?(game.board, new_tile) do
+      case action do
+        :rotate -> Octopus.App.play_sample("ui/click3.wav", tile_channel(game, new_tile))
+        _ -> false
+      end
+
       %Game{game | tile: new_tile, actions: Map.put(game.actions, action, game.t)}
     else
       game
@@ -397,7 +407,9 @@ defmodule Octopus.Apps.Blocks.Game do
       0 ->
         %Game{
           case anim[:lines] do
-            lines ->
+            lines when is_list(lines) ->
+              Octopus.App.play_sample("generic/success1.wav", game.layout.playfield_channel)
+
               delta =
                 case length(lines) do
                   4 -> 10
