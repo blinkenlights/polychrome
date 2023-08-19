@@ -71,12 +71,13 @@ defmodule Octopus.Apps.Tla do
   def init(_) do
     path = Path.join([:code.priv_dir(:octopus), "words", "500-10-letter-words.txt"])
     words = Words.load(path)
-    :timer.send_interval(3000, :next_word)
+    :timer.send_interval(5000, :next_word)
 
     current_word = Enum.random(words.words)
     font = Font.load("ddp-DoDonPachi (Cave)")
+    font_variants_count = length(font.variants)
 
-    chars = current_word |> String.graphemes() |> Enum.map(&[{&1, {0, 0}}])
+    chars = current_word |> String.graphemes() |> Enum.map(&[{&1, {0, 0}, 0}])
 
     :timer.send_interval(100, :tick)
 
@@ -85,6 +86,7 @@ defmodule Octopus.Apps.Tla do
        words: words,
        last_words: [],
        font: font,
+       font_variants_count: font_variants_count,
        chars: chars,
        current_word: current_word
      }}
@@ -96,8 +98,8 @@ defmodule Octopus.Apps.Tla do
       canvas = Canvas.new(8, length(chars))
 
       chars
-      |> Enum.reduce(canvas, fn {char, offset}, canvas ->
-        Canvas.put_string(canvas, offset, char, state.font)
+      |> Enum.reduce(canvas, fn {char, offset, variant}, canvas ->
+        Canvas.put_string(canvas, offset, char, state.font, variant)
       end)
       |> Canvas.cut({0, 0}, {7, 7})
     end)
@@ -110,10 +112,10 @@ defmodule Octopus.Apps.Tla do
       chars
       |> Enum.map(fn foo ->
         if length(foo) > 1 do
-          Enum.map(foo, fn {char, {x, y}} ->
-            {char, {x, y - 1}}
+          Enum.map(foo, fn {char, {x, y}, variant} ->
+            {char, {x, y - 1}, variant}
           end)
-          |> Enum.drop_while(fn {_chars, {_, y}} -> y < -8 end)
+          |> Enum.drop_while(fn {_chars, {_, y}, _variant} -> y < -8 end)
         else
           foo
         end
@@ -132,17 +134,18 @@ defmodule Octopus.Apps.Tla do
           font: _font
         } = state
       ) do
-    last_words = [current_word | last_words] |> Enum.take(100)
+    last_words = [current_word | last_words] |> Enum.take(50)
     next_word = Words.next(words, current_word, last_words)
 
     chars =
       chars
       |> Enum.zip(String.graphemes(next_word))
       |> Enum.map(fn {chars, new_char} ->
-        if Enum.any?(chars, fn {char, _} -> new_char == char end) do
+        if Enum.any?(chars, fn {char, _offset, _variant} -> new_char == char end) do
           chars
         else
-          chars ++ [{new_char, {0, length(chars) * 9}}]
+          chars ++
+            [{new_char, {0, length(chars) * 9}, Enum.random([0, 1, 2, 3, 6, 7, 8, 9, 10, 11])}]
         end
       end)
 
