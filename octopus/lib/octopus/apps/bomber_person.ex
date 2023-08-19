@@ -6,17 +6,32 @@ defmodule Octopus.Apps.BomberPersonApp do
   alias Octopus.Protobuf.InputEvent
 
   defmodule State do
-    defstruct [:canvas, :players, :map]
+    defstruct [:canvas, :players, :map, :bombs, :explosions]
   end
 
   defmodule Player do
     defstruct [:position, :color]
   end
 
-  @fps 60
+  defmodule Bomb do
+    defstruct [:remaining_ticks]
+  end
 
-  @stone_color {150, 150, 150}
-  @crate_color {80, 57, 0}
+  defmodule Explosion do
+    defstruct [:position, :remaining_ticks]
+  end
+
+  @fps 60
+  @bomb_ticks 180
+  @explosion_ticks 60
+  @explosion_range 2
+  @grid_size 6
+
+  def color(:stone), do: {150, 150, 150}
+  def color(:crate), do: {80, 57, 0}
+  def color(:bomb), do: {180, 0, 0}
+  def color(:explosion), do: {255, 150, 0}
+  def color(_), do: {255, 255, 255}
 
   def name(), do: "Bomber Person"
 
@@ -27,6 +42,8 @@ defmodule Octopus.Apps.BomberPersonApp do
         1 => %Player{position: {0, 0}, color: {0, 255, 0}},
         2 => %Player{position: {6, 6}, color: {0, 0, 255}},
       },
+      bombs: %{},
+      explosions: [],
       map: %{
         {3, 0} => :crate,
         {5, 0} => :crate,
@@ -71,13 +88,32 @@ defmodule Octopus.Apps.BomberPersonApp do
     {:ok, state}
   end
 
-  def handle_info(:tick, %State{} = state) do
+  def handle_info(:tick, %State{bombs: bombs, map: map, explosions: explosions} = state) do
+    new_explosions = for {coordinate, bomb} <- bombs, bomb.remaining_ticks <= 0, do: coordinate
+    map = Enum.reduce(new_explosions, map, fn coordinate, map -> map |> Map.delete(coordinate) end)
+
+    explosions = explosions ++ List.flatten(for coordinate <- new_explosions do
+      [%Explosion{position: coordinate, remaining_ticks: @explosion_ticks}] ++
+      explode(coordinate, {1, 0}, map) ++
+      explode(coordinate, {-1, 0}, map) ++
+      explode(coordinate, {0, 1}, map) ++
+      explode(coordinate, {0, -1}, map)
+    end)
+
+    # Logger.warning("Explosions: #{length}")
+
+    bombs = for {coordinate, bomb} <- bombs, bomb.remaining_ticks > 0, into: %{}, do: {coordinate, %Bomb{bomb | remaining_ticks: bomb.remaining_ticks - 1 }}
+
     canvas = state.canvas |> Canvas.clear()
 
-    canvas = Enum.reduce(state.map, canvas,
+    canvas = Enum.reduce(map, canvas,
       fn {coordinate, cell}, canvas ->
-        color = if cell == :stone, do: @stone_color, else: @crate_color
-        canvas |> Canvas.put_pixel(coordinate, color)
+        canvas |> Canvas.put_pixel(coordinate, color(cell))
+      end)
+
+    canvas = Enum.reduce(explosions, canvas,
+      fn %Explosion{position: coordinate}, canvas ->
+        canvas |> Canvas.put_pixel(coordinate, color(:explosion))
       end)
 
     canvas = Enum.reduce(state.players, canvas,
@@ -87,11 +123,29 @@ defmodule Octopus.Apps.BomberPersonApp do
     |> Canvas.to_frame()
     |> send_frame()
 
-    {:noreply, %State{state | canvas: canvas}}
+    {:noreply, %State{state | canvas: canvas, bombs: bombs, explosions: explosions, map: map}}
+  end
+
+  def explode({x, y}, {dx, dy}, map) do
+    x = x + dx
+    y = y + dy
+
+    explosion = %Explosion{position: {x, y}, remaining_ticks: @explosion_ticks}
+    cond do
+      x < 0 || x > @grid_size || y < 0 || y > @grid_size -> []
+      Map.has_key?(map, {x, y}) && map[{x, y}] == :crate -> [explosion]
+      Map.has_key?(map, {x, y}) -> []
+      true -> [explosion | explode({x, y}, {dx, dy}, map)]
+    end
   end
 
   def handle_input(%InputEvent{type: :BUTTON_A_1, value: 1}, state) do
-    {:noreply, state}
+    coordinate = state.players[1].position
+
+    {:noreply, %State{state |
+      map: state.map |> Map.put(coordinate, :bomb),
+      bombs: state.bombs |> Map.put(coordinate, %Bomb{remaining_ticks: @bomb_ticks}),
+    }}
   end
 
   def handle_input(%InputEvent{type: type, value: value}, state) do
@@ -105,8 +159,8 @@ defmodule Octopus.Apps.BomberPersonApp do
     end
 
     position_1 = {
-      player_1_x |> Util.clamp(0, 6),
-      player_1_y |> Util.clamp(0, 6),
+      player_1_x |> Util.clamp(0, @grid_size),
+      player_1_y |> Util.clamp(0, @grid_size),
     }
 
     position_1 = cond do
