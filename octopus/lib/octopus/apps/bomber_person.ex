@@ -2,15 +2,26 @@ defmodule Octopus.Apps.BomberPersonApp do
   use Octopus.App, category: :game
   require Logger
 
-  alias Octopus.{Canvas, Util}
+  alias Octopus.{Canvas, Util, Font}
   alias Octopus.Protobuf.InputEvent
 
   defmodule State do
-    defstruct [:game_state, :wait_ticks, :canvas, :big_canvas, :players, :map, :bombs, :explosions]
+    defstruct [
+      :game_state,
+      :wait_ticks,
+      :canvas,
+      :score_canvas,
+      :big_canvas,
+      :font,
+      :players,
+      :map,
+      :bombs,
+      :explosions
+    ]
   end
 
   defmodule Player do
-    defstruct [:position, :color]
+    defstruct [:position, :color, :score]
   end
 
   defmodule Bomb do
@@ -27,13 +38,15 @@ defmodule Octopus.Apps.BomberPersonApp do
   @explosion_range 2 # TODO: Implement
   @grid_size 6
   @game_over_wait 80
+  @font_name "1943"
+  @font_variants %{0 => 6, 1 => 5}
 
   def color(:stone), do: {150, 150, 150}
   def color(:crate), do: {80, 57, 0}
   def color(:bomb), do: {180, 0, 0}
   def color(:explosion), do: {255, 150, 0}
-  def color(:player_1_victory), do: {0, 180, 0}
-  def color(:player_2_victory), do: {0, 0, 180}
+  def color(:player_0_victory), do: {0, 180, 0}
+  def color(:player_1_victory), do: {0, 0, 180}
   def color(_), do: {255, 255, 255}
 
   def name(), do: "Bomber Person"
@@ -46,15 +59,25 @@ defmodule Octopus.Apps.BomberPersonApp do
     {:ok, state}
   end
 
-  def create_state() do
+  def create_state(previous_state \\ nil) do
     %State{
       game_state: :running,
       wait_ticks: 0,
       canvas: Canvas.new(8, 8),
-      big_canvas: Canvas.new(40, 8),
+      score_canvas: %{0 => Canvas.new(16, 8), 1 => Canvas.new(16, 8)},
+      big_canvas: Canvas.new(80, 8),
+      font: Font.load(@font_name),
       players: %{
-        1 => %Player{position: {0, 0}, color: {0, 255, 0}},
-        2 => %Player{position: {6, 6}, color: {0, 0, 255}},
+        0 => %Player{
+          position: {0, 0},
+          color: {0, 255, 0},
+          score: (if previous_state == nil, do: 0, else: previous_state.players[0].score),
+        },
+        1 => %Player{
+          position: {6, 6},
+          color: {0, 0, 255},
+          score: (if previous_state == nil, do: 0, else: previous_state.players[1].score),
+        },
       },
       bombs: %{},
       explosions: [],
@@ -101,10 +124,10 @@ defmodule Octopus.Apps.BomberPersonApp do
   def handle_info(:tick, %State{game_state: game_state} = state) do
     case game_state do
       :running -> update_game(state)
+      :pause_player_0_victory -> handle_pause(state)
       :pause_player_1_victory -> handle_pause(state)
-      :pause_player_2_victory -> handle_pause(state)
+      :player_0_victory -> show_victory(state)
       :player_1_victory -> show_victory(state)
-      :player_2_victory -> show_victory(state)
     end
   end
 
@@ -113,13 +136,14 @@ defmodule Octopus.Apps.BomberPersonApp do
       {wait_ticks, game_state}
     else
       case game_state do
+        :pause_player_0_victory -> {@game_over_wait, :player_0_victory}
         :pause_player_1_victory -> {@game_over_wait, :player_1_victory}
-        :pause_player_2_victory -> {@game_over_wait, :player_2_victory}
         _ -> {0, :running} # unreachable
       end
     end
-    canvas = render_canvas(state)
-    {:noreply, %State{state | canvas: canvas, wait_ticks: wait_ticks - 1, game_state: game_state}}
+    state = %State{state | wait_ticks: wait_ticks - 1, game_state: game_state}
+      |> render_canvas()
+    {:noreply, state}
   end
 
   def show_victory(%State{game_state: game_state, canvas: canvas, wait_ticks: wait_ticks} = state) do
@@ -127,20 +151,16 @@ defmodule Octopus.Apps.BomberPersonApp do
       |> Canvas.clear()
       |> Canvas.fill_rect({0, 0}, {@grid_size, @grid_size}, color(game_state))
 
-    big_canvas = state.big_canvas
-    |> Canvas.clear()
-    |> Canvas.join(canvas)
-    |> Canvas.to_frame()
-    |> send_frame()
-
     if wait_ticks > 0 do
-      {:noreply, %State{state | canvas: canvas, wait_ticks: wait_ticks - 1}}
+      state = %State{state | canvas: canvas, wait_ticks: wait_ticks - 1}
+        |> combine_and_send_canvas()
+      {:noreply, state}
     else
-      {:noreply, create_state()}
+      {:noreply, create_state(state)}
     end
   end
 
-  def update_game(%State{game_state: game_state, bombs: bombs, map: map, explosions: explosions, wait_ticks: wait_ticks} = state) do
+  def update_game(%State{game_state: game_state, bombs: bombs, map: map, players: players, explosions: explosions, wait_ticks: wait_ticks} = state) do
     # Explode bombs and create explosion tiles.
     new_explosions = for {coordinate, bomb} <- bombs, bomb.remaining_ticks <= 0, do: coordinate
     map = Enum.reduce(new_explosions, map, fn coordinate, map -> Map.delete(map, coordinate) end)
@@ -157,17 +177,28 @@ defmodule Octopus.Apps.BomberPersonApp do
       end)
 
     # Explode players.
-    player_1_position = state.players[1].position
-    player_2_position = state.players[2].position
+    player_0_position = players[0].position
+    player_1_position = players[1].position
     game_state = Enum.reduce(explosions, :running, fn %Explosion{position: coordinate}, game_state ->
       case game_state do
-        :running when coordinate == player_1_position -> :pause_player_2_victory
-        :running when coordinate == player_2_position -> :pause_player_1_victory
+        :running when coordinate == player_0_position -> :pause_player_1_victory
+        :running when coordinate == player_1_position -> :pause_player_0_victory
         _ -> game_state
       end
     end)
-
     wait_ticks = if game_state == :running, do: 0, else: @game_over_wait
+
+    # Increase player score on victory.
+    players = if game_state == :running do
+      players
+    else
+      player_index = case game_state do
+        :pause_player_0_victory -> 0
+        :pause_player_1_victory -> 1
+      end
+      player = players[player_index]
+      Map.put(players, player_index, %Player{player | score: player.score + 1})
+    end
 
     # Tick bombs and explosion tiles.
     bombs = for {coordinate, bomb} <- bombs, bomb.remaining_ticks > 0, into: %{} do
@@ -177,10 +208,9 @@ defmodule Octopus.Apps.BomberPersonApp do
       %Explosion{explosion | remaining_ticks: explosion.remaining_ticks - 1 }
     end
 
-    state = %State{state | game_state: game_state, bombs: bombs, explosions: explosions, map: map, wait_ticks: wait_ticks}
-    canvas = render_canvas(state)
-
-    {:noreply, %State{state | canvas: canvas}}
+    state = %State{state | game_state: game_state, bombs: bombs, explosions: explosions, map: map, players: players, wait_ticks: wait_ticks}
+      |> render_canvas()
+    {:noreply, state}
   end
 
   def render_canvas(state) do
@@ -198,13 +228,40 @@ defmodule Octopus.Apps.BomberPersonApp do
       canvas |> Canvas.put_pixel(player.position, player.color)
     end)
 
+    %State{state | canvas: canvas}
+      |> render_score(0)
+      |> render_score(1)
+      |> combine_and_send_canvas()
+  end
+
+  def render_score(%State{font: font} = state, player_index) do
+    score = state.players[player_index].score
+
+    [first_char, second_char] =
+      score
+      |> to_string()
+      |> String.pad_leading(2, "0")
+      |> String.to_charlist()
+
+    font_variant = @font_variants[player_index]
+    canvas = state.score_canvas[player_index]
+      |> Canvas.clear()
+      |> Font.pipe_draw_char(font, first_char, font_variant)
+      |> Font.pipe_draw_char(font, second_char, font_variant, {8, 0})
+
+    %State{state | score_canvas: Map.put(state.score_canvas, player_index, canvas)}
+  end
+
+  def combine_and_send_canvas(state) do
     big_canvas = state.big_canvas
     |> Canvas.clear()
-    |> Canvas.join(canvas)
+    |> Canvas.overlay(state.score_canvas[0], [offset: {24, 0}])
+    |> Canvas.overlay(state.canvas, [offset: {40, 0}])
+    |> Canvas.overlay(state.score_canvas[1], [offset: {48, 0}])
     |> Canvas.to_frame()
     |> send_frame()
 
-    canvas
+    state
   end
 
   def explode(coordinate, map) do
@@ -229,7 +286,7 @@ defmodule Octopus.Apps.BomberPersonApp do
   end
 
   def handle_input(%InputEvent{type: :BUTTON_A_1, value: 1}, state) do
-    coordinate = state.players[1].position
+    coordinate = state.players[0].position
 
     {:noreply, %State{state |
       map: state.map |> Map.put(coordinate, :bomb),
@@ -238,7 +295,7 @@ defmodule Octopus.Apps.BomberPersonApp do
   end
 
   def handle_input(%InputEvent{type: :BUTTON_A_2, value: 1}, state) do
-    coordinate = state.players[2].position
+    coordinate = state.players[1].position
 
     {:noreply, %State{state |
       map: state.map |> Map.put(coordinate, :bomb),
@@ -249,12 +306,16 @@ defmodule Octopus.Apps.BomberPersonApp do
   # def handle_input(%InputEvent{type: type, value: value}, state) do
   def handle_input(%InputEvent{} = event, state) do
     if state.game_state == :running do
-      state = handle_player_axis(event, state, 1, {:AXIS_X_1, :AXIS_Y_1})
-      state = handle_player_axis(event, state, 2, {:AXIS_X_2, :AXIS_Y_2})
+      state = handle_player_axis(event, state, 0, {:AXIS_X_1, :AXIS_Y_1})
+      state = handle_player_axis(event, state, 1, {:AXIS_X_2, :AXIS_Y_2})
       {:noreply, state}
     else
       {:noreply, state}
     end
+  end
+
+  def handle_input(_input_event, state) do
+    {:noreply, state}
   end
 
   def handle_player_axis(%InputEvent{type: type, value: value}, state, index, {axis_x, axis_y}) do
@@ -279,10 +340,6 @@ defmodule Octopus.Apps.BomberPersonApp do
 
     player = %Player{player | position: position}
     %State{state | players: state.players |> Map.put(index, player)}
-  end
-
-  def handle_input(_input_event, state) do
-    {:noreply, state}
   end
 
   def handle_control_event(_event, state) do
