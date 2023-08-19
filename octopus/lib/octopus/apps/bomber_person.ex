@@ -6,7 +6,7 @@ defmodule Octopus.Apps.BomberPersonApp do
   alias Octopus.Protobuf.InputEvent
 
   defmodule State do
-    defstruct [:game_state, :canvas, :big_canvas, :players, :map, :bombs, :explosions]
+    defstruct [:game_state, :wait_ticks, :canvas, :big_canvas, :players, :map, :bombs, :explosions]
   end
 
   defmodule Player do
@@ -22,10 +22,11 @@ defmodule Octopus.Apps.BomberPersonApp do
   end
 
   @fps 60
-  @bomb_ticks 180
-  @explosion_ticks 60
-  @explosion_range 2
+  @bomb_ticks 150
+  @explosion_ticks 45
+  @explosion_range 2 # TODO: Implement
   @grid_size 6
+  @game_over_wait 80
 
   def color(:stone), do: {150, 150, 150}
   def color(:crate), do: {80, 57, 0}
@@ -38,8 +39,17 @@ defmodule Octopus.Apps.BomberPersonApp do
   def name(), do: "Bomber Person"
 
   def init(_args) do
-    state = %State{
+    state = create_state()
+
+    :timer.send_interval(trunc(1000 / @fps), :tick)
+
+    {:ok, state}
+  end
+
+  def create_state() do
+    %State{
       game_state: :running,
+      wait_ticks: 0,
       canvas: Canvas.new(8, 8),
       big_canvas: Canvas.new(40, 8),
       players: %{
@@ -86,21 +96,33 @@ defmodule Octopus.Apps.BomberPersonApp do
         {3, 6} => :crate,
       },
     }
-
-    :timer.send_interval(trunc(1000 / @fps), :tick)
-
-    {:ok, state}
   end
 
   def handle_info(:tick, %State{game_state: game_state} = state) do
     case game_state do
       :running -> update_game(state)
+      :pause_player_1_victory -> handle_pause(state)
+      :pause_player_2_victory -> handle_pause(state)
       :player_1_victory -> show_victory(state)
       :player_2_victory -> show_victory(state)
     end
   end
 
-  def show_victory(%State{game_state: game_state, canvas: canvas} = state) do
+  def handle_pause(%State{game_state: game_state, wait_ticks: wait_ticks} = state) do
+    {wait_ticks, game_state} = if wait_ticks > 0 do
+      {wait_ticks, game_state}
+    else
+      case game_state do
+        :pause_player_1_victory -> {@game_over_wait, :player_1_victory}
+        :pause_player_2_victory -> {@game_over_wait, :player_2_victory}
+        _ -> {0, :running} # unreachable
+      end
+    end
+    canvas = render_canvas(state)
+    {:noreply, %State{state | canvas: canvas, wait_ticks: wait_ticks - 1, game_state: game_state}}
+  end
+
+  def show_victory(%State{game_state: game_state, canvas: canvas, wait_ticks: wait_ticks} = state) do
     canvas = state.canvas
       |> Canvas.clear()
       |> Canvas.fill_rect({0, 0}, {@grid_size, @grid_size}, color(game_state))
@@ -111,10 +133,14 @@ defmodule Octopus.Apps.BomberPersonApp do
     |> Canvas.to_frame()
     |> send_frame()
 
-    {:noreply, %State{state | canvas: canvas}}
+    if wait_ticks > 0 do
+      {:noreply, %State{state | canvas: canvas, wait_ticks: wait_ticks - 1}}
+    else
+      {:noreply, create_state()}
+    end
   end
 
-  def update_game(%State{game_state: game_state, bombs: bombs, map: map, explosions: explosions} = state) do
+  def update_game(%State{game_state: game_state, bombs: bombs, map: map, explosions: explosions, wait_ticks: wait_ticks} = state) do
     # Explode bombs and create explosion tiles.
     new_explosions = for {coordinate, bomb} <- bombs, bomb.remaining_ticks <= 0, do: coordinate
     map = Enum.reduce(new_explosions, map, fn coordinate, map -> Map.delete(map, coordinate) end)
@@ -135,11 +161,13 @@ defmodule Octopus.Apps.BomberPersonApp do
     player_2_position = state.players[2].position
     game_state = Enum.reduce(explosions, :running, fn %Explosion{position: coordinate}, game_state ->
       case game_state do
-        :running when coordinate == player_1_position -> :player_2_victory
-        :running when coordinate == player_2_position -> :player_1_victory
+        :running when coordinate == player_1_position -> :pause_player_2_victory
+        :running when coordinate == player_2_position -> :pause_player_1_victory
         _ -> game_state
       end
     end)
+
+    wait_ticks = if game_state == :running, do: 0, else: @game_over_wait
 
     # Tick bombs and explosion tiles.
     bombs = for {coordinate, bomb} <- bombs, bomb.remaining_ticks > 0, into: %{} do
@@ -149,7 +177,7 @@ defmodule Octopus.Apps.BomberPersonApp do
       %Explosion{explosion | remaining_ticks: explosion.remaining_ticks - 1 }
     end
 
-    state = %State{state | game_state: game_state, bombs: bombs, explosions: explosions, map: map}
+    state = %State{state | game_state: game_state, bombs: bombs, explosions: explosions, map: map, wait_ticks: wait_ticks}
     canvas = render_canvas(state)
 
     {:noreply, %State{state | canvas: canvas}}
