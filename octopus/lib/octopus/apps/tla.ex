@@ -43,11 +43,16 @@ defmodule Octopus.Apps.Tla do
     def next(%__MODULE__{words: words, lookup: lookup}, current_word, exclude \\ []) do
       current_word_index = Enum.find_index(words, &(&1 == current_word))
 
-      lookup[current_word_index]
-      |> Stream.map(&Enum.at(words, &1))
-      |> Stream.reject(fn word -> word in exclude end)
-      |> Enum.take(1)
-      |> hd()
+      candidate =
+        lookup[current_word_index]
+        |> Stream.map(&Enum.at(words, &1))
+        |> Stream.reject(fn word -> word in exclude end)
+        |> Enum.take(1)
+
+      case candidate do
+        [] -> Enum.random(words)
+        [word | _] -> word
+      end
     end
 
     # computes the levenshtein distance between two strings
