@@ -273,13 +273,15 @@ defmodule Octopus.Apps.Blocks.Game do
     end
   end
 
-  def check_gameover(%Game{tile: tile, board: board} = game) do
+  def check_gameover(%Game{tile: tile, board: board, animation: nil} = game) do
     if tile_hits?(board, tile) do
       new(layout: game.layout)
     else
       game
     end
   end
+
+  def check_gameover(game), do: game
 
   defp tile_channel(%Game{layout: layout}, %Tile{pos: {_x, y}}) do
     (layout.playfield_channel - div(y, 8)) |> Octopus.Util.clamp(1, 10)
@@ -340,7 +342,7 @@ defmodule Octopus.Apps.Blocks.Game do
       | actions:
           game.actions
           |> Enum.reject(fn
-            {:down, old_t} -> game.t - old_t > 4
+            {:down, old_t} -> game.t - old_t > 3
             {k, _v} -> !(k in actions)
           end)
           |> Enum.into(%{})
@@ -412,9 +414,9 @@ defmodule Octopus.Apps.Blocks.Game do
 
               delta =
                 case length(lines) do
-                  4 -> 10
-                  3 -> 6
-                  2 -> 3
+                  4 -> 8
+                  3 -> 4
+                  2 -> 2
                   1 -> 1
                 end
 

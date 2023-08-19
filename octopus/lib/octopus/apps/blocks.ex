@@ -2,7 +2,6 @@ defmodule Octopus.Apps.Blocks do
   use Octopus.App, category: :game
   require Logger
 
-  alias Octopus.Sprite
   alias Octopus.Apps.Blocks
   alias Octopus.Protobuf.InputEvent
   alias Octopus.ButtonState
