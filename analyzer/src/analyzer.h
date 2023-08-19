@@ -45,7 +45,6 @@
 *******************************************************************************/
 
 #pragma once
-#include <plog/Log.h>
 #include <schema.pb.h>
 
 //==============================================================================
@@ -103,29 +102,41 @@ class FilterProcessor : public ProcessorBase
   };
 
  public:
-  explicit FilterProcessor(Type type, float freq) : m_type(type), m_frequency(freq) {}
+  explicit FilterProcessor(Type type, AudioParameterFloat* freq) : m_type(type), m_frequency(freq)
+  {
+  }
 
   void prepareToPlay(double sampleRate, int samplesPerBlock) override
   {
-    switch (m_type)
-    {
-      case Type::low:
-        *filter.state = *juce::dsp::IIR::Coefficients<float>::makeLowPass(sampleRate, m_frequency);
-        break;
-      case Type::mid:
-        *filter.state = *juce::dsp::IIR::Coefficients<float>::makeBandPass(sampleRate, m_frequency);
-        break;
-      case Type::high:
-        *filter.state = *juce::dsp::IIR::Coefficients<float>::makeHighPass(sampleRate, m_frequency);
-        break;
-    }
+    m_sampleRate = sampleRate;
+    updateFilter();
 
     juce::dsp::ProcessSpec spec{sampleRate, static_cast<juce::uint32>(samplesPerBlock), 2};
     filter.prepare(spec);
   }
 
+  void updateFilter()
+  {
+    switch (m_type)
+    {
+      case Type::low:
+        *filter.state =
+            *juce::dsp::IIR::Coefficients<float>::makeBandPass(m_sampleRate, m_frequency->get());
+        break;
+      case Type::mid:
+        *filter.state =
+            *juce::dsp::IIR::Coefficients<float>::makeBandPass(m_sampleRate, m_frequency->get());
+        break;
+      case Type::high:
+        *filter.state =
+            *juce::dsp::IIR::Coefficients<float>::makeBandPass(m_sampleRate, m_frequency->get());
+        break;
+    }
+  }
+
   void processBlock(juce::AudioSampleBuffer& buffer, juce::MidiBuffer&) override
   {
+    updateFilter();
     juce::dsp::AudioBlock<float> block(buffer);
     juce::dsp::ProcessContextReplacing<float> context(block);
     filter.process(context);
@@ -161,8 +172,10 @@ class FilterProcessor : public ProcessorBase
 
  private:
   Type m_type;
-  float m_frequency;
+  AudioParameterFloat* m_frequency;
   float m_rms;
+
+  double m_sampleRate;
 
   float m_lastValue;
 
@@ -184,8 +197,21 @@ class TutorialProcessor : public juce::AudioProcessor, public Timer
                        .withInput("Input", juce::AudioChannelSet::stereo(), true)
                        .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
     mainProcessor(new juce::AudioProcessorGraph()),
-    m_socket(true)
+    m_socket(true),
+    m_lowFreq(new juce::AudioParameterFloat("lowFreq", "Low frequency", 20.0f, 500.0f, 80.0f)),
+    m_midFreq(new juce::AudioParameterFloat("midFreq", "Mid frequency", 100.0f, 6000.0f, 1000.0f)),
+    m_highFreq(
+        new juce::AudioParameterFloat("highFreq", "High frequency", 4000.0f, 16000.0f, 8000.0f)),
+    m_lowListen(new juce::AudioParameterBool("lowListen", "Listen", false)),
+    m_midListen(new juce::AudioParameterBool("midListen", "Listen", false)),
+    m_highListen(new juce::AudioParameterBool("highListen", "Listen", false))
   {
+    addParameter(m_lowListen);
+    addParameter(m_lowFreq);
+    addParameter(m_midListen);
+    addParameter(m_midFreq);
+    addParameter(m_highListen);
+    addParameter(m_highFreq);
   }
 
   //==============================================================================
@@ -222,6 +248,7 @@ class TutorialProcessor : public juce::AudioProcessor, public Timer
       buffer.clear(i, 0, buffer.getNumSamples());
 
     mainProcessor->processBlock(buffer, midiMessages);
+    updateGraph();
   }
 
   //==============================================================================
@@ -266,9 +293,8 @@ class TutorialProcessor : public juce::AudioProcessor, public Timer
     }
     Packet protoPacket;
     protoPacket.set_allocated_sound_to_light_control_event(event);
-    int size = 0;
-    std::string msg = protoPacket.SerializePartialAsString();
-    m_socket.write("127.0.0.1", 4423, msg.c_str(), msg.length());
+    const std::string msg = protoPacket.SerializePartialAsString();
+    m_socket.write("192.168.23.12", 4423, msg.c_str(), msg.length());
   }
 
  private:
@@ -283,21 +309,58 @@ class TutorialProcessor : public juce::AudioProcessor, public Timer
         std::make_unique<AudioGraphIOProcessor>(AudioGraphIOProcessor::audioOutputNode));
 
     lowFilter = mainProcessor->addNode(
-        std::make_unique<FilterProcessor>(FilterProcessor::Type::low, 80.0f));
+        std::make_unique<FilterProcessor>(FilterProcessor::Type::low, m_lowFreq));
     midFilter = mainProcessor->addNode(
-        std::make_unique<FilterProcessor>(FilterProcessor::Type::mid, 1000.0f));
+        std::make_unique<FilterProcessor>(FilterProcessor::Type::mid, m_midFreq));
     highFilter = mainProcessor->addNode(
-        std::make_unique<FilterProcessor>(FilterProcessor::Type::high, 8000.0f));
+        std::make_unique<FilterProcessor>(FilterProcessor::Type::high, m_highFreq));
 
     connectAudioNodes();
   }
 
+  void updateGraph()
+  {
+    for (int channel = 0; channel < 2; ++channel)
+    {
+      if (m_lowListen->get())
+      {
+        mainProcessor->addConnection(
+            {{lowFilter->nodeID, channel}, {audioOutputNode->nodeID, channel}});
+      }
+      else
+      {
+        mainProcessor->removeConnection(
+            {{lowFilter->nodeID, channel}, {audioOutputNode->nodeID, channel}});
+      }
+
+      if (m_midListen->get())
+      {
+        mainProcessor->addConnection(
+            {{midFilter->nodeID, channel}, {audioOutputNode->nodeID, channel}});
+      }
+      else
+      {
+        mainProcessor->removeConnection(
+            {{midFilter->nodeID, channel}, {audioOutputNode->nodeID, channel}});
+      }
+      if (m_highListen->get())
+      {
+        mainProcessor->addConnection(
+            {{highFilter->nodeID, channel}, {audioOutputNode->nodeID, channel}});
+      }
+      else
+      {
+        mainProcessor->removeConnection(
+            {{highFilter->nodeID, channel}, {audioOutputNode->nodeID, channel}});
+      }
+    }
+  }
   void connectAudioNodes()
   {
     for (int channel = 0; channel < 2; ++channel)
     {
-      mainProcessor->addConnection(
-          {{audioInputNode->nodeID, channel}, {audioOutputNode->nodeID, channel}});
+      // mainProcessor->addConnection(
+      //     {{audioInputNode->nodeID, channel}, {audioOutputNode->nodeID, channel}});
       mainProcessor->addConnection(
           {{audioInputNode->nodeID, channel}, {lowFilter->nodeID, channel}});
       mainProcessor->addConnection(
@@ -321,6 +384,14 @@ class TutorialProcessor : public juce::AudioProcessor, public Timer
   Node::Ptr highFilter;
 
   DatagramSocket m_socket;
+
+  juce::AudioParameterFloat* m_lowFreq;
+  juce::AudioParameterFloat* m_midFreq;
+  juce::AudioParameterFloat* m_highFreq;
+
+  juce::AudioParameterBool* m_lowListen;
+  juce::AudioParameterBool* m_midListen;
+  juce::AudioParameterBool* m_highListen;
 
   //==============================================================================
   JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TutorialProcessor)
