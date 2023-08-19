@@ -7,12 +7,12 @@ defmodule Octopus.Apps.Matrix do
 
   def config_schema do
     %{
-      afterglow: {"Afterglow", :int, %{default: 50, min: 0, max: 500}},
+      afterglow: {"Afterglow", :int, %{default: 50, min: 0, max: 500}}
     }
   end
 
   defmodule State do
-    @greens [{164, 223, 179}, {89, 141, 88}, {33, 58, 11}]
+    @greens [{164, 223, 179}, {86, 115, 70}, {44, 64, 11}, {22, 40, 0}]
     @pinks [{251, 72, 196}, {165, 52, 167}, {77, 40, 92}]
 
     alias Octopus.Canvas
@@ -22,11 +22,18 @@ defmodule Octopus.Apps.Matrix do
     def spawn_particles(%State{particles: particles} = state, amount) do
       new_particles =
         Enum.map(1..amount, fn _ ->
+          speed =
+            if :rand.uniform() > 0.9 do
+              18.0
+            else
+              3.0 + :rand.uniform() * 12.0
+            end
+
           %Particle{
             x: :rand.uniform(80),
             y: :rand.uniform(8) - 12,
             z: :rand.uniform() * 0.5 + 0.5,
-            speed: 3.0 + :rand.uniform() * 18.0,
+            speed: speed,
             age: 0.0,
             max_age: 5 + :rand.uniform() * 6,
             tail: Enum.map(1..(4 + :rand.uniform(3)), fn _ -> Enum.random(@greens) end),
@@ -85,8 +92,8 @@ defmodule Octopus.Apps.Matrix do
               rand = :rand.uniform()
 
               cond do
-                rand > 0.98 and color not in @pinks ->
-                  if :rand.uniform() > 0.5, do: List.first(@greens), else: {0,0,0}
+                rand > 0.99 and color not in @pinks ->
+                  if :rand.uniform() > 0.4, do: List.first(@greens), else: {0, 0, 0}
 
                 rand > 0.9 and color not in @pinks ->
                   @greens |> Enum.drop(1) |> Enum.random()
