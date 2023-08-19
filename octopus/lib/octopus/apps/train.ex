@@ -76,4 +76,8 @@ defmodule Octopus.Apps.Train do
   def handle_input(%InputEvent{type: _, value: _}, state) do
     {:noreply, state}
   end
+
+  def handle_input(_, state) do
+    {:noreply, state}
+  end
 end
