@@ -6,7 +6,7 @@ defmodule Octopus.Apps.BomberPersonApp do
   alias Octopus.Protobuf.InputEvent
 
   defmodule State do
-    defstruct [:game_state, :canvas, :players, :map, :bombs, :explosions]
+    defstruct [:game_state, :canvas, :big_canvas, :players, :map, :bombs, :explosions]
   end
 
   defmodule Player do
@@ -41,6 +41,7 @@ defmodule Octopus.Apps.BomberPersonApp do
     state = %State{
       game_state: :running,
       canvas: Canvas.new(8, 8),
+      big_canvas: Canvas.new(40, 8),
       players: %{
         1 => %Player{position: {0, 0}, color: {0, 255, 0}},
         2 => %Player{position: {6, 6}, color: {0, 0, 255}},
@@ -104,9 +105,11 @@ defmodule Octopus.Apps.BomberPersonApp do
       |> Canvas.clear()
       |> Canvas.fill_rect({0, 0}, {@grid_size, @grid_size}, color(game_state))
 
-    canvas
-      |> Canvas.to_frame()
-      |> send_frame()
+    big_canvas = state.big_canvas
+    |> Canvas.clear()
+    |> Canvas.join(canvas)
+    |> Canvas.to_frame()
+    |> send_frame()
 
     {:noreply, %State{state | canvas: canvas}}
   end
@@ -167,7 +170,9 @@ defmodule Octopus.Apps.BomberPersonApp do
       canvas |> Canvas.put_pixel(player.position, player.color)
     end)
 
-    canvas
+    big_canvas = state.big_canvas
+    |> Canvas.clear()
+    |> Canvas.join(canvas)
     |> Canvas.to_frame()
     |> send_frame()
 
