@@ -25,7 +25,7 @@ defmodule Octopus.Apps.BomberPersonApp do
   end
 
   defmodule Bomb do
-    defstruct [:remaining_ticks]
+    defstruct [:remaining_ticks, :player_index]
   end
 
   defmodule Explosion do
@@ -33,6 +33,7 @@ defmodule Octopus.Apps.BomberPersonApp do
   end
 
   @fps 60
+  @bombs_per_player 2
   @bomb_ticks 150
   @explosion_ticks 45
   @explosion_range 2 # TODO: Implement
@@ -285,23 +286,24 @@ defmodule Octopus.Apps.BomberPersonApp do
     end
   end
 
-  def handle_input(%InputEvent{type: :BUTTON_A_1, value: 1}, state) do
-    coordinate = state.players[0].position
+  def place_bomb(state, player_index) do
+    coordinate = state.players[player_index].position
+    bomb_count =  state.bombs |> Enum.count(fn {_, %Bomb{player_index: ^player_index}} -> true; _ -> false end)
 
-    {:noreply, %State{state |
-      map: state.map |> Map.put(coordinate, :bomb),
-      bombs: state.bombs |> Map.put(coordinate, %Bomb{remaining_ticks: @bomb_ticks}),
-    }}
+    if state.game_state == :running && bomb_count < @bombs_per_player do
+      new_bomb = %Bomb{remaining_ticks: @bomb_ticks, player_index: player_index}
+      {:noreply, %State{state |
+        map: state.map |> Map.put(coordinate, :bomb),
+        bombs: state.bombs |> Map.put(coordinate, new_bomb),
+      }}
+    else
+      {:noreply, state}
+    end
   end
 
-  def handle_input(%InputEvent{type: :BUTTON_A_2, value: 1}, state) do
-    coordinate = state.players[1].position
+  def handle_input(%InputEvent{type: :BUTTON_A_1, value: 1}, state), do: place_bomb(state, 0)
 
-    {:noreply, %State{state |
-      map: state.map |> Map.put(coordinate, :bomb),
-      bombs: state.bombs |> Map.put(coordinate, %Bomb{remaining_ticks: @bomb_ticks}),
-    }}
-  end
+  def handle_input(%InputEvent{type: :BUTTON_A_2, value: 1}, state), do: place_bomb(state, 1)
 
   # def handle_input(%InputEvent{type: type, value: value}, state) do
   def handle_input(%InputEvent{} = event, state) do
