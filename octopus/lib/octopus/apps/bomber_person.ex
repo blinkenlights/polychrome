@@ -306,6 +306,7 @@ defmodule Octopus.Apps.BomberPerson do
 
     position = cond do
       state.map |> Map.has_key?(position) -> player.position
+      state.players |> Enum.any?(fn {_, other} -> position == other.position end) -> player.position
       true -> position
     end
 
