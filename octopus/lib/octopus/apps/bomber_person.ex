@@ -1,7 +1,8 @@
-defmodule Octopus.Apps.BomberPersonApp do
+defmodule Octopus.Apps.BomberPerson do
   use Octopus.App, category: :game
   require Logger
 
+  alias Octopus.Apps.BomberPerson.Maps
   alias Octopus.{Canvas, Util, Font}
   alias Octopus.Protobuf.InputEvent
 
@@ -37,7 +38,7 @@ defmodule Octopus.Apps.BomberPersonApp do
   @bomb_ticks 150
   @explosion_ticks 45
   @explosion_range 2 # TODO: Implement
-  @grid_size 6
+  @grid_size 8
   @game_over_wait 80
   @font_name "1943"
   @font_variants %{0 => 6, 1 => 5}
@@ -61,6 +62,8 @@ defmodule Octopus.Apps.BomberPersonApp do
   end
 
   def create_state(previous_state \\ nil) do
+    {map, [spawn_1, spawn_2]} = Maps.random_map()
+
     %State{
       game_state: :running,
       wait_ticks: 0,
@@ -70,55 +73,19 @@ defmodule Octopus.Apps.BomberPersonApp do
       font: Font.load(@font_name),
       players: %{
         0 => %Player{
-          position: {0, 0},
+          position: spawn_1,
           color: {0, 255, 0},
           score: (if previous_state == nil, do: 0, else: previous_state.players[0].score),
         },
         1 => %Player{
-          position: {6, 6},
+          position: spawn_2,
           color: {0, 0, 255},
           score: (if previous_state == nil, do: 0, else: previous_state.players[1].score),
         },
       },
       bombs: %{},
       explosions: [],
-      map: %{
-        {3, 0} => :crate,
-        {5, 0} => :crate,
-
-        {1, 1} => :stone,
-        {2, 1} => :crate,
-        {3, 1} => :stone,
-        {4, 1} => :crate,
-        {5, 1} => :stone,
-        {6, 1} => :crate,
-
-        {1, 2} => :crate,
-        {3, 2} => :crate,
-        {5, 2} => :crate,
-
-        {0, 3} => :crate,
-        {1, 3} => :stone,
-        {2, 3} => :crate,
-        {3, 3} => :stone,
-        {4, 3} => :crate,
-        {5, 3} => :stone,
-        {6, 3} => :crate,
-
-        {1, 4} => :crate,
-        {3, 4} => :crate,
-        {5, 4} => :crate,
-
-        {0, 5} => :crate,
-        {1, 5} => :stone,
-        {2, 5} => :crate,
-        {3, 5} => :stone,
-        {4, 5} => :crate,
-        {5, 5} => :stone,
-
-        {1, 6} => :crate,
-        {3, 6} => :crate,
-      },
+      map: map,
     }
   end
 
@@ -148,9 +115,9 @@ defmodule Octopus.Apps.BomberPersonApp do
   end
 
   def show_victory(%State{game_state: game_state, canvas: canvas, wait_ticks: wait_ticks} = state) do
-    canvas = state.canvas
-      |> Canvas.clear()
-      |> Canvas.fill_rect({0, 0}, {@grid_size, @grid_size}, color(game_state))
+    canvas = canvas
+    |> Canvas.clear()
+    |> Canvas.fill_rect({0, 0}, {@grid_size - 1, @grid_size - 1}, color(game_state))
 
     if wait_ticks > 0 do
       state = %State{state | canvas: canvas, wait_ticks: wait_ticks - 1}
@@ -161,7 +128,7 @@ defmodule Octopus.Apps.BomberPersonApp do
     end
   end
 
-  def update_game(%State{game_state: game_state, bombs: bombs, map: map, players: players, explosions: explosions, wait_ticks: wait_ticks} = state) do
+  def update_game(%State{game_state: game_state, bombs: bombs, map: map, players: players, explosions: explosions} = state) do
     # Explode bombs and create explosion tiles.
     new_explosions = for {coordinate, bomb} <- bombs, bomb.remaining_ticks <= 0, do: coordinate
     map = Enum.reduce(new_explosions, map, fn coordinate, map -> Map.delete(map, coordinate) end)
@@ -180,7 +147,7 @@ defmodule Octopus.Apps.BomberPersonApp do
     # Explode players.
     player_0_position = players[0].position
     player_1_position = players[1].position
-    game_state = Enum.reduce(explosions, :running, fn %Explosion{position: coordinate}, game_state ->
+    game_state = Enum.reduce(explosions, game_state, fn %Explosion{position: coordinate}, game_state ->
       case game_state do
         :running when coordinate == player_0_position -> :pause_player_1_victory
         :running when coordinate == player_1_position -> :pause_player_0_victory
@@ -259,10 +226,12 @@ defmodule Octopus.Apps.BomberPersonApp do
     |> Canvas.overlay(state.score_canvas[0], [offset: {24, 0}])
     |> Canvas.overlay(state.canvas, [offset: {40, 0}])
     |> Canvas.overlay(state.score_canvas[1], [offset: {48, 0}])
+
+    big_canvas
     |> Canvas.to_frame()
     |> send_frame()
 
-    state
+    %State{state | big_canvas: big_canvas}
   end
 
   def explode(coordinate, map) do
@@ -279,7 +248,7 @@ defmodule Octopus.Apps.BomberPersonApp do
 
     explosion = %Explosion{position: {x, y}, remaining_ticks: @explosion_ticks}
     cond do
-      x < 0 || x > @grid_size || y < 0 || y > @grid_size -> []
+      x < 0 || x >= @grid_size || y < 0 || y >= @grid_size -> []
       Map.has_key?(map, {x, y}) && map[{x, y}] == :crate -> [explosion]
       Map.has_key?(map, {x, y}) -> []
       true -> [explosion | explode({x, y}, {dx, dy}, map)]
@@ -331,8 +300,8 @@ defmodule Octopus.Apps.BomberPersonApp do
     end
 
     position = {
-      player_x |> Util.clamp(0, @grid_size),
-      player_y |> Util.clamp(0, @grid_size),
+      player_x |> Util.clamp(0, @grid_size - 1),
+      player_y |> Util.clamp(0, @grid_size - 1),
     }
 
     position = cond do
