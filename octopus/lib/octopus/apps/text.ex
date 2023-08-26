@@ -35,6 +35,8 @@ defmodule Octopus.Apps.Text do
     {:noreply, state}
   end
 
+  def handle_control_event(_, state), do: {:noreply, state}
+
   def config_schema() do
     %{
       text: {"Text", :string, %{default: "POLYCHROME"}},
