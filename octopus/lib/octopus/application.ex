@@ -36,6 +36,7 @@ defmodule Octopus.Application do
 
         # WebApp
         {Finch, name: Octopus.Finch},
+        Octopus.Presence,
         OctopusWeb.Endpoint
       ] ++
         case System.get_env("TELEGRAM_BOT_SECRET") do

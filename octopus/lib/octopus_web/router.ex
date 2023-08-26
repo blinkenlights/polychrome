@@ -17,10 +17,13 @@ defmodule OctopusWeb.Router do
   scope "/", OctopusWeb do
     pipe_through :browser
 
-    live "/sim", PixelsLive
-    live "/app/:id", AppLive
-    live "/", ManagerLive
-    live "/playlist/:id", PlaylistLive
+    live_session :default, on_mount: OctopusWeb.PresenceLive do
+      live "/sim", PixelsLive
+      live "/app/:id", AppLive
+      live "/", ManagerLive
+      live "/playlist/:id", PlaylistLive
+      live "/presence", PresenceLive
+    end
   end
 
   # Other scopes may use custom stacks.
