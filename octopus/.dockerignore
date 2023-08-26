@@ -45,3 +45,6 @@ erl_crash.dump
 /priv/static/cache_manifest.json
 
 .elixir_ls
+
+src/program_lexer.erl
+src/program_parser.erl

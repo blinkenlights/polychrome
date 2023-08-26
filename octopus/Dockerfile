@@ -52,6 +52,7 @@ RUN mix deps.compile
 COPY priv priv
 
 COPY lib lib
+COPY src src
 
 COPY assets assets
 
