@@ -1,18 +1,27 @@
-# fly.toml app configuration file generated for remote-octopus on 2023-05-24T10:22:49+02:00
+# fly.toml app configuration file generated for polychrome on 2023-08-26T20:46:43+02:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = "remote-octopus"
+app = "polychrome"
 primary_region = "ams"
 kill_signal = "SIGTERM"
+swap_size_mb = 512
+
+[build]
 
 [deploy]
+#  release_command = "/app/bin/migrate"
   strategy = "immediate"
 
 [env]
-  PHX_HOST = "remote-octopus.fly.dev"
+  DATABASE_PATH = "/data/oldie.db"
+  PHX_HOST = "polychrome.fly.dev"
   PORT = "8080"
+
+[[mounts]]
+  source = "octopus_data"
+  destination = "/data"
 
 [http_service]
   internal_port = 8080
@@ -26,10 +35,8 @@ kill_signal = "SIGTERM"
     soft_limit = 1000
 
 [[services]]
-  internal_port = 2342
   protocol = "udp"
-  [[services.ports]]
-    handlers = []
-    port = 2342
+  internal_port = 2342
 
-  
+  [[services.ports]]
+    port = 2342

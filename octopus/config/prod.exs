@@ -12,7 +12,7 @@ import Config
 config :octopus, OctopusWeb.Endpoint,
   cache_static_manifest: "priv/static/cache_manifest.json",
   server: true,
-  check_origin: :conn
+  check_origin: false
 
 config :octopus,
   broadcast: true
