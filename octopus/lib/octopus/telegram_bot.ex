@@ -8,6 +8,8 @@ defmodule Octopus.TelegramBot do
   use GenServer
   require Logger
 
+  @connection_attempt_timeout 60_000
+
   @topic "polychrome_bot_update"
   defstruct [:bot_key, :me, :last_seen]
 
@@ -17,6 +19,11 @@ defmodule Octopus.TelegramBot do
 
   @impl GenServer
   def init(opts) do
+    {:ok, opts, {:continue, :init}}
+  end
+
+  @impl GenServer
+  def handle_continue(:init, opts) do
     {key, _opts} = Keyword.pop!(opts, :bot_key)
 
     case Telegram.Api.request(key, "getMe") do
@@ -31,11 +38,12 @@ defmodule Octopus.TelegramBot do
 
         next_loop()
 
-        {:ok, state}
+        {:noreply, state}
 
       error ->
         Logger.error("Bot failed to self-identify: #{inspect(error)}")
-        :error
+        :timer.sleep(@connection_attempt_timeout)
+        {:noreply, opts, {:continue, :init}}
     end
   end
 
