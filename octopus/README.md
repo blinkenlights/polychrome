@@ -1,10 +1,20 @@
 # Octopus
 
-You can reach a hosted version here: https://remote-octopus.fly.dev
+You can reach a hosted version here: https://polychrome.fly.dev
 
 ## Local setup
+### Dependencies
+On Linux you need:
+- build-essential (on Ubuntu - so generally the standard development framework)
+- elixir
+- elixir-os-mon
+- erlang-dev
+- erlang-xmerl
+- rust
 
-- Install elixir: https://elixir-lang.org/install.html
+### Installation
+- Clone repository `git clone https://github.com/blinkenlights/polychrome`
+- Change directory `cd polychrome/octopus`
 - Run `mix setup` to install and setup dependencies
 - Start the server with `iex -S mix phx.server`
 
