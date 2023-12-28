@@ -47,7 +47,7 @@ defmodule Octopus.Broadcaster do
   def init(:ok) do
     target_ip =
       case Application.get_env(:octopus, :broadcast) do
-        true -> {192, 168, 23, 255}
+        true -> {192, 168, 1, 11}
         false -> {127, 0, 0, 1}
       end
 
