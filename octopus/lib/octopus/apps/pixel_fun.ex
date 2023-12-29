@@ -31,6 +31,7 @@ defmodule Octopus.Apps.PixelFun do
       :last_colors,
       :target_colors,
       :lerp_time,
+      :lerp_over_black,
       :translate_scale,
       :rotate_scale,
       :zoom_scale,
@@ -60,7 +61,8 @@ defmodule Octopus.Apps.PixelFun do
       cycle_functions: {"Cycle Functions", :boolean, %{default: false}},
       cycle_functions_interval:
         {"Cycle Functions Interval (s)", :float, %{default: 30, min: 1, max: 60 * 60}},
-      input: {"Input", :boolean, %{default: false}}
+      input: {"Input", :boolean, %{default: false}},
+      lerp_over_black: {"Lerp over black", :boolean, %{default: true}}
     }
   end
 
@@ -75,7 +77,8 @@ defmodule Octopus.Apps.PixelFun do
       translate_scale: state.translate_scale,
       rotate_scale: state.rotate_scale,
       zoom_scale: state.zoom_scale,
-      input: state.input
+      input: state.input,
+      lerp_over_black: state.lerp_over_black
     }
   end
 
@@ -105,6 +108,7 @@ defmodule Octopus.Apps.PixelFun do
        last_colors: generate_random_colors(),
        target_colors: generate_random_colors(),
        lerp_time: config.color_interval,
+       lerp_over_black: config.lerp_over_black,
        color_interval: config.color_interval,
        cycle_functions: config.cycle_functions,
        cycle_functions_interval: config.cycle_functions_interval,
@@ -128,7 +132,8 @@ defmodule Octopus.Apps.PixelFun do
           cycle_functions: cycle_functions,
           translate_scale: translate_scale,
           rotate_scale: rotate_scale,
-          zoom_scale: zoom_scale
+          zoom_scale: zoom_scale,
+          lerp_over_black: lerp_over_black
         },
         %State{} = state
       ) do
@@ -150,7 +155,8 @@ defmodule Octopus.Apps.PixelFun do
          cycle_functions: cycle_functions,
          translate_scale: translate_scale,
          rotate_scale: rotate_scale,
-         zoom_scale: zoom_scale
+         zoom_scale: zoom_scale,
+         lerp_over_black: lerp_over_black
      }}
   end
 
@@ -210,7 +216,6 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   def handle_input(%SoundToLightControlEvent{bass: low, mid: mid, high: high}, state) do
-    # Logger.info("low: #{low}, mid: #{mid}, high: #{high}")
     {:noreply, %State{state | audio_input: %{low: low, mid: mid, high: high}}}
   end
 
@@ -266,6 +271,13 @@ defmodule Octopus.Apps.PixelFun do
         {color_a, color_b}
       end
 
+    lerp_fn =
+      if state.lerp_over_black do
+        &interpolate_colors_with_black/3
+      else
+        &interpolate_colors/3
+      end
+
     for i <- 0..(@width * @height - 1), into: canvas do
       x = rem(i, @width)
       y = div(i, @width)
@@ -292,14 +304,15 @@ defmodule Octopus.Apps.PixelFun do
          state.audio_input.low,
          state.audio_input.mid,
          state.audio_input.high,
-         colors
+         colors,
+         lerp_fn
        )}
     end
   end
 
   @default_env %{~c"pi" => :math.pi(), ~c"tau" => :math.pi() * 2}
 
-  defp pixels(expr, x, y, i, t, l, m, h, {color_a, color_b}) do
+  defp pixels(expr, x, y, i, t, l, m, h, {color_a, color_b}, lerp_fn) do
     env = [
       %{~c"x" => x, ~c"y" => y, ~c"i" => i, ~c"t" => t, ~c"l" => l, ~c"m" => m, ~c"h" => h},
       @default_env
@@ -311,10 +324,22 @@ defmodule Octopus.Apps.PixelFun do
       |> max(-1.0)
       |> min(1.0)
 
-    interpolate_colors(color_a, color_b, value)
+    lerp_fn.(color_a, color_b, value)
   end
 
   defp interpolate_colors({r1, g1, b1}, {r2, g2, b2}, value) do
+    value = (value + 1.0) * 0.5
+
+    [
+      lerp(r1, r2, value),
+      lerp(g1, g2, value),
+      lerp(b1, b2, value)
+    ]
+    |> Enum.map(&Kernel.trunc/1)
+    |> List.to_tuple()
+  end
+
+  defp interpolate_colors_with_black({r1, g1, b1}, {r2, g2, b2}, value) do
     cond do
       value > 0 -> [r1 * value, g1 * value, b1 * value]
       value < 0 -> [r2 * -value, g2 * -value, b2 * -value]
