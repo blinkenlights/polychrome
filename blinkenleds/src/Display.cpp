@@ -5,7 +5,9 @@
 #include <Network.h>
 #include <schema.pb.h>
 
-#define PIXEL_COUNT 64
+#define WIDTH 3
+#define HEIGHT 3
+#define PIXEL_COUNT (WIDTH * HEIGHT)
 #define DATA_PIN 16
 
 NeoPixelBus<NeoWrgbTm1814Feature, NeoTm1814Method> strip(PIXEL_COUNT, DATA_PIN);
@@ -167,36 +169,17 @@ RgbwColor Display::color_from_palette(WFrame_palette_t palette, uint8_t index)
 // maps the pixel index to the physical layout of the LED strip. The first LED should be top left.
 uint32_t Display::map_index(uint32_t index)
 {
-  uint32_t converted = 0;
-  switch (index / 8)
-  {
-  case 0:
-    converted = 63 - index;
-    break;
-  case 1:
-    converted = 48 + index % 8;
-    break;
-  case 2:
-    converted = 47 - index % 8;
-    break;
-  case 3:
-    converted = 32 + index % 8;
-    break;
-  case 4:
-    converted = 31 - index % 8;
-    break;
-  case 5:
-    converted = 16 + index % 8;
-    break;
-  case 6:
-    converted = 15 - index % 8;
-    break;
-  case 7:
-    converted = index % 8;
-    break;
-  }
+    uint32_t x = index % WIDTH;
+    uint32_t y = index / WIDTH;
 
-  return converted;
+    if (y % 2 == 0)
+    {
+        return y * WIDTH + x;
+    }
+    else
+    {
+        return y * WIDTH + (WIDTH - x - 1);
+    }
 }
 
 void Display::render_test_frame()
