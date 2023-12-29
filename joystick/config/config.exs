@@ -20,7 +20,7 @@ config :nerves, :firmware, rootfs_overlay: "rootfs_overlay"
 
 config :nerves, source_date_epoch: "1686916824"
 
-config :nerves_leds, names: [green: "led0", red: "led1"]
+config :nerves_leds, names: [green: "ACT", red: "PWR"]
 
 if Mix.target() == :host do
   import_config "host.exs"

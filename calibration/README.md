@@ -17,7 +17,7 @@ Reads the output (*.cal) from a DisplayCal calibration and converts it to header
   * The color levels are much more important than the right brightness.
 5. Go on "stop measurement" and "Continue to Calibration"
   * This will take 30-60 min
-6. Copy the resulting .cal file into this directory
+6. Copy the resulting .cal file into this directory (mac: ~Library/Application\ Support/DisplayCAL/storage/)
 7. Transfer the r,g,b corrections values from 4) to the `convert.exs` script
 8. Exectue the script with the filename as argument. `./convert.exs $filename.exs`
 9. Copy the rendered `Pixel_corrections.h` into the firmware.
