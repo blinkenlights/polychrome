@@ -91,33 +91,33 @@ defmodule Octopus.Apps.PixelFun.Program do
 
   def do_eval({:pow, [lhs, rhs]}, env), do: :math.pow(do_eval(lhs, env), do_eval(rhs, env))
 
-  def do_eval({:call, ['rand']}, _env), do: :rand.uniform()
-  def do_eval({:call, ['random']}, _env), do: :rand.uniform()
+  def do_eval({:call, [~c"rand"]}, _env), do: :rand.uniform()
+  def do_eval({:call, [~c"random"]}, _env), do: :rand.uniform()
 
-  def do_eval({:call, ['abs', expr]}, env), do: expr |> do_eval(env) |> abs()
-  def do_eval({:call, ['sqrt', expr]}, env), do: expr |> do_eval(env) |> :math.sqrt()
+  def do_eval({:call, [~c"abs", expr]}, env), do: expr |> do_eval(env) |> abs()
+  def do_eval({:call, [~c"sqrt", expr]}, env), do: expr |> do_eval(env) |> :math.sqrt()
 
-  def do_eval({:call, ['hypot', a, b]}, env),
+  def do_eval({:call, [~c"hypot", a, b]}, env),
     do: :math.sqrt(do_eval(a, env) ** 2 + do_eval(b, env) ** 2)
 
-  def do_eval({:call, ['sin', expr]}, env), do: expr |> do_eval(env) |> :math.sin()
-  def do_eval({:call, ['cos', expr]}, env), do: expr |> do_eval(env) |> :math.cos()
-  def do_eval({:call, ['tan', expr]}, env), do: expr |> do_eval(env) |> :math.tan()
+  def do_eval({:call, [~c"sin", expr]}, env), do: expr |> do_eval(env) |> :math.sin()
+  def do_eval({:call, [~c"cos", expr]}, env), do: expr |> do_eval(env) |> :math.cos()
+  def do_eval({:call, [~c"tan", expr]}, env), do: expr |> do_eval(env) |> :math.tan()
 
-  def do_eval({:call, ['asin', expr]}, env), do: expr |> do_eval(env) |> :math.asin()
-  def do_eval({:call, ['acos', expr]}, env), do: expr |> do_eval(env) |> :math.acos()
-  def do_eval({:call, ['atan', expr]}, env), do: expr |> do_eval(env) |> :math.atan()
-  def do_eval({:call, ['atan2', a, b]}, env), do: :math.atan2(do_eval(env, a), do_eval(env, b))
+  def do_eval({:call, [~c"asin", expr]}, env), do: expr |> do_eval(env) |> :math.asin()
+  def do_eval({:call, [~c"acos", expr]}, env), do: expr |> do_eval(env) |> :math.acos()
+  def do_eval({:call, [~c"atan", expr]}, env), do: expr |> do_eval(env) |> :math.atan()
+  def do_eval({:call, [~c"atan2", a, b]}, env), do: :math.atan2(do_eval(env, a), do_eval(env, b))
 
-  def do_eval({:call, ['asinh', expr]}, env), do: expr |> do_eval(env) |> :math.asinh()
-  def do_eval({:call, ['acosh', expr]}, env), do: expr |> do_eval(env) |> :math.acosh()
-  def do_eval({:call, ['atanh', expr]}, env), do: expr |> do_eval(env) |> :math.atanh()
+  def do_eval({:call, [~c"asinh", expr]}, env), do: expr |> do_eval(env) |> :math.asinh()
+  def do_eval({:call, [~c"acosh", expr]}, env), do: expr |> do_eval(env) |> :math.acosh()
+  def do_eval({:call, [~c"atanh", expr]}, env), do: expr |> do_eval(env) |> :math.atanh()
 
-  def do_eval({:call, ['floor', expr]}, env), do: expr |> do_eval(env) |> Float.floor()
-  def do_eval({:call, ['ceil', expr]}, env), do: expr |> do_eval(env) |> Float.ceil()
-  def do_eval({:call, ['round', expr]}, env), do: expr |> do_eval(env) |> Float.round()
+  def do_eval({:call, [~c"floor", expr]}, env), do: expr |> do_eval(env) |> Float.floor()
+  def do_eval({:call, [~c"ceil", expr]}, env), do: expr |> do_eval(env) |> Float.ceil()
+  def do_eval({:call, [~c"round", expr]}, env), do: expr |> do_eval(env) |> Float.round()
 
-  def do_eval({:call, ['fract', expr]}, env) do
+  def do_eval({:call, [~c"fract", expr]}, env) do
     value = do_eval(expr, env)
     value - trunc(value)
   end

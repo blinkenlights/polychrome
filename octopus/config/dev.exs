@@ -6,11 +6,20 @@ so_reuseport =
     {:unix, :darwin} -> {:raw, 0xFFFF, 0x0200, <<1::32-native>>}
   end
 
+# config :octopus, Octopus.Repo,
+#   database: Path.expand("../octopus_dev.db", Path.dirname(__ENV__.file)),
+#   pool_size: 5,
+#   stacktrace: true,
+#   show_sensitive_data_on_connection_error: true
+
 config :octopus, Octopus.Repo,
-  database: Path.expand("../octopus_dev.db", Path.dirname(__ENV__.file)),
-  pool_size: 5,
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "octopus_dev",
   stacktrace: true,
-  show_sensitive_data_on_connection_error: true
+  show_sensitive_data_on_connection_error: true,
+  pool_size: 10
 
 # For development, we disable any cache and enable
 # debugging and code reloading.

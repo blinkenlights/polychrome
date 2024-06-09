@@ -176,7 +176,6 @@ defmodule Octopus.App do
   end
 
   def get_screen_count() do
-    config = Application.get_env(:octopus, :installation)
-    config[:screens]
+    Application.get_env(:octopus, :installation).screens()
   end
 end

@@ -5,8 +5,8 @@
 #include <Network.h>
 #include <schema.pb.h>
 
-#define WIDTH 3
-#define HEIGHT 3
+#define WIDTH 8
+#define HEIGHT 8
 #define PIXEL_COUNT (WIDTH * HEIGHT)
 #define DATA_PIN 16
 

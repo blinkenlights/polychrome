@@ -8,6 +8,7 @@ defmodule Octopus.MixProject do
       elixir: "~> 1.14",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
+      compilers: [:yecc, :leex] ++ Mix.compilers(),
       aliases: aliases(),
       deps: deps()
     ]
@@ -37,6 +38,7 @@ defmodule Octopus.MixProject do
       {:ecto_sql, "~> 3.10"},
       {:ecto_sqlite3, ">= 0.0.0"},
       {:ecto_sqlite3_extras, "~> 1.2.0"},
+      {:postgrex, "~> 0.17.5"},
       {:phoenix_html, "~> 3.3"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 0.18"},
@@ -60,7 +62,8 @@ defmodule Octopus.MixProject do
       {:telegram, github: "visciang/telegram", tag: "0.22.4"},
       {:chameleon, "~> 2.5"},
       {:live_monaco_editor,
-       github: "lukad/live_monaco_editor", branch: "display-contents-for-wrapper"}
+       github: "lukad/live_monaco_editor", branch: "display-contents-for-wrapper"},
+      {:nimble_parsec, "~> 1.4"}
     ]
   end
 

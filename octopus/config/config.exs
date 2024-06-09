@@ -7,13 +7,21 @@
 # General application configuration
 import Config
 
-config :octopus, :installation,
-  screens: System.get_env("OCTOPUS_SCREENS", "10") |> String.to_integer()
+config :octopus, :installation, Octopus.Installation.Nation
+
+# config :octopus, :installation,
+# screens: System.get_env("OCTOPUS_SCREENS", "10") |> String.to_integer()
 
 config :octopus,
   ecto_repos: [Octopus.Repo],
   generators: [binary_id: true],
   broadcast: false
+
+config :octopus, Friends.Repo,
+  database: "octopus_#{Mix.env()}",
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost"
 
 # Configures the endpoint
 config :octopus, OctopusWeb.Endpoint,
