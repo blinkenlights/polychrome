@@ -29,6 +29,7 @@ defmodule Octopus.Apps.StoryTeller do
 
   def handle_info(:next_line, %State{story: story, line: line} = state)
       when line >= length(story.lines) do
+    Process.send_after(self(), :next_line, 5000)
     {:noreply, %State{state | line: 0}}
   end
 

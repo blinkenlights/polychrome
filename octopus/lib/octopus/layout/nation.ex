@@ -3,12 +3,12 @@ defmodule Octopus.Layout.Nation do
 
   @width 8 * 10
   @height 8
-  @pixel_width 11
-  @pixel_height 11
-  @image_width 6458
-  @image_height 1367
-  @offset_x 750
-  @offset_y 550
+  @pixel_width 25
+  @pixel_height 25
+  @image_width 12900
+  @image_height 5470
+  @offset_x 3250
+  @offset_y 3750
   @spacing 400
   @positions (for i <- 0..9, y <- 0..7, x <- 0..7 do
                 {
