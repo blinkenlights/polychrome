@@ -35,7 +35,8 @@ config :octopus, OctopusWeb.Endpoint,
 
 config :mdns_lite,
   hosts: :hostname,
-  instance_name: "Polychrome",
+  ttl: 120,
+  # instance_name: "Polychrome",
   services: [
     %{
       id: :web_service,
