@@ -52,7 +52,7 @@ defmodule Octopus.Params do
     end
   end
 
-  defp initial_values do
+  def initial_values do
     {:ok, modules} = :application.get_key(:octopus, :modules)
 
     Code.ensure_all_loaded!(modules)
@@ -94,6 +94,6 @@ defmodule Octopus.Params do
   end
 
   def all do
-    initial_values()
+    Agent.get(__MODULE__, &Map.to_list(&1))
   end
 end
