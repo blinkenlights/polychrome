@@ -73,6 +73,7 @@ defmodule Octopus.Osc.Server do
     bundle = OSCx.encode(%Bundle{elements: messages})
 
     state.clients
+    |> Map.keys()
     |> Enum.each(fn {ip, port} -> :gen_udp.send(state.socket, ip, port, bundle) end)
   end
 
