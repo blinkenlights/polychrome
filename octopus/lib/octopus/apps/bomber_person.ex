@@ -37,7 +37,7 @@ defmodule Octopus.Apps.BomberPerson do
   @bombs_per_player 2
   @bomb_ticks 150
   @explosion_ticks 45
-  @explosion_range 2 # TODO: Implement
+  # @explosion_range 2 TODO: Implement
   @grid_size 8
   @game_over_wait 80
   @font_name "1943"

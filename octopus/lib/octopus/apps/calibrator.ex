@@ -23,8 +23,6 @@ defmodule Octopus.Apps.Calibrator do
     defstruct [:r, :g, :b]
   end
 
-  @pixel_index 6
-
   @first_color "808080"
   @display_cal_endpoint "http://localhost:8080/ajax/messages"
   @red_correction 1.0

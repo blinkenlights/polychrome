@@ -3,7 +3,7 @@ defmodule Octopus.InputAdapter do
   require Logger
 
   alias Octopus.Protobuf.SoundToLightControlEvent
-  alias Octopus.{Protobuf, Mixer, PlaylistScheduler}
+  alias Octopus.{Protobuf, Mixer}
   alias Octopus.Protobuf.InputEvent
 
   @local_port 4423

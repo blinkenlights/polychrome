@@ -10,9 +10,6 @@ defmodule Octopus.Apps.BeakTest do
     defstruct [:index, :color, :canvas]
   end
 
-  @fps 60
-  @colors [{255, 255, 255}, {255, 0, 0}, {0, 255, 0}, {255, 0, 255}]
-
   def name(), do: "Beak"
 
   @supported_buttons [
@@ -29,11 +26,6 @@ defmodule Octopus.Apps.BeakTest do
   ]
 
   def init(_args) do
-    state = %State{
-      index: 0,
-      color: 0
-    }
-
     {:ok, %State{canvas: Canvas.new(80, 8)}}
   end
 

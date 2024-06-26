@@ -2,7 +2,7 @@ defmodule Octopus.GameScheduler do
   use GenServer
   require Logger
 
-  alias Octopus.{AppSupervisor, Mixer, Rep}
+  alias Octopus.{AppSupervisor, Mixer}
 
   @games [Octopus.Apps.Blocks, Octopus.Apps.Snake, Octopus.Apps.Supermario]
 

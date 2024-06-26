@@ -10,7 +10,6 @@ defmodule Octopus.Apps.Blocks.Game do
             animation: nil,
             t: 1
 
-  alias Phoenix.LiveDashboard.TitleBarComponent
   alias Octopus.Font
   alias Octopus.JoyState
   alias Octopus.Apps.Blocks
