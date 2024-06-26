@@ -10,23 +10,36 @@ defmodule Octopus.Apps.StoryTeller do
   @frame_time_ms trunc(1000 / @fps)
 
   defmodule State do
-    @enforce_keys [:font, :canvas, :line, :lines, :duration, :fade_in]
-    defstruct [:font, :canvas, :line, :lines, :duration, :fade_in]
+    @keys [
+      :font,
+      :canvas,
+      :line,
+      :lines,
+      :pause,
+      :fade_in,
+      :buffer,
+      :clear_buffer
+    ]
+    @enforce_keys @keys
+    defstruct @keys
   end
 
   def name(), do: "Storyteller"
 
   def init(_) do
     {:ok, story} = Story.load("baumhumor")
-    first_line = Enum.at(story.lines, 0)
+    {[first_line], lines} = Enum.split(story.lines, 1)
+    line = first_line.text |> String.split(" ", trim: true) |> Enum.map(&String.split(&1, ""))
 
     state = %State{
-      line: first_line,
-      lines: story.lines,
-      duration: param(:line_duration_ms, 1000) + first_line.duration,
+      buffer: "",
+      line: line,
+      lines: lines,
+      pause: 0,
       fade_in: 0,
       font: Font.load("ddp-DoDonPachi (Cave)"),
-      canvas: Canvas.new(8 * 10, 8)
+      canvas: Canvas.new(8 * 10, 8),
+      clear_buffer: false
     }
 
     Process.send_after(self(), :tick, @frame_time_ms)
@@ -34,72 +47,87 @@ defmodule Octopus.Apps.StoryTeller do
     {:ok, state}
   end
 
-  def handle_info(:tick, state) do
+  def handle_info(:tick, %State{} = state) do
     Process.send_after(self(), :tick, @frame_time_ms)
     delta = trunc(@frame_time_ms * param(:time_scale, 1.0))
-    tick(state, delta)
+
+    state = %State{state | pause: max(state.pause - delta, 0)}
+
+    tick(state)
   end
 
-  def tick(%State{duration: duration, lines: [next | rest]} = state, _delta)
-      when duration <= 0 do
-    state = %State{
+  defp next_letter(%State{line: [[letter | word] | rest]} = state) do
+    dbg("next letter: #{letter}")
+
+    %State{
       state
-      | duration: param(:line_duration_ms, 1000) + next.duration,
-        fade_in: 0,
-        line: next,
-        lines: rest
+      | pause: param(:letter_duration_ms, 100),
+        line: [word | rest],
+        buffer: state.buffer <> letter
     }
-
-    draw(state)
-    {:noreply, state}
   end
 
-  def tick(%State{duration: duration, lines: [_]} = state, _delta) when duration <= 0 do
-    state = %State{state | duration: 0, fade_in: 0, lines: []}
-    draw(state)
-    {:noreply, state}
-  end
+  defp next_word(%State{line: [[] | rest]} = state) do
+    dbg("next word")
 
-  def tick(%State{duration: duration} = state, delta) do
-    state =
+    %State{
       state
-      |> Map.put(:duration, duration - delta)
-      |> Map.put(:fade_in, state.fade_in + delta)
-
-    draw(state)
-    {:noreply, state}
+      | pause: param(:word_duration_ms, 500),
+        line: rest,
+        buffer: state.buffer <> " "
+    }
   end
 
-  def draw(%State{lines: [line | _]} = state) do
-    fade_in_map =
-      for i <- 0..9, y <- 0..7, x <- 0..7, into: %{} do
-        x = x + i * 8
-        {{x, y}, x * param(:fade_in_line_ms, 500) / (8 * 10)}
+  defp next_line(%State{lines: []} = state) do
+    dbg("end of story")
+    %State{state | pause: param(:end_duration_ms, 3000), line: nil, clear_buffer: true}
+  end
+
+  defp next_line(%State{lines: [line | rest]} = state) do
+    dbg("next line")
+    line = line.text |> String.split(" ", trim: true) |> Enum.map(&String.split(&1, ""))
+
+    %State{
+      state
+      | pause: param(:line_duration_ms, 1000),
+        line: line,
+        lines: rest,
+        clear_buffer: true
+    }
+  end
+
+  defp tick(%State{pause: 0} = state) do
+    state =
+      if state.clear_buffer, do: Map.merge(state, %{buffer: "", clear_buffer: false}), else: state
+
+    state =
+      case state.line do
+        [] -> next_line(state)
+        [[] | []] -> next_line(state)
+        [[] | _] -> next_word(state)
+        _ -> next_letter(state)
       end
 
-    offset_x = div(10 - String.length(line.text), 2) * 8
+    draw(state)
 
+    {:noreply, state}
+  end
+
+  defp tick(%State{} = state) do
+    draw(state)
+    {:noreply, state}
+  end
+
+  def draw(%State{buffer: line} = state) do
     canvas =
       state.canvas
       |> Canvas.clear()
       |> Canvas.rect({0, 0}, {87, 7}, {0, 0, 0})
 
-    variant =
-      cond do
-        Enum.member?(line.options, :direct_speech) -> 1
-        true -> 0
-      end
+    variant = 0
 
     canvas =
-      Canvas.put_string(canvas, {offset_x, 0}, line.text, state.font, variant)
-
-    pixels =
-      canvas.pixels
-      |> Map.filter(fn {{x, y}, _color} ->
-        state.fade_in >= Map.get(fade_in_map, {x, y}, :infinity)
-      end)
-
-    canvas = %Canvas{canvas | pixels: pixels}
+      Canvas.put_string(canvas, {0, 0}, line, state.font, variant)
 
     canvas |> Canvas.to_frame() |> send_frame()
   end
