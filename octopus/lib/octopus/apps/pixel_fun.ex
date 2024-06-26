@@ -1,5 +1,7 @@
 defmodule Octopus.Apps.PixelFun do
   use Octopus.App, category: :animation
+  use Octopus.Params, prefix: :pixelfun
+
   require Logger
   alias Octopus.Canvas
   alias Octopus.Protobuf.{InputEvent, SoundToLightControlEvent}
@@ -210,6 +212,7 @@ defmodule Octopus.Apps.PixelFun do
     canvas
     |> Canvas.to_frame(drop: true)
     |> Map.put(:easing_interval, state.easing_interval)
+    # |> send_canvas()
     |> send_frame()
 
     {:noreply, %State{state | canvas: canvas, offset: {offset_x, offset_y}}}
@@ -293,6 +296,8 @@ defmodule Octopus.Apps.PixelFun do
 
       x_new = x_scaled + pivot_x - offset_x
       y_new = y_scaled + pivot_y - offset_y
+
+      seconds = seconds * param(:time_scale, 1.0)
 
       {{x, y},
        pixels(

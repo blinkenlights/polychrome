@@ -17,6 +17,7 @@ defmodule Octopus.Application do
         {Ecto.Migrator,
          repos: Application.fetch_env!(:octopus, :ecto_repos),
          skip: System.get_env("SKIP_MIGRATIONS") == "true"},
+        Octopus.Params,
 
         # Caches
         Supervisor.child_spec({Cachex, name: ColorPalette}, id: make_ref()),
@@ -37,7 +38,10 @@ defmodule Octopus.Application do
         # WebApp
         {Finch, name: Octopus.Finch},
         Octopus.Presence,
-        OctopusWeb.Endpoint
+        OctopusWeb.Endpoint,
+
+        # OSC
+        {Octopus.Osc.Server, 8000}
       ] ++
         case System.get_env("TELEGRAM_BOT_SECRET") do
           nil -> []

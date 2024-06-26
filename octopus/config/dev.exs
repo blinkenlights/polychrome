@@ -6,11 +6,20 @@ so_reuseport =
     {:unix, :darwin} -> {:raw, 0xFFFF, 0x0200, <<1::32-native>>}
   end
 
+# config :octopus, Octopus.Repo,
+#   database: Path.expand("../octopus_dev.db", Path.dirname(__ENV__.file)),
+#   pool_size: 5,
+#   stacktrace: true,
+#   show_sensitive_data_on_connection_error: true
+
 config :octopus, Octopus.Repo,
-  database: Path.expand("../octopus_dev.db", Path.dirname(__ENV__.file)),
-  pool_size: 5,
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "octopus_dev",
   stacktrace: true,
-  show_sensitive_data_on_connection_error: true
+  show_sensitive_data_on_connection_error: true,
+  pool_size: 10
 
 # For development, we disable any cache and enable
 # debugging and code reloading.
@@ -68,7 +77,7 @@ config :octopus, OctopusWeb.Endpoint,
 config :octopus, dev_routes: true
 
 # Do not include metadata nor timestamps in development logs
-config :logger, :console, format: "[$level] $message\n"
+config :logger, :console, format: "[$level] $message\n", level: :debug
 
 # Set a higher stacktrace during development. Avoid configuring such
 # in production as building large stacktraces may be expensive.

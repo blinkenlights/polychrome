@@ -1,5 +1,5 @@
 defmodule OctopusWeb.PixelsLive do
-  alias Octopus.Layout.{Mildenberg, MildenbergNarrow, MildenbergZoom1, MildenbergZoom2}
+  alias Octopus.Layout.Nation
   use OctopusWeb, :live_view
 
   import Phoenix.LiveView, only: [push_event: 3, connected?: 1]
@@ -16,16 +16,13 @@ defmodule OctopusWeb.PixelsLive do
   @id_prefix "pixels"
 
   @views %{
-    "default" => Mildenberg.layout(),
-    "narrow" => MildenbergNarrow.layout(),
-    "zoom1" => MildenbergZoom1.layout(),
-    "zoom2" => MildenbergZoom2.layout()
+    "default" => Nation.layout()
   }
 
   @default_view "default"
 
   def mount(_params, _session, socket) do
-    pixel_layout = Mildenberg.layout()
+    pixel_layout = Nation.layout()
 
     socket =
       if connected?(socket) do
@@ -91,10 +88,10 @@ defmodule OctopusWeb.PixelsLive do
           class="w-full h-full bg-contain bg-no-repeat bg-center"
           style={"background-image: url(#{@pixel_layout.background_image});"}
         />
-        <img
+        <%!-- <img
           src={@pixel_layout.pixel_image}
           class="absolute left-0 top-0 w-full h-full object-contain mix-blend-multiply pointer-events-none"
-        />
+        /> --%>
       </div>
     </div>
     """

@@ -49,7 +49,7 @@ defmodule Octopus.PlaylistScheduler.Playlist do
     end
   end
 
-  defp validate_config(:config, config) do
+  defp validate_config(:config, _config) do
     # todo
     []
   end
