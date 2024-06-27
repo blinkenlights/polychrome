@@ -53,7 +53,8 @@ defmodule Octopus.Apps.PixelFun.Program do
 
   def do_eval({:logical_or, [lhs, rhs]}, env) do
     case {do_eval(lhs, env), do_eval(rhs, env)} do
-      {0.0, rhs} -> rhs
+      {+0.0, rhs} -> rhs
+      {-0.0, rhs} -> rhs
       {lhs, _rhs} -> lhs
     end
   end
@@ -84,7 +85,8 @@ defmodule Octopus.Apps.PixelFun.Program do
 
   def do_eval({:logical_and, [lhs, rhs]}, env) do
     case {do_eval(lhs, env), do_eval(rhs, env)} do
-      {0.0, _rhs} -> 0.0
+      {+0.0, _rhs} -> 0.0
+      {-0.0, _rhs} -> 0.0
       {_lhs, rhs} -> rhs
     end
   end

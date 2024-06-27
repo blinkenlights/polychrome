@@ -56,8 +56,8 @@ defmodule OctopusWeb.ManagerLive do
               <tr :for={
                 %{module: module, app_id: app_id, name: name, selected: selected} <- @running_apps
               }>
-                <td class={"p-2 #{if selected, do: 'bg-slate-300 font-bold'}"}><%= name %></td>
-                <td class={"p-2 #{if selected, do: 'bg-slate-300 font-bold'}"}><%= app_id %></td>
+                <td class={"p-2 #{if selected, do: ~c"bg-slate-300 font-bold"}"}><%= name %></td>
+                <td class={"p-2 #{if selected, do: ~c"bg-slate-300 font-bold"}"}><%= app_id %></td>
                 <td class="flex flex-row gap-2 p-1 pl-3">
                   <button
                     class="border py-1 px-2 rounded  bg-slate-300"
