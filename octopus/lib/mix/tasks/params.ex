@@ -5,7 +5,7 @@ defmodule Mix.Tasks.Params do
 
   @impl true
   def run(_args) do
-    Octopus.Params.all()
+    Octopus.Params.initial_values()
     |> Enum.each(fn {{prefix, key}, value} ->
       IO.puts("/#{prefix}/#{key}: #{value}")
     end)
