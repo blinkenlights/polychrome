@@ -2,6 +2,8 @@ defmodule Octopus.Apps.StoryTeller do
   use Octopus.App, category: :animation
   use Octopus.Params, prefix: :text
 
+  require Logger
+
   alias Octopus.Canvas
   alias Octopus.Font
   alias Octopus.Story
@@ -57,7 +59,7 @@ defmodule Octopus.Apps.StoryTeller do
   end
 
   defp next_letter(%State{line: [[letter | word] | rest]} = state) do
-    dbg("next letter: #{letter}")
+    Logger.debug("next letter: #{letter}")
 
     %State{
       state
@@ -68,7 +70,7 @@ defmodule Octopus.Apps.StoryTeller do
   end
 
   defp next_word(%State{line: [[] | rest]} = state) do
-    dbg("next word")
+    Logger.debug("next word")
 
     %State{
       state
@@ -79,12 +81,12 @@ defmodule Octopus.Apps.StoryTeller do
   end
 
   defp next_line(%State{lines: []} = state) do
-    dbg("end of story")
+    Logger.debug("end of story")
     %State{state | pause: param(:end_duration_ms, 3000), line: nil, clear_buffer: true}
   end
 
   defp next_line(%State{lines: [line | rest]} = state) do
-    dbg("next line")
+    Logger.debug("next line")
     line = line.text |> String.split(" ", trim: true) |> Enum.map(&String.split(&1, ""))
 
     %State{

@@ -47,10 +47,6 @@ defmodule Octopus.Font do
               |> Map.new(fn {rgb, char} -> {char, rgb} end)
             end)
 
-          # (for i <- 32..122, i not in 91..96, do: i) |> :binary.list_to_bin()
-
-          dbg(variants)
-
           {:commit, %__MODULE__{name: name, variants: variants}}
       end
     end)
