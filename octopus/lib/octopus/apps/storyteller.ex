@@ -37,7 +37,7 @@ defmodule Octopus.Apps.StoryTeller do
       lines: lines,
       pause: 0,
       fade_in: 0,
-      font: Font.load("ddp-DoDonPachi (Cave)"),
+      font: Font.load("BlinkenLightsRegular"),
       canvas: Canvas.new(8 * 10, 8),
       clear_buffer: false
     }

@@ -24,23 +24,35 @@ defmodule Octopus.Font do
   """
   def load(name) do
     Cachex.fetch!(__MODULE__, name, fn _ ->
-      path = find_font_path(name)
-      {:ok, img} = ExPng.Image.from_file(path)
+      case name do
+        "BlinkenLightsRegular" ->
+          {:commit, Octopus.Font.BlinkenLightsRegular.get()}
 
-      variants =
-        img.pixels
-        |> to_rgb()
-        |> Enum.chunk_every(8)
-        |> Enum.map(&List.flatten/1)
-        |> Enum.map(fn variant ->
-          variant
-          |> Enum.chunk_every(8)
-          |> Enum.chunk_every(div(img.width, 8))
-          |> Enum.zip_with(&Function.identity/1)
-          |> Enum.map(&List.flatten/1)
-        end)
+        _ ->
+          path = find_font_path(name)
+          {:ok, img} = ExPng.Image.from_file(path)
 
-      {:commit, %__MODULE__{name: name, variants: variants}}
+          variants =
+            img.pixels
+            |> to_rgb()
+            |> Enum.chunk_every(8)
+            |> Enum.map(&List.flatten/1)
+            |> Enum.map(fn variant ->
+              variant
+              |> Enum.chunk_every(8)
+              |> Enum.chunk_every(div(img.width, 8))
+              |> Enum.zip_with(&Function.identity/1)
+              |> Enum.map(&List.flatten/1)
+              |> Enum.zip(for(i <- 32..122, i not in 91..96, do: i))
+              |> Map.new(fn {rgb, char} -> {char, rgb} end)
+            end)
+
+          # (for i <- 32..122, i not in 91..96, do: i) |> :binary.list_to_bin()
+
+          dbg(variants)
+
+          {:commit, %__MODULE__{name: name, variants: variants}}
+      end
     end)
   end
 
@@ -53,35 +65,19 @@ defmodule Octopus.Font do
   @doc """
   Renders a single character onto a canvas and returns the canvas.
   """
-  def draw_char(font, char, variant, canvas, offset \\ {0, 0})
-
-  def draw_char(%__MODULE__{} = font, char, variant, canvas, {offset_x, offset_y})
-      when char >= 32 and char <= 126 do
-    char_index = char - 32
-
-    fallback_variant = Enum.at(font.variants, 0)
-
-    variant_chars =
+  def draw_char(font, char, variant, canvas, {offset_x, offset_y} \\ {0, 0}) do
+    char_pixels =
       font.variants
-      |> Enum.at(variant, fallback_variant)
+      |> Enum.at(variant, Enum.at(font.variants, 0))
+      |> Map.get(char, List.duplicate({0, 0, 0}, 64))
 
-    fallback_char_pixels = Enum.at(variant_chars, 0)
-    char_pixels = Enum.at(variant_chars, char_index, fallback_char_pixels)
-
-    canvas =
-      char_pixels
-      |> Enum.with_index()
-      |> Enum.reduce(canvas, fn {rgb, i}, canvas ->
-        x = rem(i, 8)
-        y = div(i, 8)
-        Canvas.put_pixel(canvas, {x + offset_x, y + offset_y}, rgb)
-      end)
-
-    canvas
-  end
-
-  def draw_char(%__MODULE__{} = font, _char, variant, canvas, offset) do
-    draw_char(font, 32, variant, canvas, offset)
+    char_pixels
+    |> Enum.with_index()
+    |> Enum.reduce(canvas, fn {rgb, i}, canvas ->
+      x = rem(i, 8)
+      y = div(i, 8)
+      Canvas.put_pixel(canvas, {x + offset_x, y + offset_y}, rgb)
+    end)
   end
 
   defp to_rgb([]), do: []
@@ -106,6 +102,33 @@ defmodule Octopus.Font do
     |> case do
       nil -> raise "Font #{name} not found"
       filename -> Path.join(font_dir, filename)
+    end
+  end
+
+  defmacro defbitmap(lines) do
+    quote do
+      max_width = Enum.max_by(unquote(lines), &String.length/1) |> String.length()
+      top_padding = max(0, 8 - length(unquote(lines)))
+
+      lines =
+        (List.duplicate(String.duplicate(" ", max_width), top_padding) ++ unquote(lines))
+        |> Enum.map(fn line ->
+          if max_width > 8 do
+            String.slice(line, 0, 8)
+          else
+            padding_left = div(8 - String.length(line), 2)
+            padding_right = 8 - String.length(line) - padding_left
+            String.duplicate(" ", padding_left) <> line <> String.duplicate(" ", padding_right)
+          end
+        end)
+
+      for line <- lines,
+          char <- to_charlist(line) do
+        case char do
+          ?X -> {255, 255, 255}
+          _ -> {0, 0, 0}
+        end
+      end
     end
   end
 end
