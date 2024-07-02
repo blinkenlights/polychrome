@@ -22,3 +22,17 @@ RGBW LEDs with the TM1814 chipset are used.
 green/yellow: Data
 blue: v-
 brown: v+
+
+# Power consumption
+
+64 TM1814 Led modules
+disabled calibration
+Power Supply: 12V * 8.5A = 102W
+
+* Test Frame (Rainbow): 49W
+* White RGB(255,255,255): 70W
+* Dimm white RGB(128, 128, 128): 43W
+* Red RGB(255, 0, 0): 31W
+* Red+Green RGB(255,255,0): 50W
+* All on, RGBW(255,255,255,255): 84W
+* WW only, RGBW(0,0,0,255): 33W
