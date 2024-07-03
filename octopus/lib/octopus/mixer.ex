@@ -4,8 +4,7 @@ defmodule Octopus.Mixer do
 
   alias Octopus.Protobuf.SoundToLightControlEvent
   alias Octopus.Protobuf.AudioFrame
-  alias Octopus.GameScheduler
-  alias Octopus.{Broadcaster, Protobuf, AppSupervisor, PlaylistScheduler, Canvas, GameScheduler}
+  alias Octopus.{Broadcaster, Protobuf, AppSupervisor, Canvas}
 
   alias Octopus.Protobuf.{
     Frame,
@@ -19,8 +18,6 @@ defmodule Octopus.Mixer do
   @pubsub_frames [Frame, WFrame, RGBFrame]
   @transition_duration 300
   @transition_frame_time trunc(1000 / 60)
-  @playlist_id 3
-  @game_time [0..14, 30..44] |> Enum.flat_map(&Enum.to_list/1)
 
   defmodule State do
     defstruct selected_app: nil,
@@ -29,7 +26,6 @@ defmodule Octopus.Mixer do
               transition: nil,
               buffer_canvas: Canvas.new(80, 8),
               max_luminance: 255,
-              scheduling_active?: false,
               last_input: 0
   end
 
@@ -85,14 +81,6 @@ defmodule Octopus.Mixer do
     GenServer.call(__MODULE__, :get_selected_app)
   end
 
-  def set_scheduling(active?) when is_boolean(active?) do
-    GenServer.cast(__MODULE__, {:set_scheduling, active?})
-  end
-
-  def scheduling_active? do
-    GenServer.call(__MODULE__, :scheduling_active?)
-  end
-
   @doc """
   Subscribes to the mixer topic.
 
@@ -106,23 +94,15 @@ defmodule Octopus.Mixer do
   end
 
   def init(:ok) do
-    PlaylistScheduler.start_playlist(@playlist_id)
-
     state = %State{
       last_input: System.os_time(:second)
     }
-
-    set_scheduling(true)
 
     {:ok, state}
   end
 
   def handle_call(:get_selected_app, _, %State{selected_app: selected_app} = state) do
     {:reply, selected_app, state}
-  end
-
-  def handle_call(:scheduling_active?, _, %State{scheduling_active?: scheduling_active?} = state) do
-    {:reply, scheduling_active?, state}
   end
 
   def handle_cast({:new_frame, {app_id, binary, f}}, %State{rendered_app: rendered_app} = state) do
@@ -196,32 +176,10 @@ defmodule Octopus.Mixer do
     {:noreply, state}
   end
 
-  defp handle_new_canvas(%State{} = state, %Canvas{} = canvas, offset) do
-    new_canvas =
-      canvas
-      |> Canvas.cut({0, 0}, {39, 7})
-
-    buffer_canvas =
-      state.buffer_canvas
-      |> Canvas.overlay(new_canvas, offset: offset, transparency: false)
-
-    frame =
-      buffer_canvas
-      |> Canvas.to_frame()
-
-    Protobuf.split_and_encode(frame)
-    |> Enum.each(fn binary ->
-      send_frame(binary, frame)
-    end)
-
-    state = maybe_stop_game_scheduler(state)
-
-    {:noreply, %State{state | buffer_canvas: buffer_canvas}}
-  end
-
   ### App Transitions ###
   # Implemented with a simple state machine that is represented by the `transition` field in the state.
   # Possible values are `{:in, time_left}`, `{:out, time_left}` and `nil`.
+
   def handle_cast({:select_app, next_app_id}, %State{transition: nil} = state) do
     state = %State{
       state
@@ -244,6 +202,7 @@ defmodule Octopus.Mixer do
 
     broadcast_selected_app(state)
     broadcast_rendered_app(state)
+
     {:noreply, state}
   end
 
@@ -257,27 +216,6 @@ defmodule Octopus.Mixer do
 
     broadcast_selected_app(state)
 
-    {:noreply, state}
-  end
-
-  def handle_cast({:set_scheduling, active?}, %State{} = state) do
-    if active? do
-      Logger.info("Starting scheduling")
-      PlaylistScheduler.start_playlist(@playlist_id)
-    else
-      Logger.info("Stopping scheduling")
-
-      GameScheduler.stop()
-      PlaylistScheduler.stop_playlist()
-    end
-
-    Phoenix.PubSub.broadcast(
-      Octopus.PubSub,
-      @pubsub_topic,
-      {:mixer, {:scheduling_active, active?}}
-    )
-
-    state = %State{state | scheduling_active?: active?}
     {:noreply, state}
   end
 
@@ -341,6 +279,7 @@ defmodule Octopus.Mixer do
   end
 
   ### End App Transitions ###
+
   defp send_frame(binary, %frame_type{} = frame) do
     if frame_type in @pubsub_frames do
       Phoenix.PubSub.broadcast(Octopus.PubSub, @pubsub_topic, {:mixer, {:frame, frame}})
@@ -379,52 +318,28 @@ defmodule Octopus.Mixer do
     GenServer.cast(__MODULE__, :stop_audio_playback)
   end
 
-  defp do_handle_input(
-         %State{scheduling_active?: true} = state,
-         %InputEvent{type: :BUTTON_MENU, value: 1}
-       ) do
-    case DateTime.utc_now() do
-      %DateTime{minute: minute} when minute in @game_time ->
-        PlaylistScheduler.stop_playlist()
-        GameScheduler.start()
-
-      _ ->
-        :noop
-    end
-
-    state
-  end
-
   defp do_handle_input(state, %InputEvent{type: :BUTTON_MENU}), do: state
 
-  defp do_handle_input(%State{} = state, %InputEvent{} = input_event) do
-    maybe_set_next_game(input_event)
+  defp handle_new_canvas(%State{} = state, %Canvas{} = canvas, offset) do
+    new_canvas =
+      canvas
+      |> Canvas.cut({0, 0}, {39, 7})
 
-    case state.selected_app do
-      {left, right} ->
-        AppSupervisor.send_event(left, input_event)
-        AppSupervisor.send_event(right, input_event)
+    buffer_canvas =
+      state.buffer_canvas
+      |> Canvas.overlay(new_canvas, offset: offset, transparency: false)
 
-      app_id ->
-        AppSupervisor.send_event(app_id, input_event)
-    end
+    frame =
+      buffer_canvas
+      |> Canvas.to_frame()
 
-    state
+    Protobuf.split_and_encode(frame)
+    |> Enum.each(fn binary ->
+      send_frame(binary, frame)
+    end)
+
+    {:noreply, %State{state | buffer_canvas: buffer_canvas}}
   end
-
-  defp maybe_stop_game_scheduler(%State{scheduling_active?: true} = state) do
-    %DateTime{minute: minute} = DateTime.utc_now()
-
-    if minute not in @game_time or state.last_input < System.os_time(:second) - 60 do
-      GameScheduler.stop()
-      PlaylistScheduler.start_playlist(@playlist_id)
-      state
-    else
-      state
-    end
-  end
-
-  defp maybe_stop_game_scheduler(state), do: state
 
   defp do_stop_audio_playback do
     1..10
@@ -432,14 +347,4 @@ defmodule Octopus.Mixer do
     |> Enum.map(&Protobuf.encode/1)
     |> Enum.each(&Broadcaster.send_binary/1)
   end
-
-  defp maybe_set_next_game(%InputEvent{type: :BUTTON_5, value: 1}) do
-    GameScheduler.next_game(:left)
-  end
-
-  defp maybe_set_next_game(%InputEvent{type: :BUTTON_6, value: 1}) do
-    GameScheduler.next_game(:right)
-  end
-
-  defp maybe_set_next_game(_), do: :noop
 end

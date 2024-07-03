@@ -6,6 +6,7 @@ defmodule OctopusWeb.ManagerLive do
   alias Octopus.Layout.Mildenberg
   alias Octopus.{Mixer, AppSupervisor, PlaylistScheduler}
   alias Octopus.PlaylistScheduler.Playlist
+  alias Octopus.PlaylistScheduler.Playlist.Animation
   alias OctopusWeb.PixelsLive
 
   def mount(_params, _session, socket) do
@@ -18,11 +19,10 @@ defmodule OctopusWeb.ManagerLive do
     socket =
       socket
       |> assign(pixel_layout: Mildenberg.layout(), configure_app: nil)
-      |> assign(playlist_status: "")
       |> assign_apps()
-      |> assign(selected_playlist: nil)
-      |> assign_playlist_options()
-      |> assign(scheduling_active?: Mixer.scheduling_active?())
+      |> assign(playlist_status: nil)
+      |> assign(playlist_selected_id: nil)
+      |> assign_playlists()
 
     {:ok, socket, temporary_assigns: [pixel_layout: nil]}
   end
@@ -35,10 +35,128 @@ defmodule OctopusWeb.ManagerLive do
       </div>
 
       <div class="container mx-auto">
+        <%!-- Playlists --%>
         <div class="border rounded m-2 p-0">
           <div class="flex flex-row">
             <div class="p-1 font-bold m-0 flex-grow">
-              Running:
+              Playlists
+            </div>
+            <div>
+              <button
+                class="text-slate-800 background-transparent font-bold uppercase px-3 py-1 text-xs outline-none focus:outline-none mr-1 mb-1 ease-linear transition-all duration-150"
+                type="button"
+                phx-click="playlist-new"
+              >
+                New Playlist
+              </button>
+            </div>
+          </div>
+          <table class="w-full text-left m-0">
+            <tbody>
+              <tr :for={{playlist_id, name} <- @playlists}>
+                <td class={"w-1/2 p-2 #{if playlist_id == @playlist_selected_id, do: "bg-slate-300 font-bold"}"}>
+                  <%= if playlist_id == @playlist_selected_id do %>
+                    <div class="flex flex-row flex-wrap gap-2">
+                      <%= name %>
+                      <div :if={playlist_id == @playlist_selected_id}>
+                        <div class={
+                          if @playlist_status && @playlist_status.status == :running,
+                            do: "text-green-600",
+                            else: "text-red-600"
+                        }>
+                          <%= if @playlist_status, do: @playlist_status.status %>
+                        </div>
+                      </div>
+                    </div>
+                  <% else %>
+                    <%= name %>
+                  <% end %>
+                </td>
+                <td class="p-2 flex flex-row flex-wrap gap-2">
+                  <button
+                    class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
+                    phx-click="playlist-start"
+                    phx-value-playlist-id={playlist_id}
+                  >
+                    ▶
+                  </button>
+                  <button
+                    class={[
+                      "border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1",
+                      playlist_id == @playlist_selected_id || "opacity-50"
+                    ]}
+                    phx-click="playlist-stop"
+                    phx-value-playlist-id={playlist_id}
+                    disabled={playlist_id != @playlist_selected_id}
+                  >
+                    ⏹︎
+                  </button>
+                  <button
+                    class={[
+                      "border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1",
+                      playlist_id == @playlist_selected_id || "opacity-50"
+                    ]}
+                    phx-click="playlist-prev"
+                    phx-value-playlist-id={playlist_id}
+                    disabled={playlist_id != @playlist_selected_id}
+                  >
+                    ⏮
+                  </button>
+                  <button
+                    class={[
+                      "border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1",
+                      playlist_id == @playlist_selected_id || "opacity-50"
+                    ]}
+                    phx-click="playlist-next"
+                    phx-value-playlist-id={playlist_id}
+                    disabled={playlist_id != @playlist_selected_id}
+                  >
+                    ⏭
+                  </button>
+                  <.link
+                    class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
+                    navigate={~p"/playlist/#{playlist_id}"}
+                  >
+                    ✎
+                  </.link>
+                  <button
+                    class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
+                    phx-click="playlist-delete"
+                    phx-value-playlist-id={playlist_id}
+                  >
+                    🗑
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div :if={@playlist_status} class="m-2 border-4">
+            <table class="w-full text-left m-0">
+              <tbody>
+                <tr
+                  :for={
+                    {%Animation{app: app, config: config, timeout: timeout}, index} <-
+                      Enum.with_index(@playlist_status.playlist.animations)
+                  }
+                  class={index != @playlist_status.index || "bg-slate-200 font-bold"}
+                >
+                  <td class="w-1/4 p-2">
+                    <%= app %>
+                  </td>
+                  <td><%= timeout %></td>
+                  <td class="w-1/2 "><%= config |> Jason.encode!() %></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <%!-- Running Apps --%>
+        <div class="border rounded m-2 p-0">
+          <div class="flex flex-row">
+            <div class="p-1 font-bold m-0 flex-grow">
+              Running Apps
             </div>
             <div>
               <a href="/sim">
@@ -54,10 +172,12 @@ defmodule OctopusWeb.ManagerLive do
           <table class="w-full text-left m-0">
             <tbody>
               <tr :for={
-                %{module: module, app_id: app_id, name: name, selected: selected} <- @running_apps
+                %{module: module, app_id: app_id, name: name, selected: selected} <-
+                  @running_apps
               }>
-                <td class={"p-2 #{if selected, do: ~c"bg-slate-300 font-bold"}"}><%= name %></td>
-                <td class={"p-2 #{if selected, do: ~c"bg-slate-300 font-bold"}"}><%= app_id %></td>
+                <td class={"w-1/2 p-2 #{if selected, do: ~c"bg-slate-300 font-bold"}"}>
+                  <%= name %>
+                </td>
                 <td class="flex flex-row gap-2 p-1 pl-3">
                   <button
                     class="border py-1 px-2 rounded  bg-slate-300"
@@ -85,80 +205,6 @@ defmodule OctopusWeb.ManagerLive do
               </tr>
             </tbody>
           </table>
-        </div>
-
-        <button
-          phx-click="toggle-scheduling"
-          class="border py-1 px-2 rounded bg-slate-300 hover:bg-slate-400 m-2"
-        >
-          <%= if @scheduling_active?, do: "Deactivate ", else: "Activate " %> Scheduling
-        </button>
-
-        <div class="flex flex-col m-2">
-          <div class="p-2 font-bold">
-            Playlist Scheduler
-          </div>
-          <div class="border p-2 flex flex-row flex-wrap gap-2">
-            <form phx-change="playlist-selected">
-              <select name="playlist">
-                <option disabled={true} selected={@selected_playlist == nil}>-</option>
-                <option
-                  :for={{id, name} <- @playlist_options}
-                  value={id}
-                  selected={id == @selected_playlist}
-                >
-                  <%= name %>
-                </option>
-              </select>
-            </form>
-
-            <button
-              class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
-              phx-click="playlist-start"
-              disabled={@selected_playlist == nil}
-            >
-              ▶
-            </button>
-            <button
-              class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
-              phx-click="playlist-stop"
-            >
-              ⏹︎
-            </button>
-            <button
-              class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
-              phx-click="playlist-prev"
-            >
-              ⏮
-            </button>
-            <button
-              class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
-              phx-click="playlist-next"
-            >
-              ⏭
-            </button>
-            <.link
-              :if={@selected_playlist != nil}
-              navigate={~p"/playlist/#{@selected_playlist}"}
-              class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
-            >
-              ✎
-            </.link>
-            <button
-              class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
-              phx-click="playlist-delete"
-              disabled={@selected_playlist == nil}
-            >
-              🗑
-            </button>
-            <p class="px-4 py-2"><%= @playlist_status %></p>
-            <button
-              class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
-              phx-click="playlist-new"
-            >
-              New
-            </button>
-          </div>
         </div>
 
         <div :for={{category, apps} <- @available_apps}>
@@ -191,18 +237,14 @@ defmodule OctopusWeb.ManagerLive do
 
   def handle_event("start", %{"module" => module_string}, socket) do
     module = String.to_existing_atom(module_string)
-    {:ok, _} = AppSupervisor.start_app(module)
+    {:ok, app_id} = AppSupervisor.start_app(module)
+    Mixer.select_app(app_id)
     {:noreply, socket}
   end
 
   def handle_event("stop", %{"app-id" => app_id}, socket) do
     AppSupervisor.stop_app(app_id)
 
-    {:noreply, socket}
-  end
-
-  def handle_event("toggle-scheduling", _, socket) do
-    Mixer.set_scheduling(!socket.assigns.scheduling_active?)
     {:noreply, socket}
   end
 
@@ -219,10 +261,10 @@ defmodule OctopusWeb.ManagerLive do
     {:noreply, socket |> assign(configure_app: app_id)}
   end
 
-  def handle_event("playlist-selected", %{"playlist" => id}, socket) do
-    socket =
-      socket
-      |> assign(selected_playlist: id)
+  # todo: playlist-update
+
+  def handle_event("playlist-start", %{"playlist-id" => id}, socket) do
+    PlaylistScheduler.start_playlist(id)
 
     {:noreply, socket}
   end
@@ -252,19 +294,6 @@ defmodule OctopusWeb.ManagerLive do
     {:noreply, socket}
   end
 
-  def handle_event("playlist-" <> _, _, %Socket{assigns: %{selected_playlist: nil}} = socket) do
-    socket =
-      socket
-      |> put_flash(:error, "No playlist selected")
-
-    {:noreply, socket}
-  end
-
-  def handle_event("playlist-start", _params, socket) do
-    PlaylistScheduler.start_playlist(socket.assigns.selected_playlist)
-    {:noreply, socket}
-  end
-
   def handle_event("playlist-delete", _params, socket) do
     playlist = %Playlist{} = PlaylistScheduler.get_playlist(socket.assigns.selected_playlist)
 
@@ -273,7 +302,7 @@ defmodule OctopusWeb.ManagerLive do
     socket =
       socket
       |> put_flash(:info, "Playlist #{playlist.name} deleted")
-      |> assign_playlist_options()
+      |> assign_playlists()
 
     {:noreply, socket}
   end
@@ -294,12 +323,13 @@ defmodule OctopusWeb.ManagerLive do
     {:noreply, socket}
   end
 
-  def handle_info({:mixer, {:scheduling_active, scheduling_active?}}, socket) do
-    {:noreply, socket |> assign(scheduling_active?: scheduling_active?)}
-  end
+  def handle_info({:playlist, status = %PlaylistScheduler.Status{}}, socket) do
+    socket =
+      socket
+      |> assign(playlist_status: status)
+      |> assign(playlist_selected_id: status.playlist.id)
 
-  def handle_info({:scheduler, status}, socket) do
-    {:noreply, assign(socket, playlist_status: status)}
+    {:noreply, socket}
   end
 
   defp assign_apps(socket) do
@@ -337,12 +367,12 @@ defmodule OctopusWeb.ManagerLive do
     socket |> assign(available_apps: available_apps, running_apps: running_apps)
   end
 
-  def assign_playlist_options(socket) do
-    playlist_options =
+  def assign_playlists(socket) do
+    playlists =
       PlaylistScheduler.list_playlists()
       |> Enum.map(fn %Playlist{id: id, name: name} -> {id, name} end)
 
     socket
-    |> assign(playlist_options: playlist_options)
+    |> assign(playlists: playlists)
   end
 end

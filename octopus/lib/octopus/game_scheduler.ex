@@ -66,8 +66,7 @@ defmodule Octopus.GameScheduler do
     module = Enum.at(@games, Map.get(state.app_indices, side, nil))
     AppSupervisor.stop_app(Map.get(state.app_ids, side))
 
-    {:ok, pid} = AppSupervisor.start_app(module, config: %{side: side})
-    app_id = AppSupervisor.lookup_app_id(pid)
+    {:ok, app_id} = AppSupervisor.start_app(module, config: %{side: side})
     Mixer.select_app(app_id, side)
 
     %State{state | app_ids: Map.put(state.app_ids, side, app_id)}

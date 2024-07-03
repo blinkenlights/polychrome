@@ -10,7 +10,11 @@ defmodule Octopus.PlaylistScheduler do
   @default_animation %{app: "Text", config: %{text: "POLYCHROME"}, timeout: 60_000}
 
   defmodule State do
-    defstruct [:playlist_id, :status, :run_id, :index, :app_id]
+    defstruct [:playlist_id, :run_id, :index, :app_id]
+  end
+
+  defmodule Status do
+    defstruct [:playlist, :index, :status]
   end
 
   def start_link(_opts) do
@@ -19,7 +23,7 @@ defmodule Octopus.PlaylistScheduler do
 
   def subscribe() do
     Phoenix.PubSub.subscribe(Octopus.PubSub, @topic)
-    broadcast_status()
+    broadcast()
   end
 
   def start_playlist(id) do
@@ -67,12 +71,12 @@ defmodule Octopus.PlaylistScheduler do
     GenServer.cast(__MODULE__, :prev_animation)
   end
 
-  def broadcast_status() do
+  def broadcast() do
     GenServer.cast(__MODULE__, :broadcast_status)
   end
 
   def init(:ok) do
-    {:ok, %State{status: :stopped}}
+    {:ok, %State{}}
   end
 
   def handle_cast({:start, id}, %State{} = state) do
@@ -84,7 +88,7 @@ defmodule Octopus.PlaylistScheduler do
         state =
           %State{state | playlist_id: id, index: index}
           |> new_run_id()
-          |> broadcast()
+          |> broadcast_status()
 
         send(self(), {:next, state.run_id})
 
@@ -102,11 +106,11 @@ defmodule Octopus.PlaylistScheduler do
       AppSupervisor.stop_app(state.app_id)
     end
 
-    {:noreply, %State{state | app_id: nil, run_id: nil} |> broadcast()}
+    {:noreply, %State{state | app_id: nil, run_id: nil} |> broadcast_status()}
   end
 
   def handle_cast(:broadcast_status, %State{} = state) do
-    broadcast(state)
+    broadcast_status(state)
     {:noreply, state}
   end
 
@@ -116,7 +120,7 @@ defmodule Octopus.PlaylistScheduler do
     state = state |> new_run_id()
 
     send(self(), {:next, state.run_id})
-    {:noreply, state}
+    {:noreply, state |> broadcast_status()}
   end
 
   def handle_cast(:prev_animation, %State{run_id: nil} = state), do: {:noreply, state}
@@ -130,7 +134,7 @@ defmodule Octopus.PlaylistScheduler do
 
     send(self(), {:next, state.run_id})
 
-    {:noreply, state}
+    {:noreply, state |> broadcast_status()}
   end
 
   def handle_call(:selected_playlist, _from, %State{playlist_id: playlist_id} = state) do
@@ -154,34 +158,40 @@ defmodule Octopus.PlaylistScheduler do
       "Scheduling next app #{module} with config #{inspect(config)}. Timeout: #{animation.timeout}"
     )
 
-    {:ok, pid} = AppSupervisor.start_app(module, config: config)
-    next_app_id = AppSupervisor.lookup_app_id(pid)
+    {:ok, next_app_id} = AppSupervisor.start_app(module, config: config)
     Mixer.select_app(next_app_id)
     AppSupervisor.stop_app(state.app_id)
 
     :timer.send_after(animation.timeout, self(), {:next, run_id})
 
-    {:noreply, %State{state | index: next_index, app_id: next_app_id} |> broadcast()}
+    {:noreply, %State{state | index: next_index, app_id: next_app_id} |> broadcast_status()}
   end
 
   def handle_info({:next, _}, state) do
     {:noreply, state}
   end
 
-  defp broadcast(%State{} = state) do
-    msg =
-      case state do
-        %State{app_id: nil} ->
-          {:scheduler, "Stopped"}
+  defp broadcast_status(%State{app_id: nil} = state) do
+    status =
+      %Status{
+        playlist: get_playlist(state.playlist_id),
+        index: state.index,
+        status: :stopped
+      }
 
-        %State{} = state ->
-          playlist = %Playlist{} = get_playlist(state.playlist_id)
+    Phoenix.PubSub.broadcast(Octopus.PubSub, @topic, {:playlist, status})
+    state
+  end
 
-          {:scheduler,
-           "Running #{inspect(playlist.name)} [#{state.index + 1} of #{length(playlist.animations)}]"}
-      end
+  defp broadcast_status(%State{} = state) do
+    status =
+      %Status{
+        playlist: get_playlist(state.playlist_id),
+        index: state.index,
+        status: :running
+      }
 
-    Phoenix.PubSub.broadcast(Octopus.PubSub, @topic, msg)
+    Phoenix.PubSub.broadcast(Octopus.PubSub, @topic, {:playlist, status})
     state
   end
 

@@ -71,9 +71,9 @@ defmodule Octopus.AppSupervisor do
     end
 
     case DynamicSupervisor.start_child(__MODULE__, {module, {config, name: name}}) do
-      {:ok, pid} ->
+      {:ok, _pid} ->
         Phoenix.PubSub.broadcast(Octopus.PubSub, @topic, {:apps, {:started, app_id, module}})
-        {:ok, pid}
+        {:ok, app_id}
 
       {:error, error} ->
         Logger.error("Could not start app #{module}: #{inspect(error)}")
