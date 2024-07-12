@@ -9,16 +9,26 @@ defmodule OctopusWeb.ManagerLive do
   alias Octopus.PlaylistScheduler.Playlist.Animation
   alias OctopusWeb.PixelsLive
 
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
+    sim_enabled = Map.get(params, "no_sim") == nil
+
     if connected?(socket) do
-      Mixer.subscribe()
+      if sim_enabled do
+        Mixer.subscribe()
+      end
       AppSupervisor.subscribe()
       PlaylistScheduler.subscribe()
     end
 
     socket =
       socket
-      |> assign(pixel_layout: Mildenberg.layout(), configure_app: nil)
+      |> then(fn socket ->
+        case sim_enabled do
+          true -> assign(socket, pixel_layout: Mildenberg.layout(), configure_app: nil)
+          false -> socket
+        end
+      end)
+      |> assign(sim_enabled: sim_enabled)
       |> assign_apps()
       |> assign(playlist_status: nil)
       |> assign(playlist_selected_id: nil)
@@ -30,9 +40,11 @@ defmodule OctopusWeb.ManagerLive do
   def render(assigns) do
     ~H"""
     <div class="w-full" phx-window-keydown="keydown-event">
-      <div class="flex w-full h-full justify-center bg-black">
-        <%= live_render(@socket, PixelsLive, id: "main") %>
-      </div>
+      <%= if @sim_enabled do %>
+        <div class="flex w-full h-full justify-center bg-black">
+          <%= live_render(@socket, PixelsLive, id: "main") %>
+        </div>
+      <% end %>
 
       <div class="container mx-auto">
         <%!-- Playlists --%>
