@@ -1,4 +1,4 @@
-defmodule Octopus.Font.BlinkenLightsRegular do
+defmodule Octopus.Font.BlinkenLightsBold do
   require Octopus.Font
   alias Octopus.Font
   import Font
