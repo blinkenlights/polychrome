@@ -13,7 +13,7 @@ alias Octopus.{
   GameScheduler
 }
 
-IEx.configure(inspect: [limit: :infinity])
+IEx.configure(inspect: [limit: :infinity, printable_limit: :infinity])
 Logger.configure(level: :info)
 
 mario = Sprite.load("256-characters-original", 0)

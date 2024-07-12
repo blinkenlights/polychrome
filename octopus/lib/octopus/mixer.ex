@@ -318,7 +318,10 @@ defmodule Octopus.Mixer do
     GenServer.cast(__MODULE__, :stop_audio_playback)
   end
 
-  defp do_handle_input(state, %InputEvent{type: :BUTTON_MENU}), do: state
+  defp do_handle_input(%State{} = state, %InputEvent{} = input_event) do
+    AppSupervisor.send_event(state.selected_app, input_event)
+    state
+  end
 
   defp handle_new_canvas(%State{} = state, %Canvas{} = canvas, offset) do
     new_canvas =

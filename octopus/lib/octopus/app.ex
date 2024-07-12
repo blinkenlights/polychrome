@@ -175,6 +175,10 @@ defmodule Octopus.App do
     |> Map.new()
   end
 
+  def get_app_id() do
+    AppSupervisor.lookup_app_id(self())
+  end
+
   def get_screen_count() do
     Application.get_env(:octopus, :installation).screens()
   end

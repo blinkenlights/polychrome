@@ -476,6 +476,8 @@ defimpl Inspect, for: Octopus.Canvas do
   def inspect(canvas, _opts) do
     default_color = IO.ANSI.default_color()
 
+    stats = "width: #{canvas.width}, height: #{canvas.height} \n"
+
     # traverse pixels left to right, top to bottom
     delimiter = default_color <> "+" <> String.duplicate("--", canvas.width) <> "+\n"
 
@@ -491,7 +493,7 @@ defimpl Inspect, for: Octopus.Canvas do
         default_color <> "|" <> line <> default_color <> "|\n"
       end
 
-    delimiter <> Enum.join(lines) <> delimiter
+    stats <> delimiter <> Enum.join(lines) <> delimiter
   end
 
   def convert_color_rgb_to_ansi(r, g, b) do

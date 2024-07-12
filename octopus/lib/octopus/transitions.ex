@@ -80,9 +80,10 @@ defmodule Octopus.Transitions do
       end
 
     0..(steps - 1)
-    |> Stream.map(fn step -> Easing.quadratic_in_out(step / steps) end)
+    # |> Stream.map(fn step -> Easing.quadratic_in_out(step / steps) end)
+    |> Stream.map(fn step -> step / (steps - 1) end)
     |> Stream.map(fn ratio ->
-      Enum.at(cuts, round(ratio * (length(cuts) - 1)))
+      Enum.at(cuts, trunc(ratio * (length(cuts) - 1)))
     end)
     |> Stream.map(fn {cut_start, cut_end} ->
       Canvas.cut(joined, cut_start, cut_end)

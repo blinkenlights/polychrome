@@ -1,4 +1,4 @@
-oldie_hostname =  oldie.tail7e11c.ts.net
+oldie_hostname = oldie@oldie.mule-nunki.ts.net
 
 run:
 	iex -S mix phx.server

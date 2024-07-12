@@ -1,7 +1,6 @@
 defmodule OctopusWeb.ManagerLive do
   use OctopusWeb, :live_view
 
-  alias Phoenix.LiveView.Socket
   alias Octopus.Canvas
   alias Octopus.Layout.Mildenberg
   alias Octopus.{Mixer, AppSupervisor, PlaylistScheduler}
