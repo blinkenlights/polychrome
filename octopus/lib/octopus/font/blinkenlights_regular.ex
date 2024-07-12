@@ -1,13 +1,14 @@
 defmodule Octopus.Font.BlinkenLightsRegular do
   require Octopus.Font
   alias Octopus.Font
+  import Font
 
   @characters %{
     0 => %{
       encoding: 0,
       name: "defaultchar",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "XXXXX",
           "X   X",
           "X   X",
@@ -20,7 +21,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?\s => %{
       encoding: ?\s,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "   ",
           "   ",
           "   ",
@@ -33,7 +34,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?! => %{
       encoding: ?!,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "X",
           "X",
           "X",
@@ -46,7 +47,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?" => %{
       encoding: ?",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "X X",
           "X X",
           "   ",
@@ -59,7 +60,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?# => %{
       encoding: ?#,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " X X ",
           " X X ",
           "XXXXX",
@@ -72,7 +73,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?$ => %{
       encoding: ?$,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "  X  ",
           " XXXX",
           "X X  ",
@@ -85,7 +86,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?% => %{
       encoding: ?%,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "XX  X",
           "XX  X",
           "   X ",
@@ -98,7 +99,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?& => %{
       encoding: ?&,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " XX  ",
           "X  X ",
           "X  X ",
@@ -111,7 +112,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?' => %{
       encoding: ?',
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "X",
           "X",
           " ",
@@ -124,7 +125,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?( => %{
       encoding: ?(,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "  X",
           " X ",
           "X  ",
@@ -137,7 +138,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?) => %{
       encoding: ?),
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "X  ",
           " X ",
           "  X",
@@ -150,7 +151,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?* => %{
       encoding: ?*,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "     ",
           "X X X",
           " XXX ",
@@ -163,7 +164,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?+ => %{
       encoding: ?1,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "     ",
           "  X  ",
           "  X  ",
@@ -177,7 +178,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?,,
       bb_y_off: -1,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " X",
           "X "
         ])
@@ -185,7 +186,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?- => %{
       encoding: ?-,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "   ",
           "   ",
           "   ",
@@ -198,14 +199,14 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?. => %{
       encoding: ?.,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "X"
         ])
     },
     ?/ => %{
       encoding: ?/,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "    X",
           "    X",
           "   X ",
@@ -218,7 +219,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?0 => %{
       encoding: ?0,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " XXX ",
           "X   X",
           "X   X",
@@ -231,7 +232,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?1 => %{
       encoding: ?1,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " X ",
           "XX ",
           " X ",
@@ -244,7 +245,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?2 => %{
       encoding: ?2,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " XXX ",
           "X   X",
           "   X ",
@@ -257,7 +258,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?3 => %{
       encoding: ?3,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " XXX ",
           "X   X",
           "    X",
@@ -270,7 +271,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?4 => %{
       encoding: ?4,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "X    ",
           "X   X",
           "X   X",
@@ -283,7 +284,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?5 => %{
       encoding: ?5,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "XXXXX",
           "X    ",
           "XXXX ",
@@ -296,7 +297,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?6 => %{
       encoding: ?6,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " XXX ",
           "X   X",
           "X    ",
@@ -309,7 +310,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?7 => %{
       encoding: ?7,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "XXXXX",
           "    X",
           "   X ",
@@ -322,7 +323,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?8 => %{
       encoding: ?8,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " XXX ",
           "X   X",
           "X   X",
@@ -335,7 +336,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?9 => %{
       encoding: ?9,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " XXX ",
           "X   X",
           "X   X",
@@ -348,7 +349,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?: => %{
       encoding: ?:,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " ",
           "X",
           " ",
@@ -360,7 +361,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?; => %{
       encoding: ?;,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "  ",
           " X",
           "  ",
@@ -373,7 +374,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?<,
       name: "less-than sign",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "    ",
           "  X ",
           " X  ",
@@ -386,7 +387,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?= => %{
       encoding: ?=,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "     ",
           "     ",
           "XXXXX",
@@ -399,7 +400,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?> => %{
       encoding: ?>,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "    ",
           " X  ",
           "  X ",
@@ -412,7 +413,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?? => %{
       encoding: ??,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " XXX ",
           "X   X",
           "   X ",
@@ -425,7 +426,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?@ => %{
       encoding: ?@,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "  XXXXXX  ",
           " X      X ",
           "X  XX X  X",
@@ -438,7 +439,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?A => %{
       encoding: ?A,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " XXX ",
           "X   X",
           "X   X",
@@ -451,7 +452,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?B => %{
       encoding: ?B,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "XXXX ",
           "X   X",
           "X   X",
@@ -464,7 +465,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?C => %{
       encoding: ?C,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " XXXX",
           "X    ",
           "X    ",
@@ -477,7 +478,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?D => %{
       encoding: ?D,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "XXXX ",
           "X   X",
           "X   X",
@@ -490,7 +491,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?E => %{
       encoding: ?E,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "XXXXX",
           "X    ",
           "X    ",
@@ -503,7 +504,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?F => %{
       encoding: ?F,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "XXXXX",
           "X    ",
           "X    ",
@@ -516,7 +517,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?G => %{
       encoding: ?G,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " XXX ",
           "X   X",
           "X    ",
@@ -529,7 +530,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?H => %{
       encoding: ?H,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "X   X",
           "X   X",
           "X   X",
@@ -542,7 +543,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?I => %{
       encoding: ?I,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "XXX",
           " X ",
           " X ",
@@ -555,7 +556,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?J => %{
       encoding: ?J,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "    X",
           "    X",
           "    X",
@@ -568,7 +569,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?K => %{
       encoding: ?K,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "X   X",
           "X  X ",
           "X X  ",
@@ -581,7 +582,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?L => %{
       encoding: ?L,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "X    ",
           "X    ",
           "X    ",
@@ -594,7 +595,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?M => %{
       encoding: ?M,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "X   X",
           "XX XX",
           "X X X",
@@ -607,7 +608,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?N => %{
       encoding: ?N,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "X   X",
           "X   X",
           "XX  X",
@@ -620,7 +621,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?O => %{
       encoding: ?O,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " XXX ",
           "X   X",
           "X   X",
@@ -633,7 +634,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?P => %{
       encoding: ?P,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "XXXX ",
           "X   X",
           "X   X",
@@ -646,7 +647,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?Q => %{
       encoding: ?Q,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " XXX ",
           "X   X",
           "X   X",
@@ -659,7 +660,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?R => %{
       encoding: ?R,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "XXXX ",
           "X   X",
           "X   X",
@@ -672,7 +673,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?S => %{
       encoding: ?S,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " XXX ",
           "X   X",
           "X    ",
@@ -685,7 +686,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?T => %{
       encoding: ?T,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "XXXXX",
           "  X  ",
           "  X  ",
@@ -698,7 +699,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?U => %{
       encoding: ?U,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "X   X",
           "X   X",
           "X   X",
@@ -711,7 +712,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?V => %{
       encoding: ?V,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "X   X",
           "X   X",
           "X   X",
@@ -724,7 +725,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?W => %{
       encoding: ?W,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "X   X",
           "X   X",
           "X   X",
@@ -737,7 +738,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?X => %{
       encoding: ?X,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "X   X",
           "X   X",
           " X X ",
@@ -750,7 +751,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?Y => %{
       encoding: ?Y,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "XX  XX",
           "XX  XX",
           "XX  XX",
@@ -763,7 +764,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?Z => %{
       encoding: ?Z,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "XXXXXX",
           "    XX",
           "   XX ",
@@ -776,49 +777,49 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?[ => %{
       encoding: ?[,
       bitmap:
-        Font.defbitmap([
-          "XXXX",
-          "XX  ",
-          "XX  ",
-          "XX  ",
-          "XX  ",
-          "XX  ",
-          "XXXX"
+        defbitmap([
+          "XXX",
+          "X  ",
+          "X  ",
+          "X  ",
+          "X  ",
+          "X  ",
+          "XXX"
         ])
     },
     ?\\ => %{
       encoding: ?\\,
       bitmap:
-        Font.defbitmap([
-          "XX    ",
-          "XX    ",
-          " XX   ",
-          "  XX  ",
-          "   XX ",
-          "    XX",
-          "    XX"
+        defbitmap([
+          "X    ",
+          "X    ",
+          " X   ",
+          "  X  ",
+          "   X ",
+          "    X",
+          "    X"
         ])
     },
     ?] => %{
       encoding: ?],
       bitmap:
-        Font.defbitmap([
-          "XXXX",
-          "  XX",
-          "  XX",
-          "  XX",
-          "  XX",
-          "  XX",
-          "XXXX"
+        defbitmap([
+          "XXX",
+          "  X",
+          "  X",
+          "  X",
+          "  X",
+          "  X",
+          "XXX"
         ])
     },
     ?^ => %{
       encoding: ?^,
       bitmap:
-        Font.defbitmap([
-          "  XX  ",
-          " XXXX ",
-          "XX  XX",
+        defbitmap([
+          "  X  ",
+          " X X ",
+          "X   X",
           "      ",
           "      ",
           "      ",
@@ -828,377 +829,375 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?_ => %{
       encoding: ?_,
       bitmap:
-        Font.defbitmap([
-          "XXXXXX"
+        defbitmap([
+          "XXXXX"
         ])
     },
     ?` => %{
       encoding: ?`,
       bitmap:
-        Font.defbitmap([
-          "XX ",
-          " XX",
-          "   ",
-          "   ",
-          "   ",
-          "   ",
-          "   "
+        defbitmap([
+          "X ",
+          " X",
+          "  ",
+          "  ",
+          "  ",
+          "  ",
+          "  "
         ])
     },
     ?a => %{
       encoding: ?a,
       bitmap:
-        Font.defbitmap([
-          " XXXXX",
-          "XX  XX",
-          "XX  XX",
-          "XX  XX",
-          " XXXXX"
+        defbitmap([
+          " XXXX",
+          "X   X",
+          "X   X",
+          "X   X",
+          " XXXX"
         ])
     },
     ?b => %{
       encoding: ?b,
       bitmap:
-        Font.defbitmap([
-          "XX    ",
-          "XX    ",
-          "XXXXX ",
-          "XX  XX",
-          "XX  XX",
-          "XX  XX",
-          "XXXXX "
+        defbitmap([
+          "X    ",
+          "X    ",
+          "XXXX ",
+          "X   X",
+          "X   X",
+          "X   X",
+          "XXXX "
         ])
     },
     ?c => %{
       encoding: ?c,
       bitmap:
-        Font.defbitmap([
-          "      ",
-          "      ",
-          " XXXXX",
-          "XX    ",
-          "XX    ",
-          "XX    ",
-          " XXXXX"
+        defbitmap([
+          " XXXX",
+          "X    ",
+          "X    ",
+          "X    ",
+          " XXXX"
         ])
     },
     ?d => %{
       encoding: ?d,
       bitmap:
-        Font.defbitmap([
-          "    XX",
-          "    XX",
-          " XXXXX",
-          "XX  XX",
-          "XX  XX",
-          "XX  XX",
-          " XXXXX"
+        defbitmap([
+          "    X",
+          "    X",
+          " XXXX",
+          "X   X",
+          "X   X",
+          "X   X",
+          " XXXX"
         ])
     },
     ?e => %{
       encoding: ?e,
       bitmap:
-        Font.defbitmap([
-          " XXXX ",
-          "XX  XX",
-          "XXXXXX",
-          "XX    ",
-          " XXXXX"
+        defbitmap([
+          " XXX ",
+          "X   X",
+          "XXXXX",
+          "X    ",
+          " XXXX"
         ])
     },
     ?f => %{
       encoding: ?f,
       bitmap:
-        Font.defbitmap([
-          "  XXX",
-          " XX  ",
-          " XX  ",
-          "XXXXX",
-          " XX  ",
-          " XX  ",
-          " XX  "
+        defbitmap([
+          "  XX",
+          " X  ",
+          " X  ",
+          "XXXX",
+          " X  ",
+          " X  ",
+          " X  "
         ])
     },
     ?g => %{
       encoding: ?g,
       bitmap:
-        Font.defbitmap([
-          " XXXXX",
-          "XX  XX",
-          " XXXXX",
-          "    XX",
-          "XXXXX "
+        defbitmap([
+          " XXXX",
+          "X   X",
+          " XXXX",
+          "    X",
+          "XXXX "
         ])
     },
     ?h => %{
       encoding: ?h,
       bitmap:
-        Font.defbitmap([
-          "XX    ",
-          "XX    ",
-          "XXXXX ",
-          "XX  XX",
-          "XX  XX",
-          "XX  XX",
-          "XX  XX"
+        defbitmap([
+          "X    ",
+          "X    ",
+          "XXXX ",
+          "X   X",
+          "X   X",
+          "X   X",
+          "X   X"
         ])
     },
     ?i => %{
       encoding: ?i,
       bitmap:
-        Font.defbitmap([
-          "XX",
-          "  ",
-          "XX",
-          "XX",
-          "XX",
-          "XX",
-          "XX"
+        defbitmap([
+          "X",
+          " ",
+          "X",
+          "X",
+          "X",
+          "X",
+          "X"
         ])
     },
     ?j => %{
       encoding: ?j,
       bitmap:
-        Font.defbitmap([
-          "   XX",
-          "     ",
-          "   XX",
-          "   XX",
-          "   XX",
-          "XX XX",
-          " XXX "
+        defbitmap([
+          "   X",
+          "    ",
+          "   X",
+          "   X",
+          "   X",
+          "X  X",
+          " XX "
         ])
     },
     ?k => %{
       encoding: ?k,
       bitmap:
-        Font.defbitmap([
-          "XX    ",
-          "XX XX ",
-          "XXXX  ",
-          "XXXX  ",
-          "XXXX  ",
-          "XX XX ",
-          "XX  XX"
+        defbitmap([
+          "X   ",
+          "X  X",
+          "X X ",
+          "XX  ",
+          "X X ",
+          "X  X",
+          "X  X"
         ])
     },
     ?l => %{
       encoding: ?l,
       bitmap:
-        Font.defbitmap([
-          "XX",
-          "XX",
-          "XX",
-          "XX",
-          "XX",
-          "XX",
-          "XX"
+        defbitmap([
+          "X",
+          "X",
+          "X",
+          "X",
+          "X",
+          "X",
+          "X"
         ])
     },
     ?m => %{
       encoding: ?m,
       bitmap:
-        Font.defbitmap([
-          "XXX XXX ",
-          "XX XX XX",
-          "XX XX XX",
-          "XX XX XX",
-          "XX XX XX"
+        defbitmap([
+          "XXX XX ",
+          "X  X  X",
+          "X  X  X",
+          "X  X  X",
+          "X  X  X"
         ])
     },
     ?n => %{
       encoding: ?n,
       bitmap:
-        Font.defbitmap([
-          "XXXXX ",
-          "XX  XX",
-          "XX  XX",
-          "XX  XX",
-          "XX  XX"
+        defbitmap([
+          "XXXX ",
+          "X   X",
+          "X   X",
+          "X   X",
+          "X   X"
         ])
     },
     ?o => %{
       encoding: ?o,
       bitmap:
-        Font.defbitmap([
-          " XXXX ",
-          "XX  XX",
-          "XX  XX",
-          "XX  XX",
-          " XXXX "
+        defbitmap([
+          " XXX ",
+          "X   X",
+          "X   X",
+          "X   X",
+          " XXX "
         ])
     },
     ?p => %{
       encoding: ?p,
       bitmap:
-        Font.defbitmap([
-          "XXXXX ",
-          "XX  XX",
-          "XXXXX ",
-          "XX    ",
-          "XX    "
+        defbitmap([
+          "XXXX ",
+          "X   X",
+          "XXXX ",
+          "X    ",
+          "X    "
         ])
     },
     ?q => %{
       encoding: ?q,
       bitmap:
-        Font.defbitmap([
-          " XXXXX",
-          "XX  XX",
-          " XXXXX",
-          "    XX",
-          "    XX"
+        defbitmap([
+          " XXXX",
+          "X   X",
+          " XXXX",
+          "    X",
+          "    X"
         ])
     },
     ?r => %{
       encoding: ?r,
       bitmap:
-        Font.defbitmap([
-          " XXXX",
-          "XX   ",
-          "XX   ",
-          "XX   ",
-          "XX   "
+        defbitmap([
+          " XXX",
+          "X   ",
+          "X   ",
+          "X   ",
+          "X   "
         ])
     },
     ?s => %{
       encoding: ?s,
       bitmap:
-        Font.defbitmap([
-          " XXXXX",
-          "XX    ",
-          " XXXX ",
-          "    XX",
-          "XXXXX "
+        defbitmap([
+          " XXXX",
+          "X    ",
+          " XXX ",
+          "    X",
+          "XXXX "
         ])
     },
     ?t => %{
       encoding: ?t,
       bitmap:
-        Font.defbitmap([
-          " XX ",
-          " XX ",
-          "XXXX",
-          " XX ",
-          " XX ",
-          " XX ",
-          " XX "
+        defbitmap([
+          " X ",
+          " X ",
+          "XXX",
+          " X ",
+          " X ",
+          " X ",
+          " X "
         ])
     },
     ?u => %{
       encoding: ?u,
       bitmap:
-        Font.defbitmap([
-          "XX  XX",
-          "XX  XX",
-          "XX  XX",
-          "XX  XX",
-          " XXXX "
+        defbitmap([
+          "X   X",
+          "X   X",
+          "X   X",
+          "X   X",
+          " XXX "
         ])
     },
     ?v => %{
       encoding: ?v,
       bitmap:
-        Font.defbitmap([
-          "XX  XX",
-          "XX  XX",
-          "XX  XX",
-          " XXXX ",
-          "  XX  "
+        defbitmap([
+          "X   X",
+          "X   X",
+          "X   X",
+          " X X ",
+          "  X  "
         ])
     },
     ?w => %{
       encoding: ?w,
       bitmap:
-        Font.defbitmap([
-          "XX    XX",
-          "XX    XX",
-          "XX XX XX",
-          "XX XX XX",
-          " XX  XX "
+        defbitmap([
+          "X     X",
+          "X     X",
+          "X  X  X",
+          "X  X  X",
+          " XX XX "
         ])
     },
     ?x => %{
       encoding: ?x,
       bitmap:
-        Font.defbitmap([
-          "XX  XX",
-          " XXXX ",
-          "  XX  ",
-          " XXXX ",
-          "XX  XX"
+        defbitmap([
+          "X   X",
+          " X X ",
+          "  X  ",
+          " X X ",
+          "X   X"
         ])
     },
     ?y => %{
       encoding: ?y,
       bitmap:
-        Font.defbitmap([
-          "XX  XX",
-          "XX  XX",
-          " XXXXX",
-          "    XX",
-          "XXXXX "
+        defbitmap([
+          "X   X",
+          "X   X",
+          " XXXX",
+          "    X",
+          "XXXX "
         ])
     },
     ?z => %{
       encoding: ?z,
       bitmap:
-        Font.defbitmap([
-          "XXXXXX",
-          "   XX ",
-          "  XX  ",
-          " XX   ",
-          "XXXXXX"
+        defbitmap([
+          "XXXXX",
+          "   X ",
+          "  X  ",
+          " X   ",
+          "XXXXX"
         ])
     },
     ?{ => %{
       encoding: ?{,
       bitmap:
-        Font.defbitmap([
-          "  XX",
-          " XX ",
-          " XX ",
-          "XX  ",
-          " XX ",
-          " XX ",
-          "  XX"
+        defbitmap([
+          "  X",
+          " X ",
+          " X ",
+          "X  ",
+          " X ",
+          " X ",
+          "  X"
         ])
     },
     ?| => %{
       encoding: ?|,
       bitmap:
-        Font.defbitmap([
-          "XX",
-          "XX",
-          "XX",
-          "XX",
-          "XX",
-          "XX",
-          "XX"
+        defbitmap([
+          "X",
+          "X",
+          "X",
+          "X",
+          "X",
+          "X",
+          "X"
         ])
     },
     ?} => %{
       encoding: ?},
       bitmap:
-        Font.defbitmap([
-          "XX  ",
-          " XX ",
-          " XX ",
-          "  XX",
-          " XX ",
-          " XX ",
-          "XX  "
+        defbitmap([
+          "X  ",
+          " X ",
+          " X ",
+          "  X",
+          " X ",
+          " X ",
+          "X  "
         ])
     },
     ?~ => %{
       encoding: ?~,
       bitmap:
-        Font.defbitmap([
-          " XX    ",
-          "XX X XX",
-          "    XX ",
-          "       ",
-          "       "
+        defbitmap([
+          " X   ",
+          "X X X",
+          "   X ",
+          "     ",
+          "     "
         ])
     },
 
@@ -1208,35 +1207,35 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: 160,
       name: "no-break space",
       bitmap:
-        Font.defbitmap([
-          "  ",
-          "  ",
-          "  ",
-          "  ",
-          "  ",
-          "  ",
-          "  "
+        defbitmap([
+          " ",
+          " ",
+          " ",
+          " ",
+          " ",
+          " ",
+          " "
         ])
     },
     ?¡ => %{
       encoding: ?¡,
       name: "inverted exclamation mark",
       bitmap:
-        Font.defbitmap([
-          "XX",
-          "  ",
-          "XX",
-          "XX",
-          "XX",
-          "XX",
-          "XX"
+        defbitmap([
+          "X",
+          " ",
+          "X",
+          "X",
+          "X",
+          "X",
+          "X"
         ])
     },
     ?¢ => %{
       encoding: ?¢,
       name: "cent sign",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "     ",
           "  XXX",
           " X   ",
@@ -1250,7 +1249,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?£,
       name: "pound sign",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "  XXX",
           " X   ",
           " X   ",
@@ -1264,7 +1263,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?¤,
       name: "currency sign",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "     ",
           "X   X",
           " XXX ",
@@ -1279,7 +1278,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?¥,
       name: "yen sign",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "X   X",
           " X X ",
           "XXXXX",
@@ -1293,121 +1292,138 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?¦,
       name: "broken bar",
       bitmap:
-        Font.defbitmap([
-          "XX",
-          "XX",
-          "XX",
-          "  ",
-          "XX",
-          "XX",
-          "XX"
+        defbitmap([
+          "X",
+          "X",
+          "X",
+          " ",
+          "X",
+          "X",
+          "X"
+        ])
+    },
+    ?§ => %{
+      encoding: ?§,
+      name: "section sign",
+      bb_y_off: -1,
+      bitmap:
+        defbitmap([
+          " XXX ",
+          "X    ",
+          " X   ",
+          " XXX ",
+          "X   X",
+          " XXX ",
+          "   X ",
+          "    X",
+          " XXX "
         ])
     },
     ?ß => %{
       encoding: ?ß,
       bb_y_off: -1,
       bitmap:
-        Font.defbitmap([
-          " XXXXX ",
-          "XX   XX",
-          "XX  XX ",
-          "XX XX  ",
-          "XX  XX ",
-          "XX   XX",
-          "XX XXX ",
-          "XX     "
+        defbitmap([
+          " XXX ",
+          "X   X",
+          "X  X ",
+          "X X  ",
+          "X  X ",
+          "X   X",
+          "X XX ",
+          "X    "
         ])
     },
     ?Ä => %{
       encoding: ?Ä,
       bitmap:
-        Font.defbitmap([
-          "      ",
-          "X    X",
-          "      ",
-          " XXXX ",
-          "XX  XX",
-          "XXXXXX",
-          "XX  XX",
-          "XX  XX"
+        defbitmap([
+          "     ",
+          "X   X",
+          "     ",
+          " XXX ",
+          "X   X",
+          "XXXXX",
+          "X   X",
+          "X   X"
         ])
     },
     ?Á => %{
       encoding: ?Á,
       bitmap:
-        Font.defbitmap([
-          "   XX ",
-          "  XX  ",
-          "      ",
-          " XXXX ",
-          "XX  XX",
-          "XXXXXX",
-          "XX  XX",
-          "XX  XX"
+        defbitmap([
+          "   X ",
+          "  X  ",
+          "     ",
+          " XXX ",
+          "X   X",
+          "XXXXX",
+          "X   X",
+          "X   X"
         ])
     },
     ?À => %{
       encoding: ?À,
       bitmap:
-        Font.defbitmap([
-          " XX   ",
-          "  XX  ",
-          "      ",
-          " XXXX ",
-          "XX  XX",
-          "XXXXXX",
-          "XX  XX",
-          "XX  XX"
+        defbitmap([
+          " X   ",
+          "  X  ",
+          "     ",
+          " XXX ",
+          "X   X",
+          "XXXXX",
+          "X   X",
+          "X   X"
         ])
     },
     ?Å => %{
       encoding: ?Å,
       bitmap:
-        Font.defbitmap([
-          " XXXX ",
-          " XXXX ",
-          "      ",
-          " XXXX ",
-          "XX  XX",
-          "XXXXXX",
-          "XX  XX",
-          "XX  XX"
+        defbitmap([
+          " XXX ",
+          " XXX ",
+          "     ",
+          " XXX ",
+          "X   X",
+          "XXXXX",
+          "X   X",
+          "X   X"
         ])
     },
     ?Ã => %{
       encoding: ?Ã,
       bitmap:
-        Font.defbitmap([
-          " XX XX",
-          "XX XX ",
-          "      ",
-          " XXXX ",
-          "XX  XX",
-          "XXXXXX",
-          "XX  XX",
-          "XX  XX"
+        defbitmap([
+          " XX X",
+          "X XX ",
+          "     ",
+          " XXX ",
+          "X   X",
+          "XXXXX",
+          "X   X",
+          "X   X"
         ])
     },
     ?ä => %{
       encoding: ?ä,
       bitmap:
-        Font.defbitmap([
-          "XX  XX",
-          "      ",
-          " XXXXX",
-          "XX  XX",
-          "XX  XX",
-          "XX  XX",
-          " XXXXX"
+        defbitmap([
+          "X   X",
+          "     ",
+          " XXXX",
+          "X   X",
+          "X   X",
+          "X   X",
+          " XXXX"
         ])
     },
     ?Ö => %{
       encoding: ?Ö,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "X   X",
+          "     ",
           " XXX ",
-          "X   X",
           "X   X",
           "X   X",
           "X   X",
@@ -1418,55 +1434,55 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?ö => %{
       encoding: ?ö,
       bitmap:
-        Font.defbitmap([
-          "XX  XX",
-          "      ",
-          " XXXX ",
-          "XX  XX",
-          "XX  XX",
-          "XX  XX",
-          " XXXX "
+        defbitmap([
+          " X X ",
+          "     ",
+          " XXX ",
+          "X   X",
+          "X   X",
+          "X   X",
+          " XXX "
         ])
     },
     ?Ü => %{
       encoding: ?Ü,
       bitmap:
-        Font.defbitmap([
-          "XX  XX",
-          "      ",
-          "XX  XX",
-          "XX  XX",
-          "XX  XX",
-          "XX  XX",
-          "XX  XX",
-          " XXXX "
+        defbitmap([
+          "X   X",
+          "     ",
+          "X   X",
+          "X   X",
+          "X   X",
+          "X   X",
+          "X   X",
+          " XXX "
         ])
     },
     ?ü => %{
       encoding: ?ü,
       bitmap:
-        Font.defbitmap([
-          "XX  XX",
-          "      ",
-          "XX  XX",
-          "XX  XX",
-          "XX  XX",
-          "XX  XX",
-          " XXXX "
+        defbitmap([
+          " X X ",
+          "     ",
+          "X   X",
+          "X   X",
+          "X   X",
+          "X   X",
+          " XXX "
         ])
     },
     ?¨ => %{
       encoding: ?¨,
       name: "diaresis",
       bitmap:
-        Font.defbitmap([
-          "XX  XX",
-          "      ",
-          "      ",
-          "      ",
-          "      ",
-          "      ",
-          "      "
+        defbitmap([
+          "X X",
+          "   ",
+          "   ",
+          "   ",
+          "   ",
+          "   ",
+          "   "
         ])
     },
     ?© => %{
@@ -1474,7 +1490,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       name: "copyright sign",
       bb_y_off: -1,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " XXX ",
           "X   X",
           "  X  ",
@@ -1490,7 +1506,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?€,
       name: "euro sign",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "  XXX",
           " X   ",
           "XXXX ",
@@ -1504,7 +1520,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?¯,
       name: "macron",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "XXXXX",
           "     ",
           "     ",
@@ -1518,7 +1534,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?°,
       name: "degree sign",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " X ",
           "X X",
           " X ",
@@ -1532,7 +1548,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?±,
       name: "plus-minus sign",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "  X  ",
           "  X  ",
           "XXXXX",
@@ -1546,7 +1562,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?²,
       name: "superscript two",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "XX ",
           "  X",
           " X ",
@@ -1560,7 +1576,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?³,
       name: "superscript three",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "XX ",
           "  X",
           " X ",
@@ -1575,7 +1591,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       name: "acute accent",
       bb_y_off: 5,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " X",
           "X "
         ])
@@ -1585,7 +1601,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       name: "micro sign",
       bb_y_off: -1,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "    ",
           "    ",
           "    ",
@@ -1601,7 +1617,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?·,
       name: "middle dot",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " ",
           " ",
           " ",
@@ -1615,7 +1631,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?¹,
       name: "superscript one",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " X ",
           "XX ",
           " X ",
@@ -1629,7 +1645,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?ª,
       name: "feminine ordinal indicator",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " X ",
           "X X",
           "XXX",
@@ -1643,7 +1659,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?º,
       name: "masculine ordinal indicator",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " X ",
           "X X",
           "X X",
@@ -1657,7 +1673,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?«,
       name: "left-pointing double angle quotation mark",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "     ",
           "     ",
           " X X ",
@@ -1671,7 +1687,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?¬,
       name: "not sign",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "     ",
           "     ",
           "     ",
@@ -1685,7 +1701,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?»,
       name: "right-pointing double angle quotation mark",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "     ",
           "     ",
           " X X ",
@@ -1699,7 +1715,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?¼,
       name: "vulgar fraction one quarter",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " X      X   ",
           "XX     X    ",
           " X    X X  X",
@@ -1713,7 +1729,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?½,
       name: "vulgar fraction one half",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " X      X   ",
           "XX     X    ",
           " X    X  XX ",
@@ -1727,7 +1743,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?¾,
       name: "vulgar fraction three quarters",
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           " XX      X    ",
           "X  X    X     ",
           "  X    X  X  X",
@@ -1740,7 +1756,7 @@ defmodule Octopus.Font.BlinkenLightsRegular do
     ?¿ => %{
       encoding: ?¿,
       bitmap:
-        Font.defbitmap([
+        defbitmap([
           "  X  ",
           "     ",
           "  X  ",
