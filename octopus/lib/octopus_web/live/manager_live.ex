@@ -8,26 +8,15 @@ defmodule OctopusWeb.ManagerLive do
   alias Octopus.PlaylistScheduler.Playlist.Animation
   alias OctopusWeb.PixelsLive
 
-  def mount(params, _session, socket) do
-    sim_enabled = Map.get(params, "no_sim") == nil
-
+  def mount(_params, _session, socket) do
     if connected?(socket) do
-      if sim_enabled do
-        Mixer.subscribe()
-      end
       AppSupervisor.subscribe()
       PlaylistScheduler.subscribe()
     end
 
     socket =
       socket
-      |> then(fn socket ->
-        case sim_enabled do
-          true -> assign(socket, pixel_layout: Mildenberg.layout(), configure_app: nil)
-          false -> socket
-        end
-      end)
-      |> assign(sim_enabled: sim_enabled)
+      |> setup_preview(Application.fetch_env!(:octopus, :show_sim_preview))
       |> assign_apps()
       |> assign(playlist_status: nil)
       |> assign(playlist_selected_id: nil)
@@ -36,10 +25,23 @@ defmodule OctopusWeb.ManagerLive do
     {:ok, socket, temporary_assigns: [pixel_layout: nil]}
   end
 
+  defp setup_preview(socket, true) do
+    Mixer.subscribe()
+
+    socket
+    |> assign(pixel_layout: Mildenberg.layout())
+    |> assign(show_sim_preview: true)
+  end
+
+  defp setup_preview(socket, false) do
+    socket
+    |> assign(show_sim_preview: false)
+  end
+
   def render(assigns) do
     ~H"""
     <div class="w-full" phx-window-keydown="keydown-event">
-      <%= if @sim_enabled do %>
+      <%= if @show_sim_preview do %>
         <div class="flex w-full h-full justify-center bg-black">
           <%= live_render(@socket, PixelsLive, id: "main") %>
         </div>

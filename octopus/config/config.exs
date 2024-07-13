@@ -15,7 +15,8 @@ config :octopus, :installation, Octopus.Installation.Nation
 config :octopus,
   ecto_repos: [Octopus.Repo],
   generators: [binary_id: true],
-  broadcast: false
+  broadcast: false,
+  show_sim_preview: true
 
 config :octopus, Friends.Repo,
   database: "octopus_#{Mix.env()}",
