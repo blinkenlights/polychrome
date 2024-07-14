@@ -144,7 +144,7 @@ defmodule OctopusWeb.ManagerLive do
             </tbody>
           </table>
 
-          <div :if={@playlist_status} class="m-2 border-4">
+          <div :if={@playlist_status && @playlist_status.playlist} class="m-2 border-4">
             <table class="w-full text-left m-0">
               <tbody>
                 <tr
@@ -337,10 +337,16 @@ defmodule OctopusWeb.ManagerLive do
   end
 
   def handle_info({:playlist, status = %PlaylistScheduler.Status{}}, socket) do
+    id =
+      case status.playlist do
+        %Playlist{id: id} -> id
+        _ -> nil
+      end
+
     socket =
       socket
       |> assign(playlist_status: status)
-      |> assign(playlist_selected_id: status.playlist.id)
+      |> assign(playlist_selected_id: id)
 
     {:noreply, socket}
   end

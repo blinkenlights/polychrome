@@ -171,6 +171,12 @@ defmodule Octopus.PlaylistScheduler do
     {:noreply, state}
   end
 
+  defp broadcast_status(%State{playlist_id: nil} = state) do
+    status = %Status{playlist: nil, index: nil, status: :stopped}
+    Phoenix.PubSub.broadcast(Octopus.PubSub, @topic, {:playlist, status})
+    state
+  end
+
   defp broadcast_status(%State{app_id: nil} = state) do
     status =
       %Status{
