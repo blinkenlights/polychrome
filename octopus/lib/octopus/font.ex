@@ -28,6 +28,9 @@ defmodule Octopus.Font do
         "BlinkenLightsRegular" ->
           {:commit, Octopus.Font.BlinkenLightsRegular.get()}
 
+        "BlinkenLightsBold" ->
+          {:commit, Octopus.Font.BlinkenLightsBold.get()}
+
         _ ->
           path = find_font_path(name)
           {:ok, img} = ExPng.Image.from_file(path)
