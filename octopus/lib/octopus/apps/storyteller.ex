@@ -21,7 +21,8 @@ defmodule Octopus.Apps.StoryTeller do
       :pause,
       :fade_in,
       :buffer,
-      :clear_buffer
+      :clear_buffer,
+      :offset
     ]
     @enforce_keys @keys
     defstruct @keys
@@ -45,6 +46,7 @@ defmodule Octopus.Apps.StoryTeller do
       lines: lines,
       pause: 0,
       fade_in: 0,
+      offset: 0,
       font: Font.load("BlinkenLightsRegular"),
       canvas: Canvas.new(8 * 10, 8),
       clear_buffer: false
@@ -63,46 +65,14 @@ defmodule Octopus.Apps.StoryTeller do
     |> tick()
   end
 
-  defp next_letter(%State{line: {:text, [letter | rest]}} = state) do
-    Logger.debug("next letter: #{letter}")
-
-    %State{
-      state
-      | pause: param(:letter_duration_ms, 100),
-        line: {:text, rest},
-        buffer: state.buffer <> letter
-    }
-  end
-
-  defp next_word(state, pause \\ nil)
-
-  defp next_word(%State{lines: []} = state, _pause) do
-    Logger.debug("end of story")
-    %State{state | pause: param(:end_duration_ms, 3000), line: nil, clear_buffer: true}
-  end
-
-  defp next_word(%State{lines: [line | rest]} = state, pause) do
-    Logger.debug("next line")
-
-    %State{
-      state
-      | pause: pause || param(:word_duration_ms, 500),
-        line: line,
-        lines: rest,
-        clear_buffer: true
-    }
-  end
-
   defp tick(%State{pause: 0} = state) do
     state =
       if state.clear_buffer, do: Map.merge(state, %{buffer: "", clear_buffer: false}), else: state
 
     state =
       case state.line do
-        {:text, [_ | _]} -> next_letter(state)
-        {:text, []} -> next_word(state)
-        {:pause, :short} -> next_word(state, param(:short_pause_duration_ms, 1000))
-        {:pause, :long} -> next_word(state, param(:long_pause_duration_ms, 2000))
+        {:text, [_letter | _], _opts} -> next_letter(state)
+        {:text, [], _} -> next_word(state)
       end
 
     draw(state)
@@ -115,7 +85,49 @@ defmodule Octopus.Apps.StoryTeller do
     {:noreply, state}
   end
 
-  def draw(%State{buffer: line} = state) do
+  defp next_letter(%State{line: {:text, [letter | rest], opts}} = state) do
+    Logger.debug("next letter: #{letter}")
+
+    %State{
+      state
+      | pause: param(:letter_duration_ms, 100),
+        line: {:text, rest, opts},
+        buffer: state.buffer <> letter,
+        offset: div(10 - String.length(state.buffer <> letter) - length(rest), 2)
+    }
+  end
+
+  defp ms_for_pause(pause) do
+    case pause do
+      :comma -> param(:comma_duration_ms, 500)
+      :period -> param(:period_duration_ms, 2000)
+      :word -> param(:word_duration_ms, 1000)
+      :blank -> param(:blank_duration_ms, 500)
+    end
+  end
+
+  defp next_word(%State{lines: []} = state) do
+    Logger.debug("end of story")
+    %State{state | pause: param(:end_duration_ms, 3000), line: nil, clear_buffer: true}
+  end
+
+  defp next_word(%State{lines: [line | rest]} = state) do
+    Logger.debug("next line")
+
+    {:text, _, opts} = line
+
+    pause = opts |> Keyword.get(:pause, :word) |> ms_for_pause()
+
+    %State{
+      state
+      | pause: pause,
+        line: line,
+        lines: rest,
+        clear_buffer: true
+    }
+  end
+
+  def draw(%State{buffer: buffer} = state) do
     canvas =
       state.canvas
       |> Canvas.clear()
@@ -124,7 +136,11 @@ defmodule Octopus.Apps.StoryTeller do
     variant = 0
 
     canvas =
-      Canvas.put_string(canvas, {0, 0}, line, state.font, variant)
+      Canvas.put_string(canvas, {state.offset * 8, 0}, buffer, state.font, variant)
+      |> tap(fn c ->
+        # IEx.Helpers.clear()
+        IO.inspect(c)
+      end)
 
     canvas |> Canvas.to_frame() |> send_frame()
   end
