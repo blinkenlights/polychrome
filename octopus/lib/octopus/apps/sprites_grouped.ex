@@ -16,7 +16,7 @@ defmodule Octopus.Apps.SpritesGrouped do
   @animation_steps 50
 
   @tick_interval 500
-  @skip_till_next_group 80
+  @skip_till_next_group 30
 
   @groups [
     mario: [0..7, 9, 12],

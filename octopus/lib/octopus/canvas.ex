@@ -380,7 +380,7 @@ defmodule Octopus.Canvas do
   @doc """
   Returns a rectangular subsection of the canvas.
   """
-  def cut(%Canvas{} = canvas, {x1, y1}, {x2, y2}) when x2 > x1 and y2 > y1 do
+  def cut(%Canvas{} = canvas, {x1, y1}, {x2, y2}) when x2 >= x1 and y2 >= y1 do
     width = x2 - x1 + 1
     height = y2 - y1 + 1
 

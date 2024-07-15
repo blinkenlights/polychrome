@@ -292,6 +292,18 @@ defmodule OctopusWeb.ManagerLive do
     {:noreply, socket}
   end
 
+  def handle_event("playlist-delete", %{"playlist-id" => id}, socket) do
+    playlist = PlaylistScheduler.get_playlist(id)
+    PlaylistScheduler.delete_playlist!(playlist)
+
+    socket =
+      socket
+      |> put_flash(:info, "Playlist #{playlist.name} deleted")
+      |> assign_playlists()
+
+    {:noreply, socket}
+  end
+
   def handle_event("playlist-stop", _params, socket) do
     PlaylistScheduler.stop_playlist()
     {:noreply, socket}
@@ -304,19 +316,6 @@ defmodule OctopusWeb.ManagerLive do
 
   def handle_event("playlist-prev", _params, socket) do
     PlaylistScheduler.playlist_previous()
-    {:noreply, socket}
-  end
-
-  def handle_event("playlist-delete", _params, socket) do
-    playlist = %Playlist{} = PlaylistScheduler.get_playlist(socket.assigns.selected_playlist)
-
-    PlaylistScheduler.delete_playlist!(playlist)
-
-    socket =
-      socket
-      |> put_flash(:info, "Playlist #{playlist.name} deleted")
-      |> assign_playlists()
-
     {:noreply, socket}
   end
 

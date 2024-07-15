@@ -46,6 +46,8 @@ defmodule Octopus.Animator do
       *  positon - of the the top left pixel {x, y}
       * `animation_fun` - The transition function to use. Should take two canvases and return a list of canvases.
       * `duration` - The duration of the animation in milliseconds.
+
+    Options:
       * `easing_fun` - The easing function to use. It uses floats between 0 and 1. [default: fn x -> x end]
   """
 
@@ -55,9 +57,11 @@ defmodule Octopus.Animator do
         position = {_, _},
         animation_fun,
         duration,
-        easing_fun \\ fn x -> x end
+        opts \\ []
       )
-      when is_pid(pid) and is_function(animation_fun) and is_function(easing_fun) do
+      when is_pid(pid) and is_function(animation_fun) do
+    easing_fun = Keyword.get(opts, :easing_fun, & &1)
+
     GenServer.cast(
       pid,
       {:start_animation, {canvas, position, animation_fun, duration, easing_fun}}
@@ -109,7 +113,7 @@ defmodule Octopus.Animator do
       |> Enum.map(fn {start, %Animation{} = animation} ->
         total_steps = animation.steps |> length()
         progress = min((now - start) / animation.duration, 1)
-        index = trunc(animation.easing_fun.(progress) * (total_steps - 1))
+        index = round(animation.easing_fun.(progress) * (total_steps - 1))
         canvas = Enum.at(animation.steps, index)
         {animation.position, canvas}
       end)

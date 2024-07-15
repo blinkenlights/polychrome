@@ -22,7 +22,7 @@ defmodule Octopus.Transitions do
   end
 
   @doc """
-  Canvas2 pushes canvas1 out to one side. It uses easings for a smooth transtion.
+  Canvas2 pushes canvas1 out to one side. 
   Returns a stream of canvases that are intended to be played at constant frame rate.
 
   ## Options
@@ -88,5 +88,76 @@ defmodule Octopus.Transitions do
     |> Stream.map(fn {cut_start, cut_end} ->
       Canvas.cut(joined, cut_start, cut_end)
     end)
+  end
+
+  @doc """
+  Canvas2 slides over canvas1. It uses easings for a smooth transtion.
+
+  ## Options
+  * `:direction` - `:left`, `:right`, `:top`, or `:bottom` [default: `:left`]
+  """
+
+  def slide_over(%Canvas{} = canvas1, %Canvas{} = canvas2, opts \\ []) do
+    direction = Keyword.get(opts, :direction, :left)
+
+    steps =
+      1..7
+      |> Enum.map(fn slide_distance ->
+        case direction do
+          :left ->
+            left_canvas =
+              Canvas.cut(
+                canvas2,
+                {canvas2.width - slide_distance, 0},
+                {canvas2.width - 1, canvas2.height - 1}
+              )
+
+            right_canvas =
+              Canvas.cut(canvas1, {slide_distance, 0}, {canvas1.width - 1, canvas1.height - 1})
+
+            Canvas.join(left_canvas, right_canvas, direction: :horizontal)
+
+          :right ->
+            left_canvas =
+              Canvas.cut(
+                canvas1,
+                {0, 0},
+                {canvas1.width - slide_distance - 1, canvas1.height - 1}
+              )
+
+            right_canvas =
+              Canvas.cut(canvas2, {0, 0}, {slide_distance - 1, canvas1.height - 1})
+
+            Canvas.join(left_canvas, right_canvas, direction: :horizontal)
+
+          :top ->
+            top_canvas =
+              Canvas.cut(
+                canvas2,
+                {0, canvas2.height - slide_distance},
+                {canvas2.width - 1, canvas2.height - 1}
+              )
+
+            bottom_canvas =
+              Canvas.cut(canvas1, {0, slide_distance}, {canvas1.width - 1, canvas1.height - 1})
+
+            Canvas.join(top_canvas, bottom_canvas, direction: :vertical)
+
+          :bottom ->
+            top_canvas =
+              Canvas.cut(
+                canvas1,
+                {0, 0},
+                {canvas1.width - 1, canvas1.height - slide_distance - 1}
+              )
+
+            bottom_canvas =
+              Canvas.cut(canvas2, {0, 0}, {canvas1.width - 1, slide_distance - 1})
+
+            Canvas.join(top_canvas, bottom_canvas, direction: :vertical)
+        end
+      end)
+
+    steps ++ [canvas2]
   end
 end
