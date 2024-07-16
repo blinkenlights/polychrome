@@ -35,7 +35,7 @@ defmodule Octopus.Apps.StoryTeller do
       case config do
         %{story: story} -> Story.load(story)
         %{text: text} -> {:ok, Story.parse(text)}
-        _ -> Story.load("baumhumor")
+        _ -> Story.load("nog24")
       end
 
     {[first_line], lines} = Enum.split(story, 1)
@@ -135,13 +135,8 @@ defmodule Octopus.Apps.StoryTeller do
 
     variant = 0
 
-    canvas =
-      Canvas.put_string(canvas, {state.offset * 8, 0}, buffer, state.font, variant)
-      |> tap(fn c ->
-        # IEx.Helpers.clear()
-        IO.inspect(c)
-      end)
-
-    canvas |> Canvas.to_frame() |> send_frame()
+    Canvas.put_string(canvas, {state.offset * 8, 0}, buffer, state.font, variant)
+    |> Canvas.to_frame()
+    |> send_frame()
   end
 end
