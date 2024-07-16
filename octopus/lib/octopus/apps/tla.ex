@@ -16,7 +16,7 @@ defmodule Octopus.Apps.Tla do
       words =
         path
         |> File.read!()
-        |> String.split()
+        |> String.split("\n", trim: true)
         |> Enum.filter(fn word -> String.length(word) == 10 end)
         |> Enum.shuffle()
         |> Enum.map(&String.upcase/1)
