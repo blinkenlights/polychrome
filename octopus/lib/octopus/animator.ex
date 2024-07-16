@@ -28,7 +28,7 @@ defmodule Octopus.Animator do
   end
 
   @doc """
-    Starts the animator. 
+    Starts the animator.
 
     Parameters:
       * `app_id` - the app_id to use when sending frames to the mixer
@@ -39,7 +39,7 @@ defmodule Octopus.Animator do
   end
 
   @doc """
-    Adds an animation to the animator. 
+    Adds an animation to the animator.
 
     Parameters:
       * `canvas` - the canvas to transition to

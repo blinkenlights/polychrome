@@ -1,8 +1,13 @@
 defmodule Octopus.Apps.Tla do
   use Octopus.App, category: :animation
+  use Octopus.Params, prefix: :tla
 
-  alias Octopus.Canvas
   alias Octopus.Font
+  alias Octopus.Transitions
+  alias Octopus.Canvas
+  alias Octopus.Animator
+
+  require Logger
 
   defmodule Words do
     defstruct [:words, :lookup]
@@ -73,25 +78,22 @@ defmodule Octopus.Apps.Tla do
 
   def name, do: "TLA"
 
-  def config_schema do
-    %{
-      afterglow: {"Afterglow", :int, %{default: 50, min: 0, max: 500}},
-      last_word_list_size: {"Last word list size", :int, %{default: 250, min: 0, max: 500}}
-    }
-  end
-
-  def init(config) do
+  def init(_) do
     path = Path.join([:code.priv_dir(:octopus), "words", "500-10-letter-words.txt"])
     words = Words.load(path)
-    :timer.send_interval(5000, :next_word)
+    :timer.send_after(0, :next_word)
 
     current_word = Enum.random(words.words)
-    font = Font.load("ddp-DoDonPachi (Cave)")
+    font = Font.load("BlinkenLightsRegular")
     font_variants_count = length(font.variants)
 
-    chars = current_word |> String.graphemes() |> Enum.map(&[{&1, {0, 0}, 0}])
+    {:ok, animator} = Animator.start_link(get_app_id())
 
-    :timer.send_interval(100, :tick)
+    current_canvas = Canvas.new(80, 8) |> Canvas.put_string({0, 0}, current_word, font)
+
+    transition = &Transitions.push(&1, &2, direction: :top, steps: 60, separation: 3)
+
+    Animator.start_animation(animator, current_canvas, {0, 0}, transition, 1500)
 
     {:ok,
      %{
@@ -99,49 +101,26 @@ defmodule Octopus.Apps.Tla do
        last_words: [],
        font: font,
        font_variants_count: font_variants_count,
-       chars: chars,
        current_word: current_word,
-       afterglow: config.afterglow,
-       last_word_list_size: config.last_word_list_size
+       animator: animator
      }}
   end
 
-  def get_config(state), do: Map.take(state, [:afterglow, :last_word_list_size])
+  defp random_transition_for_index(i) do
+    case i do
+      0 ->
+        &Transitions.push(&1, &2, direction: :right, steps: 60, separation: 3)
 
-  def handle_config(%{afterglow: afterglow, last_word_list_size: last_word_list_size}, state) do
-    {:noreply, %{state | afterglow: afterglow, last_word_list_size: last_word_list_size}}
-  end
+      9 ->
+        &Transitions.push(&1, &2, direction: :left, steps: 60, separation: 3)
 
-  def handle_info(:tick, %{chars: chars} = state) do
-    chars
-    |> Enum.map(fn chars ->
-      canvas = Canvas.new(8, length(chars))
-
-      chars
-      |> Enum.reduce(canvas, fn {char, offset, variant}, canvas ->
-        Canvas.put_string(canvas, offset, char, state.font, variant)
-      end)
-      |> Canvas.cut({0, 0}, {7, 7})
-    end)
-    |> Enum.reverse()
-    |> Enum.reduce(&Canvas.join/2)
-    |> Canvas.to_frame(easing_interval: state.afterglow)
-    |> send_frame()
-
-    chars =
-      chars
-      |> Enum.map(fn foo ->
-        if length(foo) > 1 do
-          Enum.map(foo, fn {char, {x, y}, variant} ->
-            {char, {x, y - 1}, variant}
-          end)
-          |> Enum.drop_while(fn {_chars, {_, y}, _variant} -> y < -8 end)
+      _ ->
+        if :rand.uniform() > 0.5 do
+          &Transitions.push(&1, &2, direction: :top, steps: 60, separation: 3)
         else
-          foo
+          &Transitions.push(&1, &2, direction: :bottom, steps: 60, separation: 3)
         end
-      end)
-
-    {:noreply, %{state | chars: chars}}
+    end
   end
 
   def handle_info(
@@ -149,26 +128,46 @@ defmodule Octopus.Apps.Tla do
         %{
           words: words,
           current_word: current_word,
-          chars: chars,
           last_words: last_words,
           font: _font
         } = state
       ) do
-    last_words = [current_word | last_words] |> Enum.take(state.last_word_list_size)
+    last_words = [current_word | last_words] |> Enum.take(param(:last_word_list_size, 250))
     next_word = Words.next(words, current_word, last_words)
 
-    chars =
-      chars
-      |> Enum.zip(String.graphemes(next_word))
-      |> Enum.map(fn {chars, new_char} ->
-        if Enum.any?(chars, fn {char, _offset, _variant} -> new_char == char end) do
-          chars
-        else
-          chars ++
-            [{new_char, {0, length(chars) * 9}, Enum.random([0, 1, 2, 3, 6, 7, 8, 9, 10, 11])}]
-        end
-      end)
+    Logger.debug("Next Word: #{next_word}", next_word)
 
-    {:noreply, %{state | last_words: last_words, chars: chars, current_word: next_word}}
+    String.split(state.current_word, "", trim: true)
+    |> Enum.zip(String.split(next_word, "", trim: true))
+    |> Enum.with_index()
+    |> Enum.each(fn
+      {{a, a}, _} ->
+        nil
+
+      {{_, b}, i} ->
+        canvas = Canvas.new(8, 8) |> Canvas.put_string({0, 0}, b, state.font)
+
+        :timer.send_after(
+          :rand.uniform(param(:max_letter_delay, 1000)),
+          {:animate_letter, i, canvas}
+        )
+    end)
+
+    :timer.send_after(param(:word_duration, 5000), :next_word)
+    {:noreply, %{state | last_words: last_words, current_word: next_word}}
+  end
+
+  def handle_info({:animate_letter, i, canvas}, state) do
+    transition = random_transition_for_index(i)
+
+    Animator.start_animation(
+      state.animator,
+      canvas,
+      {8 * i, 0},
+      transition,
+      1500
+    )
+
+    {:noreply, state}
   end
 end
