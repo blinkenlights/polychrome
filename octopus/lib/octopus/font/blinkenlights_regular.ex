@@ -752,26 +752,26 @@ defmodule Octopus.Font.BlinkenLightsRegular do
       encoding: ?Y,
       bitmap:
         defbitmap([
-          "XX  XX",
-          "XX  XX",
-          "XX  XX",
-          " XXXX ",
-          "  XX  ",
-          "  XX  ",
-          "  XX  "
+          "X   X",
+          "X   X",
+          "X   X",
+          " XXX ",
+          "  X  ",
+          "  X  ",
+          "  X  "
         ])
     },
     ?Z => %{
       encoding: ?Z,
       bitmap:
         defbitmap([
-          "XXXXXX",
-          "    XX",
-          "   XX ",
-          "  XX  ",
-          " XX   ",
-          "XX    ",
-          "XXXXXX"
+          "XXXXX",
+          "    X",
+          "   X ",
+          "  X  ",
+          " X   ",
+          "X    ",
+          "XXXXX"
         ])
     },
     ?[ => %{
