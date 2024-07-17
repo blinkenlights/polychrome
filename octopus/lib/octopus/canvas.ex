@@ -169,9 +169,6 @@ defmodule Octopus.Canvas do
   end
 
   def to_wframe(%Canvas{width: width, height: height} = canvas, opts \\ []) do
-    # width = min(width, 50)
-    # height = min(height, 8)
-    canvas = Canvas.cut(canvas, {0, 0}, {width, height})
     window_gap = if Keyword.get(opts, :drop, false), do: @window_gap, else: 0
     window_width = @window_width + window_gap
     easing_interval = Keyword.get(opts, :easing_interval, 0)
@@ -185,15 +182,13 @@ defmodule Octopus.Canvas do
         trunc(l / 2.55 / 100 * 63)
       end
 
-    # palette = for i <- 0..63, do: [0, 0, 0, i * 4]
-    # palette with red mixed in where w is low
     max_w = 252
     max_r = 63
 
     palette =
       for w <- 0..63 do
         w = w * 4
-        # r = trunc((252 - w * 4) * 63 / 252)
+
         r =
           if w == 0 do
             0
@@ -203,12 +198,6 @@ defmodule Octopus.Canvas do
 
         [r, 0, 0, w]
       end
-
-    # data
-    # |> Enum.drop(20 * 4)
-    # |> Enum.take(100)
-    # |> IO.iodata_to_binary()
-    # |> IO.inspect(limit: :infinity)
 
     %WFrame{
       palette: palette |> IO.iodata_to_binary(),
@@ -496,6 +485,54 @@ defmodule Octopus.Canvas do
       end
 
     svg_header <> Enum.join(svg_pixels) <> svg_footer
+  end
+
+  @type blend_mode :: :multiply | :add | :subtract | :screen | :overlay | :darken | :lighten
+
+  @spec blend(Canvas.t(), Canvas.t(), blend_mode) :: Canvas.t()
+  def blend_onto(%Canvas{} = bottom, %Canvas{} = top, mode), do: blend(top, bottom, mode)
+
+  @spec blend(Canvas.t(), Canvas.t(), blend_mode) :: Canvas.t()
+  def blend(%Canvas{} = top, %Canvas{} = bottom, blend_mode) do
+    for y <- 0..(bottom.height - 1),
+        x <- 0..(bottom.width - 1),
+        into: Canvas.new(bottom.width, bottom.height) do
+      bottom_color = get_pixel(bottom, {x, y})
+      top_color = get_pixel(top, {x, y})
+      {{x, y}, blend_color(bottom_color, top_color, blend_mode)}
+    end
+  end
+
+  defp blend_color({r1, g1, b1}, {r2, g2, b2}, :multiply) do
+    {div(r1 * r2, 255), div(g1 * g2, 255), div(b1 * b2, 255)}
+  end
+
+  defp blend_color({r1, g1, b1}, {r2, g2, b2}, :add) do
+    {min(r1 + r2, 255), min(g1 + g2, 255), min(b1 + b2, 255)}
+  end
+
+  defp blend_color({r1, g1, b1}, {r2, g2, b2}, :subtract) do
+    {max(r1 - r2, 0), max(g1 - g2, 0), max(b1 - b2, 0)}
+  end
+
+  defp blend_color({r1, g1, b1}, {r2, g2, b2}, :screen) do
+    {255 - div((255 - r1) * (255 - r2), 255), 255 - div((255 - g1) * (255 - g2), 255),
+     255 - div((255 - b1) * (255 - b2), 255)}
+  end
+
+  defp blend_color({r1, g1, b1}, {r2, g2, b2}, :overlay) do
+    r = if r1 < 128, do: div(2 * r1 * r2, 255), else: 255 - div(2 * (255 - r1) * (255 - r2), 255)
+    g = if g1 < 128, do: div(2 * g1 * g2, 255), else: 255 - div(2 * (255 - g1) * (255 - g2), 255)
+    b = if b1 < 128, do: div(2 * b1 * b2, 255), else: 255 - div(2 * (255 - b1) * (255 - b2), 255)
+    {r, g, b}
+  end
+
+  defp blend_color({r1, g1, b1}, {r2, g2, b2}, :darken) do
+    {min(r1, r2), min(g1, g2), min(b1, b2)}
+  end
+
+  defp blend_color({r1, g1, b1}, {r2, g2, b2}, :lighten) do
+    {max(r1, r2), max(g1, g2), max(b1, b2)}
   end
 end
 
