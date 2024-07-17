@@ -13,7 +13,7 @@ defmodule Octopus.Canvas do
 
   alias Octopus.Font
   alias Octopus.WebP
-  alias Octopus.Protobuf.{RGBFrame}
+  alias Octopus.Protobuf.{RGBFrame, WFrame}
   alias Octopus.Canvas
 
   defstruct [:width, :height, :pixels]
@@ -166,6 +166,55 @@ defmodule Octopus.Canvas do
           do: [r, g, b]
 
     %RGBFrame{data: data |> IO.iodata_to_binary(), easing_interval: easing_interval}
+  end
+
+  def to_wframe(%Canvas{width: width, height: height} = canvas, opts \\ []) do
+    # width = min(width, 50)
+    # height = min(height, 8)
+    canvas = Canvas.cut(canvas, {0, 0}, {width, height})
+    window_gap = if Keyword.get(opts, :drop, false), do: @window_gap, else: 0
+    window_width = @window_width + window_gap
+    easing_interval = Keyword.get(opts, :easing_interval, 0)
+
+    data =
+      for window <- 0..(div(width + window_gap, window_width) - 1),
+          y <- 0..(height - 1),
+          x <- 0..7,
+          {r, g, b} = get_pixel(canvas, {window * window_width + x, y}) do
+        %Chameleon.HSL{l: l} = Chameleon.RGB.new(r, g, b) |> Chameleon.convert(Chameleon.HSL)
+        trunc(l / 2.55 / 100 * 63)
+      end
+
+    # palette = for i <- 0..63, do: [0, 0, 0, i * 4]
+    # palette with red mixed in where w is low
+    max_w = 252
+    max_r = 63
+
+    palette =
+      for w <- 0..63 do
+        w = w * 4
+        # r = trunc((252 - w * 4) * 63 / 252)
+        r =
+          if w == 0 do
+            0
+          else
+            trunc(max_r * :math.pow((max_w - w) / max_w, 2))
+          end
+
+        [r, 0, 0, w]
+      end
+
+    # data
+    # |> Enum.drop(20 * 4)
+    # |> Enum.take(100)
+    # |> IO.iodata_to_binary()
+    # |> IO.inspect(limit: :infinity)
+
+    %WFrame{
+      palette: palette |> IO.iodata_to_binary(),
+      data: data |> IO.iodata_to_binary(),
+      easing_interval: easing_interval
+    }
   end
 
   @doc """
@@ -380,6 +429,8 @@ defmodule Octopus.Canvas do
   @doc """
   Returns a rectangular subsection of the canvas.
   """
+  def cut(canvas, top_left, bottom_right)
+
   def cut(%Canvas{} = canvas, {x1, y1}, {x2, y2}) when x2 >= x1 and y2 >= y1 do
     width = x2 - x1 + 1
     height = y2 - y1 + 1

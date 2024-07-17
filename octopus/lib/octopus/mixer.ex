@@ -7,15 +7,13 @@ defmodule Octopus.Mixer do
   alias Octopus.{Broadcaster, Protobuf, AppSupervisor, Canvas}
 
   alias Octopus.Protobuf.{
-    Frame,
-    WFrame,
     RGBFrame,
     InputEvent,
     ControlEvent
   }
 
   @pubsub_topic "mixer"
-  @pubsub_frames [Frame, WFrame, RGBFrame]
+  @pubsub_frames [RGBFrame]
   @transition_duration 300
   @transition_frame_time trunc(1000 / 60)
 

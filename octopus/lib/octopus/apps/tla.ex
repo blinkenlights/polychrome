@@ -87,7 +87,7 @@ defmodule Octopus.Apps.Tla do
     font = Font.load("BlinkenLightsRegular")
     font_variants_count = length(font.variants)
 
-    {:ok, animator} = Animator.start_link(get_app_id())
+    {:ok, animator} = Animator.start_link(app_id: get_app_id(), to_frame: &Canvas.to_wframe/2)
 
     current_canvas = Canvas.new(80, 8) |> Canvas.put_string({0, 0}, current_word, font)
 

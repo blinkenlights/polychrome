@@ -17,7 +17,8 @@ defmodule Octopus.Animator do
   defmodule State do
     defstruct canvas: nil,
               app_id: nil,
-              animations: %{}
+              animations: %{},
+              to_frame: &Canvas.to_frame/2
   end
 
   defmodule Animation do
@@ -34,8 +35,10 @@ defmodule Octopus.Animator do
       * `app_id` - the app_id to use when sending frames to the mixer
   """
 
-  def start_link(app_id) when is_binary(app_id) do
-    GenServer.start_link(__MODULE__, app_id)
+  def start_link(opts) do
+    app_id = Keyword.fetch!(opts, :app_id)
+    to_frame = Keyword.get(opts, :to_frame, &Canvas.to_frame/2)
+    GenServer.start_link(__MODULE__, app_id: app_id, to_frame: to_frame)
   end
 
   @doc """
@@ -68,10 +71,14 @@ defmodule Octopus.Animator do
     )
   end
 
-  def init(app_id) when is_binary(app_id) do
+  def init(opts) do
+    app_id = Keyword.fetch!(opts, :app_id)
+    to_frame = Keyword.fetch!(opts, :to_frame)
+
     state = %State{
       canvas: Canvas.new(@canvas_size_x, @canvas_size_y),
-      app_id: app_id
+      app_id: app_id,
+      to_frame: to_frame
     }
 
     :timer.send_interval((1000 / @frame_rate) |> trunc, self(), :tick)
@@ -104,7 +111,10 @@ defmodule Octopus.Animator do
     {:noreply, %State{state | animations: Map.put(state.animations, start, animation)}}
   end
 
-  def handle_info(:tick, %State{animations: %{} = animations} = state) do
+  def handle_info(
+        :tick,
+        %State{animations: %{} = animations, to_frame: to_frame} = state
+      ) do
     now = System.os_time(:millisecond)
 
     canvas =
@@ -121,7 +131,7 @@ defmodule Octopus.Animator do
         Canvas.overlay(canvas_acc, canvas, offset: {x, y})
       end)
 
-    frame = Canvas.to_frame(canvas, easing_interval: 50)
+    frame = to_frame.(canvas, easing_interval: 50)
     Mixer.handle_frame(state.app_id, frame)
 
     # filter out animations that are done

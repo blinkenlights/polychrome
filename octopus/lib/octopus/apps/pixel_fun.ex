@@ -210,7 +210,7 @@ defmodule Octopus.Apps.PixelFun do
     canvas = state |> render()
 
     canvas
-    |> Canvas.to_frame(drop: true)
+    |> Canvas.to_wframe(drop: true)
     |> Map.put(:easing_interval, state.easing_interval)
     # |> send_canvas()
     |> send_frame()
