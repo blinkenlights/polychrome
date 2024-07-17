@@ -29,9 +29,11 @@ config :nerves, :erlinit, update_clock: true
 # * See https://hexdocs.pm/ssh_subsystem_fwup/readme.html for firmware updates
 
 config :nerves_ssh,
-  authorized_keys: [
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFk68ujMEgPVglDNnxqrht/0piGwofQy4GmPjgq4CvUV"
-  ]
+  authorized_keys:
+    File.cwd!()
+    |> Path.join("priv/authorized_keys/*")
+    |> Path.wildcard()
+    |> Enum.map(&File.read!/1)
 
 # Configure the network using vintage_net
 # See https://github.com/nerves-networking/vintage_net for more information
