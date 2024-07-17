@@ -1,13 +1,19 @@
 defmodule Octopus.Installation do
   @typedoc """
-  Position of a pixel, used to map content onto the installation.
+  Logical position of a pixel in the installation
   """
   @type pixel :: {integer(), integer()}
 
   @doc """
-  Returns the positions of the pixels in the installation
+  Returns a list of panels with all of the pixels
   """
-  @callback pixels() :: list(pixel())
+  @callback panels() :: nonempty_list(nonempty_list(pixel()))
+
+  @callback width() :: integer()
+  @callback height() :: integer()
+
+  @callback center_x() :: number()
+  @callback center_y() :: number()
 
   @callback simulator_layouts() :: nonempty_list(Octopus.Layout.t())
 end
