@@ -492,47 +492,85 @@ defmodule Octopus.Canvas do
   @spec blend(Canvas.t(), Canvas.t(), blend_mode) :: Canvas.t()
   def blend_onto(%Canvas{} = bottom, %Canvas{} = top, mode), do: blend(top, bottom, mode)
 
-  @spec blend(Canvas.t(), Canvas.t(), blend_mode) :: Canvas.t()
-  def blend(%Canvas{} = top, %Canvas{} = bottom, blend_mode) do
+  @spec blend(Canvas.t(), Canvas.t(), blend_mode, float) :: Canvas.t()
+  def blend(%Canvas{} = top, %Canvas{} = bottom, blend_mode, alpha \\ 1) do
     for y <- 0..(bottom.height - 1),
         x <- 0..(bottom.width - 1),
         into: Canvas.new(bottom.width, bottom.height) do
       bottom_color = get_pixel(bottom, {x, y})
       top_color = get_pixel(top, {x, y})
-      {{x, y}, blend_color(bottom_color, top_color, blend_mode)}
+      {{x, y}, blend_color(bottom_color, top_color, blend_mode, alpha)}
     end
   end
 
-  defp blend_color({r1, g1, b1}, {r2, g2, b2}, :multiply) do
-    {div(r1 * r2, 255), div(g1 * g2, 255), div(b1 * b2, 255)}
+  defp blend_color(color1, color2, blend_mode, alpha)
+
+  defp blend_color({r1, g1, b1}, {r2, g2, b2}, :multiply, alpha) do
+    {
+      trunc(r1 * r2 / 255 * alpha + r1 * (1 - alpha)),
+      trunc(g1 * g2 / 255 * alpha + g1 * (1 - alpha)),
+      trunc(b1 * b2 / 255 * alpha + b1 * (1 - alpha))
+    }
   end
 
-  defp blend_color({r1, g1, b1}, {r2, g2, b2}, :add) do
-    {min(r1 + r2, 255), min(g1 + g2, 255), min(b1 + b2, 255)}
+  defp blend_color({r1, g1, b1}, {r2, g2, b2}, :add, alpha) do
+    {
+      trunc(min(r1 * (1 - alpha) + r2 * alpha, 255)),
+      trunc(min(g1 * (1 - alpha) + g2 * alpha, 255)),
+      trunc(min(b1 * (1 - alpha) + b2 * alpha, 255))
+    }
   end
 
-  defp blend_color({r1, g1, b1}, {r2, g2, b2}, :subtract) do
-    {max(r1 - r2, 0), max(g1 - g2, 0), max(b1 - b2, 0)}
+  defp blend_color({r1, g1, b1}, {r2, g2, b2}, :subtract, alpha) do
+    {
+      trunc(max(r1 * (1 - alpha) - r2 * alpha, 0)),
+      trunc(max(g1 * (1 - alpha) - g2 * alpha, 0)),
+      trunc(max(b1 * (1 - alpha) - b2 * alpha, 0))
+    }
   end
 
-  defp blend_color({r1, g1, b1}, {r2, g2, b2}, :screen) do
-    {255 - div((255 - r1) * (255 - r2), 255), 255 - div((255 - g1) * (255 - g2), 255),
-     255 - div((255 - b1) * (255 - b2), 255)}
+  defp blend_color({r1, g1, b1}, {r2, g2, b2}, :screen, alpha) do
+    {
+      trunc(255 - (255 - r1) * (255 - r2) / 255 * alpha + r1 * (1 - alpha)),
+      trunc(255 - (255 - g1) * (255 - g2) / 255 * alpha + g1 * (1 - alpha)),
+      trunc(255 - (255 - b1) * (255 - b2) / 255 * alpha + b1 * (1 - alpha))
+    }
   end
 
-  defp blend_color({r1, g1, b1}, {r2, g2, b2}, :overlay) do
-    r = if r1 < 128, do: div(2 * r1 * r2, 255), else: 255 - div(2 * (255 - r1) * (255 - r2), 255)
-    g = if g1 < 128, do: div(2 * g1 * g2, 255), else: 255 - div(2 * (255 - g1) * (255 - g2), 255)
-    b = if b1 < 128, do: div(2 * b1 * b2, 255), else: 255 - div(2 * (255 - b1) * (255 - b2), 255)
+  defp blend_color({r1, g1, b1}, {r2, g2, b2}, :overlay, alpha) do
+    r =
+      if r1 < 128,
+        do: trunc(2 * r1 * r2 / 255 * alpha + r1 * (1 - alpha)),
+        else: trunc(255 - 2 * (255 - r1) * (255 - r2) / 255)
+
+    g =
+      if g1 < 128,
+        do: trunc(2 * g1 * g2 / 255 * alpha + g1 * (1 - alpha)),
+        else: trunc(255 - 2 * (255 - g1) * (255 - g2) / 255)
+
+    b =
+      if b1 < 128,
+        do: trunc(2 * b1 * b2 / 255 * alpha + b1 * (1 - alpha)),
+        else: trunc(255 - 2 * (255 - b1) * (255 - b2) / 255)
+
     {r, g, b}
   end
 
-  defp blend_color({r1, g1, b1}, {r2, g2, b2}, :darken) do
-    {min(r1, r2), min(g1, g2), min(b1, b2)}
+  defp blend_color({r1, g1, b1}, {r2, g2, b2}, :darken, alpha) do
+    {
+      trunc(min(r1 * (1 - alpha) + r2 * alpha, 255)),
+      trunc(min(r1, r2) * alpha + r1 * (1 - alpha)),
+      trunc(min(g1, g2) * alpha + g1 * (1 - alpha)),
+      trunc(min(b1, b2) * alpha + b1 * (1 - alpha))
+    }
   end
 
-  defp blend_color({r1, g1, b1}, {r2, g2, b2}, :lighten) do
-    {max(r1, r2), max(g1, g2), max(b1, b2)}
+  defp blend_color({r1, g1, b1}, {r2, g2, b2}, :lighten, alpha) do
+    {
+      trunc(max(r1, r2) * alpha + r1 * (1 - alpha)),
+      trunc(max(g1, g2) * alpha + g1 * (1 - alpha)),
+      trunc(max(b1, b2) * alpha + b1 * (1 - alpha))
+    }
   end
 end
 
