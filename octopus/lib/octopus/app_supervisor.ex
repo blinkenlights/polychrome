@@ -54,19 +54,19 @@ defmodule Octopus.AppSupervisor do
     config = Map.merge(default_config, config)
 
     if module in available_apps() do
-      do_start_app(module, config)
+      do_start_app(module, config, Keyword.get(opts, :select_app, true))
     else
       Logger.error("App #{module} not found")
       {:error, :app_not_found}
     end
   end
 
-  defp do_start_app(module, config) when is_atom(module) do
+  defp do_start_app(module, config, select_app) when is_atom(module) do
     app_id = generate_app_id()
     name = {:via, Registry, {Octopus.AppRegistry, app_id, module}}
 
     # select app in mixer if there is no other app running
-    if running_apps() == [] do
+    if select_app && running_apps() == [] do
       Mixer.select_app(app_id)
     end
 

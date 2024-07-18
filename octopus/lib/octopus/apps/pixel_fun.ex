@@ -30,7 +30,10 @@ defmodule Octopus.Apps.PixelFun do
       :move,
       :input,
       :audio_input,
-      :seconds
+      :seconds,
+      :panels,
+      :center_x,
+      :center_y
     ]
   end
 
@@ -38,12 +41,9 @@ defmodule Octopus.Apps.PixelFun do
 
   defdelegate installation, to: Octopus
 
-  def center_x, do: installation().center_x()
-  def center_y, do: installation().center_y()
-
   def config_schema() do
     %{
-      program: {"Program", :string, %{default: "sin(t*2+i)*y-cos(t*2-i)*x"}},
+      program: {"Program", :string, %{default: "sin(10*t-hypot(x,y))"}},
       color_interval: {"Color change Interval (s)", :float, %{default: 5, min: 1, max: 20}},
       invert_colors: {"Invert Colors", :boolean, %{default: false}},
       translate_scale: {"Translate Scale", :float, %{default: 5, min: 0, max: 20}},
@@ -73,12 +73,10 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   def init(config) do
-    # canvas = Canvas.new(installation().wid(), @width, @height)
     {:ok, program} = config.program |> Program.parse()
 
     :timer.send_interval(@frame_time_ms, :tick)
     Process.send_after(self(), :update_colors, param(:color_interval_ms, 5000))
-    # Process.send_after(self(), :cycle_functions, trunc(config.cycle_functions_interval * 1000))
 
     {seconds, micros} = NaiveDateTime.utc_now() |> NaiveDateTime.to_gregorian_seconds()
     seconds = seconds + micros / 1_000_000
@@ -99,12 +97,14 @@ defmodule Octopus.Apps.PixelFun do
        translate_scale: config.translate_scale,
        rotate_scale: config.rotate_scale,
        zoom_scale: config.zoom_scale,
-       # pivot: {@center_x, @center_y},
        offset: {0, 0},
        move: {0, 0},
        input: config.input,
        audio_input: %{low: 0.0, mid: 0.0, high: 0.0},
-       seconds: seconds
+       seconds: seconds,
+       panels: installation().panels(),
+       center_x: installation().center_x(),
+       center_y: installation().center_y()
      }}
   end
 
@@ -232,14 +232,14 @@ defmodule Octopus.Apps.PixelFun do
     lerp_fn =
       if state.lerp_over_black, do: &interpolate_colors_with_black/3, else: &interpolate_colors/3
 
-    installation().panels()
+    state.panels
     |> Enum.map(fn panel ->
       for {{x, y}, i} <- Enum.with_index(panel), into: Canvas.new(8, 8) do
         local_x = rem(i, 8)
         local_y = div(i, 8)
 
-        x_translated = x - offset_x - center_x()
-        y_translated = y - offset_y - center_y()
+        x_translated = x - offset_x - state.center_x
+        y_translated = y - offset_y - state.center_y
 
         x_rotated = x_translated * :math.cos(rotation) - y_translated * :math.sin(rotation)
         y_rotated = x_translated * :math.sin(rotation) + y_translated * :math.cos(rotation)
@@ -288,15 +288,15 @@ defmodule Octopus.Apps.PixelFun do
         value > 0 ->
           %Chameleon.HSV{
             a
-            | s: param(:saturation_percent, 70),
-              v: trunc(param(:value_percent, 100) * value)
+            | s: param(:saturation_percent, 70) |> min(100) |> max(0),
+              v: trunc(100 * value) |> min(100) |> max(0)
           }
 
         value < 0 ->
           %Chameleon.HSV{
             b
-            | s: param(:saturation_percent, 70),
-              v: trunc(param(:value_percent, 100) * -value)
+            | s: param(:saturation_percent, 70) |> min(100) |> max(0),
+              v: trunc(100 * -value) |> min(100) |> max(0)
           }
 
         true ->
@@ -320,7 +320,7 @@ defmodule Octopus.Apps.PixelFun do
 
     hsv = %Chameleon.HSV{
       hsv
-      | s: param(:saturation_percent, 70),
+      | s: param(:saturation_percent, 70) |> min(100) |> max(0),
         v: trunc(param(:value_percent, 100) * -value) |> min(100) |> max(0)
     }
 

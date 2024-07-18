@@ -1,5 +1,6 @@
 defmodule Octopus.Mixer do
   use GenServer
+  use Octopus.Params, prefix: :mixer
   require Logger
 
   alias Octopus.Protobuf.SoundToLightControlEvent
@@ -24,14 +25,49 @@ defmodule Octopus.Mixer do
               transition: nil,
               buffer_canvas: Canvas.new(80, 8),
               max_luminance: 255,
-              last_input: 0
+              last_input: 0,
+              pixel_fun: nil,
+              pixel_fun_frame: nil
   end
 
   def start_link(_) do
     GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
   end
 
-  def handle_frame(app_id, %RGBFrame{} = frame) do
+  def mix_with_pixel_fun? do
+    param(:mix_with_pixel_fun?, false)
+  end
+
+  def pixel_fun_frame do
+    GenServer.call(__MODULE__, :get_pixel_fun_frame)
+  end
+
+  def mix_frame_with_pixel_fun(%RGBFrame{} = frame) do
+    if mix_with_pixel_fun?() do
+      pf_frame = pixel_fun_frame()
+
+      if pf_frame do
+        canvas = Canvas.from_frame(frame)
+        pf_canvas = Canvas.from_frame(pf_frame)
+        Canvas.blend(pf_canvas, canvas, :multiply, 1) |> Canvas.to_frame()
+      else
+        frame
+      end
+    else
+      frame
+    end
+  end
+
+  def handle_frame(app_id, frame, can_be_mixed_with_pixel_fun \\ true)
+
+  def handle_frame(app_id, %RGBFrame{} = frame, can_be_mixed_with_pixel_fun) do
+    frame =
+      if can_be_mixed_with_pixel_fun do
+        mix_frame_with_pixel_fun(frame)
+      else
+        frame
+      end
+
     # Split RGB frames to avoid UPD fragmenting. Can be removed when we fix the fragmenting in the firmware
     Protobuf.split_and_encode(frame)
     |> Enum.each(fn binary ->
@@ -39,7 +75,7 @@ defmodule Octopus.Mixer do
     end)
   end
 
-  def handle_frame(app_id, %{} = frame) do
+  def handle_frame(app_id, %{} = frame, _can_be_mixed_with_pixel_fun) do
     # encode the frame in the app process, so any encoding errors get raised there
     Protobuf.encode(frame)
     |> send_frame(frame, app_id)
@@ -92,24 +128,40 @@ defmodule Octopus.Mixer do
   end
 
   def init(:ok) do
+    {:ok, pixel_fun} = Octopus.AppSupervisor.start_app(Octopus.Apps.PixelFun, select_app: false)
+
     state = %State{
-      last_input: System.os_time(:second)
+      last_input: System.os_time(:second),
+      pixel_fun: pixel_fun
     }
 
     {:ok, state}
+  end
+
+  def handle_call(:get_pixel_fun_frame, _, %State{pixel_fun_frame: pixel_fun_frame} = state) do
+    {:reply, pixel_fun_frame, state}
   end
 
   def handle_call(:get_selected_app, _, %State{selected_app: selected_app} = state) do
     {:reply, selected_app, state}
   end
 
-  def handle_cast({:new_frame, {app_id, binary, f}}, %State{rendered_app: rendered_app} = state) do
+  def handle_cast(
+        {:new_frame, {app_id, binary, f}},
+        %State{rendered_app: rendered_app, pixel_fun: pixel_fun} = state
+      ) do
     case rendered_app do
       {^app_id, _} -> send_frame(binary, f)
       {_, ^app_id} -> send_frame(binary, f)
       ^app_id -> send_frame(binary, f)
       _ -> :noop
     end
+
+    state =
+      case pixel_fun do
+        ^app_id -> %State{state | pixel_fun_frame: f}
+        _ -> state
+      end
 
     {:noreply, state}
   end
