@@ -60,8 +60,7 @@ config :mdns_lite,
   ],
   dns_bridge_enabled: true,
   dns_bridge_ip: {127, 0, 0, 53},
-  dns_bridge_port: 53,
-  dns_bridge_recursive: true
+  dns_bridge_port: 53
 
 # Import target specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

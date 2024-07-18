@@ -6,7 +6,7 @@ defmodule Joystick.UDP do
   alias Joystick.Protobuf.{InputEvent, InputLightEvent}
   alias Joystick.LightControl
 
-  @octopus_host "oldie.local" |> String.to_charlist()
+  @octopus_host ~c"oldie.local"
   # @octopus_host ~c"192.168.1.176"
   @octopus_port 4423
   @local_port 4422
@@ -31,13 +31,21 @@ defmodule Joystick.UDP do
   end
 
   def handle_cast({:send, binary}, %State{} = state) do
-    case :gen_udp.send(state.udp, @octopus_host, @octopus_port, binary) do
-      :ok ->
-        # Logger.debug("Event send to #{@octopus_host}:#{@octopus_port}")
-        :noop
+    case MdnsLite.gethostbyname(@octopus_host) do
+      {:ok, ip} ->
+        case :gen_udp.send(state.udp, {ip, @octopus_port}, binary) do
+          :ok ->
+            # Logger.debug("Event send to #{@octopus_host}:#{@octopus_port}")
+            :noop
 
-      {:error, reason} ->
-        Logger.warning("Failed to send to #{@octopus_host}:#{@octopus_port} : #{inspect(reason)}")
+          {:error, reason} ->
+            Logger.warning(
+              "Failed to send to #{@octopus_host}:#{@octopus_port} : #{inspect(reason)}"
+            )
+        end
+
+      {:error, _} ->
+        :noop
     end
 
     {:noreply, state}
