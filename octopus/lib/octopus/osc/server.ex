@@ -63,6 +63,11 @@ defmodule Octopus.Osc.Server do
 
   defp handle_message(["heartbeat"], _, _state), do: nil
 
+  defp handle_message(["global", key], args, state) do
+    Octopus.Params.Global.handle_param(key, args)
+    put_param_and_reply("global", key, args, state)
+  end
+
   defp handle_message(["config"], [1.0], state) do
     messages =
       Octopus.Params.all()
@@ -78,6 +83,14 @@ defmodule Octopus.Osc.Server do
   end
 
   defp handle_message([prefix, key], args, state) do
+    put_param_and_reply(prefix, key, args, state)
+  end
+
+  defp handle_message(address, args, _state) do
+    Logger.warning("Unknown OSC message: #{inspect(address)} with args: #{inspect(args)}")
+  end
+
+  defp put_param_and_reply(prefix, key, args, state) do
     arg =
       case args do
         [arg] -> arg
@@ -91,9 +104,5 @@ defmodule Octopus.Osc.Server do
     |> Enum.each(fn {ip, port} -> :gen_udp.send(state.socket, ip, port, message) end)
 
     Octopus.Params.put(prefix, key, arg)
-  end
-
-  defp handle_message(address, args, _state) do
-    Logger.warning("Unknown OSC message: #{inspect(address)} with args: #{inspect(args)}")
   end
 end
