@@ -32,7 +32,7 @@ defmodule Octopus.Application do
         Octopus.AppSupervisor,
         Octopus.InputAdapter,
         Octopus.PlaylistScheduler,
-        Octopus.GameScheduler,
+        Octopus.EventScheduler,
         Octopus.Mixer,
 
         # WebApp

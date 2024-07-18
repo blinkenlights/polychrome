@@ -95,6 +95,7 @@ defmodule Octopus.PlaylistScheduler do
         {:noreply, state}
 
       nil ->
+        Logger.warning("Playlist id #{id} not found")
         {:noreply, state}
     end
   end

@@ -14,7 +14,7 @@ defmodule Octopus.Apps.Whackamole do
     defstruct [:game]
   end
 
-  def name(), do: "Whackamole"
+  def name(), do: "Whack'em"
 
   def icon(), do: Canvas.from_string("W", Font.load("cshk-Captain Sky Hawk (RARE)"), 3)
 

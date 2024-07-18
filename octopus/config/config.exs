@@ -16,7 +16,8 @@ config :octopus,
   ecto_repos: [Octopus.Repo],
   generators: [binary_id: true],
   broadcast: false,
-  show_sim_preview: true
+  show_sim_preview: true,
+  enable_event_mode: true
 
 config :octopus, Friends.Repo,
   database: "octopus_#{Mix.env()}",

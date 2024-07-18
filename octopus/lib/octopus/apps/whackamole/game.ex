@@ -1,6 +1,6 @@
 defmodule Octopus.Apps.Whackamole.Game do
   require Logger
-  alias Octopus.{Canvas, Font, App, Animator, Transitions, Sprite}
+  alias Octopus.{Canvas, Font, App, Animator, Transitions, Sprite, EventScheduler}
   alias Octopus.Apps.Whackamole.Mole
 
   defstruct [
@@ -54,27 +54,27 @@ defmodule Octopus.Apps.Whackamole.Game do
     case game.tick do
       3 ->
         whack =
-          Canvas.new(5 * 8, 8)
-          |> Canvas.put_string({0, 0}, "WHACK", game.font, 0)
+          Canvas.new(6 * 8, 8)
+          |> Canvas.put_string({0, 0}, " WHACK", game.font, 0)
 
         Animator.start_animation(game.animator, whack, {0, 0}, transition_fun, duration)
         next_tick(game)
 
       6 ->
         a =
-          Canvas.new(8, 8)
-          |> Canvas.put_string({0, 0}, "A", game.font, 1)
+          Canvas.new(3 * 8, 8)
+          |> Canvas.put_string({0, 0}, "'EM", game.font, 1)
 
-        Animator.start_animation(game.animator, a, {5 * 8, 0}, transition_fun, duration)
+        Animator.start_animation(game.animator, a, {6 * 8, 0}, transition_fun, duration)
         next_tick(game)
 
-      9 ->
-        mole =
-          Canvas.new(4 * 8, 8)
-          |> Canvas.put_string({0, 0}, "MOLE", game.font, 2)
+      # 9 ->
+      #   mole =
+      #     Canvas.new(4 * 8, 8)
+      #     |> Canvas.put_string({0, 0}, "MOLE", game.font, 2)
 
-        Animator.start_animation(game.animator, mole, {6 * 8, 0}, transition_fun, duration)
-        next_tick(game)
+      # Animator.start_animation(game.animator, mole, {6 * 8, 0}, transition_fun, duration)
+      # next_tick(game)
 
       30 ->
         Animator.clear(game.animator, fade_out: 500)
@@ -96,27 +96,37 @@ defmodule Octopus.Apps.Whackamole.Game do
         |> next_tick()
 
       _ ->
-        # game over
-        Animator.clear(game.animator, fade_out: @game_over_fade_out_ms)
         %__MODULE__{game | state: :game_over, tick: 0}
     end
   end
 
   def tick(%__MODULE__{state: :game_over} = game) do
-    text_display = trunc(@game_over_fade_out_ms / 100)
+    transition_fun = &Transitions.push(&1, &2, direction: :top, separation: 0)
+    duration = 300
 
     case game.tick do
-      ^text_display ->
-        Logger.info("WHACKAMOLE: GAME OVER")
+      2 ->
+        Animator.clear(game.animator, fade_out: 500)
+        next_tick(game)
 
+      7 ->
         game_over =
           Canvas.new(10 * 8, 8)
-          |> Canvas.put_string({0, 0}, "GAME  OVER", game.font, 1)
-
-        transition_fun = &Transitions.push(&1, &2, direction: :top, separation: 0)
-        duration = 300
+          |> Canvas.put_string({0, 0}, "GAME OVER", game.font, 1)
 
         Animator.start_animation(game.animator, game_over, {0, 0}, transition_fun, duration)
+        next_tick(game)
+
+      20 ->
+        score =
+          Canvas.new(10 * 8, 8)
+          |> Canvas.put_string({24, 0}, game.score |> to_string(), game.font, 1)
+
+        Animator.start_animation(game.animator, score, {0, 0}, transition_fun, duration)
+        next_tick(game)
+
+      40 ->
+        EventScheduler.game_finished()
         next_tick(game)
 
       _ ->
@@ -189,7 +199,7 @@ defmodule Octopus.Apps.Whackamole.Game do
   end
 
   def lost_animation(%__MODULE__{} = game, %Mole{} = mole) do
-    Logger.info("LOST ANIMATION for mole #{mole.pannel} in tick #{game.tick}")
+    # Logger.info("LOST ANIMATION for mole #{mole.pannel} in tick #{game.tick}")
     red_canvas = Canvas.new(8, 8) |> Canvas.fill(@survived_color)
     blank_canvas = Canvas.new(8, 8) |> Canvas.fill({0, 0, 0})
     transition_fn = &[&1, red_canvas, blank_canvas, red_canvas, blank_canvas, red_canvas, &2]
@@ -205,7 +215,7 @@ defmodule Octopus.Apps.Whackamole.Game do
   end
 
   def down_animation(%__MODULE__{} = game, pannel) do
-    Logger.info("WHACKAMOLE: WHACKED MOLE #{pannel}")
+    # Logger.info("WHACKAMOLE: WHACKED MOLE #{pannel}")
     blank_canvas = Canvas.new(8, 8) |> Canvas.fill({0, 0, 0})
     transition_fun = &Transitions.push(&1, &2, direction: :bottom, separation: 0)
     duration = @mole_spawn_duration_ms * game.difficulty
@@ -220,7 +230,7 @@ defmodule Octopus.Apps.Whackamole.Game do
   end
 
   def spawn_animation(%__MODULE__{} = game, pannel) do
-    Logger.info("WHACKAMOLE: SPAWN MOLE #{pannel}")
+    # Logger.info("WHACKAMOLE: SPAWN MOLE #{pannel}")
 
     sprite_canvas = Sprite.load(@sprite_sheet, Enum.random(@mole_sprites))
     transition_fun = &Transitions.push(&1, &2, direction: :top, separation: 0)
@@ -236,7 +246,7 @@ defmodule Octopus.Apps.Whackamole.Game do
   end
 
   def whack_animation(%__MODULE__{} = game, pannel) do
-    Logger.info("WHACKAMOLE: WHACK #{pannel}")
+    # Logger.info("WHACKAMOLE: WHACK #{pannel}")
 
     # todo convert to rgbw white
     whack_canvas = Canvas.new(8, 8) |> Canvas.fill({255, 255, 255})

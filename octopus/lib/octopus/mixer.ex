@@ -4,7 +4,7 @@ defmodule Octopus.Mixer do
 
   alias Octopus.Protobuf.SoundToLightControlEvent
   alias Octopus.Protobuf.AudioFrame
-  alias Octopus.{Broadcaster, Protobuf, AppSupervisor, Canvas}
+  alias Octopus.{Broadcaster, Protobuf, AppSupervisor, Canvas, EventScheduler}
 
   alias Octopus.Protobuf.{
     RGBFrame,
@@ -318,6 +318,7 @@ defmodule Octopus.Mixer do
 
   defp do_handle_input(%State{} = state, %InputEvent{} = input_event) do
     AppSupervisor.send_event(state.selected_app, input_event)
+    EventScheduler.handle_input(input_event)
     state
   end
 
