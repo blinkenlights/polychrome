@@ -14,7 +14,7 @@ defmodule Octopus.Apps.Whackamole.Game do
     :moles,
     :last_mole,
     :difficulty,
-    :last_inputs
+    :whack_times
   ]
 
   # game_states [:intro, :playing, :game_over, :tilt]
@@ -78,7 +78,7 @@ defmodule Octopus.Apps.Whackamole.Game do
     |> case do
       %__MODULE__{lives: lives} = game when lives > 0 ->
         game
-        |> check_tilt()
+        # |> check_tilt()
         |> maybe_add_mole()
         |> maybe_increase_difficulty()
         |> next_tick()
@@ -135,7 +135,8 @@ defmodule Octopus.Apps.Whackamole.Game do
 
       %__MODULE__{game | moles: moles, score: score}
     else
-      game
+      now = System.os_time(:millisecond)
+      %__MODULE__{game | whack_times: [now | game.whack_times]}
     end
   end
 
@@ -148,12 +149,19 @@ defmodule Octopus.Apps.Whackamole.Game do
   def check_tilt(%__MODULE__{} = game) do
     tilt_duration_ms = param(:tilt_duration_ms, 1000)
     tilt_max = param(:tilt_max, 15)
+    now = System.os_time(:millisecond)
 
-    if rem(game.tick, tilt_delay_s * 10) == 0 do
-      Logger.info("Tilt check")
-      %__MODULE__{game | lives: game.lives - 1}
-    else
-      game
+    {_expired, active} =
+      Enum.split_with(game.whack_times, fn time ->
+        now - time > tilt_duration_ms
+      end)
+
+    case Enum.count(active) do
+      count when count > tilt_max ->
+        %__MODULE__{game | lives: game.lives - 1, whack_times: [], state: :tilt}
+
+      _ ->
+        %__MODULE__{game | whack_times: active}
     end
   end
 
