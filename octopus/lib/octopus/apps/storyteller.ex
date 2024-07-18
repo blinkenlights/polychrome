@@ -136,7 +136,7 @@ defmodule Octopus.Apps.StoryTeller do
     variant = 0
 
     Canvas.put_string(canvas, {state.offset * 8, 0}, buffer, state.font, variant)
-    |> Canvas.to_frame()
+    |> Canvas.to_wframe(easing_interval: param(:easing_interval, 100))
     |> send_frame()
   end
 end
