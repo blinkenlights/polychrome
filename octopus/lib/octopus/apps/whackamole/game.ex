@@ -13,10 +13,11 @@ defmodule Octopus.Apps.Whackamole.Game do
     :lives,
     :moles,
     :last_mole,
-    :difficulty
+    :difficulty,
+    :last_inputs
   ]
 
-  # game_states [:intro, :playing, :game_over]
+  # game_states [:intro, :playing, :game_over, :tilt]
 
   @font_name "cshk-Captain Sky Hawk (RARE)"
   @sprite_sheet "256-characters-original"
@@ -77,6 +78,7 @@ defmodule Octopus.Apps.Whackamole.Game do
     |> case do
       %__MODULE__{lives: lives} = game when lives > 0 ->
         game
+        |> check_tilt()
         |> maybe_add_mole()
         |> maybe_increase_difficulty()
         |> next_tick()
@@ -104,9 +106,11 @@ defmodule Octopus.Apps.Whackamole.Game do
         next_tick(game)
 
       30 ->
+        text = " SCORE #{game.score |> to_string()}"
+
         score =
           Canvas.new(10 * 8, 8)
-          |> Canvas.put_string({4 * 8, 0}, game.score |> to_string(), game.font, 1)
+          |> Canvas.put_string({0, 0}, text, game.font, 1)
 
         Animator.start_animation(game.animator, score, {0, 0}, transition_fun, duration)
         next_tick(game)
@@ -141,10 +145,27 @@ defmodule Octopus.Apps.Whackamole.Game do
     %__MODULE__{game | tick: tick + 1}
   end
 
+  def check_tilt(%__MODULE__{} = game) do
+    tilt_duration_ms = param(:tilt_duration_ms, 1000)
+    tilt_max = param(:tilt_max, 15)
+
+    if rem(game.tick, tilt_delay_s * 10) == 0 do
+      Logger.info("Tilt check")
+      %__MODULE__{game | lives: game.lives - 1}
+    else
+      game
+    end
+  end
+
   def maybe_add_mole(%__MODULE__{} = game) do
     mole_delay_s = param(:mole_delay_s, 1.5)
+    spread = 0.3
+    value = mole_delay_s * 10 * game.difficulty
+    diff = value * spread
+    min = value - diff
+    target = :rand.uniform() * diff + min
 
-    if game.tick - game.last_mole > mole_delay_s * 10 * game.difficulty do
+    if game.tick - game.last_mole > target do
       pannels_with_moles = Map.keys(game.moles)
 
       case Enum.to_list(0..9) -- pannels_with_moles do
@@ -165,7 +186,7 @@ defmodule Octopus.Apps.Whackamole.Game do
   end
 
   def maybe_increase_difficulty(%__MODULE__{} = game) do
-    increment_difficulty_every_s = param(:increment_difficulty_every_s, 10)
+    increment_difficulty_every_s = param(:increment_difficulty_every_s, 3)
     difficulty_decay = param(:difficulty_decay, 0.05)
 
     if rem(game.tick, increment_difficulty_every_s * 10) == 0 do
@@ -180,7 +201,7 @@ defmodule Octopus.Apps.Whackamole.Game do
   end
 
   def mole_survived?(%__MODULE__{} = game) do
-    mole_time_to_live_s = param(:mole_time_to_live_s, 5)
+    mole_time_to_live_s = param(:mole_time_to_live_s, 7)
 
     {survived, active} =
       Enum.split_with(game.moles, fn {_, mole} ->
@@ -201,11 +222,11 @@ defmodule Octopus.Apps.Whackamole.Game do
     # Logger.info("LOST ANIMATION for mole #{mole.pannel} in tick #{game.tick}")
     red_canvas = Canvas.new(8, 8) |> Canvas.fill(@survived_color)
     blank_canvas = Canvas.new(8, 8) |> Canvas.fill({0, 0, 0})
-    # transition_fn = &[&1, red_canvas, blank_canvas, red_canvas, blank_canvas, red_canvas, &2]
-    transition_fn = fn canvas_sprite, _ ->
-      blended = Canvas.blend(canvas_sprite, red_canvas, :multiply, 1)
-      [canvas_sprite, blended, canvas_sprite, blended, canvas_sprite, blended, blank_canvas]
-    end
+    transition_fn = &[&1, red_canvas, blank_canvas, red_canvas, blank_canvas, red_canvas, &2]
+    # transition_fn = fn canvas_sprite, _ ->
+    #   blended = Canvas.blend(canvas_sprite, red_canvas, :multiply, 1)
+    #   [canvas_sprite, blended, canvas_sprite, blended, canvas_sprite, blended, blank_canvas]
+    # end
 
     # transition_fn =&[&1, red_canvas, blank_canvas, red_canvas, blank_canvas, red_canvas, &2]
     lost_animation_duration_ms = param(:lost_animation_duration_ms, 500)
