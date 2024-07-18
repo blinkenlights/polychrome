@@ -1,14 +1,9 @@
 defmodule Octopus.Apps.Matrix do
   use Octopus.App, category: :animation
+  use Octopus.Params, prefix: :matrix
 
   defmodule Particle do
     defstruct [:x, :y, :z, :speed, :color, :age, :max_age, :tail]
-  end
-
-  def config_schema do
-    %{
-      afterglow: {"Afterglow", :int, %{default: 50, min: 0, max: 500}}
-    }
   end
 
   defmodule State do
@@ -139,8 +134,8 @@ defmodule Octopus.Apps.Matrix do
   end
 
   def handle_info(:tick, %State{} = state) do
-    state = state |> State.update(1 / 60) |> State.render()
-    state.canvas |> Canvas.to_frame(easing_interval: 50) |> send_frame()
+    state = state |> State.update(1 / 60 * param(:speed, 1.0)) |> State.render()
+    state.canvas |> Canvas.to_frame(easing_interval: param(:easing_interval, 100)) |> send_frame()
     {:noreply, state}
   end
 end
