@@ -180,22 +180,28 @@ defmodule Octopus.Broadcaster do
   end
 
   def get_broadcast_ip() do
-    {:ok, ifaddrs} = :inet.getifaddrs()
-
-    ifaddrs
-    |> Enum.map(fn {_ifname, ifprops} -> Keyword.get(ifprops, :broadaddr) end)
-    |> Enum.reject(&is_nil/1)
-    |> Enum.uniq()
-    |> case do
-      [] ->
-        {127, 0, 0, 1}
-
-      [ip] ->
+    case Application.fetch_env(:octopus, :broadcast_ip) do
+      {:ok, ip} ->
         ip
 
-      [ip, _ | _] ->
-        Logger.warning("Multiple broadcast IPs found. Using the first one: #{inspect(ip)}")
-        ip
+      :error ->
+        {:ok, ifaddrs} = :inet.getifaddrs()
+
+        ifaddrs
+        |> Enum.map(fn {_ifname, ifprops} -> Keyword.get(ifprops, :broadaddr) end)
+        |> Enum.reject(&is_nil/1)
+        |> Enum.uniq()
+        |> case do
+          [] ->
+            {127, 0, 0, 1}
+
+          [ip] ->
+            ip
+
+          [ip, _ | _] ->
+            Logger.warning("Multiple broadcast IPs found. Using the first one: #{inspect(ip)}")
+            ip
+        end
     end
   end
 end

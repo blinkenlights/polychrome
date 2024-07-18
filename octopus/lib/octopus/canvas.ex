@@ -76,6 +76,21 @@ defmodule Octopus.Canvas do
   end
 
   @doc """
+  Fills the canvas with the given color.
+  """
+
+  @spec fill(Canvas.t(), color()) :: Canvas.t()
+  def fill(%Canvas{} = canvas, color) do
+    pixels =
+      for x <- 0..(canvas.width - 1),
+          y <- 0..(canvas.height - 1),
+          do: {{x, y}, color},
+          into: %{}
+
+    %Canvas{canvas | pixels: pixels}
+  end
+
+  @doc """
   Clears a rectangular subsection of the canvas
   """
   def clear_rect(%Canvas{} = canvas, {x1, y1}, {x2, y2}) do

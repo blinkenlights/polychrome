@@ -16,7 +16,8 @@ config :octopus, OctopusWeb.Endpoint,
 
 config :octopus,
   broadcast: true,
-  show_sim_preview: false
+  show_sim_preview: false,
+  broadcast_ip: {192, 168, 1, 255}
 
 # Configures Swoosh API Client
 config :swoosh, api_client: Swoosh.ApiClient.Finch, finch_name: Octopus.Finch

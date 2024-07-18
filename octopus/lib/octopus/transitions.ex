@@ -28,14 +28,12 @@ defmodule Octopus.Transitions do
   ## Options
   * `:direction` - `:left`, `:right`, `:top`, or `:bottom` [default: `:left`]
   * `:separation` - number of separation pixels between the two canvases [default: 3]
-  * `:steps` - number of steps to use for the transition [default: 50]
 
   """
 
   def push(%Canvas{} = canvas1, %Canvas{} = canvas2, opts \\ []) do
     direction = Keyword.get(opts, :direction, :left)
     separation = Keyword.get(opts, :separation, 3)
-    steps = Keyword.get(opts, :steps, 50)
 
     joined =
       case direction do
@@ -79,12 +77,7 @@ defmodule Octopus.Transitions do
           |> Enum.map(fn y -> {{0, y}, {joined.width - 1, y + canvas1.height - 1}} end)
       end
 
-    0..(steps - 1)
-    # |> Stream.map(fn step -> Easing.quadratic_in_out(step / steps) end)
-    |> Stream.map(fn step -> step / (steps - 1) end)
-    |> Stream.map(fn ratio ->
-      Enum.at(cuts, trunc(ratio * (length(cuts) - 1)))
-    end)
+    cuts
     |> Stream.map(fn {cut_start, cut_end} ->
       Canvas.cut(joined, cut_start, cut_end)
     end)

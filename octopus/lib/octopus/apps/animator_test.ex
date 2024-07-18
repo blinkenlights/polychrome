@@ -30,10 +30,10 @@ defmodule Octopus.Apps.AnimatorTest do
     easing_fun = &Easing.cubic_out/1
 
     # separation = Enum.random(1..5)
-    transition_fun =
-      &Transitions.push(&1, &2, direction: direction, steps: 8)
+    # transition_fun =
+    #   &Transitions.push(&1, &2, direction: direction, steps: 8)
 
-    # transition_fun = &Transitions.slide_over(&1, &2, direction: direction)
+    transition_fun = &Transitions.slide_over(&1, &2, direction: direction)
 
     Animator.start_animation(state.animator, canvas, {pos_x, 0}, transition_fun, 500,
       easing_fun: easing_fun

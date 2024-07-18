@@ -48,13 +48,17 @@ message RGBFrame {
   uint32 easing_interval = 2; // Optional. In milliseconds. Fade this frame over the previous one with an easing curve. Colors are blended in gamma corrected RGB space.
 }
 
+message RGBWFrame {
+  bytes data = 1 [(nanopb).max_size = 2560]; // Series of RGBW values. 8bit per color. First pixel is top left. One panel after the other.
+  uint32 easing_interval = 2; 
+}
+
 // AudioFrame with uri of the sample to be played and the channel number
 message AudioFrame {
   string uri = 1; // supports file://<path>, http(s)://<url> with .wav or .aiff files
   uint32 channel = 2;
   bool stop = 3; // stops playback on specified channel if true
 }
-
 
 enum SynthWaveform {
   SINE = 0;
@@ -107,6 +111,11 @@ message SynthFrame {
   float velocity            = 4;
   float duration_ms         = 5;
   SynthConfig config        = 6;
+}
+
+message InputLight {
+  InputType type = 1;
+  int32 duration = 2; // in milliseconds
 }
 
 message InputEvent {

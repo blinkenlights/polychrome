@@ -17,12 +17,13 @@ defmodule Octopus.Animator do
   defmodule State do
     defstruct canvas: nil,
               app_id: nil,
-              animations: %{},
-              to_frame: &Canvas.to_frame/2
+              animations: [],
+              to_frame: nil
   end
 
   defmodule Animation do
     defstruct steps: nil,
+              start_time: nil,
               position: nil,
               duration: nil,
               easing_fun: nil
@@ -37,7 +38,7 @@ defmodule Octopus.Animator do
 
   def start_link(opts) do
     app_id = Keyword.fetch!(opts, :app_id)
-    to_frame = Keyword.get(opts, :to_frame, &Canvas.to_frame/2)
+    to_frame = Keyword.get(opts, :to_frame, &Canvas.to_frame(&1, easing_interval: 50))
     GenServer.start_link(__MODULE__, app_id: app_id, to_frame: to_frame)
   end
 
@@ -69,6 +70,18 @@ defmodule Octopus.Animator do
       pid,
       {:start_animation, {canvas, position, animation_fun, duration, easing_fun}}
     )
+  end
+
+  @doc """
+    Clears the canvas and stops all animations. 
+
+    Options:
+     * fade_out - duration of fade out. [default: 0]
+  """
+
+  def clear(pid, opts \\ []) when is_pid(pid) do
+    fade_out_ms = Keyword.get(opts, :fade_out, 0)
+    GenServer.cast(pid, {:clear, fade_out_ms})
   end
 
   def init(opts) do
@@ -103,26 +116,33 @@ defmodule Octopus.Animator do
     animation =
       %Animation{
         steps: steps,
+        start_time: start,
         position: {pos_x, pos_y},
         duration: duration,
         easing_fun: easing_fun
       }
 
-    {:noreply, %State{state | animations: Map.put(state.animations, start, animation)}}
+    {:noreply, %State{state | animations: [animation | state.animations]}}
   end
 
-  def handle_info(
-        :tick,
-        %State{animations: %{} = animations, to_frame: to_frame} = state
-      ) do
+  def handle_cast({:clear, fade_out_ms}, %State{} = state) do
+    canvas = Canvas.new(@canvas_size_x, @canvas_size_y)
+    frame = Canvas.to_frame(canvas, easing_interval: fade_out_ms)
+
+    Mixer.handle_frame(state.app_id, frame)
+
+    {:noreply, %State{state | canvas: canvas, animations: []}}
+  end
+
+  def handle_info(:tick, %State{animations: animations} = state) do
     now = System.os_time(:millisecond)
 
     canvas =
       animations
-      |> Enum.sort_by(fn {start, _} -> start end)
-      |> Enum.map(fn {start, %Animation{} = animation} ->
+      |> Enum.sort_by(& &1.start_time)
+      |> Enum.map(fn %Animation{} = animation ->
         total_steps = animation.steps |> length()
-        progress = min((now - start) / animation.duration, 1)
+        progress = min((now - animation.start_time) / animation.duration, 1)
         index = round(animation.easing_fun.(progress) * (total_steps - 1))
         canvas = Enum.at(animation.steps, index)
         {animation.position, canvas}
@@ -131,16 +151,15 @@ defmodule Octopus.Animator do
         Canvas.overlay(canvas_acc, canvas, offset: {x, y})
       end)
 
-    frame = to_frame.(canvas, easing_interval: 50)
+    frame = state.to_frame.(canvas)
     Mixer.handle_frame(state.app_id, frame)
 
     # filter out animations that are done
     animations =
       animations
-      |> Enum.reject(fn {start, %Animation{duration: duration}} ->
-        start + duration < now
+      |> Enum.reject(fn %Animation{} = animation ->
+        animation.start_time + animation.duration < now
       end)
-      |> Enum.into(%{})
 
     {:noreply, %State{state | animations: animations, canvas: canvas}}
   end
