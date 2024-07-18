@@ -256,14 +256,14 @@ defmodule Octopus.Apps.Whackamole.Game do
     # todo convert to rgbw white
     whack_canvas =
       Canvas.new(8, 8)
-      |> Canvas.fill({100, 128, 100})
+      |> Canvas.fill({0, 64, 64})
       |> Canvas.put_pixel({0, 0}, {0, 0, 0})
       |> Canvas.put_pixel({0, 7}, {0, 0, 0})
       |> Canvas.put_pixel({7, 0}, {0, 0, 0})
       |> Canvas.put_pixel({7, 7}, {0, 0, 0})
 
     transition_fun = fn start, _ -> [start, whack_canvas, start] end
-    whack_duration = param(:whack_duration, 500)
+    whack_duration = param(:whack_duration, 100)
 
     Animator.start_animation(
       game.animator,
@@ -273,6 +273,6 @@ defmodule Octopus.Apps.Whackamole.Game do
       whack_duration
     )
 
-    InputAdapter.send_light_event(pannel + 1, whack_duration)
+    InputAdapter.send_light_event(pannel + 1, 500)
   end
 end

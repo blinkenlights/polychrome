@@ -9,8 +9,8 @@ defmodule Octopus.EventScheduler do
   @game Octopus.Apps.Whackamole
   @playlist_name "Default"
 
-  @idle_animation_interval 6_000
-  @idle_animation_duration 2_000
+  @idle_animation_interval 2_000
+  @idle_animation_duration 3_000
 
   defmodule State do
     # statuses: :game, :playlist, :off
