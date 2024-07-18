@@ -15,7 +15,7 @@ config :octopus, :installation, Octopus.Installation.Nation
 config :octopus,
   ecto_repos: [Octopus.Repo],
   generators: [binary_id: true],
-  broadcast: true,
+  broadcast: false,
   show_sim_preview: true,
   enable_event_mode: true
 

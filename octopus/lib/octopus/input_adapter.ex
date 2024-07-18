@@ -35,7 +35,10 @@ defmodule Octopus.InputAdapter do
   end
 
   def handle_cast({:send_binary, binary}, %State{udp: udp} = state) do
-    :gen_udp.send(udp, {state.from_ip, state.from_port}, binary)
+    if not is_nil(state.from_ip) do
+      :gen_udp.send(udp, {state.from_ip, state.from_port}, binary)
+    end
+
     {:noreply, state}
   end
 

@@ -106,7 +106,7 @@ defmodule Octopus.Apps.Whackamole.Game do
       30 ->
         score =
           Canvas.new(10 * 8, 8)
-          |> Canvas.put_string({24, 0}, game.score |> to_string(), game.font, 1)
+          |> Canvas.put_string({4 * 8, 0}, game.score |> to_string(), game.font, 1)
 
         Animator.start_animation(game.animator, score, {0, 0}, transition_fun, duration)
         next_tick(game)
