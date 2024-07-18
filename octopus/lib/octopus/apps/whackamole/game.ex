@@ -1,4 +1,5 @@
 defmodule Octopus.Apps.Whackamole.Game do
+  use Octopus.Params, prefix: :whackamole
   require Logger
   alias Octopus.{Canvas, Font, App, Animator, Transitions, Sprite, EventScheduler}
   alias Octopus.Apps.Whackamole.Mole
@@ -15,19 +16,12 @@ defmodule Octopus.Apps.Whackamole.Game do
     :difficulty
   ]
 
-  @game_states [:intro, :playing, :game_over]
+  # game_states [:intro, :playing, :game_over]
 
   @font_name "cshk-Captain Sky Hawk (RARE)"
   @sprite_sheet "256-characters-original"
   # 56..59
   @mole_sprites 0..255
-
-  @mole_delay_s 2
-  @mole_spawn_duration_ms 300
-  @mole_time_to_live_s 3
-  @lost_animation_duration_ms 500
-  @game_over_fade_out_ms 500
-  @whack_duration_ms 100
 
   @survived_color {255, 0, 0}
 
@@ -156,7 +150,9 @@ defmodule Octopus.Apps.Whackamole.Game do
   end
 
   def maybe_add_mole(%__MODULE__{} = game) do
-    if game.tick - game.last_mole > @mole_delay_s * 10 * game.difficulty do
+    mole_delay = param(:mole_delay, 2)
+
+    if game.tick - game.last_mole > mole_delay * 10 * game.difficulty do
       pannels_with_moles = Map.keys(game.moles)
 
       case Enum.to_list(0..9) -- pannels_with_moles do
@@ -176,16 +172,27 @@ defmodule Octopus.Apps.Whackamole.Game do
     end
   end
 
-  def maybe_increase_difficulty(%__MODULE__{difficulty: difficulty, tick: tick} = game) do
-    # based on score, increase difficulty
-    # difficulty should influence the mole duration (animation speed and delay) as well as the frequency
-    game
+  def maybe_increase_difficulty(%__MODULE__{} = game) do
+    difficulty_increase_interval_ms = param(:increment_difficulty_every, 10000)
+    difficulty_decay = param(:difficulty_decay, 0.1)
+
+    if rem(game.tick, difficulty_increase_interval_ms) == 0 do
+      difficulty =
+        :math.exp(game.tick / difficulty_increase_interval_ms / 100 * difficulty_decay * 0.05)
+
+      Logger.info("Difficulty increased from #{game.difficulty} to #{difficulty}")
+      %__MODULE__{game | difficulty: difficulty}
+    else
+      game
+    end
   end
 
   def mole_survived?(%__MODULE__{} = game) do
+    mole_time_to_live_s = param(:mole_time_to_live_s, 3)
+
     {survived, active} =
       Enum.split_with(game.moles, fn {_, mole} ->
-        game.tick - mole.start_tick > @mole_time_to_live_s * 10 * game.difficulty
+        game.tick - mole.start_tick > mole_time_to_live_s * 10 * game.difficulty
       end)
 
     survived
@@ -203,14 +210,14 @@ defmodule Octopus.Apps.Whackamole.Game do
     red_canvas = Canvas.new(8, 8) |> Canvas.fill(@survived_color)
     blank_canvas = Canvas.new(8, 8) |> Canvas.fill({0, 0, 0})
     transition_fn = &[&1, red_canvas, blank_canvas, red_canvas, blank_canvas, red_canvas, &2]
-    duration = @lost_animation_duration_ms
+    lost_animation_duration_ms = param(:lost_animation_duration_ms, 500)
 
     Animator.start_animation(
       game.animator,
       blank_canvas,
       {mole.pannel * 8, 0},
       transition_fn,
-      duration
+      lost_animation_duration_ms
     )
   end
 
@@ -218,14 +225,14 @@ defmodule Octopus.Apps.Whackamole.Game do
     # Logger.info("WHACKAMOLE: WHACKED MOLE #{pannel}")
     blank_canvas = Canvas.new(8, 8) |> Canvas.fill({0, 0, 0})
     transition_fun = &Transitions.push(&1, &2, direction: :bottom, separation: 0)
-    duration = @mole_spawn_duration_ms * game.difficulty
+    mole_spawn_duration_ms = param(:mole_spawn_duration_ms, 300) * game.difficulty
 
     Animator.start_animation(
       game.animator,
       blank_canvas,
       {pannel * 8, 0},
       transition_fun,
-      duration
+      mole_spawn_duration_ms
     )
   end
 
@@ -234,14 +241,14 @@ defmodule Octopus.Apps.Whackamole.Game do
 
     sprite_canvas = Sprite.load(@sprite_sheet, Enum.random(@mole_sprites))
     transition_fun = &Transitions.push(&1, &2, direction: :top, separation: 0)
-    duration = @mole_spawn_duration_ms * game.difficulty
+    mole_spawn_duration_ms = param(:mole_spawn_duration_ms, 300) * game.difficulty
 
     Animator.start_animation(
       game.animator,
       sprite_canvas,
       {pannel * 8, 0},
       transition_fun,
-      duration
+      mole_spawn_duration_ms
     )
   end
 
@@ -251,14 +258,14 @@ defmodule Octopus.Apps.Whackamole.Game do
     # todo convert to rgbw white
     whack_canvas = Canvas.new(8, 8) |> Canvas.fill({255, 255, 255})
     transition_fun = fn start, _ -> [start, whack_canvas, start] end
-    duration = @whack_duration_ms
+    whack_duration = param(:whack_duration, 100)
 
     Animator.start_animation(
       game.animator,
       whack_canvas,
       {pannel * 8, 0},
       transition_fun,
-      duration
+      whack_duration
     )
   end
 end

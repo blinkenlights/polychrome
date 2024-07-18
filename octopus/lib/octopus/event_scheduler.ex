@@ -4,14 +4,16 @@ defmodule Octopus.EventScheduler do
 
   alias Octopus.{AppSupervisor, Mixer, PlaylistScheduler}
   alias Octopus.Protobuf.InputEvent
+  alias Octopus.PlaylistScheduler.Playlist
 
   @game Octopus.Apps.Whackamole
-  @playlist_id 5
+  @playlist_name "Default"
 
   defmodule State do
-    defstruct game_app_id: nil,
-              # statuses: :game, :playlist, :off
-              status: :off
+    # statuses: :game, :playlist, :off
+    defstruct status: :off,
+              game_app_id: nil,
+              playlist_id: nil
   end
 
   def start_link(_opts) do
@@ -35,22 +37,32 @@ defmodule Octopus.EventScheduler do
   end
 
   def init(:ok) do
-    status =
-      case Application.fetch_env(:octopus, :enable_event_mode) do
-        {:ok, true} ->
-          start_playlist()
-          :playlist
+    case Application.fetch_env(:octopus, :enable_event_mode) do
+      {:ok, true} ->
+        Logger.info("EventScheduler: event mode enabled. Starting")
+        start()
+
+      _ ->
+        :noop
+    end
+
+    playlist_id =
+      PlaylistScheduler.list_playlists()
+      |> Enum.find(fn %Playlist{name: name} -> name == @playlist_name end)
+      |> case do
+        %Playlist{id: id} ->
+          Logger.info("EventScheduler: using playlist #{@playlist_name} with id #{id}")
+          id
 
         _ ->
-          :off
+          nil
       end
 
-    Logger.info("EventScheduler: starting in #{status} mode")
-    {:ok, %State{status: status}}
+    {:ok, %State{status: :off, playlist_id: playlist_id}}
   end
 
   def handle_cast(:start, %State{status: :off} = state) do
-    start_playlist()
+    start_playlist(state)
     {:noreply, %State{state | status: :playlist}}
   end
 
@@ -98,14 +110,16 @@ defmodule Octopus.EventScheduler do
     Logger.info("EventScheduler: game finished, starting playlist")
 
     AppSupervisor.stop_app(state.game_app_id)
-    start_playlist()
+    start_playlist(state)
 
     {:noreply, %State{state | status: :playlist}}
   end
 
   def handle_cast(:game_finished, state), do: {:noreply, state}
 
-  defp start_playlist() do
-    PlaylistScheduler.start_playlist(@playlist_id)
+  defp start_playlist(%State{playlist_id: id}) when not is_nil(id) do
+    PlaylistScheduler.start_playlist(id)
   end
+
+  defp start_playlist(_), do: :noop
 end
