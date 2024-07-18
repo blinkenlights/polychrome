@@ -1,7 +1,7 @@
 defmodule Octopus.Apps.Whackamole.Game do
   use Octopus.Params, prefix: :whackamole
   require Logger
-  alias Octopus.{Canvas, Font, App, Animator, Transitions, Sprite, EventScheduler}
+  alias Octopus.{Canvas, Font, App, Animator, Transitions, Sprite, EventScheduler, InputAdapter}
   alias Octopus.Apps.Whackamole.Mole
 
   defstruct [
@@ -62,14 +62,6 @@ defmodule Octopus.Apps.Whackamole.Game do
         Animator.start_animation(game.animator, a, {6 * 8, 0}, transition_fun, duration)
         next_tick(game)
 
-      # 9 ->
-      #   mole =
-      #     Canvas.new(4 * 8, 8)
-      #     |> Canvas.put_string({0, 0}, "MOLE", game.font, 2)
-
-      # Animator.start_animation(game.animator, mole, {6 * 8, 0}, transition_fun, duration)
-      # next_tick(game)
-
       30 ->
         Animator.clear(game.animator, fade_out: 500)
         %__MODULE__{game | state: :playing, tick: 0}
@@ -111,7 +103,7 @@ defmodule Octopus.Apps.Whackamole.Game do
         Animator.start_animation(game.animator, game_over, {0, 0}, transition_fun, duration)
         next_tick(game)
 
-      20 ->
+      30 ->
         score =
           Canvas.new(10 * 8, 8)
           |> Canvas.put_string({24, 0}, game.score |> to_string(), game.font, 1)
@@ -119,7 +111,7 @@ defmodule Octopus.Apps.Whackamole.Game do
         Animator.start_animation(game.animator, score, {0, 0}, transition_fun, duration)
         next_tick(game)
 
-      40 ->
+      60 ->
         EventScheduler.game_finished()
         next_tick(game)
 
@@ -209,7 +201,13 @@ defmodule Octopus.Apps.Whackamole.Game do
     # Logger.info("LOST ANIMATION for mole #{mole.pannel} in tick #{game.tick}")
     red_canvas = Canvas.new(8, 8) |> Canvas.fill(@survived_color)
     blank_canvas = Canvas.new(8, 8) |> Canvas.fill({0, 0, 0})
-    transition_fn = &[&1, red_canvas, blank_canvas, red_canvas, blank_canvas, red_canvas, &2]
+    # transition_fn = &[&1, red_canvas, blank_canvas, red_canvas, blank_canvas, red_canvas, &2]
+    transition_fn = fn canvas_sprite, _ ->
+      blended = Canvas.blend(canvas_sprite, red_canvas, :multiply, 1)
+      [canvas_sprite, blended, canvas_sprite, blended, canvas_sprite, blended, blank_canvas]
+    end
+
+    # transition_fn =&[&1, red_canvas, blank_canvas, red_canvas, blank_canvas, red_canvas, &2]
     lost_animation_duration_ms = param(:lost_animation_duration_ms, 500)
 
     Animator.start_animation(
@@ -256,9 +254,16 @@ defmodule Octopus.Apps.Whackamole.Game do
     # Logger.info("WHACKAMOLE: WHACK #{pannel}")
 
     # todo convert to rgbw white
-    whack_canvas = Canvas.new(8, 8) |> Canvas.fill({255, 255, 255})
+    whack_canvas =
+      Canvas.new(8, 8)
+      |> Canvas.fill({100, 128, 100})
+      |> Canvas.put_pixel({0, 0}, {0, 0, 0})
+      |> Canvas.put_pixel({0, 7}, {0, 0, 0})
+      |> Canvas.put_pixel({7, 0}, {0, 0, 0})
+      |> Canvas.put_pixel({7, 7}, {0, 0, 0})
+
     transition_fun = fn start, _ -> [start, whack_canvas, start] end
-    whack_duration = param(:whack_duration, 100)
+    whack_duration = param(:whack_duration, 500)
 
     Animator.start_animation(
       game.animator,
@@ -267,5 +272,7 @@ defmodule Octopus.Apps.Whackamole.Game do
       transition_fun,
       whack_duration
     )
+
+    InputAdapter.send_light_event(pannel + 1, whack_duration)
   end
 end

@@ -8,7 +8,8 @@ defmodule Joystick.Application do
     children = [
       Joystick.Monitor,
       Joystick.UDP,
-      Joystick.EventHandler
+      Joystick.EventHandler,
+      Joystick.LightControl
     ]
 
     Supervisor.start_link(children, opts)

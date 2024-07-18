@@ -12,6 +12,7 @@ defmodule Octopus.Protobuf do
     FirmwareConfig,
     FirmwarePacket,
     InputEvent,
+    InputLightEvent,
     ControlEvent,
     SynthFrame,
     SoundToLightControlEvent
@@ -51,6 +52,11 @@ defmodule Octopus.Protobuf do
 
   def encode(%InputEvent{} = event) do
     %Packet{content: {:input_event, event}}
+    |> Packet.encode()
+  end
+
+  def encode(%InputLightEvent{} = event) do
+    %Packet{content: {:input_light_event, event}}
     |> Packet.encode()
   end
 

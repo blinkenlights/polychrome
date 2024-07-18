@@ -100,6 +100,11 @@ defmodule Octopus.Protobuf.Packet do
   field :synth_frame, 10, type: Octopus.Protobuf.SynthFrame, json_name: "synthFrame", oneof: 0
   field :input_event, 6, type: Octopus.Protobuf.InputEvent, json_name: "inputEvent", oneof: 0
 
+  field :input_light_event, 15,
+    type: Octopus.Protobuf.InputLightEvent,
+    json_name: "inputLightEvent",
+    oneof: 0
+
   field :control_event, 9,
     type: Octopus.Protobuf.ControlEvent,
     json_name: "controlEvent",
@@ -140,6 +145,15 @@ defmodule Octopus.Protobuf.WFrame do
 end
 
 defmodule Octopus.Protobuf.RGBFrame do
+  @moduledoc false
+
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :data, 1, type: :bytes, deprecated: false
+  field :easing_interval, 2, type: :uint32, json_name: "easingInterval"
+end
+
+defmodule Octopus.Protobuf.RGBWFrame do
   @moduledoc false
 
   use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
@@ -215,6 +229,15 @@ defmodule Octopus.Protobuf.SynthFrame do
   field :velocity, 4, type: :float
   field :duration_ms, 5, type: :float, json_name: "durationMs"
   field :config, 6, type: Octopus.Protobuf.SynthConfig
+end
+
+defmodule Octopus.Protobuf.InputLightEvent do
+  @moduledoc false
+
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :type, 1, type: Octopus.Protobuf.InputType, enum: true
+  field :duration, 2, type: :int32
 end
 
 defmodule Octopus.Protobuf.InputEvent do

@@ -2,12 +2,15 @@ defmodule Octopus.EventScheduler do
   use GenServer
   require Logger
 
-  alias Octopus.{AppSupervisor, Mixer, PlaylistScheduler}
-  alias Octopus.Protobuf.InputEvent
+  alias Octopus.{AppSupervisor, Mixer, PlaylistScheduler, InputAdapter}
+  alias Octopus.Protobuf.{InputEvent}
   alias Octopus.PlaylistScheduler.Playlist
 
   @game Octopus.Apps.Whackamole
   @playlist_name "Default"
+
+  @idle_animation_interval 6_000
+  @idle_animation_duration 2_000
 
   defmodule State do
     # statuses: :game, :playlist, :off
@@ -57,6 +60,8 @@ defmodule Octopus.EventScheduler do
         _ ->
           nil
       end
+
+    :timer.send_interval(@idle_animation_interval, :idle)
 
     {:ok, %State{status: :off, playlist_id: playlist_id}}
   end
@@ -116,6 +121,16 @@ defmodule Octopus.EventScheduler do
   end
 
   def handle_cast(:game_finished, state), do: {:noreply, state}
+
+  def handle_info(:idle, %State{status: :playlist} = state) do
+    InputAdapter.send_light_event(Enum.random(1..10), @idle_animation_duration)
+
+    {:noreply, state}
+  end
+
+  def handle_info(:idle, state) do
+    {:noreply, state}
+  end
 
   defp start_playlist(%State{playlist_id: id}) when not is_nil(id) do
     PlaylistScheduler.start_playlist(id)

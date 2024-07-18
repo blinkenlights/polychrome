@@ -100,6 +100,11 @@ defmodule Joystick.Protobuf.Packet do
   field :synth_frame, 10, type: Joystick.Protobuf.SynthFrame, json_name: "synthFrame", oneof: 0
   field :input_event, 6, type: Joystick.Protobuf.InputEvent, json_name: "inputEvent", oneof: 0
 
+  field :input_light_event, 15,
+    type: Joystick.Protobuf.InputLightEvent,
+    json_name: "inputLightEvent",
+    oneof: 0
+
   field :control_event, 9,
     type: Joystick.Protobuf.ControlEvent,
     json_name: "controlEvent",
@@ -118,6 +123,11 @@ defmodule Joystick.Protobuf.Packet do
   field :rgb_frame_part2, 8,
     type: Joystick.Protobuf.RGBFrame,
     json_name: "rgbFramePart2",
+    oneof: 0
+
+  field :sound_to_light_control_event, 11,
+    type: Joystick.Protobuf.SoundToLightControlEvent,
+    json_name: "soundToLightControlEvent",
     oneof: 0
 end
 
@@ -150,6 +160,15 @@ defmodule Joystick.Protobuf.RGBFrame do
   field :easing_interval, 2, type: :uint32, json_name: "easingInterval"
 end
 
+defmodule Joystick.Protobuf.RGBWFrame do
+  @moduledoc false
+
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :data, 1, type: :bytes, deprecated: false
+  field :easing_interval, 2, type: :uint32, json_name: "easingInterval"
+end
+
 defmodule Joystick.Protobuf.AudioFrame do
   @moduledoc false
 
@@ -157,6 +176,7 @@ defmodule Joystick.Protobuf.AudioFrame do
 
   field :uri, 1, type: :string
   field :channel, 2, type: :uint32
+  field :stop, 3, type: :bool
 end
 
 defmodule Joystick.Protobuf.SynthAdsrConfig do
@@ -218,6 +238,15 @@ defmodule Joystick.Protobuf.SynthFrame do
   field :config, 6, type: Joystick.Protobuf.SynthConfig
 end
 
+defmodule Joystick.Protobuf.InputLightEvent do
+  @moduledoc false
+
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :type, 1, type: Joystick.Protobuf.InputType, enum: true
+  field :duration, 2, type: :int32
+end
+
 defmodule Joystick.Protobuf.InputEvent do
   @moduledoc false
 
@@ -233,6 +262,16 @@ defmodule Joystick.Protobuf.ControlEvent do
   use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :type, 1, type: Joystick.Protobuf.ControlEventType, enum: true
+end
+
+defmodule Joystick.Protobuf.SoundToLightControlEvent do
+  @moduledoc false
+
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :bass, 1, type: :float
+  field :mid, 2, type: :float
+  field :high, 3, type: :float
 end
 
 defmodule Joystick.Protobuf.FirmwareConfig do

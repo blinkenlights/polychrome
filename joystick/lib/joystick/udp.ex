@@ -3,11 +3,13 @@ defmodule Joystick.UDP do
   require Logger
 
   alias Joystick.Protobuf
-  alias Joystick.Protobuf.InputEvent
+  alias Joystick.Protobuf.{InputEvent, InputLightEvent}
+  alias Joystick.LightControl
 
   @octopus_host "oldie.local" |> String.to_charlist()
+  # @octopus_host ~c"192.168.1.176"
   @octopus_port 4423
-  @local_port 4423
+  @local_port 4422
 
   defmodule State do
     defstruct [:udp]
@@ -23,7 +25,7 @@ defmodule Joystick.UDP do
   end
 
   def init(:ok) do
-    {:ok, udp} = :gen_udp.open(@local_port, [:binary, active: false])
+    {:ok, udp} = :gen_udp.open(@local_port, [:binary, active: true])
 
     {:ok, %State{udp: udp}}
   end
@@ -35,7 +37,20 @@ defmodule Joystick.UDP do
         :noop
 
       {:error, reason} ->
-        Logger.warn("Failed to send to #{@octopus_host}:#{@octopus_port} : #{inspect(reason)}")
+        Logger.warning("Failed to send to #{@octopus_host}:#{@octopus_port} : #{inspect(reason)}")
+    end
+
+    {:noreply, state}
+  end
+
+  def handle_info({:udp, _socket, from_ip, _port, packet}, state = %State{}) do
+    case Protobuf.decode(packet) do
+      {:ok, %InputLightEvent{} = input_event} ->
+        Logger.debug("Received light event from #{inspect(from_ip)}: #{inspect(input_event)}")
+        LightControl.handle_light_event(input_event)
+
+      _ ->
+        :noop
     end
 
     {:noreply, state}

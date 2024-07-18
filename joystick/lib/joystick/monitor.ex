@@ -65,7 +65,11 @@ defmodule Joystick.Monitor do
   defp handle_vcgencmd_response({"throttled=0x" <> hex, 0}) do
     # see https://www.raspberrypi.org/documentation/raspbian/applications/vcgencmd.md
     <<_::4, past::4, _::12, current::4>> =
-      hex |> String.trim() |> String.pad_leading(6, "0") |> Base.decode16!()
+      hex
+      |> String.trim()
+      |> String.pad_leading(6, "0")
+      |> String.upcase()
+      |> Base.decode16!()
 
     case {past, current} do
       {0, 0} ->
@@ -80,7 +84,7 @@ defmodule Joystick.Monitor do
       {_, _} ->
         # past and current bad
         if Application.get_env(:tr33_pi, :health_log, true) do
-          Logger.warn(
+          Logger.warning(
             "#{__MODULE__}: System unhealthy, vcgencmd current: #{inspect(current)}, past: #{inspect(past)}"
           )
 

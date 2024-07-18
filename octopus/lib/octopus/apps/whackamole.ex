@@ -3,7 +3,6 @@ defmodule Octopus.Apps.Whackamole do
   require Logger
 
   alias Octopus.Protobuf.InputEvent
-  alias Octopus.ButtonState
   alias Octopus.Canvas
   alias Octopus.Font
   alias Octopus.Apps.Whackamole.Game
