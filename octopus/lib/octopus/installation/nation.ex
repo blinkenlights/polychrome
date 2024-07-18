@@ -17,6 +17,21 @@ defmodule Octopus.Installation.Nation do
   ]
 
   @impl true
+  def panel_offsets() do
+    @panels_offsets
+  end
+
+  @impl true
+  def panel_width() do
+    @panel_width
+  end
+
+  @impl true
+  def panel_height() do
+    @panel_height
+  end
+
+  @impl true
   def center_x() do
     width() / 2 - 0.5
   end

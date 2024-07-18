@@ -9,6 +9,11 @@ defmodule Octopus.Installation do
   """
   @callback panels() :: nonempty_list(nonempty_list(pixel()))
 
+  @callback panel_offsets() :: nonempty_list({integer(), integer()})
+
+  @callback panel_width() :: integer()
+  @callback panel_height() :: integer()
+
   @callback width() :: integer()
   @callback height() :: integer()
 

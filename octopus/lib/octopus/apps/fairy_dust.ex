@@ -84,6 +84,7 @@ defmodule Octopus.Apps.FairyDust do
     dt = 1 / @fps * state.speed
 
     canvas = Canvas.new((8 + 16) * 10, 8)
+    # canvas = Canvas.new(Octopus.installation().width, Octopus.installation().height)
 
     wrap_width = canvas.width + 100
     wrap_offset = -60
@@ -134,12 +135,29 @@ defmodule Octopus.Apps.FairyDust do
         state.fairy_dust
       end
 
-    canvas
-    |> Canvas.overlay(particle_canvas)
-    |> Canvas.overlay(fairy_dust,
-      offset: {trunc(rocket_x - fairy_dust.width / 2), trunc(rocket_y - fairy_dust.height / 2)}
-    )
-    |> Canvas.to_frame(drop: true)
+    canvas =
+      canvas
+      |> Canvas.overlay(particle_canvas)
+      |> Canvas.overlay(fairy_dust,
+        offset: {trunc(rocket_x - fairy_dust.width / 2), trunc(rocket_y - fairy_dust.height / 2)}
+      )
+
+    # |> Canvas.to_frame()
+    # |> send_frame()
+
+    # |> dbg()
+
+    panel_width = Octopus.installation().panel_width()
+    panel_height = Octopus.installation().panel_height()
+
+    # IO.inspect(state)
+
+    Enum.map(Octopus.installation().panel_offsets(), fn {x, y} ->
+      Canvas.cut(canvas, {x, y}, {x + panel_width - 1, y + panel_height - 1})
+    end)
+    |> Enum.reverse()
+    |> Enum.reduce(&Canvas.join/2)
+    |> Canvas.to_frame()
     |> send_frame()
 
     {:noreply, %State{state | time: state.time + dt, particles: particles}}
