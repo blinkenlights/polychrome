@@ -139,7 +139,7 @@ defmodule Octopus.Apps.Tla do
     last_words = [current_word | last_words] |> Enum.take(param(:last_word_list_size, 250))
     next_word = Words.next(words, current_word, last_words)
 
-    Logger.debug("Next Word: #{next_word}", next_word)
+    Logger.debug("Next Word: #{next_word}")
 
     String.split(state.current_word, "", trim: true)
     |> Enum.zip(String.split(next_word, "", trim: true))
