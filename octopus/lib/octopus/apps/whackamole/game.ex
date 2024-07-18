@@ -150,9 +150,9 @@ defmodule Octopus.Apps.Whackamole.Game do
   end
 
   def maybe_add_mole(%__MODULE__{} = game) do
-    mole_delay = param(:mole_delay, 2)
+    mole_delay_s = param(:mole_delay_s, 1.5)
 
-    if game.tick - game.last_mole > mole_delay * 10 * game.difficulty do
+    if game.tick - game.last_mole > mole_delay_s * 10 * game.difficulty do
       pannels_with_moles = Map.keys(game.moles)
 
       case Enum.to_list(0..9) -- pannels_with_moles do
@@ -173,12 +173,12 @@ defmodule Octopus.Apps.Whackamole.Game do
   end
 
   def maybe_increase_difficulty(%__MODULE__{} = game) do
-    difficulty_increase_interval_ms = param(:increment_difficulty_every, 10000)
-    difficulty_decay = param(:difficulty_decay, 0.1)
+    increment_difficulty_every_s = param(:increment_difficulty_every_s, 10)
+    difficulty_decay = param(:difficulty_decay, 0.05)
 
-    if rem(game.tick, difficulty_increase_interval_ms) == 0 do
+    if rem(game.tick, increment_difficulty_every_s * 10) == 0 do
       difficulty =
-        :math.exp(game.tick / difficulty_increase_interval_ms / 100 * difficulty_decay * 0.05)
+        :math.exp(game.tick / increment_difficulty_every_s / 10 * difficulty_decay * -1)
 
       Logger.info("Difficulty increased from #{game.difficulty} to #{difficulty}")
       %__MODULE__{game | difficulty: difficulty}
@@ -188,7 +188,7 @@ defmodule Octopus.Apps.Whackamole.Game do
   end
 
   def mole_survived?(%__MODULE__{} = game) do
-    mole_time_to_live_s = param(:mole_time_to_live_s, 3)
+    mole_time_to_live_s = param(:mole_time_to_live_s, 5)
 
     {survived, active} =
       Enum.split_with(game.moles, fn {_, mole} ->
