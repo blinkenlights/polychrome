@@ -14,7 +14,8 @@ defmodule Octopus.Apps.Whackamole.Game do
     :moles,
     :last_mole,
     :difficulty,
-    :whack_times
+    :whack_times,
+    :tilt_start
   ]
 
   # game_states [:intro, :playing, :game_over, :tilt]
@@ -38,7 +39,8 @@ defmodule Octopus.Apps.Whackamole.Game do
       score: 0,
       difficulty: 1,
       last_mole: 0,
-      moles: %{}
+      moles: %{},
+      whack_times: []
     }
   end
 
@@ -78,7 +80,7 @@ defmodule Octopus.Apps.Whackamole.Game do
     |> case do
       %__MODULE__{lives: lives} = game when lives > 0 ->
         game
-        # |> check_tilt()
+        |> check_tilt()
         |> maybe_add_mole()
         |> maybe_increase_difficulty()
         |> next_tick()
@@ -124,6 +126,31 @@ defmodule Octopus.Apps.Whackamole.Game do
     end
   end
 
+  def tick(%__MODULE__{state: :tilt} = game) do
+    duration = 1000
+
+    case game.tick - game.tilt_start do
+      1 ->
+        tilt =
+          Canvas.new(10 * 8, 8)
+          |> Canvas.put_string({0, 0}, "   TILT!", game.font, 3)
+
+        blank_canvas = Canvas.new(10 * 8, 8) |> Canvas.fill({0, 0, 0})
+
+        transition_fun = &[&1, tilt, blank_canvas, tilt, blank_canvas, &2]
+        Animator.start_animation(game.animator, tilt, {0, 0}, transition_fun, duration)
+
+        next_tick(game)
+
+      20 ->
+        Animator.clear(game.animator, fade_out: 500)
+        %__MODULE__{game | state: :playing}
+
+      _ ->
+        next_tick(game)
+    end
+  end
+
   def whack(%__MODULE__{state: :playing} = game, button_number) do
     whack_animation(game, button_number)
 
@@ -148,7 +175,7 @@ defmodule Octopus.Apps.Whackamole.Game do
 
   def check_tilt(%__MODULE__{} = game) do
     tilt_duration_ms = param(:tilt_duration_ms, 1000)
-    tilt_max = param(:tilt_max, 15)
+    tilt_max = param(:tilt_max, 6)
     now = System.os_time(:millisecond)
 
     {_expired, active} =
@@ -158,7 +185,13 @@ defmodule Octopus.Apps.Whackamole.Game do
 
     case Enum.count(active) do
       count when count > tilt_max ->
-        %__MODULE__{game | lives: game.lives - 1, whack_times: [], state: :tilt}
+        %__MODULE__{
+          game
+          | lives: game.lives - 1,
+            whack_times: [],
+            state: :tilt,
+            tilt_start: game.tick
+        }
 
       _ ->
         %__MODULE__{game | whack_times: active}
@@ -230,11 +263,12 @@ defmodule Octopus.Apps.Whackamole.Game do
     # Logger.info("LOST ANIMATION for mole #{mole.pannel} in tick #{game.tick}")
     red_canvas = Canvas.new(8, 8) |> Canvas.fill(@survived_color)
     blank_canvas = Canvas.new(8, 8) |> Canvas.fill({0, 0, 0})
-    transition_fn = &[&1, red_canvas, blank_canvas, red_canvas, blank_canvas, red_canvas, &2]
-    # transition_fn = fn canvas_sprite, _ ->
-    #   blended = Canvas.blend(canvas_sprite, red_canvas, :multiply, 1)
-    #   [canvas_sprite, blended, canvas_sprite, blended, canvas_sprite, blended, blank_canvas]
-    # end
+    # transition_fn = &[&1, red_canvas, blank_canvas, red_canvas, blank_canvas, red_canvas, &2]
+
+    transition_fn = fn canvas_sprite, _ ->
+      blended = Canvas.blend(canvas_sprite, red_canvas, :multiply, 1)
+      [canvas_sprite, blended, canvas_sprite, blended, canvas_sprite, blended, blank_canvas]
+    end
 
     # transition_fn =&[&1, red_canvas, blank_canvas, red_canvas, blank_canvas, red_canvas, &2]
     lost_animation_duration_ms = param(:lost_animation_duration_ms, 500)
