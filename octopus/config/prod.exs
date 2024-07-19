@@ -17,7 +17,7 @@ config :octopus, OctopusWeb.Endpoint,
 config :octopus,
   broadcast: true,
   show_sim_preview: false,
-  broadcast_ip: {192, 168, 1, 255},
+  broadcast_ip: {10, 130, 15, 255},
   enable_event_mode: true
 
 # Configures Swoosh API Client

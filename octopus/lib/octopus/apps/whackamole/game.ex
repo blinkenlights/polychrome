@@ -227,7 +227,7 @@ defmodule Octopus.Apps.Whackamole.Game do
   end
 
   def maybe_increase_difficulty(%__MODULE__{} = game) do
-    increment_difficulty_every_s = param(:increment_difficulty_every_s, 3)
+    increment_difficulty_every_s = param(:increment_difficulty_every_s, 4)
     difficulty_decay = param(:difficulty_decay, 0.05)
 
     if rem(game.tick, increment_difficulty_every_s * 10) == 0 do
@@ -299,10 +299,15 @@ defmodule Octopus.Apps.Whackamole.Game do
 
   def spawn_animation(%__MODULE__{} = game, pannel) do
     # Logger.info("WHACKAMOLE: SPAWN MOLE #{pannel}")
+    show_hints_till = 50
 
     sprite_canvas = Sprite.load(@sprite_sheet, Enum.random(@mole_sprites))
     transition_fun = &Transitions.push(&1, &2, direction: :top, separation: 0)
     mole_spawn_duration_ms = param(:mole_spawn_duration_ms, 300) * game.difficulty
+
+    if game.tick < show_hints_till do
+      InputAdapter.send_light_event(pannel + 1, 1000)
+    end
 
     Animator.start_animation(
       game.animator,
