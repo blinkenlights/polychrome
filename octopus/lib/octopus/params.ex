@@ -23,7 +23,48 @@ defmodule Octopus.Params do
 
   use Agent
 
+  import Ecto.Query, only: [from: 2]
+
+  alias Octopus.Repo
+
   require Logger
+
+  defmodule Schema do
+    use Ecto.Schema
+    import Ecto.Changeset
+
+    schema "params" do
+      field :params, :binary
+
+      timestamps()
+    end
+
+    def changeset(params, attrs \\ %{}) do
+      params
+      |> cast(attrs, [:params])
+      |> validate_required([:params])
+    end
+  end
+
+  def persist do
+    params = :erlang.term_to_binary(all())
+
+    %Schema{}
+    |> Schema.changeset(%{params: params})
+    |> Repo.insert!()
+  end
+
+  def load_persisted_config(offset \\ 0) do
+    query =
+      from p in Schema,
+        order_by: [desc: p.inserted_at],
+        limit: 1,
+        offset: ^offset
+
+    Repo.all(query)
+    |> Enum.map(&:erlang.binary_to_term(&1.params))
+    |> List.first()
+  end
 
   def start_link(_) do
     Agent.start_link(&initial_values/0, name: __MODULE__)

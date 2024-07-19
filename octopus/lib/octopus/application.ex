@@ -18,6 +18,11 @@ defmodule Octopus.Application do
          repos: Application.fetch_env!(:octopus, :ecto_repos),
          skip: System.get_env("SKIP_MIGRATIONS") == "true"},
         Octopus.Params,
+        %{
+          id: Octopus.Params.LoadPersistedConfig,
+          start: {Task, :start_link, [fn -> Octopus.Params.load_persisted_config() end]},
+          restart: :transient
+        },
 
         # Caches
         Supervisor.child_spec({Cachex, name: ColorPalette}, id: make_ref()),
