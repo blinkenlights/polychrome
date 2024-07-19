@@ -121,9 +121,7 @@ defmodule Octopus.PlaylistScheduler do
       state
       |> new_run_id()
 
-    if state.playlist_id != nil do
-      send(self(), {:next, state.run_id})
-    end
+    send(self(), {:next, state.run_id})
 
     {:noreply, state |> broadcast_status()}
   end
