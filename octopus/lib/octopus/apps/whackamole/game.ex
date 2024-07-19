@@ -15,13 +15,15 @@ defmodule Octopus.Apps.Whackamole.Game do
     :last_mole,
     :difficulty,
     :whack_times,
-    :tilt_start
+    :tilt_start,
+    :highscore
   ]
 
   # game_states [:intro, :playing, :game_over, :tilt]
 
   @font_name "cshk-Captain Sky Hawk (RARE)"
   @sprite_sheet "256-characters-original"
+  @highscore_file "whackamole_highscore"
   # 56..59
   @mole_sprites 0..255
 
@@ -40,7 +42,8 @@ defmodule Octopus.Apps.Whackamole.Game do
       difficulty: 1,
       last_mole: 0,
       moles: %{},
-      whack_times: []
+      whack_times: [],
+      highscore: read_highscore()
     }
   end
 
@@ -112,12 +115,28 @@ defmodule Octopus.Apps.Whackamole.Game do
 
         score =
           Canvas.new(10 * 8, 8)
-          |> Canvas.put_string({0, 0}, text, game.font, 1)
+          |> Canvas.put_string({0, 0}, text, game.font, 2)
 
         Animator.start_animation(game.animator, score, {0, 0}, transition_fun, duration)
         next_tick(game)
 
-      60 ->
+      50 ->
+        canvas =
+          if game.score > game.highscore do
+            write_highscore(game.score)
+
+            Canvas.new(10 * 8, 8)
+            |> Canvas.put_string({0, 0}, "HIGHSCORE!", game.font, 0)
+          else
+            Canvas.new(10 * 8, 8)
+            |> Canvas.put_string({0, 0}, " HIGH #{game.highscore}", game.font, 0)
+          end
+
+        Animator.start_animation(game.animator, canvas, {0, 0}, transition_fun, duration)
+
+        next_tick(game)
+
+      70 ->
         EventScheduler.game_finished()
         next_tick(game)
 
@@ -342,5 +361,21 @@ defmodule Octopus.Apps.Whackamole.Game do
     )
 
     InputAdapter.send_light_event(pannel + 1, 500)
+  end
+
+  def read_highscore() do
+    highscore_path = :code.priv_dir(:octopus) |> Path.join(@highscore_file)
+
+    if File.exists?(highscore_path) do
+      File.read!(highscore_path) |> String.to_integer()
+    else
+      write_highscore(0)
+      0
+    end
+  end
+
+  def write_highscore(score) do
+    highscore_path = :code.priv_dir(:octopus) |> Path.join(@highscore_file)
+    File.write!(highscore_path, score |> to_string())
   end
 end
