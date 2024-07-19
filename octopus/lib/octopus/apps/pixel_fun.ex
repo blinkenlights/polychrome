@@ -101,10 +101,10 @@ defmodule Octopus.Apps.PixelFun do
        move: {0, 0},
        input: config.input,
        audio_input: %{low: 0.0, mid: 0.0, high: 0.0},
-       seconds: seconds,
        panels: installation().panels(),
        center_x: installation().center_x(),
-       center_y: installation().center_y()
+       center_y: installation().center_y(),
+       seconds: seconds
      }}
   end
 
@@ -290,15 +290,15 @@ defmodule Octopus.Apps.PixelFun do
         value > 0 ->
           %Chameleon.HSV{
             a
-            | s: param(:saturation_percent, 70) |> min(100) |> max(0),
-              v: trunc(100 * value) |> min(100) |> max(0)
+            | s: param(:saturation_percent, 70),
+              v: trunc(param(:value_percent, 100) * value)
           }
 
         value < 0 ->
           %Chameleon.HSV{
             b
-            | s: param(:saturation_percent, 70) |> min(100) |> max(0),
-              v: trunc(100 * -value) |> min(100) |> max(0)
+            | s: param(:saturation_percent, 70),
+              v: trunc(param(:value_percent, 100) * -value)
           }
 
         true ->
@@ -322,7 +322,7 @@ defmodule Octopus.Apps.PixelFun do
 
     hsv = %Chameleon.HSV{
       hsv
-      | s: param(:saturation_percent, 70) |> min(100) |> max(0),
+      | s: param(:saturation_percent, 70),
         v: trunc(param(:value_percent, 100) * -value) |> min(100) |> max(0)
     }
 

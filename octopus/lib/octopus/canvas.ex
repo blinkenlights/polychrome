@@ -43,25 +43,6 @@ defmodule Octopus.Canvas do
     }
   end
 
-  @spec from_frame(%RGBFrame{}) :: Canvas.t()
-  def from_frame(%RGBFrame{} = frame) do
-    from_frame(frame.data, 0, [])
-
-    # new(80, 8)
-    # |> Map.put(:pixels, pixels)
-  end
-
-  defp from_frame(<<>>, _, acc),
-    do: acc |> Enum.reverse() |> then(&Enum.into(&1, Canvas.new(80, 8)))
-
-  defp from_frame(<<r::8, g::8, b::8, rest::binary>>, i, acc) do
-    panel_index = div(i, 64)
-    local_index = rem(i, 64)
-    x = rem(local_index, 8)
-    y = div(local_index, 8)
-    from_frame(rest, i + 1, [{{panel_index * 8 + x, y}, {r, g, b}} | acc])
-  end
-
   @doc """
   Creates a new canvas from a webp file.
   The webp file must be located in the priv/webp directory.

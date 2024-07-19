@@ -151,10 +151,9 @@ defmodule Octopus.App do
     send_frame(frame, self())
   end
 
-  def send_frame(%frame_type{} = frame, pid, can_be_mixed_with_pixel_fun \\ true)
-      when frame_type in @supported_frames do
+  def send_frame(%frame_type{} = frame, pid) when frame_type in @supported_frames do
     app_id = AppSupervisor.lookup_app_id(pid)
-    Mixer.handle_frame(app_id, frame, can_be_mixed_with_pixel_fun)
+    Mixer.handle_frame(app_id, frame)
   end
 
   def send_canvas(%Canvas{} = canvas) do
