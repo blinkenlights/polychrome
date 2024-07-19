@@ -305,7 +305,7 @@ defmodule OctopusWeb.ManagerLive do
   end
 
   def handle_event("playlist-stop", _params, socket) do
-    PlaylistScheduler.stop_playlist()
+    PlaylistScheduler.pause_playlist()
     {:noreply, socket}
   end
 

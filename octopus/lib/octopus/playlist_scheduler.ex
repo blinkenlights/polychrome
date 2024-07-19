@@ -30,8 +30,12 @@ defmodule Octopus.PlaylistScheduler do
     GenServer.cast(__MODULE__, {:start, id})
   end
 
-  def stop_playlist() do
-    GenServer.cast(__MODULE__, :stop)
+  def pause_playlist() do
+    GenServer.cast(__MODULE__, :pause)
+  end
+
+  def resume_playlist() do
+    GenServer.cast(__MODULE__, :resume)
   end
 
   def create_playlist!(name) do
@@ -100,8 +104,8 @@ defmodule Octopus.PlaylistScheduler do
     end
   end
 
-  def handle_cast(:stop, %State{} = state) do
-    Logger.info("Stopping playlist")
+  def handle_cast(:pause, %State{} = state) do
+    Logger.info("Pausing playlist")
 
     if state.app_id != nil do
       AppSupervisor.stop_app(state.app_id)
@@ -110,10 +114,27 @@ defmodule Octopus.PlaylistScheduler do
     {:noreply, %State{state | app_id: nil, run_id: nil} |> broadcast_status()}
   end
 
+  def handle_cast(:resume, %State{} = state) do
+    Logger.info("Resuming playlist")
+
+    state =
+      state
+      |> new_run_id()
+
+    if state.playlist_id != nil do
+      send(self(), {:next, state.run_id})
+    end
+
+    {:noreply, state |> broadcast_status()}
+  end
+
   def handle_cast(:broadcast_status, %State{} = state) do
     broadcast_status(state)
     {:noreply, state}
   end
+
+  # app_id: id of currently active app
+  # run_id: id of current playlist run, nil means stopped, skipping will start a new run
 
   def handle_cast(:next_animation, %State{run_id: nil} = state), do: {:noreply, state}
 

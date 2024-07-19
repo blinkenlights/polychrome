@@ -67,7 +67,7 @@ defmodule Octopus.EventScheduler do
   end
 
   def handle_cast(:start, %State{status: :off} = state) do
-    start_playlist(state)
+    PlaylistScheduler.start_playlist(state.playlist_id)
     {:noreply, %State{state | status: :playlist}}
   end
 
@@ -75,7 +75,7 @@ defmodule Octopus.EventScheduler do
 
   def handle_cast(:stop, %State{} = state) do
     AppSupervisor.stop_app(state.game_app_id)
-    PlaylistScheduler.stop_playlist()
+    PlaylistScheduler.pause_playlist()
 
     {:noreply, %State{state | status: :off}}
   end
@@ -100,7 +100,7 @@ defmodule Octopus.EventScheduler do
       when type in @activate_game_buttons do
     Logger.info("EventScheduler: game button pressed, starting game")
 
-    PlaylistScheduler.stop_playlist()
+    PlaylistScheduler.pause_playlist()
     {:ok, app_id} = AppSupervisor.start_app(@game)
     Mixer.select_app(app_id)
 
@@ -115,7 +115,7 @@ defmodule Octopus.EventScheduler do
     Logger.info("EventScheduler: game finished, starting playlist")
 
     AppSupervisor.stop_app(state.game_app_id)
-    start_playlist(state)
+    PlaylistScheduler.resume_playlist()
 
     {:noreply, %State{state | status: :playlist}}
   end
@@ -131,10 +131,4 @@ defmodule Octopus.EventScheduler do
   def handle_info(:idle, state) do
     {:noreply, state}
   end
-
-  defp start_playlist(%State{playlist_id: id}) when not is_nil(id) do
-    PlaylistScheduler.start_playlist(id)
-  end
-
-  defp start_playlist(_), do: :noop
 end
