@@ -215,12 +215,17 @@ defmodule Octopus.Apps.PixelFun do
   def handle_input(_, state), do: {:noreply, state}
 
   defp render(%State{program: program} = state) do
-    offset_x = :math.sin(0.3 + state.seconds * param(:translate_speed, 0.0))
-    offset_y = :math.cos(0.7 + state.seconds * param(:translate_speed, 0.0))
+    offset_x =
+      :math.sin(0.3 + state.seconds * param(:translate_speed, 0.1)) *
+        param(:translate_scale_x, 200.0)
+
+    offset_y =
+      :math.cos(0.7 + state.seconds * param(:translate_speed, 0.1)) *
+        param(:translate_scale_y, 8.0)
 
     zoom = (:math.sin(state.seconds * 0.1) * 0.5 + 0.5) * param(:zoom_scale, 1.0)
 
-    rotation = state.seconds * param(:rotate_speed, 0.0)
+    rotation = state.seconds * param(:rotate_speed, 1.0)
 
     {color_a, color_b} = state.colors
 
