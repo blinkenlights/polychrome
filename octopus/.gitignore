@@ -47,3 +47,5 @@ src/program_parser.erl
 priv/native
 
 /octopus_*.db*
+
+whackamole_highscore

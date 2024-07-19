@@ -364,7 +364,7 @@ defmodule Octopus.Apps.Whackamole.Game do
   end
 
   def read_highscore() do
-    highscore_path = :code.priv_dir(:octopus) |> Path.join(@highscore_file)
+    highscore_path = File.cwd!() |> Path.join(@highscore_file)
 
     if File.exists?(highscore_path) do
       File.read!(highscore_path) |> String.to_integer()
@@ -375,7 +375,7 @@ defmodule Octopus.Apps.Whackamole.Game do
   end
 
   def write_highscore(score) do
-    highscore_path = :code.priv_dir(:octopus) |> Path.join(@highscore_file)
+    highscore_path = File.cwd!() |> Path.join(@highscore_file)
     File.write!(highscore_path, score |> to_string())
   end
 end
