@@ -36,6 +36,13 @@ defmodule Octopus.Apps.Tla do
             end)
             |> Enum.sort_by(&elem(&1, 1))
             |> Enum.map(&elem(&1, 0))
+
+          new_candidates =
+            if length(new_candidates) > 30 do
+              Enum.drop(new_candidates, 20)
+            else
+              new_candidates
+            end
             |> Enum.take(10)
 
           {index_1, new_candidates}
