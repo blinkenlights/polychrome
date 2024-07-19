@@ -290,15 +290,15 @@ defmodule Octopus.Apps.PixelFun do
         value > 0 ->
           %Chameleon.HSV{
             a
-            | s: param(:saturation_percent, 70),
-              v: trunc(param(:value_percent, 100) * value)
+            | s: param(:saturation_percent, 70) |> max(0) |> min(100),
+              v: trunc(param(:value_percent, 100) * value) |> max(0) |> min(100)
           }
 
         value < 0 ->
           %Chameleon.HSV{
             b
-            | s: param(:saturation_percent, 70),
-              v: trunc(param(:value_percent, 100) * -value)
+            | s: param(:saturation_percent, 70) |> max(0) |> min(100),
+              v: trunc(param(:value_percent, 100) * -value) |> max(0) |> min(100)
           }
 
         true ->
