@@ -372,7 +372,7 @@ defmodule Octopus.Apps.PixelFun do
 
   defp generate_random_colors do
     hue_a = :rand.uniform(360) - 1
-    hue_b = Integer.mod(hue_a + 90 + :rand.uniform(180) - 1, 360)
+    hue_b = Integer.mod(hue_a + 90 + :rand.uniform(180) - 1, 359)
     sat_a = param(:saturation_percent, 70)
     sat_b = param(:saturation_percent, 70)
     hsv_a = Chameleon.HSV.new(hue_a, sat_a, 100)
