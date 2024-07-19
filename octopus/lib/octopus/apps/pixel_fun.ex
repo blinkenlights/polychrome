@@ -159,6 +159,8 @@ defmodule Octopus.Apps.PixelFun do
   def handle_info(:update_colors, %State{} = state) do
     colors = generate_random_colors()
 
+    Process.send_after(self(), :update_colors, param(:color_interval_ms, 5000))
+
     {:noreply,
      %State{
        state
