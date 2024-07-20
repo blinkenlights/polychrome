@@ -73,6 +73,7 @@ defmodule Octopus.Apps.StoryTeller do
       case state.line do
         {:text, [_letter | _], _opts} -> next_letter(state)
         {:text, [], _} -> next_word(state)
+        nil -> Octopus.PlaylistScheduler.playlist_next()
       end
 
     draw(state)
