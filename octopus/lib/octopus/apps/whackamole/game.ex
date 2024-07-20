@@ -27,8 +27,6 @@ defmodule Octopus.Apps.Whackamole.Game do
   # 56..59
   @mole_sprites 0..255
 
-  @survived_color {255, 0, 0}
-
   def new() do
     {:ok, animator} = Animator.start_link(app_id: App.get_app_id())
 
@@ -62,8 +60,8 @@ defmodule Octopus.Apps.Whackamole.Game do
 
       6 ->
         a =
-          Canvas.new(3 * 8, 8)
-          |> Canvas.put_string({0, 0}, "'EM", game.font, 1)
+          Canvas.new(4 * 8, 8)
+          |> Canvas.put_string({0, 0}, "'EM!", game.font, 1)
 
         Animator.start_animation(game.animator, a, {6 * 8, 0}, transition_fun, duration)
         next_tick(game)
@@ -171,16 +169,15 @@ defmodule Octopus.Apps.Whackamole.Game do
   end
 
   def whack(%__MODULE__{state: :playing} = game, button_number) do
-    whack_animation(game, button_number)
-
     if Map.has_key?(game.moles, button_number) do
       moles = Map.delete(game.moles, button_number)
       score = game.score + 1
 
-      down_animation(game, button_number)
+      whack_success_animation(game, button_number)
 
       %__MODULE__{game | moles: moles, score: score}
     else
+      whack_fail_animation(game, button_number, false)
       now = System.os_time(:millisecond)
       %__MODULE__{game | whack_times: [now | game.whack_times]}
     end
@@ -280,7 +277,7 @@ defmodule Octopus.Apps.Whackamole.Game do
 
   def lost_animation(%__MODULE__{} = game, %Mole{} = mole) do
     # Logger.info("LOST ANIMATION for mole #{mole.pannel} in tick #{game.tick}")
-    red_canvas = Canvas.new(8, 8) |> Canvas.fill(@survived_color)
+    red_canvas = background_canvas(0, 100, 100)
     blank_canvas = Canvas.new(8, 8) |> Canvas.fill({0, 0, 0})
     # transition_fn = &[&1, red_canvas, blank_canvas, red_canvas, blank_canvas, red_canvas, &2]
 
@@ -298,21 +295,6 @@ defmodule Octopus.Apps.Whackamole.Game do
       {mole.pannel * 8, 0},
       transition_fn,
       lost_animation_duration_ms
-    )
-  end
-
-  def down_animation(%__MODULE__{} = game, pannel) do
-    # Logger.info("WHACKAMOLE: WHACKED MOLE #{pannel}")
-    blank_canvas = Canvas.new(8, 8) |> Canvas.fill({0, 0, 0})
-    transition_fun = &Transitions.push(&1, &2, direction: :bottom, separation: 0)
-    mole_spawn_duration_ms = param(:mole_spawn_duration_ms, 300) * game.difficulty
-
-    Animator.start_animation(
-      game.animator,
-      blank_canvas,
-      {pannel * 8, 0},
-      transition_fun,
-      mole_spawn_duration_ms
     )
   end
 
@@ -337,17 +319,29 @@ defmodule Octopus.Apps.Whackamole.Game do
     )
   end
 
-  def whack_animation(%__MODULE__{} = game, pannel) do
-    # Logger.info("WHACKAMOLE: WHACK #{pannel}")
+  def down_animation(%__MODULE__{} = game, pannel) do
+    # Logger.info("WHACKAMOLE: WHACKED MOLE #{pannel}")
+    blank_canvas = Canvas.new(8, 8) |> Canvas.fill({0, 0, 0})
+    green_canvas = background_canvas(120, 100, 100)
 
-    # todo convert to rgbw white
-    whack_canvas =
-      Canvas.new(8, 8)
-      |> Canvas.fill({0, 64, 64})
-      |> Canvas.put_pixel({0, 0}, {0, 0, 0})
-      |> Canvas.put_pixel({0, 7}, {0, 0, 0})
-      |> Canvas.put_pixel({7, 0}, {0, 0, 0})
-      |> Canvas.put_pixel({7, 7}, {0, 0, 0})
+    transition_fun = fn canvas_sprite, target ->
+      blended = Canvas.blend(canvas_sprite, green_canvas, :multiply, 1)
+      Transitions.push(blended, target, direction: :bottom, separation: 0)
+    end
+
+    mole_spawn_duration_ms = param(:mole_spawn_duration_ms, 300) * game.difficulty
+
+    Animator.start_animation(
+      game.animator,
+      blank_canvas,
+      {pannel * 8, 0},
+      transition_fun,
+      mole_spawn_duration_ms
+    )
+  end
+
+  def whack_success_animation(%__MODULE__{} = game, pannel) do
+    whack_canvas = background_canvas(120, 50, 50)
 
     transition_fun = fn start, _ -> [start, whack_canvas, start] end
     whack_duration = param(:whack_duration, 100)
@@ -361,6 +355,39 @@ defmodule Octopus.Apps.Whackamole.Game do
     )
 
     InputAdapter.send_light_event(pannel + 1, 500)
+
+    spawn(fn ->
+      :timer.sleep(whack_duration)
+      down_animation(game, pannel)
+    end)
+  end
+
+  def whack_fail_animation(%__MODULE__{} = game, pannel, hit?) do
+    whack_canvas = background_canvas(0, 75, 50)
+
+    transition_fun = fn start, _ -> [start, whack_canvas, start] end
+    whack_duration = param(:whack_duration, 100)
+
+    Animator.start_animation(
+      game.animator,
+      whack_canvas,
+      {pannel * 8, 0},
+      transition_fun,
+      whack_duration
+    )
+
+    InputAdapter.send_light_event(pannel + 1, 500)
+  end
+
+  def background_canvas(h, s, v) do
+    %Chameleon.RGB{r: r, g: g, b: b} = Chameleon.HSV.to_rgb(%Chameleon.HSV{h: h, s: s, v: v})
+
+    Canvas.new(8, 8)
+    |> Canvas.fill({r, g, b})
+    |> Canvas.put_pixel({0, 0}, {0, 0, 0})
+    |> Canvas.put_pixel({0, 7}, {0, 0, 0})
+    |> Canvas.put_pixel({7, 0}, {0, 0, 0})
+    |> Canvas.put_pixel({7, 7}, {0, 0, 0})
   end
 
   def read_highscore() do
