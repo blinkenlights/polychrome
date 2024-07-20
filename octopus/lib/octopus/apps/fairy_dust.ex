@@ -142,15 +142,8 @@ defmodule Octopus.Apps.FairyDust do
         offset: {trunc(rocket_x - fairy_dust.width / 2), trunc(rocket_y - fairy_dust.height / 2)}
       )
 
-    # |> Canvas.to_frame()
-    # |> send_frame()
-
-    # |> dbg()
-
     panel_width = Octopus.installation().panel_width()
     panel_height = Octopus.installation().panel_height()
-
-    # IO.inspect(state)
 
     Enum.map(Octopus.installation().panel_offsets(), fn {x, y} ->
       Canvas.cut(canvas, {x, y}, {x + panel_width - 1, y + panel_height - 1})

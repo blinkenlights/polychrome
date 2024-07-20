@@ -12,6 +12,8 @@ defmodule Octopus.EventScheduler do
   @idle_animation_interval 2_000
   @idle_animation_duration 3_000
 
+  @topic "event_scheduler"
+
   defmodule State do
     # statuses: :game, :playlist, :off
     defstruct status: :off,
@@ -29,6 +31,21 @@ defmodule Octopus.EventScheduler do
 
   def stop() do
     GenServer.cast(__MODULE__, :stop)
+  end
+
+  def is_started?() do
+    GenServer.call(__MODULE__, :is_started?)
+  end
+
+  @doc """
+  Subscribes to the event_scheduler topic.
+
+  Published messages:
+  * `{:event_scheduler, :started}` - an app was started
+  * `{:event_scheduler, :stopped}` - an app was stopped
+  """
+  def subscribe() do
+    Phoenix.PubSub.subscribe(Octopus.PubSub, @topic)
   end
 
   def handle_input(%InputEvent{} = input_event) do
@@ -68,15 +85,18 @@ defmodule Octopus.EventScheduler do
 
   def handle_cast(:start, %State{status: :off} = state) do
     PlaylistScheduler.start_playlist(state.playlist_id)
+    Phoenix.PubSub.broadcast(Octopus.PubSub, @topic, {:event_scheduler, :started})
     {:noreply, %State{state | status: :playlist}}
   end
 
-  def handle_cast(:start, state), do: {:noreply, state}
+  def handle_cast(:start, state) do
+    {:noreply, state}
+  end
 
   def handle_cast(:stop, %State{} = state) do
     AppSupervisor.stop_app(state.game_app_id)
     PlaylistScheduler.pause_playlist()
-
+    Phoenix.PubSub.broadcast(Octopus.PubSub, @topic, {:event_scheduler, :stopped})
     {:noreply, %State{state | status: :off}}
   end
 
@@ -121,6 +141,9 @@ defmodule Octopus.EventScheduler do
   end
 
   def handle_cast(:game_finished, state), do: {:noreply, state}
+
+  def handle_call(:is_started?, _, %State{status: :off} = state), do: {:reply, false, state}
+  def handle_call(:is_started?, _, state), do: {:reply, true, state}
 
   def handle_info(:idle, %State{status: :playlist} = state) do
     InputAdapter.send_light_event(Enum.random(1..10), @idle_animation_duration)

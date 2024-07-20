@@ -6,12 +6,14 @@ defmodule OctopusWeb.ManagerLive do
   alias Octopus.{Mixer, AppSupervisor, PlaylistScheduler}
   alias Octopus.PlaylistScheduler.Playlist
   alias Octopus.PlaylistScheduler.Playlist.Animation
+  alias Octopus.EventScheduler
   alias OctopusWeb.PixelsLive
 
   def mount(_params, _session, socket) do
     if connected?(socket) do
       AppSupervisor.subscribe()
       PlaylistScheduler.subscribe()
+      EventScheduler.subscribe()
     end
 
     socket =
@@ -20,6 +22,7 @@ defmodule OctopusWeb.ManagerLive do
       |> assign_apps()
       |> assign(playlist_status: nil)
       |> assign(playlist_selected_id: nil)
+      |> assign(event_scheduler_started: EventScheduler.is_started?())
       |> assign_playlists()
 
     {:ok, socket, temporary_assigns: [pixel_layout: nil]}
@@ -172,6 +175,18 @@ defmodule OctopusWeb.ManagerLive do
               Running Apps
             </div>
             <div>
+              <button
+                class="text-slate-800 rounded bg-slate-200 my-2 font-bold uppercase px-3 py-1 text-xs outline-none focus:outline-none mr-1 mb-1"
+                phx-click="toggle_event_scheduler"
+                phx-value-val={to_string(!@event_scheduler_started)}
+              >
+                <%= if @event_scheduler_started do %>
+                  Stop
+                <% else %>
+                  Start
+                <% end %>
+                Event Scheduler
+              </button>
               <a href="/sim">
                 <button
                   class="text-slate-800 background-transparent font-bold uppercase px-3 py-1 text-xs outline-none focus:outline-none mr-1 mb-1 ease-linear transition-all duration-150"
@@ -319,6 +334,16 @@ defmodule OctopusWeb.ManagerLive do
     {:noreply, socket}
   end
 
+  def handle_event("toggle_event_scheduler", %{"val" => "true"}, socket) do
+    EventScheduler.start()
+    {:noreply, socket}
+  end
+
+  def handle_event("toggle_event_scheduler", %{"val" => "false"}, socket) do
+    EventScheduler.stop()
+    {:noreply, socket}
+  end
+
   def handle_info({:apps, _}, socket) do
     {:noreply, socket |> assign_apps()}
   end
@@ -347,6 +372,16 @@ defmodule OctopusWeb.ManagerLive do
       |> assign(playlist_status: status)
       |> assign(playlist_selected_id: id)
 
+    {:noreply, socket}
+  end
+
+  def handle_info({:event_scheduler, :started}, socket) do
+    socket = assign(socket, :event_scheduler_started, true)
+    {:noreply, socket}
+  end
+
+  def handle_info({:event_scheduler, :stopped}, socket) do
+    socket = assign(socket, :event_scheduler_started, false)
     {:noreply, socket}
   end
 
