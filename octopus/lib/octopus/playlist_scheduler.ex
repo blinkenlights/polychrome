@@ -117,13 +117,16 @@ defmodule Octopus.PlaylistScheduler do
   def handle_cast(:resume, %State{} = state) do
     Logger.info("Resuming playlist")
 
-    state =
-      state
-      |> new_run_id()
+    case state.playlist_id do
+      nil ->
+        Logger.warning("No playlist selected")
+        {:noreply, state}
 
-    send(self(), {:next, state.run_id})
-
-    {:noreply, state |> broadcast_status()}
+      _id ->
+        state = state |> new_run_id()
+        send(self(), {:next, state.run_id})
+        {:noreply, state |> broadcast_status()}
+    end
   end
 
   def handle_cast(:broadcast_status, %State{} = state) do
@@ -178,13 +181,20 @@ defmodule Octopus.PlaylistScheduler do
       "Scheduling next app #{module} with config #{inspect(config)}. Timeout: #{animation.timeout}"
     )
 
-    {:ok, next_app_id} = AppSupervisor.start_app(module, config: config)
-    Mixer.select_app(next_app_id)
-    AppSupervisor.stop_app(state.app_id)
+    case AppSupervisor.start_app(module, config: config) do
+      {:ok, next_app_id} ->
+        Mixer.select_app(next_app_id)
+        AppSupervisor.stop_app(state.app_id)
 
-    :timer.send_after(animation.timeout, self(), {:next, run_id})
+        :timer.send_after(animation.timeout, self(), {:next, run_id})
 
-    {:noreply, %State{state | index: next_index, app_id: next_app_id} |> broadcast_status()}
+        {:noreply, %State{state | index: next_index, app_id: next_app_id} |> broadcast_status()}
+
+      {:error, reason} ->
+        Logger.warning("PlayistScheduler: Could not start app, skipping")
+        send(self(), {:next, run_id})
+        {:noreply, %State{state | index: next_index} |> broadcast_status()}
+    end
   end
 
   def handle_info({:next, _}, state) do
@@ -192,7 +202,7 @@ defmodule Octopus.PlaylistScheduler do
   end
 
   defp broadcast_status(%State{playlist_id: nil} = state) do
-    status = %Status{playlist: nil, index: nil, status: :stopped}
+    status = %Status{playlist: nil, index: nil, status: :paused}
     Phoenix.PubSub.broadcast(Octopus.PubSub, @topic, {:playlist, status})
     state
   end
@@ -202,7 +212,7 @@ defmodule Octopus.PlaylistScheduler do
       %Status{
         playlist: get_playlist(state.playlist_id),
         index: state.index,
-        status: :stopped
+        status: :paused
       }
 
     Phoenix.PubSub.broadcast(Octopus.PubSub, @topic, {:playlist, status})
