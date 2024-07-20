@@ -247,7 +247,7 @@ defmodule Octopus.Apps.Whackamole.Game do
 
   def maybe_increase_difficulty(%__MODULE__{} = game) do
     increment_difficulty_every_s = param(:increment_difficulty_every_s, 4)
-    difficulty_decay = param(:difficulty_decay, 0.05)
+    difficulty_decay = param(:difficulty_decay, 0.04)
 
     if rem(game.tick, increment_difficulty_every_s * 10) == 0 do
       difficulty =
