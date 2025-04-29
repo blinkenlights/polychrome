@@ -362,7 +362,7 @@ defmodule Octopus.Apps.Whackamole.Game do
     end)
   end
 
-  def whack_fail_animation(%__MODULE__{} = game, pannel, hit?) do
+  def whack_fail_animation(%__MODULE__{} = game, pannel, _hit?) do
     whack_canvas = background_canvas(0, 75, 50)
 
     transition_fun = fn start, _ -> [start, whack_canvas, start] end

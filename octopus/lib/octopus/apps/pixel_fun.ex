@@ -360,17 +360,6 @@ defmodule Octopus.Apps.PixelFun do
     |> Chameleon.convert(Chameleon.HSV)
   end
 
-  defp lerp_hsv(a, b, value) do
-    hsl_a = Chameleon.convert(a, Chameleon.HSL)
-    hsl_b = Chameleon.convert(b, Chameleon.HSL)
-    h = lerp(hsl_a.h, hsl_b.h, value) |> trunc()
-    s = lerp(hsl_a.s, hsl_b.s, value) |> trunc()
-    l = lerp(hsl_a.l, hsl_b.l, value) |> trunc()
-
-    Chameleon.HSL.new(h, s, l)
-    |> Chameleon.convert(Chameleon.HSV)
-  end
-
   defp lerp(a, b, t) do
     (1 - t) * a + t * b
   end

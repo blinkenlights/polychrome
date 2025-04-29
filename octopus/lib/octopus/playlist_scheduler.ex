@@ -190,7 +190,7 @@ defmodule Octopus.PlaylistScheduler do
 
         {:noreply, %State{state | index: next_index, app_id: next_app_id} |> broadcast_status()}
 
-      {:error, reason} ->
+      {:error, _reason} ->
         Logger.warning("PlayistScheduler: Could not start app, skipping")
         send(self(), {:next, run_id})
         {:noreply, %State{state | index: next_index} |> broadcast_status()}
