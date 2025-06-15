@@ -13,9 +13,9 @@ so_reuseport =
 #   show_sensitive_data_on_connection_error: true
 
 config :octopus, Octopus.Repo,
-  username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
+  username: System.get_env("OCTOPUS_DATABASE_ROLE", "postgres"),
+  password: System.get_env("OCTOPUS_DATABASE_PASSWORD", "postgres"),
+  hostname: System.get_env("OCTOPUS_DATABASE_HOST", "localhost"),
   database: "octopus_dev",
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
