@@ -433,23 +433,27 @@ defmodule Octopus.Canvas do
 
   ## Options
   * `:direction` - `:vertical` or `:horizontal` [default: `:horizontal`]
-
+  * `:separation` - The separation between the two canvases [default: `0`]
   """
   def join(%Canvas{} = canvas1, %Canvas{} = canvas2, opts \\ []) do
     direction = Keyword.get(opts, :direction, :horizontal)
+    separation = Keyword.get(opts, :separation, 0)
 
     pixels =
       Enum.reduce(canvas2.pixels, canvas1.pixels, fn {{x, y}, color}, pixels ->
         case direction do
-          :horizontal -> Map.put(pixels, {x + canvas1.width, y}, color)
-          :vertical -> Map.put(pixels, {x, y + canvas1.height}, color)
+          :horizontal -> Map.put(pixels, {x + canvas1.width + separation, y}, color)
+          :vertical -> Map.put(pixels, {x, y + canvas1.height + separation}, color)
         end
       end)
 
     {width, height} =
       case direction do
-        :horizontal -> {canvas1.width + canvas2.width, max(canvas1.height, canvas2.height)}
-        :vertical -> {max(canvas1.width, canvas2.width), canvas1.height + canvas2.height}
+        :horizontal ->
+          {canvas1.width + canvas2.width + separation, max(canvas1.height, canvas2.height)}
+
+        :vertical ->
+          {max(canvas1.width, canvas2.width), canvas1.height + canvas2.height + separation}
       end
 
     %Canvas{canvas1 | width: width, height: height, pixels: pixels}
@@ -489,9 +493,9 @@ defmodule Octopus.Canvas do
   @doc """
   Returns a rectangular subsection of the canvas.
   """
-  def cut(canvas, top_left, bottom_right)
+  def crop(canvas, top_left, bottom_right)
 
-  def cut(%Canvas{} = canvas, {x1, y1}, {x2, y2}) when x2 >= x1 and y2 >= y1 do
+  def crop(%Canvas{} = canvas, {x1, y1}, {x2, y2}) when x2 >= x1 and y2 >= y1 do
     width = x2 - x1 + 1
     height = y2 - y1 + 1
 
@@ -503,6 +507,8 @@ defmodule Octopus.Canvas do
 
     %Canvas{canvas | width: width, height: height, pixels: pixels}
   end
+
+  defdelegate cut(canvas, top_left, bottom_right), to: __MODULE__, as: :crop
 
   def flip_horizontal(%Canvas{} = canvas) do
     pixels =

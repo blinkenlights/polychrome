@@ -15,6 +15,14 @@ defmodule Octopus.Mixer do
   @transition_duration 300
   @transition_frame_time trunc(1000 / 60)
 
+  @type display_info :: %{
+          layout: :adjacent_panels | :gapped_panels | :gapped_panels_wrapped,
+          width: integer(),
+          height: integer(),
+          panel_width: integer(),
+          panel_height: integer()
+        }
+
   defmodule State do
     defstruct [
       # App display buffers and configuration
@@ -62,6 +70,7 @@ defmodule Octopus.Mixer do
   @doc """
   Returns cached display information for apps to use.
   """
+  @spec get_display_info() :: display_info()
   def get_display_info() do
     GenServer.call(__MODULE__, :get_display_info)
   end

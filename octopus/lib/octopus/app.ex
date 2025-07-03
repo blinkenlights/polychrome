@@ -303,6 +303,7 @@ defmodule Octopus.App do
     panel_at_coord: function() # fn(x, y) -> panel_id | :not_found
   }
   """
+  @spec get_display_info() :: Mixer.display_info()
   def get_display_info() do
     # Get app-specific display info based on the app's layout configuration
     app_id = get_app_id()
