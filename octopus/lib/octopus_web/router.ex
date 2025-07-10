@@ -20,6 +20,7 @@ defmodule OctopusWeb.Router do
     live_session :default, on_mount: OctopusWeb.PresenceLive do
       live "/sim", PixelsLive
       live "/sim3d", Sim3dLive
+      live "/sim3daframe", Sim3dAframeLive
       live "/app/:id", AppLive
       live "/", ManagerLive
       live "/playlist/:id", PlaylistLive

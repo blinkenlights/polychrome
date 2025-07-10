@@ -85,6 +85,14 @@ defmodule OctopusWeb.ManagerLive do
               Open 3D Sim
             </button>
           </a>
+          <a href="/sim3daframe">
+            <button
+              class="text-slate-800 background-transparent font-bold uppercase px-3 py-1 text-xs outline-none focus:outline-none mr-1 mb-1 ease-linear transition-all duration-150"
+              type="button"
+            >
+              Open 3D Sim Aframe
+            </button>
+          </a>
         </div>
 
         <%!-- Playlists --%>
