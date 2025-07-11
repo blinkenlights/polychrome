@@ -114,7 +114,10 @@ const skyFragmentShader = `
 
 let panelDiameter = 20;
 const buttonPoleDiameter = 0.05;
-const buttonPoleHeight = 1;
+const buttonPoleHeight = 1.0; // Höhe des Poles
+const buttonPoleRadius = 0.05; // Radius des Poles (10cm)
+const buttonBaseHeight = 0.02; // 2cm
+const buttonBuzzerHeight = 0.05; // 5cm
 const distancePanelButtonPoles = 8;
 const buttonPolesRadius = (panelDiameter / 2) - distancePanelButtonPoles;
 const PANEL_SIZE = 1.6;
@@ -228,12 +231,29 @@ class Pixels3dAframeHook extends Hook {
       const angle = (i / numPanels) * Math.PI * 2;
       const x = buttonPolesRadius * Math.sin(angle);
       const z = buttonPolesRadius * Math.cos(angle);
+      const buzzerRadius = buttonPoleRadius - 0.01;
+      // Pole (braun)
       const pole = document.createElement('a-cylinder');
-      pole.setAttribute('radius', buttonPoleDiameter.toString());
+      pole.setAttribute('radius', buttonPoleRadius.toString());
       pole.setAttribute('height', buttonPoleHeight.toString());
       pole.setAttribute('color', '#8B4513');
       pole.setAttribute('position', `${x} ${buttonPoleHeight / 2} ${z}`);
       polesEl.appendChild(pole);
+      const base = document.createElement('a-cylinder');
+      base.setAttribute('radius', buttonPoleRadius.toString());
+      base.setAttribute('height', buttonBaseHeight.toString());
+      base.setAttribute('color', '#111');
+      base.setAttribute('position', `${x} ${buttonPoleHeight + buttonBaseHeight / 2} ${z}`);
+      polesEl.appendChild(base);
+      const buzzer = document.createElement('a-sphere');
+      buzzer.setAttribute('radius', buzzerRadius.toString());
+      buzzer.setAttribute('color', 'red');
+      // Position: oben auf dem schwarzen Aufsatz
+      buzzer.setAttribute('position', `${x} ${buttonPoleHeight + buttonBuzzerHeight / 2} ${z}`);
+      // Nur obere Halbkugel anzeigen
+      buzzer.setAttribute('theta-start', '0');
+      buzzer.setAttribute('theta-length', '90');
+      polesEl.appendChild(buzzer);
     }
     return polesEl;
   }
