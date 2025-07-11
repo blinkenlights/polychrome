@@ -112,17 +112,15 @@ const skyFragmentShader = `
   }
 `;
 
-let panelDiameter = 20;
-const buttonPoleDiameter = 0.05;
-const buttonPoleHeight = 1.0; // Höhe des Poles
-const buttonPoleRadius = 0.05; // Radius des Poles (10cm)
-const buttonBaseHeight = 0.02; // 2cm
-const buttonBuzzerHeight = 0.05; // 5cm
-const distancePanelButtonPoles = 8;
+let panelDiameter = 18.7;
+const buttonPoleHeight = 1.0;
+const buttonPoleRadius = 0.05;
+const buttonBaseHeight = 0.02;
+const distancePanelButtonPoles = 6.6;
 const buttonPolesRadius = (panelDiameter / 2) - distancePanelButtonPoles;
 const PANEL_SIZE = 1.6;
 const PANEL_DEPTH = 0.3;
-const numPanels = 10;
+const numPanels = 12;
 const panels: any[] = [];
 const pixels: RGB[] = Array(numPanels * 8 * 8).fill([0, 0, 0]);
 let poleDiameter: number = 0.4;
@@ -223,6 +221,10 @@ class Pixels3dAframeHook extends Hook {
     normal.setAttribute('id', 'ground-normal');
     normal.setAttribute('src', '/images/patchy-meadow1/patchy-meadow1_normal-ogl.png');
     assetsEl.appendChild(normal);
+    const skysphere = document.createElement('img');
+    albedo.setAttribute('id', 'skysphere');
+    albedo.setAttribute('src', '/images/nog_250711.JPG');
+    assetsEl.appendChild(skysphere);
     return assetsEl;
   }
 
@@ -262,7 +264,7 @@ class Pixels3dAframeHook extends Hook {
       spotlight.setAttribute('color', '#fff');
       spotlight.setAttribute('intensity', '3');
       spotlight.setAttribute('angle', '20');
-      spotlight.setAttribute('distance', '2');
+      spotlight.setAttribute('distance', '0.2');
       spotlight.setAttribute('decay', '1');
       spotlight.setAttribute('position', `0 0.127 0`);
       spotlight.setAttribute('rotation', '-90 0 0'); // nach oben
@@ -295,9 +297,8 @@ class Pixels3dAframeHook extends Hook {
   }
 
   createSky() {
-    const skyEl = document.createElement('a-entity');
-    skyEl.setAttribute('geometry', `primitive: sphere; radius: 1000`);
-    skyEl.setAttribute('material', `shader: sky-shader; side: back`);
+    const skyEl = document.createElement('a-sky');
+    skyEl.setAttribute('src', '/images/nog_250711.JPG')
     return skyEl;
   }
 
