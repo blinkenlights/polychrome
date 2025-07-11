@@ -130,7 +130,7 @@ defmodule Octopus.Apps.Encounter do
       Enum.map(channels, fn channel ->
         Logger.info("config #{channel}")
 
-        send_frame(%SynthFrame{
+        send_synth_event(%SynthFrame{
           event_type: :CONFIG,
           config: config,
           channel: channel,
@@ -149,7 +149,7 @@ defmodule Octopus.Apps.Encounter do
         {config, channel_selection} = track_configs[note.track]
         channel = random_element(channel_selection)
 
-        send_frame(
+        send_synth_event(
           %SynthFrame{
             event_type: :NOTE_ON,
             channel: channel,
@@ -165,7 +165,12 @@ defmodule Octopus.Apps.Encounter do
 
         Task.start_link(fn ->
           :timer.sleep(note.duration)
-          send_frame(%SynthFrame{event_type: :NOTE_OFF, note: note.midi, channel: channel}, pid)
+
+          send_synth_event(
+            %SynthFrame{event_type: :NOTE_OFF, note: note.midi, channel: channel},
+            pid
+          )
+
           send(pid, {:NOTE_OFF, channel, note.midi})
         end)
 
