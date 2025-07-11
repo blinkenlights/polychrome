@@ -112,11 +112,15 @@ const skyFragmentShader = `
   }
 `;
 
+let panelDiameter = 20;
+const buttonPoleDiameter = 0.05;
+const buttonPoleHeight = 1;
+const distancePanelButtonPoles = 8;
+const buttonPolesRadius = (panelDiameter / 2) - distancePanelButtonPoles;
 const PANEL_SIZE = 1.6;
 const PANEL_DEPTH = 0.3;
 const numPanels = 10;
 const panels: any[] = [];
-let panelDiameter = 20;
 const pixels: RGB[] = Array(numPanels * 8 * 8).fill([0, 0, 0]);
 let poleDiameter: number = 0.4;
 let poleHeight: number = 0.4;
@@ -171,6 +175,9 @@ class Pixels3dAframeHook extends Hook {
     assetsEl.addEventListener('loaded', () => {
       const panelsEl = this.createPanels();
       sceneEl.appendChild(panelsEl);
+
+      const buttonPolesEl = this.createButtonPoles();
+      sceneEl.appendChild(buttonPolesEl)
   
       const sky = this.createSky();
       sceneEl.appendChild(sky);
@@ -213,6 +220,24 @@ class Pixels3dAframeHook extends Hook {
     return assetsEl;
   }
 
+  createButtonPoles() {
+    const polesEl = document.createElement('a-entity');
+    polesEl.setAttribute('id', 'button-poles');
+
+    for (let i = 0; i < numPanels; i++) {
+      const angle = (i / numPanels) * Math.PI * 2;
+      const x = buttonPolesRadius * Math.sin(angle);
+      const z = buttonPolesRadius * Math.cos(angle);
+      const pole = document.createElement('a-cylinder');
+      pole.setAttribute('radius', buttonPoleDiameter.toString());
+      pole.setAttribute('height', buttonPoleHeight.toString());
+      pole.setAttribute('color', '#8B4513');
+      pole.setAttribute('position', `${x} ${buttonPoleHeight / 2} ${z}`);
+      polesEl.appendChild(pole);
+    }
+    return polesEl;
+  }
+
   createGround() {
     const groundEl = document.createElement('a-plane');
     groundEl.setAttribute('rotation', '-90 0 0');
@@ -233,7 +258,6 @@ class Pixels3dAframeHook extends Hook {
   }
 
   createPanels() {
-    // Panels- und Textur-Arrays leeren
     panels.length = 0;
     textures.length = 0;
     const panelsEl = document.createElement('a-entity') as any;
@@ -277,7 +301,7 @@ class Pixels3dAframeHook extends Hook {
       center.setAttribute('geometry', `primitive: box; height: ${PANEL_SIZE}; width: ${PANEL_SIZE}; depth: ${PANEL_DEPTH}`);
       center.setAttribute('material', 'color: #fff; roughness: 0.4');
       center.setAttribute('position', `0 ${poleHeight + PANEL_SIZE/2} 0`);
-      // Pfähle
+      // Poles
       const poleLeft = document.createElement('a-cylinder');
       poleLeft.setAttribute('radius', (poleDiameter / 2).toString());
       poleLeft.setAttribute('height', poleHeight.toString());
@@ -288,7 +312,6 @@ class Pixels3dAframeHook extends Hook {
       poleRight.setAttribute('height', poleHeight.toString());
       poleRight.setAttribute('color', '#8B4513');
       poleRight.setAttribute('position', `${PANEL_SIZE/2 - poleDiameter/2} ${poleHeight/2} 0`);
-      // Zusammenbauen
       group.appendChild(center);
       group.appendChild(front);
       group.appendChild(back);
@@ -392,7 +415,6 @@ class Pixels3dAframeHook extends Hook {
     if (oldPanels) {
       oldPanels.parentNode?.removeChild(oldPanels);
     }
-    // Neue Panels erzeugen und an Szene hängen
     const newPanels = this.createPanels();
     if (sceneEl) {
       sceneEl.appendChild(newPanels);
