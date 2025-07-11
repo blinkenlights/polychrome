@@ -184,6 +184,9 @@ class Pixels3dAframeHook extends Hook {
   
       const sky = this.createSky();
       sceneEl.appendChild(sky);
+
+      const light = this.createLight();
+      sceneEl.appendChild(light)
   
       const groundEl = this.createGround();
       sceneEl.appendChild(groundEl);
@@ -239,20 +242,31 @@ class Pixels3dAframeHook extends Hook {
       pole.setAttribute('color', '#8B4513');
       pole.setAttribute('position', `${x} ${buttonPoleHeight / 2} ${z}`);
       polesEl.appendChild(pole);
+      // Schwarzer Aufsatz
       const base = document.createElement('a-cylinder');
       base.setAttribute('radius', buttonPoleRadius.toString());
       base.setAttribute('height', buttonBaseHeight.toString());
       base.setAttribute('color', '#111');
-      base.setAttribute('position', `${x} ${buttonPoleHeight + buttonBaseHeight / 2} ${z}`);
+      base.setAttribute('position', `${x} ${buttonPoleHeight + (buttonBaseHeight / 2)} ${z}`);
       polesEl.appendChild(base);
+      // Roter Buzzer (Halbkugel)
       const buzzer = document.createElement('a-sphere');
       buzzer.setAttribute('radius', buzzerRadius.toString());
       buzzer.setAttribute('color', 'red');
-      // Position: oben auf dem schwarzen Aufsatz
-      buzzer.setAttribute('position', `${x} ${buttonPoleHeight + buttonBuzzerHeight / 2} ${z}`);
-      // Nur obere Halbkugel anzeigen
+      buzzer.setAttribute('position', `${x} ${buttonPoleHeight + buttonBaseHeight} ${z}`);
       buzzer.setAttribute('theta-start', '0');
       buzzer.setAttribute('theta-length', '90');
+      // Spotlight im Buzzer
+      const spotlight = document.createElement('a-light');
+      spotlight.setAttribute('type', 'spot');
+      spotlight.setAttribute('color', '#fff');
+      spotlight.setAttribute('intensity', '3');
+      spotlight.setAttribute('angle', '20');
+      spotlight.setAttribute('distance', '2');
+      spotlight.setAttribute('decay', '1');
+      spotlight.setAttribute('position', `0 0.127 0`);
+      spotlight.setAttribute('rotation', '-90 0 0'); // nach oben
+      buzzer.appendChild(spotlight);
       polesEl.appendChild(buzzer);
     }
     return polesEl;
@@ -268,6 +282,16 @@ class Pixels3dAframeHook extends Hook {
       'shader: standard; src: #ground-albedo; normalMap: #ground-normal; roughnessMap: #ground-roughness; normalScale: 1 1; metalness: 0.0; repeat: 1000 1000; side: double'
     );
     return groundEl;
+  }
+
+  createLight() {
+    // Directional Light wie 17 Uhr: warm, schräg von oben (Südwesten)
+    const sun = document.createElement('a-entity');
+    sun.setAttribute('light', 'type: directional; color: #ffd9a0; intensity: 1.1; castShadow: true');
+    // Position: schräg von oben, Südwesten
+    sun.setAttribute('position', '-10 20 -10');
+    sun.setAttribute('rotation', '-45 -45 0');
+    return sun;
   }
 
   createSky() {
