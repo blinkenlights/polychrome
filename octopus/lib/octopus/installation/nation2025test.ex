@@ -9,7 +9,7 @@ defmodule Octopus.Installation.Nation2025Test do
     panel_gap: 10,
     simulator_layouts: [
       [
-        name: "Nation 2025",
+        name: "Nation 2025 Test",
         background_image: "/images/nation2025-background.webp",
         pixel_image: "/images/nation2025-overlay.webp",
         image_size: {3463, 1469},
