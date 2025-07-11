@@ -21,7 +21,7 @@ deploy-fly:
 	fly deploy
 
 deploy-oldie:
-	rsync -rlv --delete --filter=':- .gitignore' --exclude='_build' --exclude='deps' --exclude='priv/native' . ${oldie_hostname}:/opt/octopus
+	rsync -rlv --delete --filter=':- .gitignore' --exclude='_build' --exclude='deps' --exclude='priv/native' --exclude='native/target' . ${oldie_hostname}:/opt/octopus
 	ssh ${oldie_hostname} "sudo systemctl restart octopus.service"
 
 remote-logs:
