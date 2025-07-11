@@ -1,16 +1,7 @@
 import { Hook, makeHook } from "phoenix_typed_hook";
-
-type RGB = [number, number, number];
-
-import { Frame, rgbPixelsFromFrame } from "./shared/frame";
-
+import AFRAME from "aframe";
 import * as THREE from "three";
-
-import { VRButton } from "three/addons/webxr/VRButton.js";
-import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
-import Stats from "three/addons/libs/stats.module.js";
-import { GUI } from "three/addons/libs/lil-gui.module.min.js";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { Frame, RGB, rgbPixelsFromFrame } from "./shared/frame";
 
 const vertexShader = `
   varying vec2 vUv;
@@ -123,14 +114,282 @@ const skyFragmentShader = `
 
 const PANEL_SIZE = 1.6;
 const PANEL_DEPTH = 0.3;
+const numPanels = 10;
+const panels: any[] = [];
+let panelDiameter = 20;
+const pixels: RGB[] = Array(numPanels * 8 * 8).fill([0, 0, 0]);
+const textures: any[] = [];
+
+type Param = {
+  param: {
+    diameter?: number;
+    move?: [number, number];
+    position?: [number, number];
+    height?: number;
+    pole_diameter?: number;
+    foot_diameter?: number;
+    button_poles_diameter?: number;
+  };
+};
 
 class Pixels3dAframeHook extends Hook {
   mounted() {
     console.log("Pixels3dAframeHook mounted");
+
+    if (!AFRAME) {
+      console.error('AFRAME not loaded!');
+      return;
+    }
+    const canvas = this.el as HTMLCanvasElement;
+    const id = canvas.id;
+    this.registerShaders();
+    this.createScene();
+    this.handleEvent(`param: `, ({ param: param }: Param) => {
+      this.handleParams(param)
+    });
+    const events = ['frame:pixels-*', `frame:${id}`];
+    events.forEach((event) => {
+      this.handleEvent(event, ({ frame }: { frame: Frame }) => {
+        for (let [i, pixel] of rgbPixelsFromFrame(frame).entries()) {
+          pixels[i] = pixel;
+        }
+      });
+    });
   }
 
-  updated() {
-    console.log("Pixels3dAframeHook updated");
+  createScene() {
+    const sceneEl = document.createElement('a-scene');
+    sceneEl.setAttribute('embedded', '');
+    sceneEl.setAttribute('vr-mode-ui', 'enabled: false');
+
+    this.registerComponents();
+    const assetsEl = this.createAssets();
+    sceneEl.appendChild(assetsEl);
+  
+    assetsEl.addEventListener('loaded', () => {
+      const panelsEl = this.createPanels();
+      sceneEl.appendChild(panelsEl);
+  
+      const sky = this.createSky();
+      sceneEl.appendChild(sky);
+  
+      const groundEl = this.createGround();
+      sceneEl.appendChild(groundEl);
+  
+      const cameraRig = this.createCameraRig();
+      sceneEl.appendChild(cameraRig);
+  
+    });
+    this.el.appendChild(sceneEl);
+  }
+
+  createCameraRig() {
+    const cameraRig = document.createElement('a-entity');
+    cameraRig.setAttribute('id', 'cameraRig');
+    const camera = document.createElement('a-entity');
+    camera.setAttribute('camera', '');
+    camera.setAttribute('position', '0 1.6 0');
+    camera.setAttribute('look-controls', '');
+    cameraRig.appendChild(camera);
+    return cameraRig;
+  }
+
+  createAssets() {
+    const assetsEl = document.createElement('a-assets');
+    const albedo = document.createElement('img');
+    albedo.setAttribute('id', 'ground-albedo');
+    albedo.setAttribute('src', '/images/patchy-meadow1/patchy-meadow1_albedo.png');
+    assetsEl.appendChild(albedo);
+    const roughness = document.createElement('img');
+    roughness.setAttribute('id', 'ground-roughness');
+    roughness.setAttribute('src', '/images/patchy-meadow1/patchy-meadow1_roughness.png');
+    assetsEl.appendChild(roughness);
+    const normal = document.createElement('img');
+    normal.setAttribute('id', 'ground-normal');
+    normal.setAttribute('src', '/images/patchy-meadow1/patchy-meadow1_normal-ogl.png');
+    assetsEl.appendChild(normal);
+    return assetsEl;
+  }
+
+  createGround() {
+    const groundEl = document.createElement('a-plane');
+    groundEl.setAttribute('rotation', '-90 0 0');
+    groundEl.setAttribute('width', '2000');   // wie im Original
+    groundEl.setAttribute('height', '2000');
+    groundEl.setAttribute('position', '0 0 0');
+    groundEl.setAttribute('material',
+      'shader: standard; src: #ground-albedo; normalMap: #ground-normal; roughnessMap: #ground-roughness; normalScale: 1 1; metalness: 0.0; repeat: 1000 1000; side: double'
+    );
+    return groundEl;
+  }
+
+  createSky() {
+    const skyEl = document.createElement('a-entity');
+    skyEl.setAttribute('geometry', `primitive: sphere; radius: 1000`);
+    skyEl.setAttribute('material', `shader: sky-shader; side: back`);
+    return skyEl;
+  }
+
+  createPanels() {
+    // Panels- und Textur-Arrays leeren
+    panels.length = 0;
+    textures.length = 0;
+    const panelsEl = document.createElement('a-entity') as any;
+    panelsEl.setAttribute('id', 'panels');
+    const poleHeight = 1.5;
+    const poleDiameter = 0.2;
+    for (let i = 0; i < numPanels; i++) {
+      const angle = (i / numPanels) * Math.PI * 2;
+      const group = document.createElement('a-entity') as any;
+      group.object3D.position.set(
+        panelDiameter * Math.sin(angle),
+        0,
+        panelDiameter * Math.cos(angle)
+      );
+      group.object3D.rotation.y = angle + Math.PI;
+      // 8x8 Textur
+      const size = 8;
+      const data = new Uint8Array(size * size * 4);
+      for (let k = 0; k < size * size; k++) {
+        data[k * 4 + 0] = 255; // R
+        data[k * 4 + 1] = 0;   // G
+        data[k * 4 + 2] = 0;   // B
+        data[k * 4 + 3] = 255; // A
+      }
+      const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+      texture.needsUpdate = true;
+      textures.push(texture);
+      // Front-Plane
+      const front = document.createElement('a-entity');
+      front.setAttribute('geometry', `primitive: plane; height: ${PANEL_SIZE}; width: ${PANEL_SIZE}`);
+      front.setAttribute('material', 'shader: led-shader; transparent: true');
+      front.setAttribute('led-panel', `textureIndex: ${i}; side: front`);
+      front.setAttribute('position', `0 ${poleHeight + PANEL_SIZE/2} ${PANEL_DEPTH/2}`);
+      // Back-Plane
+      const back = document.createElement('a-entity');
+      back.setAttribute('geometry', `primitive: plane; height: ${PANEL_SIZE}; width: ${PANEL_SIZE}`);
+      back.setAttribute('material', 'shader: led-shader; transparent: true');
+      back.setAttribute('led-panel', `textureIndex: ${i}; side: back`);
+      back.setAttribute('rotation', `0 180 0`);
+      back.setAttribute('position', `0 ${poleHeight + PANEL_SIZE/2} ${-PANEL_DEPTH/2}`);
+      // Center-Box (optional, als "Körper" des Panels)
+      const center = document.createElement('a-entity');
+      center.setAttribute('geometry', `primitive: box; height: ${PANEL_SIZE}; width: ${PANEL_SIZE}; depth: ${PANEL_DEPTH}`);
+      center.setAttribute('material', 'color: #fff; roughness: 0.4');
+      center.setAttribute('position', `0 ${poleHeight + PANEL_SIZE/2} 0`);
+      // Pfähle
+      const poleLeft = document.createElement('a-cylinder');
+      poleLeft.setAttribute('radius', (poleDiameter / 2).toString());
+      poleLeft.setAttribute('height', poleHeight.toString());
+      poleLeft.setAttribute('color', '#8B4513');
+      poleLeft.setAttribute('position', `${-PANEL_SIZE/2 + poleDiameter/2} ${poleHeight/2} 0`);
+      const poleRight = document.createElement('a-cylinder');
+      poleRight.setAttribute('radius', (poleDiameter / 2).toString());
+      poleRight.setAttribute('height', poleHeight.toString());
+      poleRight.setAttribute('color', '#8B4513');
+      poleRight.setAttribute('position', `${PANEL_SIZE/2 - poleDiameter/2} ${poleHeight/2} 0`);
+      // Zusammenbauen
+      group.appendChild(center);
+      group.appendChild(front);
+      group.appendChild(back);
+      group.appendChild(poleLeft);
+      group.appendChild(poleRight);
+      panelsEl.appendChild(group);
+    }
+    panelsEl.setAttribute('update-panel-textures', '');
+    return panelsEl;
+  }
+
+  handleParams(param: Param["param"]) {
+    if (param.diameter) {
+      panelDiameter = param.diameter;
+      this.updatePanels()
+    }
+  }
+
+  registerComponents() {
+    AFRAME.registerComponent('led-panel', {
+      schema: {
+        textureIndex: {type: 'int'},
+        side: {type: 'string', default: 'front'}
+      },
+      init: function () {
+        const mesh = this.el.getObject3D('mesh');
+        if (!mesh) return;
+        let uniforms;
+        if (this.data.side === 'front') {
+          uniforms = {
+            uLEDTexture: { value: textures[this.data.textureIndex] },
+            uMask: { value: 0.2 },
+            uMaskSmoothness: { value: 1.0 },
+            uMaskSize: { value: 1.0 },
+          };
+        } else {
+          uniforms = {
+            uLEDTexture: { value: textures[this.data.textureIndex] },
+            uMask: { value: 1.0 },
+            uMaskSmoothness: { value: 0.05 },
+            uMaskSize: { value: 0.1 },
+          };
+        }
+        mesh.material = new THREE.ShaderMaterial({
+          vertexShader: vertexShader,
+          fragmentShader: fragmentShader,
+          transparent: true,
+          uniforms: uniforms
+        });
+      }
+    });
+    AFRAME.registerComponent('update-panel-textures', {
+      tick: function () {
+        for (let i = 0; i < numPanels; i++) {
+          for (let j = 0; j < 64; j++) {
+            const textureIdx = numPanels - i - 1;
+            const pixelIdx = i * 64 + j;
+            if (pixels[pixelIdx]) {
+              const texture = textures[textureIdx];
+              if (!texture || !texture.image) {
+                console.warn('Texture or texture.image is undefined', textureIdx, texture);
+                return;
+              }
+              const data = texture.image.data;
+              data[j * 4] = pixels[pixelIdx][0];
+              data[j * 4 + 1] = pixels[pixelIdx][1];
+              data[j * 4 + 2] = pixels[pixelIdx][2];
+              data[j * 4 + 3] = 255;
+              texture.needsUpdate = true;
+            }
+          }
+        }
+      }
+    });
+  }
+
+  registerShaders() {
+    AFRAME.registerShader('led-shader', {
+      vertexShader: vertexShader,
+      fragmentShader: fragmentShader
+    })
+    AFRAME.registerShader('sky-shader', {
+      vertexShader: skyVertexShader,
+      fragmentShader: skyFragmentShader
+    })
+  }
+
+  updatePanels() {
+    // Panels- und Textur-Arrays leeren und Panels-Entity entfernen
+    panels.length = 0;
+    textures.length = 0;
+    const oldPanels = document.querySelector('#panels');
+    const sceneEl = document.querySelector('a-scene');
+    if (oldPanels) {
+      oldPanels.parentNode?.removeChild(oldPanels);
+    }
+    // Neue Panels erzeugen und an Szene hängen
+    const newPanels = this.createPanels();
+    if (sceneEl) {
+      sceneEl.appendChild(newPanels);
+    }
   }
 }
 

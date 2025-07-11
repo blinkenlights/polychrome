@@ -1,5 +1,5 @@
 import Pixels3dHook from "./pixels3d";
-import Pixels3dAframeHook from "./pixels3d_aframe";
+import Pixels3dAframeHook from "./pixels3daframe";
 import PixelsHook from "./pixels";
 import ProximityChartHook from "./proximity_chart";
 import { CodeEditorHook } from "../../../deps/live_monaco_editor/priv/static/live_monaco_editor.esm";

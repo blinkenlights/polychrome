@@ -4,6 +4,7 @@
     "chart.js": "^4.5.0",
     "phoenix_typed_hook": "^0.18.2",
     "three": "^0.176.0",
-    "topbar": "^3.0.0"
+    "topbar": "^3.0.0",
+    "aframe": "^1.7.0"
   }
 }

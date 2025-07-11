@@ -22,7 +22,7 @@ defmodule OctopusWeb.Sim3dAframeLive do
           data: List.duplicate([0, 0, 0], 80 * 8) |> IO.iodata_to_binary()
         }
 
-        Phoenix.PubSub.subscribe(Octopus.PubSub, Octopus.Params.Sim3dAframe.topic())
+        Phoenix.PubSub.subscribe(Octopus.PubSub, Octopus.Params.Sim3d.topic())
 
         socket
         |> push_config(@default_config)
