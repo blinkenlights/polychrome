@@ -264,14 +264,14 @@ class Pixels3dAframeHook extends Hook {
       front.setAttribute('geometry', `primitive: plane; height: ${PANEL_SIZE}; width: ${PANEL_SIZE}`);
       front.setAttribute('material', 'shader: led-shader; transparent: true');
       front.setAttribute('led-panel', `textureIndex: ${i}; side: front`);
-      front.setAttribute('position', `0 ${poleHeight + PANEL_SIZE/2} ${PANEL_DEPTH/2}`);
+      front.setAttribute('position', `0 ${poleHeight + PANEL_SIZE/2} ${PANEL_DEPTH/2 + 0.1}`);
       // Back-Plane
       const back = document.createElement('a-entity');
       back.setAttribute('geometry', `primitive: plane; height: ${PANEL_SIZE}; width: ${PANEL_SIZE}`);
       back.setAttribute('material', 'shader: led-shader; transparent: true');
       back.setAttribute('led-panel', `textureIndex: ${i}; side: back`);
       back.setAttribute('rotation', `0 180 0`);
-      back.setAttribute('position', `0 ${poleHeight + PANEL_SIZE/2} ${-PANEL_DEPTH/2}`);
+      back.setAttribute('position', `0 ${poleHeight + PANEL_SIZE/2} ${-(PANEL_DEPTH/2 + 0.1)}`);
       // Center-Box (optional, als "Körper" des Panels)
       const center = document.createElement('a-entity');
       center.setAttribute('geometry', `primitive: box; height: ${PANEL_SIZE}; width: ${PANEL_SIZE}; depth: ${PANEL_DEPTH}`);
