@@ -81,7 +81,7 @@ defmodule Octopus.Osc.Server do
   end
 
   defp handle_message(["sim_3d_aframe", key], args, state) do
-    Octopus.Params.Sim3dAframe.handle_param(key, args)
+    Octopus.Params.Sim3d.handle_param(key, args)
     put_param_and_reply("sim_3d_aframe", key, args, state)
   end
 
