@@ -118,6 +118,8 @@ const numPanels = 10;
 const panels: any[] = [];
 let panelDiameter = 20;
 const pixels: RGB[] = Array(numPanels * 8 * 8).fill([0, 0, 0]);
+let poleDiameter: number = 0.4;
+let poleHeight: number = 0.4;
 const textures: any[] = [];
 
 type Param = {
@@ -144,7 +146,7 @@ class Pixels3dAframeHook extends Hook {
     const id = canvas.id;
     this.registerShaders();
     this.createScene();
-    this.handleEvent(`param: `, ({ param: param }: Param) => {
+    this.handleEvent(`param:${id}`, ({ param: param }: Param) => {
       this.handleParams(param)
     });
     const events = ['frame:pixels-*', `frame:${id}`];
@@ -236,15 +238,13 @@ class Pixels3dAframeHook extends Hook {
     textures.length = 0;
     const panelsEl = document.createElement('a-entity') as any;
     panelsEl.setAttribute('id', 'panels');
-    const poleHeight = 1.5;
-    const poleDiameter = 0.2;
     for (let i = 0; i < numPanels; i++) {
       const angle = (i / numPanels) * Math.PI * 2;
       const group = document.createElement('a-entity') as any;
       group.object3D.position.set(
-        panelDiameter * Math.sin(angle),
+        (panelDiameter / 2) * Math.sin(angle),
         0,
-        panelDiameter * Math.cos(angle)
+        (panelDiameter / 2) * Math.cos(angle)
       );
       group.object3D.rotation.y = angle + Math.PI;
       // 8x8 Textur
@@ -303,6 +303,14 @@ class Pixels3dAframeHook extends Hook {
   handleParams(param: Param["param"]) {
     if (param.diameter) {
       panelDiameter = param.diameter;
+      this.updatePanels()
+    }
+    if (param.height) {
+      poleHeight  = param.height;
+      this.updatePanels()
+    }
+    if (param.foot_diameter) {
+      poleDiameter  = param.foot_diameter;
       this.updatePanels()
     }
   }
@@ -377,7 +385,6 @@ class Pixels3dAframeHook extends Hook {
   }
 
   updatePanels() {
-    // Panels- und Textur-Arrays leeren und Panels-Entity entfernen
     panels.length = 0;
     textures.length = 0;
     const oldPanels = document.querySelector('#panels');
