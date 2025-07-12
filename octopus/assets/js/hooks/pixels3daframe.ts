@@ -112,12 +112,11 @@ const skyFragmentShader = `
   }
 `;
 
-let panelDiameter = 18.7;
+let panelDiameter = 20;
 const buttonPoleHeight = 1.0;
 const buttonPoleRadius = 0.05;
 const buttonBaseHeight = 0.02;
-const distancePanelButtonPoles = 6.6;
-let buttonPolesRadius = (panelDiameter / 2) - distancePanelButtonPoles;
+let buttonPolesRadius = (panelDiameter / 2) - 2;
 const PANEL_SIZE = 1.6;
 const PANEL_DEPTH = 0.3;
 const numPanels = 12;
@@ -283,6 +282,22 @@ class Pixels3dAframeHook extends Hook {
     groundEl.setAttribute('material',
       'shader: standard; src: #ground-albedo; normalMap: #ground-normal; roughnessMap: #ground-roughness; normalScale: 1 1; metalness: 0.0; repeat: 1000 1000; side: double'
     );
+
+    // Repeat-Wrapping für Texturen setzen, damit repeat funktioniert
+    groundEl.addEventListener('materialtextureloaded', () => {
+      const mesh = (groundEl as any).getObject3D('mesh');
+      if (!mesh) return;
+      ['map', 'normalMap', 'roughnessMap'].forEach((key) => {
+        const tex = mesh.material[key];
+        if (tex) {
+          tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+          tex.repeat.set(1000, 1000); // oder gewünschtes repeat
+          tex.needsUpdate = true;
+        }
+      });
+      mesh.material.needsUpdate = true;
+    });
+
     return groundEl;
   }
 
@@ -299,6 +314,8 @@ class Pixels3dAframeHook extends Hook {
   createSky() {
     const skyEl = document.createElement('a-sky');
     skyEl.setAttribute('src', '/images/nog_250711.JPG')
+    skyEl.setAttribute('scale', '0.028 0.028 0.028');
+    skyEl.setAttribute('position', '0 1.847 0');
     return skyEl;
   }
 
