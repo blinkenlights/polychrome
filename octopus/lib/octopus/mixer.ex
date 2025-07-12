@@ -175,22 +175,22 @@ defmodule Octopus.Mixer do
         new_app_displays = Map.put(state.app_displays, app_id, updated_display)
         new_state = %State{state | app_displays: new_app_displays}
 
-        if state.rendered_app == app_id do
-          display_info = updated_display.display_info
+        frame =
+          if state.rendered_app == app_id do
+            display_info = updated_display.display_info
 
-          easing_interval =
-            easing_interval_override || Map.get(updated_display.config, :easing_interval, 0)
+            easing_interval =
+              easing_interval_override || Map.get(updated_display.config, :easing_interval, 0)
 
-          # Apply mask if in masked mode
-          if state.output_mode == :masked and state.mask_app_id do
-            mask_display = Map.get(new_state.app_displays, state.mask_app_id)
+            # Apply mask if in masked mode
+            if state.output_mode == :masked and state.mask_app_id do
+              mask_display = Map.get(new_state.app_displays, state.mask_app_id)
 
-            if mask_display do
-              mask_canvas = get_mask_canvas(mask_display)
+              if mask_display do
+                mask_canvas = get_mask_canvas(mask_display)
 
-              if mask_canvas do
-                # Send RGB frame with masking
-                frame =
+                if mask_canvas do
+                  # RGB frame with masking
                   canvas_to_frame_with_mask(
                     canvas,
                     mask_canvas,
@@ -198,28 +198,24 @@ defmodule Octopus.Mixer do
                     easing_interval,
                     :rgb
                   )
-
-                binary = Protobuf.encode(frame)
-                send_frame(binary, frame)
+                else
+                  canvas_to_frame(canvas, display_info, easing_interval)
+                end
               else
-                # Send RGB frame without masking
-                frame = canvas_to_frame(canvas, display_info, easing_interval)
-                binary = Protobuf.encode(frame)
-                send_frame(binary, frame)
+                # RGB frame without masking
+                canvas_to_frame(canvas, display_info, easing_interval)
               end
             else
-              # Send RGB frame without masking
-              frame = canvas_to_frame(canvas, display_info, easing_interval)
-              binary = Protobuf.encode(frame)
-              send_frame(binary, frame)
+              # RGB frame without masking
+              canvas_to_frame(canvas, display_info, easing_interval)
             end
-          else
-            # Send RGB frame without masking
-            frame = canvas_to_frame(canvas, display_info, easing_interval)
-            binary = Protobuf.encode(frame)
-            send_frame(binary, frame)
           end
-        end
+
+        frame
+        |> Protobuf.split_and_encode()
+        |> Enum.each(fn binary ->
+          send_frame(binary, frame)
+        end)
 
         {:noreply, new_state}
     end
