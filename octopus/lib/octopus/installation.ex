@@ -170,26 +170,30 @@ defmodule Octopus.Installation do
 
   @behaviour __MODULE__
 
+  defp installation do
+    Application.fetch_env!(:octopus, :installation)
+  end
+
   @impl __MODULE__
-  defdelegate arrangement, to: Application.compile_env(:octopus, :installation)
+  def arrangement, do: installation().arrangement()
   @impl __MODULE__
-  defdelegate num_panels, to: Application.compile_env(:octopus, :installation)
+  def num_panels, do: installation().num_panels()
   @impl __MODULE__
-  defdelegate num_joysticks, to: Application.compile_env(:octopus, :installation)
+  def num_joysticks, do: installation().num_joysticks()
   @impl __MODULE__
-  defdelegate panel_width, to: Application.compile_env(:octopus, :installation)
+  def panel_width, do: installation().panel_width()
   @impl __MODULE__
-  defdelegate panel_height, to: Application.compile_env(:octopus, :installation)
+  def panel_height, do: installation().panel_height()
   @impl __MODULE__
-  defdelegate panel_gap, to: Application.compile_env(:octopus, :installation)
+  def panel_gap, do: installation().panel_gap()
   @impl __MODULE__
-  defdelegate width, to: Application.compile_env(:octopus, :installation)
+  def width, do: installation().width()
   @impl __MODULE__
-  defdelegate height, to: Application.compile_env(:octopus, :installation)
+  def height, do: installation().height()
   @impl __MODULE__
-  defdelegate simulator_layouts, to: Application.compile_env(:octopus, :installation)
+  def simulator_layouts, do: installation().simulator_layouts()
   @impl __MODULE__
-  defdelegate num_buttons, to: Application.compile_env(:octopus, :installation)
+  def num_buttons, do: installation().num_buttons()
 
   @doc """
   Returns the concrete pixel positions of all panels in the installation

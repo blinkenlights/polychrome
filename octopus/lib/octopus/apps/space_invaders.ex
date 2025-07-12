@@ -101,7 +101,7 @@ defmodule Octopus.Apps.SpaceInvaders do
         end)
 
       if length(dead_invaders) > 0 do
-        send_frame(%AudioFrame{uri: "file://space-invader/invaderkilled.wav", channel: 5})
+        send_audio_event(%AudioFrame{uri: "file://space-invader/invaderkilled.wav", channel: 5})
       end
 
       %Game{game | invaders: invaders, bullets: bullets}
@@ -169,7 +169,7 @@ defmodule Octopus.Apps.SpaceInvaders do
     end
 
     def shoot(%Game{player: %{x: x, y: y} = player} = game) do
-      send_frame(%AudioFrame{uri: "file://space-invader/shoot.wav", channel: 5})
+      send_audio_event(%AudioFrame{uri: "file://space-invader/shoot.wav", channel: 5})
 
       player = %{player | shoot_anim: 2}
       %Game{game | player: player, bullets: [%{x: x, y: y - 1} | game.bullets]}
@@ -191,6 +191,14 @@ defmodule Octopus.Apps.SpaceInvaders do
   end
 
   def name, do: "Space Invaders"
+
+  def compatible?() do
+    installation_info = Octopus.App.get_installation_info()
+
+    installation_info.num_joysticks >= 1 and
+      installation_info.panel_width == 8 and
+      installation_info.panel_height == 8
+  end
 
   def app_init(_args) do
     # Configure display using new unified API - adjacent layout (was Canvas.to_frame())

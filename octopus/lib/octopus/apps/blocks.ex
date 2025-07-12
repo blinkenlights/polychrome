@@ -18,6 +18,14 @@ defmodule Octopus.Apps.Blocks do
 
   def name(), do: "Blocks"
 
+  def compatible?() do
+    installation_info = Octopus.App.get_installation_info()
+
+    installation_info.num_joysticks >= 1 and
+      installation_info.panel_width == 8 and
+      installation_info.panel_height == 8
+  end
+
   def icon(), do: Canvas.from_string("T", Font.load("robot"))
 
   def app_init(args) do

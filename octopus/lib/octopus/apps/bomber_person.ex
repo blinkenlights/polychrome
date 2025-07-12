@@ -58,7 +58,8 @@ defmodule Octopus.Apps.BomberPerson do
 
     installation_info.panel_count == 10 and
       installation_info.panel_width == 8 and
-      installation_info.panel_height == 8
+      installation_info.panel_height == 8 and
+      installation_info.num_joysticks == 2
   end
 
   def app_init(_args) do

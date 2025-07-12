@@ -55,7 +55,7 @@ defmodule Octopus.Apps.Rickroll do
 
     1..num_buttons
     |> Enum.map(&%AudioFrame{uri: "file://rickroll.wav", stop: false, channel: &1})
-    |> Enum.each(&send_frame/1)
+    |> Enum.each(&send_audio_event/1)
 
     {:noreply, state}
   end

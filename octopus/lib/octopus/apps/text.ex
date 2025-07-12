@@ -127,11 +127,11 @@ defmodule Octopus.Apps.Text do
         |> Enum.reverse()
         |> Enum.map(fn
           {canvas, :click, channel} ->
-            send_frame(%AudioFrame{uri: "file://ui/switch3.wav", channel: channel})
+            send_audio_event(%AudioFrame{uri: "file://ui/switch3.wav", channel: channel})
             canvas
 
           {canvas, :flip_sound, channel} ->
-            send_frame(%AudioFrame{uri: "file://transition/flipdot1.wav", channel: channel})
+            send_audio_event(%AudioFrame{uri: "file://transition/flipdot1.wav", channel: channel})
             canvas
 
           canvas ->

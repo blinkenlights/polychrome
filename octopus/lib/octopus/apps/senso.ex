@@ -85,7 +85,7 @@ defmodule Octopus.Apps.Senso do
       duration_ms: @time_between_elements_ms,
       velocity: 1
     }
-    |> send_frame()
+    |> send_synth_event()
 
     :timer.sleep(@time_between_elements_ms)
 
@@ -97,7 +97,7 @@ defmodule Octopus.Apps.Senso do
       channel: window,
       note: 60 + window - 1
     }
-    |> send_frame()
+    |> send_synth_event()
 
     :timer.sleep((@time_between_elements_ms / 2) |> trunc())
 
@@ -174,7 +174,7 @@ defmodule Octopus.Apps.Senso do
       duration_ms: 1000,
       velocity: 1
     }
-    |> send_frame()
+    |> send_synth_event()
 
     {:noreply, state}
   end
@@ -198,7 +198,7 @@ defmodule Octopus.Apps.Senso do
       channel: btn_num,
       note: 60 + btn_num - 1
     }
-    |> send_frame()
+    |> send_synth_event()
 
     success = btn_num == Enum.at(state.expected_sequence, state.index)
 
@@ -232,7 +232,7 @@ defmodule Octopus.Apps.Senso do
         config: @synth_config,
         duration_ms: 10
       }
-      |> send_frame()
+      |> send_synth_event()
     end)
 
     send(self(), :run)
@@ -259,7 +259,7 @@ defmodule Octopus.Apps.Senso do
       uri: "file://corrosion15.wav",
       channel: 5
     }
-    |> send_frame()
+    |> send_audio_event()
 
     canvas = Canvas.new(display_info.width, display_info.height)
 
@@ -287,7 +287,7 @@ defmodule Octopus.Apps.Senso do
       uri: "file://corrosion14.wav",
       channel: 5
     }
-    |> send_frame()
+    |> send_audio_event()
 
     canvas = Canvas.new(display_info.width, display_info.height)
 

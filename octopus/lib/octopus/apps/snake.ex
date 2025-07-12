@@ -17,6 +17,14 @@ defmodule Octopus.Apps.Snake do
 
   def name(), do: "Snake"
 
+  def compatible?() do
+    installation_info = Octopus.App.get_installation_info()
+
+    installation_info.num_joysticks >= 1 and
+      installation_info.panel_width == 8 and
+      installation_info.panel_height == 8
+  end
+
   def icon(), do: Sprite.load("../images/snake", 0)
 
   def app_init(args) do

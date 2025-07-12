@@ -4,13 +4,9 @@
 # This configuration file is loaded before any dependency and
 # is restricted to this project.
 
-# General application configuration
 import Config
 
-config :octopus, :installation, Octopus.Installation.Nation2025
-
-# config :octopus, :installation,
-# screens: System.get_env("OCTOPUS_SCREENS", "10") |> String.to_integer()
+# General application configuration
 
 config :octopus,
   ecto_repos: [Octopus.Repo],

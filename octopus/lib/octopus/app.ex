@@ -45,9 +45,6 @@ defmodule Octopus.App do
   alias Octopus.Canvas
 
   alias Octopus.Protobuf.{
-    Frame,
-    WFrame,
-    RGBFrame,
     AudioFrame,
     SynthFrame
   }
@@ -59,8 +56,6 @@ defmodule Octopus.App do
   alias Octopus.Installation
 
   alias Octopus.{Mixer, AppSupervisor}
-
-  @supported_frames [Frame, RGBFrame, WFrame, AudioFrame, SynthFrame]
 
   @doc """
   Human readable name of the app. It will be used in the UI and other places to identify the app.
@@ -198,19 +193,31 @@ defmodule Octopus.App do
   end
 
   def play_sample(sample_path, channel) do
-    send_frame(%AudioFrame{uri: Path.join("file://", sample_path), channel: channel}, self())
+    send_audio_event(%AudioFrame{uri: Path.join("file://", sample_path), channel: channel})
   end
 
   @doc """
-  Send a frame to the mixer.
+  Send an audio event to the hardware.
   """
-  def send_frame(%frame_type{} = frame) when frame_type in @supported_frames do
-    send_frame(frame, self())
+  def send_audio_event(%AudioFrame{} = audio_frame) do
+    send_audio_event(audio_frame, self())
   end
 
-  def send_frame(%frame_type{} = frame, pid) when frame_type in @supported_frames do
+  def send_audio_event(%AudioFrame{} = audio_frame, pid) do
     app_id = AppSupervisor.lookup_app_id(pid)
-    Mixer.handle_frame(app_id, frame)
+    Mixer.handle_frame(app_id, audio_frame)
+  end
+
+  @doc """
+  Send a synthesizer event to the hardware.
+  """
+  def send_synth_event(%SynthFrame{} = synth_frame) do
+    send_synth_event(synth_frame, self())
+  end
+
+  def send_synth_event(%SynthFrame{} = synth_frame, pid) do
+    app_id = AppSupervisor.lookup_app_id(pid)
+    Mixer.handle_frame(app_id, synth_frame)
   end
 
   def send_canvas(%Canvas{} = canvas) do
@@ -253,7 +260,8 @@ defmodule Octopus.App do
       panel_gap: Installation.panel_gap(),
       width: Installation.width(),
       height: Installation.height(),
-      num_buttons: Installation.num_buttons()
+      num_buttons: Installation.num_buttons(),
+      num_joysticks: Installation.num_joysticks()
     }
   end
 

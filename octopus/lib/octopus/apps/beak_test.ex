@@ -26,7 +26,7 @@ defmodule Octopus.Apps.BeakTest do
       when button >= 1 and button <= 10 do
     channel = button
 
-    send_frame(%SynthFrame{
+    send_synth_event(%SynthFrame{
       event_type: :NOTE_ON,
       channel: channel,
       config: %SynthConfig{
