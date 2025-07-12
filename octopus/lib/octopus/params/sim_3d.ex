@@ -9,7 +9,7 @@ defmodule Octopus.Params.Sim3d do
   def height, do: param(:height, 0.4)
   def pole_diameter, do: param(:pole_diameter, 0.15)
   def foot_diameter, do: param(:foot_diameter, 0.3)
-  def button_diameter, do: param(:button_diameter, 0.3)
+  def button_diameter, do: param(:button_diameter, 2.0)
 
   def handle_param("diameter", [value]) do
     Phoenix.PubSub.broadcast(Octopus.PubSub, topic(), {:diameter, value})
