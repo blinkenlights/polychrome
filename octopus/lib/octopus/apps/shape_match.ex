@@ -122,6 +122,28 @@ defmodule Octopus.Apps.ShapeMatch do
 
   def handle_event(
     %Octopus.Events.Event.Input{type: :button, action: :press, button: button},
+    %{game_over: true, installation_info: installation_info} = state
+  ) do
+    # Restart the game
+    animation_files = ["balls1", "balls2", "balls3", "lines1", "lines2"]
+    loaded_animations = Enum.map(animation_files, fn name -> {name, Octopus.WebP.load_animation(name)} end)
+    chosen_per_panel = for _ <- 1..installation_info.panel_count do Enum.random(loaded_animations) end
+
+    Logger.info("🔄 Restarting game on button #{button} press")
+
+    {:noreply, %{
+      state |
+      chosen_per_panel: chosen_per_panel,
+      game_over: false,
+      game_start_time: System.monotonic_time(:second),
+      frame_index: 0,
+      game_over_animation_index: 0,
+      game_over_elapsed: 0
+    }}
+  end
+
+  def handle_event(
+    %Octopus.Events.Event.Input{type: :button, action: :press, button: button},
     %{chosen_per_panel: chosen_per_panel, installation_info: installation_info} = state
   ) do
     panel_count = installation_info.panel_count
