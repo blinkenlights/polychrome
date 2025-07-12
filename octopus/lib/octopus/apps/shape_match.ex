@@ -19,7 +19,7 @@ defmodule Octopus.Apps.ShapeMatch do
     # Always use adjacent panels layout to utilize all available panels
     Octopus.App.configure_display(layout: :adjacent_panels)
 
-    animation_files = ["balls1", "balls2", "balls3"]
+    animation_files = ["balls1", "balls2", "balls3", "lines1", "lines2"]
     # Load all animations
     loaded_animations =
       animation_files
@@ -46,7 +46,8 @@ defmodule Octopus.Apps.ShapeMatch do
     {:ok, %{
       chosen_per_panel: chosen_per_panel,
       frame_index: 0,
-      installation_info: installation_info
+      installation_info: installation_info,
+      game_over: false
     }}
   end
 
@@ -82,25 +83,35 @@ defmodule Octopus.Apps.ShapeMatch do
     %{chosen_per_panel: chosen_per_panel, installation_info: installation_info} = state
   ) do
     panel_count = installation_info.panel_count
-    Logger.info("Button pressed")
-    if button >= 0 and button <= panel_count do
-      button_index = button - 1
-      animation_files = ["balls1", "balls2", "balls3"]
-      # Load all animations
+
+    Logger.info("Button #{button} pressed")
+
+    if button >= 0 and button < panel_count do
+      animation_files = ["balls1", "balls2", "balls3", "lines1", "lines2"]
+
       loaded_animations =
         animation_files
         |> Enum.map(fn name ->
           {name, Octopus.WebP.load_animation(name)}
         end)
-      # Randomly pick one for this panel
+
       new_animation = Enum.random(loaded_animations)
-      # Replace the animation at button_index
+
       updated_chosen_per_panel =
-        List.replace_at(chosen_per_panel, button_index, new_animation)
-      Logger.info("Button #{button} pressed → new animation for panel #{button_index}")
-      {:noreply, %{state | chosen_per_panel: updated_chosen_per_panel}}
+        List.replace_at(chosen_per_panel, button - 1, new_animation)
+
+      Logger.info("→ new animation for panel #{button}")
+
+      [{first_name, _} | rest] = updated_chosen_per_panel
+      all_same? = Enum.all?(rest, fn {name, _} -> name == first_name end)
+
+      if all_same? do
+        Logger.info("🎉 Game Over! Alle Panels haben die gleiche Animation: #{first_name}")
+        {:noreply, %{state | chosen_per_panel: updated_chosen_per_panel, game_over: true}}
+      else
+        {:noreply, %{state | chosen_per_panel: updated_chosen_per_panel}}
+      end
     else
-      # Button outside valid range
       {:noreply, state}
     end
   end
