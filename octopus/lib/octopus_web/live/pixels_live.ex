@@ -30,11 +30,11 @@ defmodule OctopusWeb.PixelsLive do
 
     # Base button mappings for number keys and function keys
     button_mappings =
-      for i <- 1..min(num_buttons, 10) do
+      for i <- 1..min(num_buttons, 10)//1 do
         key = if i == 10, do: "0", else: to_string(i)
         {key, i}
       end ++
-        for i <- 1..min(num_buttons, 12) do
+        for i <- 1..min(num_buttons, 12)//1 do
           key = "F#{i}"
           {key, i}
         end
@@ -153,7 +153,7 @@ defmodule OctopusWeb.PixelsLive do
         <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-10">
           <div class="flex gap-2 justify-center">
             <button
-              :for={i <- 1..@num_buttons}
+              :for={i <- 1..@num_buttons//1}
               phx-click="button-click"
               phx-value-button={i}
               class={[
