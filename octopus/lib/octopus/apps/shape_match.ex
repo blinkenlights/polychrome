@@ -1,7 +1,6 @@
 defmodule Octopus.Apps.ShapeMatch do
   use Octopus.App, category: :animation
   alias Octopus.WebP
-  alias Octopus.Canvas
   alias Octopus.{Canvas, Font, Transitions}
   alias Octopus.Events.Event.Lifecycle, as: LifecycleEvent
   alias Octopus.Installation
@@ -42,10 +41,10 @@ defmodule Octopus.Apps.ShapeMatch do
   end
 
   def handle_info(:tick, %{game_over: true} = state) do
-    # Spiel ist vorbei → Zeitanzeige animieren
+    # Game is over → animate time display
     now = System.monotonic_time(:second)
 
-    # Sicherheitsprüfung für game_start_time
+    # Safety check for game_start_time
     game_start_time = case state.game_start_time do
       nil -> now
       time when is_integer(time) -> time
@@ -60,12 +59,12 @@ defmodule Octopus.Apps.ShapeMatch do
     panel_height = state.installation_info.panel_height
     panel_count = state.installation_info.panel_count
 
-    # Auf welchem Panel soll der Text erscheinen
+    # On which panel should the text appear
     active_panel = rem(state.game_over_animation_index, panel_count)
 
     tiled_canvas = Canvas.new(panel_count * panel_width, panel_height)
 
-    # Für jedes Panel entscheiden, ob wir den Text zeigen oder leer lassen
+    # For each panel, decide whether to show text or leave empty
     tiled_canvas =
       Enum.reduce(0..(panel_count - 1), tiled_canvas, fn panel_index, acc ->
         x_offset = panel_index * panel_width
@@ -109,7 +108,7 @@ defmodule Octopus.Apps.ShapeMatch do
     %Octopus.Events.Event.Input{type: :button, action: :press, button: button},
     %{chosen_per_panel: chosen_per_panel, installation_info: installation_info, game_start_time: nil} = state
   ) do
-    # Erster Buttonpress → Spielstart
+    # First button press → game start
     Logger.info("Game start on button #{button} press")
     now = System.monotonic_time(:second)
 
@@ -140,7 +139,7 @@ defmodule Octopus.Apps.ShapeMatch do
       all_same? = Enum.all?(rest, fn {name, _} -> name == first_name end)
 
       if all_same? do
-        Logger.info("🎉 Game Over! Alle Panels haben die gleiche Animation: #{first_name}")
+        Logger.info("🎉 Game Over! All panels have the same animation: #{first_name}")
         {:noreply, %{state | chosen_per_panel: updated_chosen_per_panel, game_over: true, game_over_animation_index: 0}}
       else
         {:noreply, %{state | chosen_per_panel: updated_chosen_per_panel}}
@@ -155,7 +154,7 @@ defmodule Octopus.Apps.ShapeMatch do
     {:noreply, state}
   end
 
-  # Hilfsfunktion zur Zeitformatierung
+  # Helper function for time formatting
   defp format_time(seconds) do
     hours = div(seconds, 3600)
     minutes = div(rem(seconds, 3600), 60)
