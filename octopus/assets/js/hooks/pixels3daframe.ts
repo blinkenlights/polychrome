@@ -117,7 +117,7 @@ const buttonPoleHeight = 1.0;
 const buttonPoleRadius = 0.05;
 const buttonBaseHeight = 0.02;
 const distancePanelButtonPoles = 6.6;
-const buttonPolesRadius = (panelDiameter / 2) - distancePanelButtonPoles;
+let buttonPolesRadius = (panelDiameter / 2) - distancePanelButtonPoles;
 const PANEL_SIZE = 1.6;
 const PANEL_DEPTH = 0.3;
 const numPanels = 12;
@@ -135,7 +135,7 @@ type Param = {
     height?: number;
     pole_diameter?: number;
     foot_diameter?: number;
-    button_poles_diameter?: number;
+    button_diameter?: number;
   };
 };
 
@@ -379,6 +379,10 @@ class Pixels3dAframeHook extends Hook {
     }
     if (param.foot_diameter) {
       poleDiameter  = param.foot_diameter;
+      this.updatePanels()
+    }
+    if (param.button_diameter) {
+      buttonPolesRadius  = param.button_diameter / 2;
       this.updatePanels()
     }
   }
