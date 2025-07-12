@@ -36,11 +36,13 @@ defmodule Octopus.Apps.ShapeMatch do
       installation_info: installation_info,
       game_over: false,
       game_start_time: System.monotonic_time(:second),
-      game_over_animation_index: 0
+      game_over_animation_index: 0,
+      game_over_elapsed: 0
     }}
   end
 
-  def handle_info(:tick, %{game_over: true} = state) do
+  def handle_info(:tick, %{game_over: true, game_over_elapsed: elapsed} = state) do
+    formatted = format_time(elapsed)
     # Game is over → animate time display
     now = System.monotonic_time(:second)
 
@@ -54,7 +56,7 @@ defmodule Octopus.Apps.ShapeMatch do
     elapsed = now - game_start_time
     formatted = format_time(elapsed)
 
-    font = Font.load("ddp-DoDonPachi (Cave)")
+    font = Font.load("aftb-Afterburner (Sega)")
     panel_width = state.installation_info.panel_width
     panel_height = state.installation_info.panel_height
     panel_count = state.installation_info.panel_count
@@ -140,7 +142,14 @@ defmodule Octopus.Apps.ShapeMatch do
 
       if all_same? do
         Logger.info("🎉 Game Over! All panels have the same animation: #{first_name}")
-        {:noreply, %{state | chosen_per_panel: updated_chosen_per_panel, game_over: true, game_over_animation_index: 0}}
+        now = System.monotonic_time(:second)
+        elapsed = now - state.game_start_time
+        {:noreply, %{state |
+          chosen_per_panel: updated_chosen_per_panel,
+          game_over: true,
+          game_over_animation_index: 0,
+          game_over_elapsed: elapsed
+        }}
       else
         {:noreply, %{state | chosen_per_panel: updated_chosen_per_panel}}
       end
