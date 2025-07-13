@@ -32,7 +32,7 @@ config :octopus, :firmware_broadcaster_remote_port, 1337
 config :octopus, :osc_server_port, 8000
 
 # Network addresses configuration
-config :octopus, :enable_broadcast, true
+config :octopus, :enable_broadcast, false
 # Default broadcast, can be overridden per environment
 config :octopus, :broadcast_ip, nil
 config :octopus, :localhost_ip, {127, 0, 0, 1}
