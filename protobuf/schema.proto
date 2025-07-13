@@ -29,7 +29,7 @@ message Packet {
 
 // Frame that uses only the white channel, 1 byte per pixel.
 message WFrame {
-  bytes data = 1 [(nanopb).max_size = 720]; // Selects pixel colors from the palette. First pixel is top left. One panel after the other.
+  bytes data = 1 [(nanopb).max_size = 768]; // Selects pixel colors from the palette. First pixel is top left. One panel after the other.
   uint32 easing_interval = 3; // Optional. In milliseconds. Fade this frame over the previous one with an easing curve. Colors are blended in gamma corrected RGB space.
 }
 
