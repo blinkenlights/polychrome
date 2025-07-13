@@ -44,38 +44,31 @@ defmodule Octopus.Apps.ShapeMatch do
     }}
   end
 
-  def handle_info(:tick, %{game_over: true, game_over_elapsed: elapsed} = state) do
+  def handle_info(:tick, %{game_over: true, game_over_elapsed: elapsed, game_over_animation_index: offset} = state) do
     # Game is over → animate time display
     formatted = format_time(elapsed)
-
     font = Font.load("solo-Solomons Key (Tecmo)")
     panel_width = state.installation_info.panel_width
     panel_height = state.installation_info.panel_height
     panel_count = state.installation_info.panel_count
-
-    # On which panel should the text appear
-    active_panel = rem(state.game_over_animation_index, panel_count)
+    chars = String.graphemes(formatted)
+    str_len = length(chars)
 
     tiled_canvas = Canvas.new(panel_count * panel_width, panel_height)
 
-    # For each panel, decide whether to show text or leave empty
     tiled_canvas =
       Enum.reduce(0..(panel_count - 1), tiled_canvas, fn panel_index, acc ->
         x_offset = panel_index * panel_width
+        char_index = rem(panel_index + offset, str_len)
+        char = Enum.at(chars, char_index)
         canvas_part =
-          if panel_index == active_panel do
-            Canvas.from_string(formatted, font, 0)
-          else
-            Canvas.new(panel_width, panel_height)
-          end
+          Font.draw_char(font, hd(to_charlist(char)), 0, Canvas.new(panel_width, panel_height))
         Canvas.overlay(acc, canvas_part, offset: {x_offset, 0})
       end)
 
     Octopus.App.update_display(tiled_canvas)
-
     Process.send_after(self(), :tick, 500)
-
-    {:noreply, %{state | game_over_animation_index: state.game_over_animation_index + 1}}
+    {:noreply, %{state | game_over_animation_index: offset + 1}}
   end
 
   def handle_info(:tick, %{game_over: false, chosen_per_panel: chosen_per_panel, frame_index: frame_index, installation_info: installation_info} = state) do
@@ -182,6 +175,6 @@ defmodule Octopus.Apps.ShapeMatch do
     hours = div(seconds, 3600)
     minutes = div(rem(seconds, 3600), 60)
     secs = rem(seconds, 60)
-    :io_lib.format("~2..0B:~2..0B:~2..0B", [hours, minutes, secs]) |> IO.iodata_to_binary()
+    :io_lib.format("~2..0B:~2..0B:~2..0B  f  ", [hours, minutes, secs]) |> IO.iodata_to_binary()
   end
 end
