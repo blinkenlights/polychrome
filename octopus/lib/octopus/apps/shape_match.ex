@@ -45,21 +45,10 @@ defmodule Octopus.Apps.ShapeMatch do
   end
 
   def handle_info(:tick, %{game_over: true, game_over_elapsed: elapsed} = state) do
-    formatted = format_time(elapsed)
     # Game is over → animate time display
-    now = System.monotonic_time(:second)
-
-    # Safety check for game_start_time
-    game_start_time = case state.game_start_time do
-      nil -> now
-      time when is_integer(time) -> time
-      _ -> now
-    end
-
-    elapsed = now - game_start_time
     formatted = format_time(elapsed)
 
-    font = Font.load("aftb-Afterburner (Sega)")
+    font = Font.load("solo-Solomons Key (Tecmo)")
     panel_width = state.installation_info.panel_width
     panel_height = state.installation_info.panel_height
     panel_count = state.installation_info.panel_count

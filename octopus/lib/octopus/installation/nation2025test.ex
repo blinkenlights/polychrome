@@ -1,12 +1,12 @@
 defmodule Octopus.Installation.Nation2025Test do
   use Octopus.Installation,
     arrangement: :linear,
-    num_panels: 7,
-    num_buttons: 7,
+    num_panels: 12,
+    num_buttons: 12,
     num_joysticks: 0,
     panel_width: 8,
     panel_height: 8,
-    panel_gap: 10,
+    panel_gap: 16,
     simulator_layouts: [
       [
         name: "Nation 2025 Test",
