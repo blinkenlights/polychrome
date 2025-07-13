@@ -75,6 +75,8 @@ defmodule Octopus.Protobuf do
     [packet1]
   end
 
+  def split_and_encode(nil), do: []
+
   def decode_firmware_packet(protobuf) when is_binary(protobuf) do
     {:ok, FirmwarePacket.decode(protobuf)}
   rescue
