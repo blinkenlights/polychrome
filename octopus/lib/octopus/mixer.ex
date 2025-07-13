@@ -175,14 +175,14 @@ defmodule Octopus.Mixer do
         new_app_displays = Map.put(state.app_displays, app_id, updated_display)
         new_state = %State{state | app_displays: new_app_displays}
 
-        frame =
-          if state.rendered_app == app_id do
-            display_info = updated_display.display_info
+        if state.rendered_app == app_id do
+          display_info = updated_display.display_info
 
-            easing_interval =
-              easing_interval_override || Map.get(updated_display.config, :easing_interval, 0)
+          easing_interval =
+            easing_interval_override || Map.get(updated_display.config, :easing_interval, 0)
 
-            # Apply mask if in masked mode
+          # Apply mask if in masked mode
+          frame =
             if state.output_mode == :masked and state.mask_app_id do
               mask_display = Map.get(new_state.app_displays, state.mask_app_id)
 
@@ -209,13 +209,13 @@ defmodule Octopus.Mixer do
               # RGB frame without masking
               canvas_to_frame(canvas, display_info, easing_interval)
             end
-          end
 
-        frame
-        |> Protobuf.split_and_encode()
-        |> Enum.each(fn binary ->
-          send_frame(binary, frame)
-        end)
+          frame
+          |> Protobuf.split_and_encode()
+          |> Enum.each(fn binary ->
+            send_frame(binary, frame)
+          end)
+        end
 
         {:noreply, new_state}
     end

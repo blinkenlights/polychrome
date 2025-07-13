@@ -8,7 +8,7 @@ defmodule Joystick.Application do
     children = [
       Joystick.Monitor,
       Joystick.UDP,
-      Joystick.EventHandler,
+      Joystick.GpioEventHandler,
       Joystick.LightControl
     ]
 

@@ -33,7 +33,7 @@ defmodule Joystick.MixProject do
       {:nerves, "~> 1.10", runtime: false},
       {:shoehorn, "~> 0.9"},
       {:ring_logger, "~> 0.9"},
-      {:toolshed, "~> 0.3.0"},
+      {:toolshed, "~> 0.3"},
       {:nerves_leds, "~> 0.8"},
       {:vintage_net, "~> 0.13"},
       {:input_event, "~> 1.2"},
@@ -41,8 +41,8 @@ defmodule Joystick.MixProject do
       {:circuits_gpio, "~> 2.1"},
 
       # Dependencies for all targets except :host
-      {:nerves_runtime, "~> 0.13.0", targets: @all_targets},
-      {:nerves_pack, "~> 0.7.0", targets: @all_targets},
+      {:nerves_runtime, "~> 0.13", targets: @all_targets},
+      {:nerves_pack, "~> 0.7", targets: @all_targets},
 
       # Dependencies for specific targets
       # NOTE: It's generally low risk and recommended to follow minor version
@@ -54,7 +54,7 @@ defmodule Joystick.MixProject do
       {:nerves_system_rpi2, "~> 1.19", runtime: false, targets: :rpi2},
       {:nerves_system_rpi3, "~> 1.19", runtime: false, targets: :rpi3},
       {:nerves_system_rpi3a, "~> 1.19", runtime: false, targets: :rpi3a},
-      {:nerves_system_rpi4, "~> 1.19", runtime: false, targets: :rpi4},
+      {:nerves_system_rpi4, "~> 1.31", runtime: false, targets: :rpi4},
       {:nerves_system_bbb, "~> 2.14", runtime: false, targets: :bbb},
       {:nerves_system_osd32mp1, "~> 0.10", runtime: false, targets: :osd32mp1},
       {:nerves_system_x86_64, "~> 1.19", runtime: false, targets: :x86_64},

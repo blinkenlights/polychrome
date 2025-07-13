@@ -43,6 +43,8 @@ defmodule Joystick.Protobuf.InputType do
   field :BUTTON_8, 7
   field :BUTTON_9, 8
   field :BUTTON_10, 9
+  field :BUTTON_11, 17
+  field :BUTTON_12, 18
   field :AXIS_X_1, 10
   field :AXIS_Y_1, 11
   field :AXIS_X_2, 12
@@ -93,7 +95,6 @@ defmodule Joystick.Protobuf.Packet do
 
   oneof :content, 0
 
-  field :frame, 2, type: Joystick.Protobuf.Frame, oneof: 0
   field :w_frame, 3, type: Joystick.Protobuf.WFrame, json_name: "wFrame", oneof: 0
   field :rgb_frame, 4, type: Joystick.Protobuf.RGBFrame, json_name: "rgbFrame", oneof: 0
   field :audio_frame, 5, type: Joystick.Protobuf.AudioFrame, json_name: "audioFrame", oneof: 0
@@ -131,36 +132,16 @@ defmodule Joystick.Protobuf.Packet do
     oneof: 0
 end
 
-defmodule Joystick.Protobuf.Frame do
-  @moduledoc false
-
-  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
-
-  field :data, 1, type: :bytes, deprecated: false
-  field :palette, 2, type: :bytes, deprecated: false
-  field :easing_interval, 3, type: :uint32, json_name: "easingInterval"
-end
-
 defmodule Joystick.Protobuf.WFrame do
   @moduledoc false
 
   use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
 
   field :data, 1, type: :bytes, deprecated: false
-  field :palette, 2, type: :bytes, deprecated: false
   field :easing_interval, 3, type: :uint32, json_name: "easingInterval"
 end
 
 defmodule Joystick.Protobuf.RGBFrame do
-  @moduledoc false
-
-  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
-
-  field :data, 1, type: :bytes, deprecated: false
-  field :easing_interval, 2, type: :uint32, json_name: "easingInterval"
-end
-
-defmodule Joystick.Protobuf.RGBWFrame do
   @moduledoc false
 
   use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
@@ -274,6 +255,16 @@ defmodule Joystick.Protobuf.SoundToLightControlEvent do
   field :high, 3, type: :float
 end
 
+defmodule Joystick.Protobuf.ProximityEvent do
+  @moduledoc false
+
+  use Protobuf, syntax: :proto3, protoc_gen_elixir_version: "0.12.0"
+
+  field :panel_index, 1, type: :uint32, json_name: "panelIndex"
+  field :sensor_index, 2, type: :uint32, json_name: "sensorIndex"
+  field :distance_mm, 3, type: :float, json_name: "distanceMm"
+end
+
 defmodule Joystick.Protobuf.FirmwareConfig do
   @moduledoc false
 
@@ -299,6 +290,11 @@ defmodule Joystick.Protobuf.FirmwarePacket do
     oneof: 0
 
   field :remote_log, 2, type: Joystick.Protobuf.RemoteLog, json_name: "remoteLog", oneof: 0
+
+  field :proximity_event, 3,
+    type: Joystick.Protobuf.ProximityEvent,
+    json_name: "proximityEvent",
+    oneof: 0
 end
 
 defmodule Joystick.Protobuf.FirmwareInfo do
@@ -319,6 +315,7 @@ defmodule Joystick.Protobuf.FirmwareInfo do
   field :uptime, 11, type: :uint64
   field :heap_size, 12, type: :uint32, json_name: "heapSize"
   field :free_heap, 13, type: :uint32, json_name: "freeHeap"
+  field :proximity_readings_per_second, 14, type: :uint32, json_name: "proximityReadingsPerSecond"
 end
 
 defmodule Joystick.Protobuf.RemoteLog do
