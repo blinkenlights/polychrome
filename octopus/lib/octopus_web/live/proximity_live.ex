@@ -3,7 +3,7 @@ defmodule OctopusWeb.ProximityLive do
 
   alias Octopus.Events.Event.Proximity, as: ProximityEvent
 
-  @batch_size 3
+  @batch_size 2
 
   @impl true
   def mount(_params, _session, socket) do

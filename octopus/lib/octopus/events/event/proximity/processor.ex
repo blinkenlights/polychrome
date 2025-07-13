@@ -12,7 +12,9 @@ defmodule Octopus.Events.Event.Proximity.Processor do
 
   @window_size 5
   # Smoothing factor for EMA (0.0 = very smooth, 1.0 = no smoothing)
-  @ema_alpha 0.1
+  @ema_alpha 0.2
+  # Distance threshold in mm - ignore events beyond this distance
+  @distance_threshold 3000
 
   defmodule State do
     defstruct sensor_windows: %{}, sensor_ema_values: %{}, sensor_combined_ema_values: %{}
@@ -22,12 +24,14 @@ defmodule Octopus.Events.Event.Proximity.Processor do
     GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
   end
 
-  @doc """
-  Process a proximity event by adding smoothed distance values.
-  Returns the enhanced event with multiple smoothing algorithms applied.
-  """
+  def process_event(%ProximityEvent{distance: distance}) when distance > @distance_threshold do
+    :filtered
+  end
+
   def process_event(%ProximityEvent{} = event) do
-    GenServer.call(__MODULE__, {:process_event, event})
+    event = GenServer.call(__MODULE__, {:process_event, event})
+
+    {:ok, event}
   end
 
   # GenServer callbacks
