@@ -31,7 +31,6 @@ defmodule Octopus.InputAdapter do
   end
 
   def init(:ok) do
-    # Configuration is centralized in config.exs
     local_port = Application.fetch_env!(:octopus, :controller_interface_port)
     Logger.info("Starting input adapter. Listening on port #{local_port}")
     {:ok, udp} = :gen_udp.open(local_port, [:binary, active: true])
@@ -40,8 +39,13 @@ defmodule Octopus.InputAdapter do
   end
 
   def handle_cast({:send_binary, binary}, %State{udp: udp} = state) do
-    if not is_nil(state.from_ip) do
-      :gen_udp.send(udp, {state.from_ip, state.from_port}, binary)
+    case state do
+      %State{from_ip: nil} ->
+        Logger.warning("InputAdapter: No destination IP, skipping packet")
+
+      %State{from_ip: from_ip, from_port: from_port} ->
+        Logger.debug("InputAdapter: Sending packet to #{from_ip}:#{from_port}")
+        :gen_udp.send(udp, {from_ip, from_port}, binary)
     end
 
     {:noreply, state}
@@ -50,14 +54,11 @@ defmodule Octopus.InputAdapter do
   def handle_info({:udp, _socket, from_ip, from_port, packet}, state = %State{}) do
     case Protobuf.decode_packet(packet) do
       {:ok, %InputEvent{} = input_event} ->
-        # Convert protobuf input event to domain event
         domain_event = Factory.create_input_event(input_event)
-        # Logger.debug("#{__MODULE__}: Received input event: #{inspect(domain_event)}")
         Events.handle_event(domain_event)
 
       {:ok, %SoundToLightControlEvent{} = stl_event} ->
         domain_event = Factory.create_audio_event(stl_event)
-        # Logger.debug("#{__MODULE__}: Received audio event: #{inspect(domain_event)}")
         Events.handle_event(domain_event)
 
       {:ok, content} ->

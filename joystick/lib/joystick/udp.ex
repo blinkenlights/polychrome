@@ -45,6 +45,7 @@ defmodule Joystick.UDP do
         end
 
       {:error, _} ->
+        Logger.warning("Failed to get IP for #{octopus_host}")
         :noop
     end
 

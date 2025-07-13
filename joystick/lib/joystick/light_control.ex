@@ -3,8 +3,21 @@ defmodule Joystick.LightControl do
   require Logger
   alias Joystick.Protobuf.{InputLightEvent}
 
-  @led_mapping [11, 2, 3, 4, 5, 6, 17, 27, 9, 10]
-  @tick_interval_ms trunc(1000 / 60)
+  @gpio_pins [
+    4,
+    17,
+    27,
+    22,
+    10,
+    9,
+    11,
+    0,
+    5,
+    6,
+    13,
+    19
+  ]
+  @tick_interval_ms 10
 
   defmodule State do
     defstruct [:leds, durations: %{}]
@@ -22,11 +35,14 @@ defmodule Joystick.LightControl do
     Logger.info("Starting #{__MODULE__}")
 
     leds =
-      @led_mapping
-      |> Enum.map(&Circuits.GPIO.open("GPIO#{&1}", :output))
-      |> Enum.map(&elem(&1, 1))
+      @gpio_pins
+      |> Enum.map(fn pin ->
+        Logger.info("Opening GPIO pin #{pin} for light")
+        {:ok, gpio} = Circuits.GPIO.open(pin, :output)
+        gpio
+      end)
       |> Enum.with_index(1)
-      |> Enum.map(fn {pin, i} -> {"BUTTON_#{i}" |> String.to_existing_atom(), pin} end)
+      |> Enum.map(fn {gpio, i} -> {"BUTTON_#{i}" |> String.to_existing_atom(), gpio} end)
       |> Enum.into(%{})
 
     :timer.send_interval(@tick_interval_ms, :tick)

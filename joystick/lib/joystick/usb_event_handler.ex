@@ -1,4 +1,4 @@
-defmodule Joystick.EventHandler do
+defmodule Joystick.UsbEventHandler do
   use GenServer
   require Logger
 
