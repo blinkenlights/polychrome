@@ -57,7 +57,9 @@ class ProximityChartHook extends Hook {
               display: true,
               text: 'Distance (mm)'
             },
-            beginAtZero: false
+            beginAtZero: true,
+            min: 0,
+            max: 3000
           }
         },
         plugins: {
@@ -68,10 +70,10 @@ class ProximityChartHook extends Hook {
         },
         elements: {
           point: {
-            radius: 0
+            radius: 2
           },
           line: {
-            tension: 0.1
+            borderWidth: 0 // Hide lines globally
           }
         }
       }
@@ -86,8 +88,8 @@ class ProximityChartHook extends Hook {
   addAlgorithmBatches(sensorKey: string, algorithms: AlgorithmData) {
     if (!this.chart) return;
 
-    // Only process raw and combined algorithms for display
-    const algorithmsToShow = ['raw', 'combined'];
+    // Only process combined algorithm for display
+    const algorithmsToShow = ['combined'];
 
     // Process each algorithm, but only show selected ones
     Object.entries(algorithms).forEach(([algorithmName, readings]) => {
@@ -114,13 +116,11 @@ class ProximityChartHook extends Hook {
       dataset = {
         label: datasetLabel,
         data: [],
-        borderColor: this.getAlgorithmColor(algorithmName),
-        backgroundColor: this.getAlgorithmColor(algorithmName, 0.1),
-        tension: 0.1,
-        pointRadius: 0, // No points
-        borderWidth: algorithmName === 'combined' ? 2 : 1, // Make combined line slightly thicker, others thinner
-        pointBackgroundColor: this.getAlgorithmColor(algorithmName),
-        pointBorderColor: this.getAlgorithmColor(algorithmName)
+        borderWidth: 0, // Hide lines completely
+        pointRadius: 2, // Show points with 2px radius
+        pointBackgroundColor: this.getAlgorithmColor(algorithmName, sensorKey),
+        pointBorderColor: this.getAlgorithmColor(algorithmName, sensorKey),
+        pointBorderWidth: 1
       };
       this.chart.data.datasets.push(dataset);
     }
@@ -134,7 +134,7 @@ class ProximityChartHook extends Hook {
       });
     }
 
-    const maxPoints = 100;
+    const maxPoints = 200;
 
     // Maintain rolling window - replace the data array if it exceeds max points
     if (dataset.data.length > maxPoints) {
@@ -142,17 +142,53 @@ class ProximityChartHook extends Hook {
     }
   }
 
-  getAlgorithmColor(algorithmName: string, alpha: number = 1): string {
-    // Predefined colors for each algorithm
-    const colors: { [key: string]: string } = {
-      raw: `rgba(239, 68, 68, ${alpha})`,      // Red
-      sma: `rgba(59, 130, 246, ${alpha})`,     // Blue
-      ema: `rgba(249, 115, 22, ${alpha})`, // Orange
-      median: `rgba(147, 51, 234, ${alpha})`,  // Purple
-      combined: `rgba(34, 197, 94, ${alpha})` // Green
+  getAlgorithmColor(algorithmName: string, sensorKey: string, alpha: number = 1): string {
+    // Base hue values for each algorithm (0-360)
+    const algorithmHues: { [key: string]: number } = {
+      raw: 0,        // Red base
+      sma: 210,      // Blue base
+      ema: 25,       // Orange base
+      median: 270,   // Purple base
+      combined: 120  // Green base
     };
 
-    return colors[algorithmName] || `rgba(128, 128, 128, ${alpha})`; // Default gray
+    // Generate a hash from the sensor key to create variation
+    const sensorHash = this.hashString(sensorKey);
+
+    // Get base hue for the algorithm
+    const baseHue = algorithmHues[algorithmName] || 200; // Default blue-ish
+
+    // Dramatically increase variation range for better color separation
+    // Vary the hue based on sensor key (±120 degrees for maximum separation)
+    const hueVariation = (sensorHash % 240) - 120;
+    const finalHue = (baseHue + hueVariation + 360) % 360;
+
+    // Vary saturation significantly (50-90% for more vibrant colors)
+    const saturation = 50 + (sensorHash % 40);
+
+    // Keep lightness with good variation (35-65% for better contrast)
+    const lightness = 35 + (sensorHash % 30);
+
+    // Debug logging to check hash values and colors
+    console.log(`Color for ${sensorKey} (${algorithmName}): hash=${sensorHash}, hue=${finalHue}, sat=${saturation}, light=${lightness}`);
+
+    return `hsla(${finalHue}, ${saturation}%, ${lightness}%, ${alpha})`;
+  }
+
+  // Improved hash function for better distribution with similar strings
+  private hashString(str: string): number {
+    let hash = 5381; // djb2 hash initial value
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash * 33) ^ char) >>> 0; // Use XOR and ensure unsigned 32-bit
+    }
+
+    // Additional mixing to improve distribution for similar strings
+    hash = ((hash >>> 16) ^ hash) * 0x45d9f3b;
+    hash = ((hash >>> 16) ^ hash) * 0x45d9f3b;
+    hash = (hash >>> 16) ^ hash;
+
+    return Math.abs(hash);
   }
 
   destroyed() {

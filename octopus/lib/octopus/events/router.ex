@@ -71,16 +71,20 @@ defmodule Octopus.Events.Router do
   end
 
   def handle_cast({:route_event, %ProximityEvent{} = proximity_event}, state) do
-    processed_event = Processor.process_event(proximity_event)
+    case Processor.process_event(proximity_event) do
+      {:ok, processed_event} ->
+        selected_app = AppManager.get_selected_app()
+        AppSupervisor.send_event(selected_app, processed_event)
 
-    selected_app = AppManager.get_selected_app()
-    AppSupervisor.send_event(selected_app, processed_event)
+        Phoenix.PubSub.broadcast(
+          Octopus.PubSub,
+          @pubsub_topic,
+          {:events_router, {:proximity_event, processed_event}}
+        )
 
-    Phoenix.PubSub.broadcast(
-      Octopus.PubSub,
-      @pubsub_topic,
-      {:events_router, {:proximity_event, processed_event}}
-    )
+      _ ->
+        :noop
+    end
 
     {:noreply, state}
   end

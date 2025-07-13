@@ -10,14 +10,9 @@
 #define ECHO1_PIN 34
 #define ECHO2_PIN 35
 
-// PWM CONFIGURATION
-// Sensor 1: _____|‾‾‾‾‾|______________|‾‾‾‾‾|______
-// Sensor 2: ______________|‾‾‾‾‾|______________|‾‾‾‾‾|
-//           0ms   10µs    33.3ms    43.3ms   66.7ms
-
-#define TRIGGER_FREQ_HZ 15    // 15Hz per sensor
-#define PWM_RESOLUTION 16     // 16-bit resolution
-#define TRIGGER_PULSE_DUTY 10 // duty: 10/65536 * 66.7ms = ~10µs pulse
+#define TRIGGER_FREQ_HZ 10   // 10Hz per sensor
+#define PWM_RESOLUTION 16    // 16-bit resolution
+#define TRIGGER_PULSE_DUTY 7 // duty: 7/65536 * 100ms = ~10µs pulse
 
 // PWM CHANNELS
 #define PWM_CHANNEL_1 0
