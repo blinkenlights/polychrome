@@ -50,14 +50,6 @@ defmodule Octopus.Apps.ProximityDemo do
      }}
   end
 
-  # def handle_info(:tick, %State{} = state) do
-  #   state
-  #   |> render_proximity_data()
-  #   |> Octopus.App.update_display()
-
-  #   {:noreply, state}
-  # end
-
   def handle_event(%ProximityEvent{} = event, state) do
     state
     |> render_proximity_data(event)
@@ -66,7 +58,7 @@ defmodule Octopus.Apps.ProximityDemo do
     {:noreply, state}
   end
 
-  def handle_event(any_event, state) do
+  def handle_event(_any_event, state) do
     {:noreply, state}
   end
 
@@ -77,13 +69,6 @@ defmodule Octopus.Apps.ProximityDemo do
     # Get display info to use correct dimensions
     display_info = Octopus.App.get_display_info()
     canvas = Canvas.new(display_info.width, display_info.height)
-
-    # Get all smoothed readings from the ProximitySensor
-    # smoothed_measurements = Octopus.ProximitySensor.get_smoothed_values()
-    # smoothed_measurements = []
-
-    # Enum.reduce(smoothed_measurements, canvas, fn {{panel_index, sensor_index}, distance},
-    #                                               acc_canvas ->
     brightness_ratio = 1.0 - (distance - min) / (max - min)
     brightness_value = trunc(brightness_ratio * 100)
 
@@ -103,9 +88,8 @@ defmodule Octopus.Apps.ProximityDemo do
     for x <- x_start..x_end,
         y <- 0..(display_info.panel_height - 1),
         reduce: canvas do
-      canvas -> Canvas.put_pixel(canvas, {x, y}, color)
+      canvas ->
+        Canvas.put_pixel(canvas, {x, y}, color)
     end
-
-    # end)
   end
 end
