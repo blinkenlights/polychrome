@@ -309,35 +309,7 @@ defmodule Octopus.Apps.PixelFun do
 
   @default_env %{~c"pi" => :math.pi(), ~c"tau" => :math.pi() * 2}
 
-  def pixels(expr, x, y, i, t, color_a, color_b, lerp_fn \\ &interpolate_colors_with_black/3)
-
-  def pixels(expr, x, y, i, t, color_a, color_b, lerp_fn)
-      when is_binary(expr) do
-    {:ok, program} = Program.parse(expr)
-    pixels(program, x, y, i, t, color_a, color_b, lerp_fn)
-  end
-
-  def pixels(program, x, y, i, t, color_a, color_b, lerp_fn) do
-    pixels(program, x, y, i, t, 0, 0, 0, {color_a, color_b}, lerp_fn)
-  end
-
-  def pixels(expr, x, y, i, t, l, m, h, {{r1, g1, b1}, {r2, g2, b2}}, lerp_fn) do
-    pixels(
-      expr,
-      x,
-      y,
-      i,
-      t,
-      l,
-      m,
-      h,
-      {Chameleon.RGB.new(r1, g1, b1) |> Chameleon.convert(Chameleon.HSV),
-       Chameleon.RGB.new(r2, g2, b2) |> Chameleon.convert(Chameleon.HSV)},
-      lerp_fn
-    )
-  end
-
-  def pixels(expr, x, y, i, t, l, m, h, {color_a, color_b}, lerp_fn) do
+  defp pixels(expr, x, y, i, t, l, m, h, {color_a, color_b}, lerp_fn) do
     env = [
       %{~c"x" => x, ~c"y" => y, ~c"i" => i, ~c"t" => t, ~c"l" => l, ~c"m" => m, ~c"h" => h},
       @default_env
@@ -392,7 +364,7 @@ defmodule Octopus.Apps.PixelFun do
     hsv = %Chameleon.HSV{
       hsv
       | s: param(:saturation_percent, 70),
-        v: trunc(param(:value_percent, 100) * abs(value)) |> min(100) |> max(0)
+        v: trunc(param(:value_percent, 100) * -value) |> min(100) |> max(0)
     }
 
     %Chameleon.RGB{r: r, g: g, b: b} = Chameleon.convert(hsv, Chameleon.RGB)

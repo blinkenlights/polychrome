@@ -64,7 +64,7 @@ defmodule Octopus.Canvas do
     rgb_pixels =
       for y <- 0..(canvas.height - 1),
           x <- 0..(canvas.width - 1),
-          {r, g, b} = Octopus.Canvas.get_pixel(canvas, {x, y}),
+          {r, g, b} <- Octopus.Canvas.get_pixel(canvas, {x, y}),
           do: [r, g, b]
 
     WebP.encode_rgb(List.flatten(rgb_pixels), canvas.width, canvas.height)
