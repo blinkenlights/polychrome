@@ -8,6 +8,7 @@ defmodule Octopus.Apps.FlappyDot do
       :canvas,
       :display_info,
       :tick_count,
+      :unicorn_x,   # NEU: horizontale Position des Dots
       :unicorn_y,
       :velocity_y,
       :gravity,
@@ -19,7 +20,7 @@ defmodule Octopus.Apps.FlappyDot do
   end
 
   @fps 30
-  @unicorn_x 5  # fixierter X-Startwert (kann animiert werden für Kreis)
+  @unicorn_start_x 5  # Startwert für Dot
 
   def name(), do: "FlappyDot"
 
@@ -32,6 +33,7 @@ defmodule Octopus.Apps.FlappyDot do
       canvas: canvas,
       display_info: display_info,
       tick_count: 0,
+      unicorn_x: @unicorn_start_x, # NEU
       unicorn_y: div(display_info.height, 2),
       velocity_y: 0,
       gravity: 1,
@@ -53,6 +55,7 @@ defmodule Octopus.Apps.FlappyDot do
       new_state = %State{
         state |
         tick_count: 0,
+        unicorn_x: @unicorn_start_x, # NEU
         unicorn_y: div(state.display_info.height, 2),
         velocity_y: 0,
         game_over: false,
@@ -67,7 +70,7 @@ defmodule Octopus.Apps.FlappyDot do
   def handle_info(:tick, %State{} = state) do
     state = %{state | tick_count: state.tick_count + 1}
 
-    # Nur alle 5 Ticks Physik und Welt bewegen
+    # Nur alle 5 Ticks Physik und Dot bewegen
     slow_tick? = rem(state.tick_count, 5) == 0
 
     {velocity_y, unicorn_y} =
@@ -80,22 +83,33 @@ defmodule Octopus.Apps.FlappyDot do
         {state.velocity_y, state.unicorn_y}
       end
 
-    # Hindernisse nur alle 5 Ticks bewegen
-    obstacles =
+    # Dot horizontal bewegen (anstatt Hindernisse)
+    unicorn_x =
       if slow_tick? do
-        move_obstacles(state.obstacles, state.display_info.width)
+        state.unicorn_x + 1
       else
-        state.obstacles
+        state.unicorn_x
       end
 
+    # Hindernisse bleiben statisch
+    obstacles = state.obstacles
+
     # Prüfe Kollision
-    game_over = collision?(unicorn_y, @unicorn_x, obstacles)
+    game_over = collision?(unicorn_y, unicorn_x, obstacles, state.display_info)
+
+    # Prüfe, ob Dot das Ende erreicht hat (optional: Game Over oder Loop)
+    unicorn_x =
+      if unicorn_x >= state.display_info.width do
+        0 # oder: state.display_info.width - 1
+      else
+        unicorn_x
+      end
 
     # Zeichne alles
     canvas = Canvas.new(state.display_info.width, state.display_info.height)
     canvas = draw_background(canvas, state.display_info.width, state.display_info.height)
     canvas = draw_obstacles(canvas, obstacles)
-    canvas = draw_unicorn(canvas, @unicorn_x, unicorn_y)
+    canvas = draw_unicorn(canvas, unicorn_x, unicorn_y)
 
     Octopus.App.update_display(canvas)
 
@@ -103,6 +117,7 @@ defmodule Octopus.Apps.FlappyDot do
      %State{
        state
        | canvas: canvas,
+         unicorn_x: unicorn_x,
          unicorn_y: unicorn_y,
          velocity_y: velocity_y,
          obstacles: obstacles,
@@ -165,12 +180,12 @@ defmodule Octopus.Apps.FlappyDot do
     end)
   end
 
-  defp collision?(unicorn_y, unicorn_x, obstacles) do
+  defp collision?(unicorn_y, unicorn_x, obstacles, display_info) do
     Enum.any?(obstacles, fn %{x: x, width: w, top_height: th, bottom_height: bh} ->
       # Check horizontal overlap
       in_x = unicorn_x >= x and unicorn_x < x + w
       # Check vertical collision
-      in_y = unicorn_y <= th or unicorn_y >= (64 - bh) # 64 ist Platzhalter, setze display_info.height später dynamisch!
+      in_y = unicorn_y <= th or unicorn_y >= (display_info.height - bh)
       in_x and in_y
     end)
   end
