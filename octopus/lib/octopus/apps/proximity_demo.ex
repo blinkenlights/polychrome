@@ -12,10 +12,6 @@ defmodule Octopus.Apps.ProximityDemo do
   @fps 30
   @frame_time_ms trunc(1000 / @fps)
 
-  # Smoothing factor for exponential moving average (0.0 to 1.0)
-  # Lower values = more smoothing, higher values = more responsive
-  # @smoothing_factor 0.1
-
   def name(), do: "Proximity Demo"
 
   def config_schema() do
@@ -39,9 +35,6 @@ defmodule Octopus.Apps.ProximityDemo do
   def app_init(config) do
     # Configure display using new unified API - adjacent layout for proximity sensors
     Octopus.App.configure_display(layout: :adjacent_panels)
-
-    # # Start the timer for rendering
-    # :timer.send_interval(@frame_time_ms, :tick)
 
     {:ok,
      %State{
