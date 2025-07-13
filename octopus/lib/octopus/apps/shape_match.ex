@@ -7,6 +7,8 @@ defmodule Octopus.Apps.ShapeMatch do
   alias Octopus.{Canvas, Font, Transitions}
   alias Octopus.Events.Event.Lifecycle, as: LifecycleEvent
   alias Octopus.Installation
+  alias Octopus.Highscore.ShapeMatchHighscore
+  alias Octopus.Repo
 
   require Logger
 
@@ -151,6 +153,12 @@ defmodule Octopus.Apps.ShapeMatch do
         Logger.info("🎉 Game Over! All panels have the same animation: #{first_name}")
         now = System.monotonic_time(:second)
         elapsed = now - state.game_start_time
+
+        # Save highscore to DB
+        %ShapeMatchHighscore{}
+        |> ShapeMatchHighscore.changeset(%{score_seconds: elapsed})
+        |> Repo.insert()
+
         {:noreply, %{state |
           chosen_per_panel: updated_chosen_per_panel,
           game_over: true,
