@@ -33,6 +33,7 @@ defmodule Octopus.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:igniter, "~> 0.6", only: [:dev, :test]},
       {:phoenix, "~> 1.7"},
       {:phoenix_ecto, "~> 4.4"},
       {:ecto_sql, "~> 3.12"},
@@ -64,7 +65,8 @@ defmodule Octopus.MixProject do
       {:nimble_parsec, "~> 1.4"},
       {:nimble_options, "~> 1.0"},
       {:mdns_lite, "~> 0.8.10"},
-      {:oscx, "~> 0.1.1"}
+      {:oscx, "~> 0.1.1"},
+      {:tidewave, "~> 0.2", only: :dev}
     ]
   end
 
