@@ -69,7 +69,7 @@ defmodule Octopus.Apps.ProximityDemo do
     # Get display info to use correct dimensions
     display_info = Octopus.App.get_display_info()
     canvas = Canvas.new(display_info.width, display_info.height)
-    brightness_ratio = 1.0 - (distance - min) / (max - min)
+    brightness_ratio = 1.0 - Enum.min([0.99, (distance - min) / (max - min)])
     brightness_value = trunc(brightness_ratio * 100)
 
     %Chameleon.RGB{r: r, g: g, b: b} =

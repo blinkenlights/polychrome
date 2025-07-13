@@ -19,7 +19,7 @@ defmodule Octopus.Events.Event.Proximity.Generator do
     # Spike probability (0.0 to 1.0, where 0.05 = 5% chance per event)
     spike_probability: 0.05,
     # Spike magnitude (mm above normal range)
-    spike_magnitude: 3000.0,
+    spike_magnitude: 1000.0,
     # Event generation interval (milliseconds)
     interval_ms: 100,
     # Panel and sensor configuration
@@ -41,6 +41,11 @@ defmodule Octopus.Events.Event.Proximity.Generator do
       :movement_direction,
       :running
     ]
+  end
+
+  def init() do
+    start_link(nil)
+    start_generation()
   end
 
   def start_link(_) do
