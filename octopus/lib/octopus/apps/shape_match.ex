@@ -19,12 +19,11 @@ defmodule Octopus.Apps.ShapeMatch do
     installation_info.panel_width >= 8 and
     installation_info.panel_height >= 8
   end
-
+  @animation_files ["amethyst", "coin", "diamond", "emerald", "heart", "key", "ruby"]
   def app_init(_args) do
     Octopus.App.configure_display(layout: :adjacent_panels)
 
-    animation_files = ["amethyst", "coin", "diamond", "emerald", "heart", "key", "ruby"]
-    loaded_animations = Enum.map(animation_files, fn name -> {name, WebP.load_animation(name)} end)
+    loaded_animations = Enum.map(@animation_files, fn name -> {name, WebP.load_animation(name)} end)
     {chosen_name, _chosen_animation} = Enum.random(loaded_animations)
 
     installation_info = get_installation_info()
@@ -57,16 +56,7 @@ defmodule Octopus.Apps.ShapeMatch do
     str_len = length(chars)
 
     tiled_canvas = Canvas.new(panel_count * panel_width, panel_height)
-
-    tiled_canvas =
-      Enum.reduce(0..(panel_count - 1), tiled_canvas, fn panel_index, acc ->
-        x_offset = panel_index * panel_width
-        char_index = rem(panel_index + offset, str_len)
-        char = Enum.at(chars, char_index)
-        canvas_part =
-          Font.draw_char(font, hd(to_charlist(char)), 0, Canvas.new(panel_width, panel_height))
-        Canvas.overlay(acc, canvas_part, offset: {x_offset, 0})
-      end)
+    tiled_canvas = Canvas.put_string(tiled_canvas, {0, 0}, formatted, font)
 
     Octopus.App.update_display(tiled_canvas)
     Process.send_after(self(), :tick, 500)
@@ -112,8 +102,7 @@ defmodule Octopus.Apps.ShapeMatch do
     %{game_over: true, installation_info: installation_info} = state
   ) do
     # Restart the game
-    animation_files = ["amethyst", "coin", "diamond", "emerald", "heart", "key", "ruby"]
-    loaded_animations = Enum.map(animation_files, fn name -> {name, Octopus.WebP.load_animation(name)} end)
+    loaded_animations = Enum.map(@animation_files, fn name -> {name, Octopus.WebP.load_animation(name)} end)
     chosen_per_panel = for _ <- 1..installation_info.panel_count do Enum.random(loaded_animations) end
 
     Logger.info("🔄 Restarting game on button #{button} press")
@@ -134,12 +123,11 @@ defmodule Octopus.Apps.ShapeMatch do
     %{chosen_per_panel: chosen_per_panel, installation_info: installation_info} = state
   ) do
     panel_count = installation_info.panel_count
-    animation_files = ["amethyst", "coin", "diamond", "emerald", "heart", "key", "ruby"]
 
     Logger.info("Button #{button} pressed")
 
     if button >= 1 and button <= panel_count do
-      loaded_animations = Enum.map(animation_files, fn name -> {name, Octopus.WebP.load_animation(name)} end)
+      loaded_animations = Enum.map(@animation_files, fn name -> {name, Octopus.WebP.load_animation(name)} end)
       new_animation = Enum.random(loaded_animations)
 
       updated_chosen_per_panel = List.replace_at(chosen_per_panel, button - 1, new_animation)

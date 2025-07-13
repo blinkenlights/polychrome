@@ -13,7 +13,7 @@ defmodule Octopus.Apps.FontTester do
   @fonts Font.list_available() |> Enum.sort()
   @max_index Enum.count(@fonts) - 1
 
-  @text ":12345678"
+  @text "POLYCHROME"
 
   def name(), do: "Font Tester"
 
