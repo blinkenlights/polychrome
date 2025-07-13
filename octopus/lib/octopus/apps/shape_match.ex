@@ -1,3 +1,6 @@
+# TODO
+# Highscore
+# Better graphics
 defmodule Octopus.Apps.ShapeMatch do
   use Octopus.App, category: :animation
   alias Octopus.WebP
@@ -151,7 +154,7 @@ defmodule Octopus.Apps.ShapeMatch do
 
     Logger.info("Button #{button} pressed")
 
-    if button >= 0 and button < panel_count do
+    if button >= 1 and button <= panel_count do
       loaded_animations = Enum.map(animation_files, fn name -> {name, Octopus.WebP.load_animation(name)} end)
       new_animation = Enum.random(loaded_animations)
 
