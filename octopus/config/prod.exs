@@ -16,10 +16,8 @@ config :octopus, OctopusWeb.Endpoint,
 
 config :octopus, broadcast: false, show_sim_preview: true, enable_event_mode: false
 
-# Override network configuration for production
 config :octopus, :enable_broadcast, true
-# Production-specific broadcast IP
-config :octopus, :broadcast_ip, {192, 168, 1, 255}
+config :octopus, :broadcast_ip, nil
 
 # Configures Swoosh API Client
 config :swoosh, api_client: Swoosh.ApiClient.Finch, finch_name: Octopus.Finch
