@@ -6,47 +6,29 @@ defmodule Octopus.Apps.ProximityDemo do
   alias Octopus.Events.Event.Proximity, as: ProximityEvent
 
   defmodule State do
-    defstruct [:min_distance, :max_distance]
+    defstruct [:proximity_events]
   end
 
-  @fps 30
+  @fps 60
   @frame_time_ms trunc(1000 / @fps)
+
+  @min_distance 300
+  @max_distance 2000
+
+  @fade_time_ms 5000
 
   def name(), do: "Proximity Demo"
 
-  def config_schema() do
-    %{
-      min_distance: {"Min Distance [mm]", :int, %{default: 500, min: 0, max: 50_000}},
-      max_distance: {"Max Distance [mm]", :int, %{default: 3_000, min: 0, max: 50_000}}
-    }
-  end
-
-  def get_config(state) do
-    %{
-      min_distance: state.min_distance,
-      max_distance: state.max_distance
-    }
-  end
-
-  def handle_config_change(config, state) do
-    {:ok, %State{state | min_distance: config.min_distance, max_distance: config.max_distance}}
-  end
-
-  def app_init(config) do
-    # Configure display using new unified API - adjacent layout for proximity sensors
+  def app_init(_) do
     Octopus.App.configure_display(layout: :adjacent_panels)
+    :timer.send_interval(@frame_time_ms, :tick)
 
-    {:ok,
-     %State{
-       min_distance: config.min_distance,
-       max_distance: config.max_distance
-     }}
+    {:ok, %State{proximity_events: %{}}}
   end
 
   def handle_event(%ProximityEvent{} = event, state) do
-    state
-    |> render_proximity_data(event)
-    |> Octopus.App.update_display()
+    key = {event.panel, event.sensor}
+    state = %State{state | proximity_events: Map.put(state.proximity_events, key, event)}
 
     {:noreply, state}
   end
@@ -55,27 +37,72 @@ defmodule Octopus.Apps.ProximityDemo do
     {:noreply, state}
   end
 
-  defp render_proximity_data(
-         %State{min_distance: min, max_distance: max},
-         %ProximityEvent{distance: distance, panel: panel_index, sensor: sensor_index} = event
-       ) do
-    # Get display info to use correct dimensions
+  def handle_info(:tick, state) do
     display_info = Octopus.App.get_display_info()
     canvas = Canvas.new(display_info.width, display_info.height)
-    brightness_ratio = 1.0 - Enum.min([0.99, (distance - min) / (max - min)])
-    brightness_value = trunc(brightness_ratio * 100)
+    current_time = System.os_time(:millisecond)
 
+    Enum.reduce(state.proximity_events, canvas, fn {_, event}, acc_canvas ->
+      render_event(acc_canvas, display_info, event, current_time)
+    end)
+    |> Octopus.App.update_display()
+
+    {:noreply, state}
+  end
+
+  def handle_info(_any_info, state) do
+    {:noreply, state}
+  end
+
+  defp render_event(canvas, display_info, %ProximityEvent{} = event, current_time) do
+    time_since_event = current_time - event.timestamp
+
+    saturation = saturation(event.distance)
+    value = value(time_since_event)
+
+    render_panel_side(canvas, display_info, event.panel, event.sensor, saturation, value)
+  end
+
+  defp saturation(distance) do
+    case distance do
+      d when d < @min_distance ->
+        100
+
+      d when d > @max_distance ->
+        0
+
+      d ->
+        ratio = (d - @min_distance) / (@max_distance - @min_distance)
+        trunc((1.0 - ratio) * 100)
+    end
+  end
+
+  defp value(time_since_event) do
+    case time_since_event do
+      t when t >= @fade_time_ms ->
+        0
+
+      t ->
+        # Linear fade from 100 to 0 over fade_time_ms
+        ratio = t / @fade_time_ms
+        trunc((1.0 - ratio) * 100)
+    end
+  end
+
+  defp render_panel_side(canvas, display_info, panel_index, sensor, saturation, value) do
+    # Convert HSV to RGB
     %Chameleon.RGB{r: r, g: g, b: b} =
-      Chameleon.HSV.new(280, 100, brightness_value)
+      Chameleon.HSV.new(280, saturation, value)
       |> Chameleon.convert(Chameleon.RGB)
 
     color = {r, g, b}
 
-    panel_start_x = panel_index * display_info.panel_width
+    # Panel index 1 corresponds to the first panel, so subtract 1
+    panel_start_x = (panel_index - 1) * display_info.panel_width
     side_width = div(display_info.panel_width, 2)
 
-    # Sensor 0 = left side, Sensor 1 = right side
-    x_start = panel_start_x + if sensor_index == 0, do: 0, else: side_width
+    # sensor: 0 = left side, 1 = right side
+    x_start = panel_start_x + if sensor == 0, do: 0, else: side_width
     x_end = x_start + side_width - 1
 
     for x <- x_start..x_end,
