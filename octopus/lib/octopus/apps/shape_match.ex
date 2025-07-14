@@ -1,8 +1,5 @@
-# TODO
-# Highscore
-# Better graphics
 defmodule Octopus.Apps.ShapeMatch do
-  use Octopus.App, category: :animation
+  use Octopus.App, category: :game
   alias Octopus.WebP
   alias Octopus.{Canvas, Font, Transitions}
   alias Octopus.Events.Event.Lifecycle, as: LifecycleEvent
@@ -103,7 +100,7 @@ defmodule Octopus.Apps.ShapeMatch do
     end
   end
 
-  # --- GAME OVER ANIMATION: ZEIT-ANZEIGE ---
+  # --- GAME OVER ANIMATION: TIME DISPLAY ---
   def handle_info(:tick, %{game_over: true, game_over_animation_phase: :time_display, game_over_elapsed: elapsed, game_over_animation_index: offset} = state) do
     formatted = format_time(elapsed)
     font = Font.load("solo-Solomons Key (Tecmo)")
@@ -113,7 +110,7 @@ defmodule Octopus.Apps.ShapeMatch do
     chars = String.graphemes(formatted)
     str_len = length(chars)
 
-    # Offset für Lauflicht
+    # Offset for marquee effect
     shifted = Enum.concat(Enum.drop(chars, offset), Enum.take(chars, offset))
 
     tiled_canvas = Canvas.new(panel_count * panel_width, panel_height)
@@ -152,7 +149,7 @@ defmodule Octopus.Apps.ShapeMatch do
     {:noreply, %{state | frame_index: frame_index + 1}}
   end
 
-  # --- GAME OVER TRIGGER: ALLE PANELS GLEICH ---
+  # --- GAME OVER TRIGGER: ALL PANELS MATCH ---
   def handle_event(
     %Octopus.Events.Event.Input{type: :button, action: :press, button: button},
     %{chosen_per_panel: chosen_per_panel, installation_info: installation_info, game_start_time: nil} = state
