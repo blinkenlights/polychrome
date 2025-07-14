@@ -1,6 +1,13 @@
 defmodule Octopus.Particles do
   @moduledoc """
   A generic particle system.
+
+  Example:
+
+      system = Particles.new(16, 16, :math.pi() * 3.5, 0.05, {255, 0, 0})
+      system = Particles.spawn(system, {7.5, 7.5}, 25)
+      system = Particles.update(system, 0.1)
+      canvas = Particles.draw(system, Canvas.new(16, 16))
   """
 
   alias Octopus.Canvas
