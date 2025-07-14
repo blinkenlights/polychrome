@@ -196,18 +196,19 @@ defmodule Octopus.Mixer do
                     mask_canvas,
                     display_info,
                     easing_interval,
-                    :rgb
+                    :rgb,
+                    app_display
                   )
                 else
-                  canvas_to_frame(canvas, display_info, easing_interval)
+                  canvas_to_frame(canvas, display_info, easing_interval, app_display)
                 end
               else
                 # RGB frame without masking
-                canvas_to_frame(canvas, display_info, easing_interval)
+                canvas_to_frame(canvas, display_info, easing_interval, app_display)
               end
             else
               # RGB frame without masking
-              canvas_to_frame(canvas, display_info, easing_interval)
+              canvas_to_frame(canvas, display_info, easing_interval, app_display)
             end
 
           frame
@@ -257,26 +258,27 @@ defmodule Octopus.Mixer do
                     canvas,
                     mask_canvas,
                     display_info,
-                    easing_interval
+                    easing_interval,
+                    app_display
                   )
 
                 binary = Protobuf.encode(frame)
                 send_frame(binary, frame)
               else
                 # Send WFrame without masking
-                frame = canvas_to_wframe(canvas, display_info, easing_interval)
+                frame = canvas_to_wframe(canvas, display_info, easing_interval, app_display)
                 binary = Protobuf.encode(frame)
                 send_frame(binary, frame)
               end
             else
               # Send WFrame without masking
-              frame = canvas_to_wframe(canvas, display_info, easing_interval)
+              frame = canvas_to_wframe(canvas, display_info, easing_interval, app_display)
               binary = Protobuf.encode(frame)
               send_frame(binary, frame)
             end
           else
             # Send WFrame without masking
-            frame = canvas_to_wframe(canvas, display_info, easing_interval)
+            frame = canvas_to_wframe(canvas, display_info, easing_interval, app_display)
             binary = Protobuf.encode(frame)
             send_frame(binary, frame)
           end
@@ -478,7 +480,7 @@ defmodule Octopus.Mixer do
   # Display layout and frame generation functions
 
   # Converts a canvas to frame using layout-aware pixel extraction.
-  defp canvas_to_frame(canvas, display_info, easing_interval) do
+  defp canvas_to_frame(canvas, display_info, easing_interval, app_display) do
     panel_width = Installation.panel_width()
     panel_height = Installation.panel_height()
 
@@ -499,11 +501,15 @@ defmodule Octopus.Mixer do
         end
       end
 
-    %RGBFrame{data: data |> IO.iodata_to_binary(), easing_interval: easing_interval}
+    %RGBFrame{
+      data: data |> IO.iodata_to_binary(),
+      easing_interval: easing_interval,
+      keep_w: app_display.config.merge_rgbw
+    }
   end
 
   # Converts a grayscale canvas to WFrame using layout-aware pixel extraction.
-  defp canvas_to_wframe(canvas, display_info, easing_interval) do
+  defp canvas_to_wframe(canvas, display_info, easing_interval, app_display) do
     panel_width = Installation.panel_width()
     panel_height = Installation.panel_height()
 
@@ -528,11 +534,22 @@ defmodule Octopus.Mixer do
         end
       end
 
-    %WFrame{data: data |> IO.iodata_to_binary(), easing_interval: easing_interval}
+    %WFrame{
+      data: data |> IO.iodata_to_binary(),
+      easing_interval: easing_interval,
+      keep_rgb: app_display.config.merge_rgbw
+    }
   end
 
   # Converts canvas to frame with masking applied during frame generation
-  defp canvas_to_frame_with_mask(canvas, mask_canvas, display_info, easing_interval, output_type) do
+  defp canvas_to_frame_with_mask(
+         canvas,
+         mask_canvas,
+         display_info,
+         easing_interval,
+         output_type,
+         app_display
+       ) do
     panel_width = Installation.panel_width()
     panel_height = Installation.panel_height()
 
@@ -580,11 +597,15 @@ defmodule Octopus.Mixer do
         end
       end
 
-    %RGBFrame{data: data |> IO.iodata_to_binary(), easing_interval: easing_interval}
+    %RGBFrame{
+      data: data |> IO.iodata_to_binary(),
+      easing_interval: easing_interval,
+      keep_w: app_display.config.merge_rgbw
+    }
   end
 
   # Converts canvas to wframe with masking applied during frame generation
-  defp canvas_to_wframe_with_mask(canvas, mask_canvas, display_info, easing_interval) do
+  defp canvas_to_wframe_with_mask(canvas, mask_canvas, display_info, easing_interval, app_display) do
     panel_width = Installation.panel_width()
     panel_height = Installation.panel_height()
 
@@ -618,7 +639,11 @@ defmodule Octopus.Mixer do
         trunc(gray_value * mask_ratio)
       end
 
-    %WFrame{data: data |> IO.iodata_to_binary(), easing_interval: easing_interval}
+    %WFrame{
+      data: data |> IO.iodata_to_binary(),
+      easing_interval: easing_interval,
+      keep_rgb: app_display.config.merge_rgbw
+    }
   end
 
   defp build_display_info(layout) do

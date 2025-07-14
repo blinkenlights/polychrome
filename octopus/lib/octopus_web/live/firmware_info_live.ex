@@ -8,7 +8,7 @@ defmodule OctopusWeb.FirmwareInfoLive do
       send(self(), :update)
     end
 
-    {:ok, assign(socket, firmware_stats: %{}, current_time: 0)}
+    {:ok, assign(socket, firmware_stats: [], current_time: 0)}
   end
 
   @impl true
@@ -16,7 +16,6 @@ defmodule OctopusWeb.FirmwareInfoLive do
     firmware_stats =
       Octopus.Broadcaster.firmware_stats()
       |> Enum.sort_by(fn {_mac, meta} -> meta.firmware_info.panel_index end)
-      |> Map.new()
 
     socket =
       socket
@@ -67,7 +66,7 @@ defmodule OctopusWeb.FirmwareInfoLive do
             <% end %>
           </tbody>
         </table>
-        <%= if map_size(@firmware_stats) == 0 do %>
+        <%= if length(@firmware_stats) == 0 do %>
           <p class="text-gray-600 mt-4">No firmware devices found.</p>
         <% end %>
       </div>

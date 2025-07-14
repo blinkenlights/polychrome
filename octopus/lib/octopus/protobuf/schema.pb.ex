@@ -132,6 +132,7 @@ defmodule Octopus.Protobuf.WFrame do
 
   field :data, 1, type: :bytes, deprecated: false
   field :easing_interval, 3, type: :uint32, json_name: "easingInterval"
+  field :keep_rgb, 4, type: :bool, json_name: "keepRgb"
 end
 
 defmodule Octopus.Protobuf.RGBFrame do
@@ -141,6 +142,7 @@ defmodule Octopus.Protobuf.RGBFrame do
 
   field :data, 1, type: :bytes, deprecated: false
   field :easing_interval, 2, type: :uint32, json_name: "easingInterval"
+  field :keep_w, 3, type: :bool, json_name: "keepW"
 end
 
 defmodule Octopus.Protobuf.AudioFrame do

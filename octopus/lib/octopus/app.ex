@@ -286,7 +286,8 @@ defmodule Octopus.App do
       supports_rgb: Keyword.get(opts, :supports_rgb, true),
       supports_grayscale: Keyword.get(opts, :supports_grayscale, false),
       default_transparency: Keyword.get(opts, :transparency, 1.0),
-      easing_interval: Keyword.get(opts, :easing_interval, 0)
+      easing_interval: Keyword.get(opts, :easing_interval, 0),
+      merge_rgbw: Keyword.get(opts, :merge_rgbw, false)
     }
 
     # Creates buffers in mixer immediately
