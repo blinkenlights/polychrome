@@ -111,16 +111,30 @@ defmodule Octopus.Particles do
   - `amount`: The number of particles to spawn
   """
   @spec spawn(t(), Canvas.coord(), non_neg_integer()) :: t()
-  def spawn(%Particles{} = system, {x, y}, amount) do
+  def spawn(%Particles{} = system, {x, y}, amount, opts \\ []) do
+    angle = Keyword.get(opts, :angle, system.angle)
+    spread = Keyword.get(opts, :spread, system.spread)
+    min_ttl = Keyword.get(opts, :min_ttl, system.min_ttl)
+    max_ttl = Keyword.get(opts, :max_ttl, system.max_ttl)
+    min_speed = Keyword.get(opts, :min_speed, system.min_speed)
+    max_speed = Keyword.get(opts, :max_speed, system.max_speed)
+
+    colors =
+      case Keyword.get(opts, :colors) do
+        nil -> system.colors
+        {_, _, _} = color -> Stream.cycle([color])
+        colors -> Stream.cycle(colors)
+      end
+
     new_particles =
-      system.colors
+      colors
       |> Enum.take(amount)
       |> Enum.map(fn color ->
-        variance = (:rand.uniform() - 0.5) * 2 * system.spread * :math.pi() * 2
-        angle_with_variance = system.angle + variance
-        speed = :rand.uniform() * (system.max_speed - system.min_speed) + system.min_speed
+        variance = (:rand.uniform() - 0.5) * 2 * spread * :math.pi() * 2
+        angle_with_variance = angle + variance
+        speed = :rand.uniform() * (max_speed - min_speed) + min_speed
         {vx, vy} = vector_from_angle(angle_with_variance)
-        ttl = :rand.uniform() * (system.max_ttl - system.min_ttl) + system.min_ttl
+        ttl = :rand.uniform() * (max_ttl - min_ttl) + min_ttl
         %Particle{x: x, y: y, vx: vx * speed, vy: vy * speed, color: color, ttl: ttl}
       end)
 
