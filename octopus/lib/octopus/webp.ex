@@ -24,7 +24,7 @@ defmodule Octopus.WebP do
             y = div(i, width)
 
             case alpha do
-              255 -> acc
+              0 -> acc
               _a -> Canvas.put_pixel(acc, {x, y}, {r, g, b})
             end
           end)
