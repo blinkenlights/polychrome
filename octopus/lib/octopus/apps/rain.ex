@@ -92,13 +92,13 @@ defmodule Octopus.Apps.Rain do
     # If a drop is near the bottom, spawn a splash up with 10% chance
     splash_particles =
       sys.particles
-      |> Enum.filter(fn p -> p.y > sys.height - 2 end)
-      |> Enum.filter(fn _ -> :rand.uniform() < 0.1 end)
+      |> Enum.filter(fn p -> p.y > sys.height - 1 end)
+      |> Enum.filter(fn _ -> :rand.uniform() < 0.08 end)
 
     Enum.reduce(splash_particles, sys, fn p, acc ->
       # Splash: spawn 2-3 particles upwards
       splash = Particles.new(acc.width, acc.height, -:math.pi() / 2, 0.3, [@rain_color], 0.2, 0.5, 10, 20)
-      splash = Particles.spawn(splash, {p.x, acc.height - 1}, 2)
+      splash = Particles.spawn(splash, {p.x, acc.height}, 1)
       %{acc | particles: acc.particles ++ splash.particles}
     end)
   end
