@@ -19,10 +19,14 @@ defmodule Octopus.WebP do
         canvas =
           pixels
           |> Enum.with_index()
-          |> Enum.reduce(canvas, fn {[r, g, b], i}, acc ->
+          |> Enum.reduce(canvas, fn {[r, g, b, alpha], i}, acc ->
             x = rem(i, width)
             y = div(i, width)
-            Canvas.put_pixel(acc, {x, y}, {r, g, b})
+
+            case alpha do
+              255 -> acc
+              _a -> Canvas.put_pixel(acc, {x, y}, {r, g, b})
+            end
           end)
 
         {:commit, canvas}
@@ -74,10 +78,14 @@ defmodule Octopus.WebP do
       canvas =
         pixels
         |> Enum.with_index()
-        |> Enum.reduce(canvas, fn {[r, g, b], i}, acc ->
+        |> Enum.reduce(canvas, fn {[r, g, b, alpha], i}, acc ->
           x = rem(i, width)
           y = div(i, width)
-          Canvas.put_pixel(acc, {x, y}, {r, g, b})
+
+          case alpha do
+            0 -> acc
+            _a -> Canvas.put_pixel(acc, {x, y}, {r, g, b})
+          end
         end)
 
       {canvas, duration}

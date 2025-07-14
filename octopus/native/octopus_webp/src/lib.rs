@@ -23,35 +23,35 @@ fn decode_animation(path: &str) -> Option<Animation> {
         animation.size = frame.dimensions();
         match frame.color_mode() {
             ColorMode::Rgb => {
-                let rgb = frame.data().chunks_exact(3).map(|x| x.to_vec()).collect();
-                let frame = (rgb, frame.timestamp());
+                let rgba = frame.data().chunks_exact(3).map(|x| vec![x[0], x[1], x[2], 255]).collect();
+                let frame = (rgba, frame.timestamp());
                 animation.frames.push(frame);
             }
             ColorMode::Rgba => {
-                let rgb = frame
+                let rgba = frame
                     .data()
                     .chunks_exact(4)
-                    .map(|x| x[0..3].to_vec())
+                    .map(|x| x.to_vec())
                     .collect();
-                let frame = (rgb, frame.timestamp());
+                let frame = (rgba, frame.timestamp());
                 animation.frames.push(frame);
             }
             ColorMode::Bgr => {
-                let rgb = frame
+                let rgba = frame
                     .data()
                     .chunks_exact(3)
-                    .map(|bgr| vec![bgr[2], bgr[1], bgr[0]])
+                    .map(|bgr| vec![bgr[2], bgr[1], bgr[0], 255])
                     .collect();
-                let frame = (rgb, frame.timestamp());
+                let frame = (rgba, frame.timestamp());
                 animation.frames.push(frame);
             }
             ColorMode::Bgra => {
-                let rgb = frame
+                let rgba = frame
                     .data()
                     .chunks_exact(4)
-                    .map(|bgr| vec![bgr[2], bgr[1], bgr[0]])
+                    .map(|bgra| vec![bgra[2], bgra[1], bgra[0], bgra[3]])
                     .collect();
-                let frame = (rgb, frame.timestamp());
+                let frame = (rgba, frame.timestamp());
                 animation.frames.push(frame);
             }
         }
@@ -87,9 +87,9 @@ fn decode_rgb(path: &str) -> Option<(Vec<Vec<u8>>, u32, u32)> {
     let height = webp.height();
     let image = webp.to_image();
     let pixels = image
-        .into_rgb8()
+        .into_rgba8()
         .into_vec()
-        .chunks_exact(3)
+        .chunks_exact(4)
         .map(|pixel| pixel.to_vec())
         .collect();
     Some((pixels, width, height))
