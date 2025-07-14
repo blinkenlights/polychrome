@@ -13,6 +13,8 @@ Pixel::Pixel()
 {
 	start_color = RgbwColor(0, 0, 0, 0);
 	target_color = RgbwColor(0, 0, 0, 0);
+	current_color = RgbwColor(0, 0, 0, 0);
+	original_color = RgbwColor(0, 0, 0, 0);
 	easing_active = false;
 }
 
@@ -33,6 +35,8 @@ void Pixel::set_enable_calibration(bool enable)
 
 void Pixel::set_color(RgbwColor color)
 {
+	original_color = color;
+
 	// we apply gamma correction and calibration at the start so all color operations inside this class are done in the the corrected color space
 	if (enable_calibration)
 	{
@@ -69,6 +73,11 @@ RgbwColor Pixel::get_display_color()
 	current_color = RgbwColor::LinearBlend(start_color, target_color, ratio);
 
 	return current_color;
+}
+
+RgbwColor Pixel::get_original_color()
+{
+	return original_color;
 }
 
 float Pixel::get_easing(float value)

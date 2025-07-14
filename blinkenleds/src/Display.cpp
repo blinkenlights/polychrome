@@ -49,20 +49,6 @@ void Display::loop()
   strip.Show();
 }
 
-void apply_rgb_frame(RGBFrame_data_t data, uint16_t first_pixel, uint16_t last_pixel)
-{
-  RgbwColor color;
-  for (int i = first_pixel; i <= last_pixel; i++)
-  {
-    color.R = data.bytes[i * 3];
-    color.G = data.bytes[i * 3 + 1];
-    color.B = data.bytes[i * 3 + 2];
-    color.W = 0;
-
-    pixel[i - first_pixel].set_color(color);
-  }
-}
-
 // Function to calculate R value for a given W value (0-255)
 // Based on the formula: r = max_r * ((max_w - w) / max_w)^2
 uint8_t calculate_r_for_wframe(uint8_t w_value)
@@ -81,17 +67,57 @@ uint8_t calculate_r_for_wframe(uint8_t w_value)
   }
 }
 
-void apply_w_frame(WFrame_data_t data, uint16_t first_pixel, uint16_t last_pixel)
+void apply_rgb_frame(RGBFrame_data_t data, uint16_t first_pixel, uint16_t last_pixel, bool keep_w)
+{
+  RgbwColor color;
+  for (int i = first_pixel; i <= last_pixel; i++)
+  {
+    color.R = data.bytes[i * 3];
+    color.G = data.bytes[i * 3 + 1];
+    color.B = data.bytes[i * 3 + 2];
+
+    if (keep_w)
+    {
+      RgbwColor original = pixel[i - first_pixel].get_original_color();
+      color.W = original.W;
+      uint8_t w_r = calculate_r_for_wframe(color.W);
+      uint16_t screen_red = color.R + w_r - (color.R * w_r / 255);
+      color.R = min(255, (int)screen_red);
+    }
+    else
+    {
+      color.W = 0;
+    }
+
+    pixel[i - first_pixel].set_color(color);
+  }
+}
+
+void apply_w_frame(WFrame_data_t data, uint16_t first_pixel, uint16_t last_pixel, bool keep_rgb)
 {
   RgbwColor color;
   for (int i = first_pixel; i <= last_pixel; i++)
   {
     uint8_t w = data.bytes[i];
-    uint8_t r = calculate_r_for_wframe(w);
+    uint8_t w_r = calculate_r_for_wframe(w);
 
-    color.R = r;
-    color.G = 0;
-    color.B = 0;
+    if (keep_rgb)
+    {
+      RgbwColor original = pixel[i - first_pixel].get_original_color();
+      uint16_t screen_red = original.R + w_r - (original.R * w_r / 255);
+
+      color.R = min(255, (int)screen_red);
+      color.G = original.G;
+      color.B = original.B;
+    }
+    else
+    {
+      uint8_t r = calculate_r_for_wframe(w);
+      color.R = r;
+      color.G = 0;
+      color.B = 0;
+    }
+
     color.W = w;
     pixel[i - first_pixel].set_color(color);
   }
@@ -116,7 +142,7 @@ void Display::handle_packet(Packet packet)
   case Packet_w_frame_tag:
     first_pixel = PIXEL_COUNT * (PANEL_INDEX - 1);
     last_pixel = first_pixel + PIXEL_COUNT - 1;
-    apply_w_frame(packet.content.w_frame.data, first_pixel, last_pixel);
+    apply_w_frame(packet.content.w_frame.data, first_pixel, last_pixel, packet.content.w_frame.keep_rgb);
 
     Pixel::set_easing_interval(packet.content.w_frame.easing_interval);
 
@@ -125,7 +151,7 @@ void Display::handle_packet(Packet packet)
   case Packet_rgb_frame_tag:
     first_pixel = PIXEL_COUNT * (PANEL_INDEX - 1);
     last_pixel = first_pixel + PIXEL_COUNT - 1;
-    apply_rgb_frame(packet.content.rgb_frame.data, first_pixel, last_pixel);
+    apply_rgb_frame(packet.content.rgb_frame.data, first_pixel, last_pixel, packet.content.rgb_frame.keep_w);
     Pixel::set_easing_interval(packet.content.rgb_frame.easing_interval);
     break;
 
@@ -134,7 +160,7 @@ void Display::handle_packet(Packet packet)
     {
       first_pixel = PIXEL_COUNT * (PANEL_INDEX - 1);
       last_pixel = first_pixel + PIXEL_COUNT - 1;
-      apply_rgb_frame(packet.content.rgb_frame_part1.data, first_pixel, last_pixel);
+      apply_rgb_frame(packet.content.rgb_frame_part1.data, first_pixel, last_pixel, packet.content.rgb_frame_part1.keep_w);
 
       Pixel::set_easing_interval(packet.content.rgb_frame_part1.easing_interval);
     }
@@ -145,7 +171,7 @@ void Display::handle_packet(Packet packet)
     {
       first_pixel = PIXEL_COUNT * (PANEL_INDEX - 6);
       last_pixel = first_pixel + PIXEL_COUNT - 1;
-      apply_rgb_frame(packet.content.rgb_frame_part2.data, first_pixel, last_pixel);
+      apply_rgb_frame(packet.content.rgb_frame_part2.data, first_pixel, last_pixel, packet.content.rgb_frame_part2.keep_w);
 
       Pixel::set_easing_interval(packet.content.rgb_frame_part2.easing_interval);
     }

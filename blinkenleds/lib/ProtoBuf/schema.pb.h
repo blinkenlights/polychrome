@@ -82,6 +82,7 @@ typedef PB_BYTES_ARRAY_T(768) WFrame_data_t;
 typedef struct _WFrame {
     WFrame_data_t data; /* Selects pixel colors from the palette. First pixel is top left. One panel after the other. */
     uint32_t easing_interval; /* Optional. In milliseconds. Fade this frame over the previous one with an easing curve. Colors are blended in gamma corrected RGB space. */
+    bool keep_rgb; /* If true, any existing RGB data will be retained and mixed with this. */
 } WFrame;
 
 typedef PB_BYTES_ARRAY_T(2304) RGBFrame_data_t;
@@ -89,6 +90,7 @@ typedef PB_BYTES_ARRAY_T(2304) RGBFrame_data_t;
 typedef struct _RGBFrame {
     RGBFrame_data_t data; /* Series of RGB values. 8bit per color. First pixel is top left. One panel after the other. */
     uint32_t easing_interval; /* Optional. In milliseconds. Fade this frame over the previous one with an easing curve. Colors are blended in gamma corrected RGB space. */
+    bool keep_w; /* If true, any existing W data will be retained and mixed with this RGB frame. */
 } RGBFrame;
 
 /* AudioFrame with uri of the sample to be played and the channel number */
@@ -282,8 +284,8 @@ extern "C" {
 
 /* Initializer values for message structs */
 #define Packet_init_default                      {0, {FirmwareConfig_init_default}}
-#define WFrame_init_default                      {{0, {0}}, 0}
-#define RGBFrame_init_default                    {{0, {0}}, 0}
+#define WFrame_init_default                      {{0, {0}}, 0, 0}
+#define RGBFrame_init_default                    {{0, {0}}, 0, 0}
 #define AudioFrame_init_default                  {{{NULL}, NULL}, 0, 0}
 #define SynthAdsrConfig_init_default             {0, 0, 0, 0}
 #define SynthReverbConfig_init_default           {0, 0, 0, 0, 0}
@@ -299,8 +301,8 @@ extern "C" {
 #define FirmwareInfo_init_default                {"", "", 0, 0, 0, "", "", "", "", 0, 0, 0, 0, 0}
 #define RemoteLog_init_default                   {""}
 #define Packet_init_zero                         {0, {FirmwareConfig_init_zero}}
-#define WFrame_init_zero                         {{0, {0}}, 0}
-#define RGBFrame_init_zero                       {{0, {0}}, 0}
+#define WFrame_init_zero                         {{0, {0}}, 0, 0}
+#define RGBFrame_init_zero                       {{0, {0}}, 0, 0}
 #define AudioFrame_init_zero                     {{{NULL}, NULL}, 0, 0}
 #define SynthAdsrConfig_init_zero                {0, 0, 0, 0}
 #define SynthReverbConfig_init_zero              {0, 0, 0, 0, 0}
@@ -319,8 +321,10 @@ extern "C" {
 /* Field tags (for use in manual encoding/decoding) */
 #define WFrame_data_tag                          1
 #define WFrame_easing_interval_tag               3
+#define WFrame_keep_rgb_tag                      4
 #define RGBFrame_data_tag                        1
 #define RGBFrame_easing_interval_tag             2
+#define RGBFrame_keep_w_tag                      3
 #define AudioFrame_uri_tag                       1
 #define AudioFrame_channel_tag                   2
 #define AudioFrame_stop_tag                      3
@@ -422,13 +426,15 @@ X(a, STATIC,   ONEOF,    MESSAGE,  (content,input_light_event,content.input_ligh
 
 #define WFrame_FIELDLIST(X, a) \
 X(a, STATIC,   SINGULAR, BYTES,    data,              1) \
-X(a, STATIC,   SINGULAR, UINT32,   easing_interval,   3)
+X(a, STATIC,   SINGULAR, UINT32,   easing_interval,   3) \
+X(a, STATIC,   SINGULAR, BOOL,     keep_rgb,          4)
 #define WFrame_CALLBACK NULL
 #define WFrame_DEFAULT NULL
 
 #define RGBFrame_FIELDLIST(X, a) \
 X(a, STATIC,   SINGULAR, BYTES,    data,              1) \
-X(a, STATIC,   SINGULAR, UINT32,   easing_interval,   2)
+X(a, STATIC,   SINGULAR, UINT32,   easing_interval,   2) \
+X(a, STATIC,   SINGULAR, BOOL,     keep_w,            3)
 #define RGBFrame_CALLBACK NULL
 #define RGBFrame_DEFAULT NULL
 
@@ -602,7 +608,7 @@ extern const pb_msgdesc_t RemoteLog_msg;
 #define InputEvent_size                          13
 #define InputLightEvent_size                     13
 #define ProximityEvent_size                      17
-#define RGBFrame_size                            2313
+#define RGBFrame_size                            2315
 #define RemoteLog_size                           102
 #define SCHEMA_PB_H_MAX_SIZE                     RGBFrame_size
 #define SoundToLightControlEvent_size            15
@@ -610,7 +616,7 @@ extern const pb_msgdesc_t RemoteLog_msg;
 #define SynthConfig_size                         90
 #define SynthFrame_size                          116
 #define SynthReverbConfig_size                   25
-#define WFrame_size                              777
+#define WFrame_size                              779
 
 #ifdef __cplusplus
 } /* extern "C" */
@@ -634,7 +640,7 @@ struct MessageDescriptor<Packet> {
 };
 template <>
 struct MessageDescriptor<WFrame> {
-    static PB_INLINE_CONSTEXPR const pb_size_t fields_array_length = 2;
+    static PB_INLINE_CONSTEXPR const pb_size_t fields_array_length = 3;
     static PB_INLINE_CONSTEXPR const pb_size_t size = WFrame_size;
     static inline const pb_msgdesc_t* fields() {
         return &WFrame_msg;
@@ -648,7 +654,7 @@ struct MessageDescriptor<WFrame> {
 };
 template <>
 struct MessageDescriptor<RGBFrame> {
-    static PB_INLINE_CONSTEXPR const pb_size_t fields_array_length = 2;
+    static PB_INLINE_CONSTEXPR const pb_size_t fields_array_length = 3;
     static PB_INLINE_CONSTEXPR const pb_size_t size = RGBFrame_size;
     static inline const pb_msgdesc_t* fields() {
         return &RGBFrame_msg;

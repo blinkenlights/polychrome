@@ -15,6 +15,9 @@ public:
 	// Color with applied easings, gamma correction and calibarion
 	RgbwColor get_display_color();
 
+	// Get the original uncorrected color
+	RgbwColor get_original_color();
+
 	// Set easing parameters
 	static void set_easing_interval(uint32_t interval_ms);
 	static void set_easing_mode(EasingMode mode);
@@ -25,6 +28,7 @@ private:
 	RgbwColor start_color;
 	RgbwColor target_color;
 	RgbwColor current_color;
+	RgbwColor original_color;
 	bool easing_active;
 
 	static const uint8_t calibration_table_r[256];

@@ -31,12 +31,14 @@ message Packet {
 message WFrame {
   bytes data = 1 [(nanopb).max_size = 768]; // Selects pixel colors from the palette. First pixel is top left. One panel after the other.
   uint32 easing_interval = 3; // Optional. In milliseconds. Fade this frame over the previous one with an easing curve. Colors are blended in gamma corrected RGB space.
+  bool keep_rgb = 4; // If true, any existing RGB data will be retained and mixed with this.
 }
 
 // Frame with 3 bytes per pixel (RGB)
 message RGBFrame {
   bytes data = 1 [(nanopb).max_size = 2304]; // Series of RGB values. 8bit per color. First pixel is top left. One panel after the other.
   uint32 easing_interval = 2; // Optional. In milliseconds. Fade this frame over the previous one with an easing curve. Colors are blended in gamma corrected RGB space.
+  bool keep_w = 3; // If true, any existing W data will be retained and mixed with this RGB frame.
 }
 
 // AudioFrame with uri of the sample to be played and the channel number
