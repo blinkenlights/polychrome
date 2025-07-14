@@ -5,8 +5,8 @@ defmodule Octopus.Apps.Fireworks do
   alias Octopus.Installation
   alias Octopus.Events.Event.Input
   alias Octopus.Canvas
-  alias Octopus.Apps.Shapes.Panel
   alias Octopus.Apps.Shapes.State
+  alias Octopus.Particles
 
   def name, do: "Fireworks"
 
@@ -18,118 +18,6 @@ defmodule Octopus.Apps.Fireworks do
 
   defmodule Particle do
     defstruct [:color, :x, :y, :vx, :vy, :ttl]
-  end
-
-  defmodule Panel do
-    defstruct [
-      :index,
-      :width,
-      :height,
-      :particles,
-      :num_panels
-    ]
-
-    def new(index, width, height, num_panels) do
-      %__MODULE__{
-        index: index,
-        width: width,
-        height: height,
-        particles: [],
-        num_panels: num_panels
-      }
-    end
-
-    def update(%__MODULE__{} = panel, dt) do
-      panel
-      |> update_particles(dt)
-    end
-
-    defp vector_from_angle(angle) do
-      x = :math.cos(angle)
-      y = :math.sin(angle)
-      {x, y}
-    end
-
-    def spawn_particles(%__MODULE__{} = panel, {x, y}, angle, num_particles) do
-      colors =
-        Stream.repeatedly(fn ->
-          hue = 360 * panel.index / panel.num_panels
-          saturation = :rand.uniform() * 25 + 60
-          lightness = :rand.uniform() * 25 + 45
-          hsl = Chameleon.HSL.new(trunc(hue), trunc(saturation), trunc(lightness))
-          %Chameleon.RGB{r: r, g: g, b: b} = Chameleon.convert(hsl, Chameleon.RGB)
-          {r, g, b}
-        end)
-
-      new_particles =
-        colors
-        |> Stream.cycle()
-        |> Enum.take(num_particles)
-        |> Enum.map(fn color ->
-          variance = (:rand.uniform() - 0.5) * 0.5
-          angle = angle + variance
-          {vx, vy} = vector_from_angle(angle)
-          speed = :rand.uniform() * 25 + 25
-
-          %Particle{
-            color: color,
-            x: x,
-            y: y,
-            vx: vx * speed,
-            vy: vy * speed,
-            ttl: :rand.uniform() * 2 + 0.5
-          }
-        end)
-
-      %__MODULE__{panel | particles: panel.particles ++ new_particles}
-    end
-
-    def draw(%__MODULE__{} = panel) do
-      draw_particles(panel)
-      |> Canvas.cut({0, 0}, {7, 7})
-    end
-
-    defp update_particles(%__MODULE__{} = panel, dt) do
-      particles =
-        panel.particles
-        |> Enum.map(fn particle ->
-          vy = particle.vy + 90.81 * dt
-          vx = particle.vx
-
-          %Particle{
-            particle
-            | vx: vx,
-              vy: vy,
-              x: particle.x + vx * dt,
-              y: particle.y + vy * dt,
-              ttl: particle.ttl - dt
-          }
-        end)
-        |> Enum.filter(fn particle -> particle.ttl > 0 end)
-
-      %__MODULE__{panel | particles: particles}
-    end
-
-    defp draw_particles(%__MODULE__{} = panel) do
-      particles =
-        panel.particles
-        |> Enum.filter(fn particle ->
-          particle.x >= 0 and particle.y >= 0 and particle.x < panel.width and
-            particle.y < panel.height
-        end)
-
-      Enum.reduce(particles, Canvas.new(panel.width, panel.height), fn particle, canvas ->
-        color =
-          if particle.ttl < 1 do
-            {r, g, b} = particle.color
-            {trunc(r * particle.ttl), trunc(g * particle.ttl), trunc(b * particle.ttl)}
-          else
-            particle.color
-          end
-
-        Canvas.put_pixel(canvas, {round(particle.x), round(particle.y)}, color)
-      end)
-    end
   end
 
   defmodule State do
@@ -147,12 +35,23 @@ defmodule Octopus.Apps.Fireworks do
 
     panels =
       Map.new(0..(Installation.num_panels() - 1), fn i ->
+        colors =
+          Stream.repeatedly(fn ->
+            hue = 360 * i / Installation.num_panels()
+            saturation = :rand.uniform() * 25 + 60
+            lightness = :rand.uniform() * 25 + 45
+            hsl = Chameleon.HSL.new(trunc(hue), trunc(saturation), trunc(lightness))
+            %Chameleon.RGB{r: r, g: g, b: b} = Chameleon.convert(hsl, Chameleon.RGB)
+            {r, g, b}
+          end)
+
         panel =
-          Panel.new(
-            i,
+          Particles.new(
             Installation.panel_width(),
             Installation.panel_height(),
-            Installation.num_panels()
+            :math.pi() * 3.5,
+            0.05,
+            colors
           )
 
         {i, panel}
@@ -177,11 +76,7 @@ defmodule Octopus.Apps.Fireworks do
     panels =
       state.panels
       |> Map.get(index)
-      |> Panel.spawn_particles(
-        {Installation.panel_width() / 2, Installation.panel_height()},
-        :math.pi() * 3 / 2,
-        15
-      )
+      |> Particles.spawn({Installation.panel_width() / 2, Installation.panel_height()}, 25)
       |> then(&Map.put(state.panels, index, &1))
 
     state = %{state | panels: panels}
@@ -196,13 +91,15 @@ defmodule Octopus.Apps.Fireworks do
   def handle_info(:tick, %State{} = state) do
     state.panels
     |> Map.values()
-    |> Enum.map(&Panel.draw/1)
+    |> Enum.map(
+      &Particles.draw(&1, Canvas.new(Installation.panel_width(), Installation.panel_height()))
+    )
     |> Enum.reduce(&Canvas.join(&2, &1))
     |> update_display()
 
     panels =
       state.panels
-      |> Enum.map(fn {id, panel} -> {id, Panel.update(panel, @frame_time_s)} end)
+      |> Enum.map(fn {id, panel} -> {id, Particles.update(panel, @frame_time_s)} end)
       |> Map.new()
 
     state = %State{state | panels: panels}
