@@ -1,6 +1,8 @@
 defmodule Octopus.Apps.SparkleMist do
   use Octopus.App, category: :interactive
 
+  require Logger
+
   alias Octopus.Installation
   alias Octopus.Events.Event.Proximity, as: ProximityEvent
   alias Octopus.Canvas
@@ -32,7 +34,8 @@ defmodule Octopus.Apps.SparkleMist do
         colors =
           Stream.repeatedly(fn ->
             base_hue = 360 * (panel - 1) / Installation.num_panels()
-            hue = if sensor == 0, do: base_hue, else: rem(trunc(base_hue + 180), 360)
+            hue = base_hue
+            # hue = if sensor == 0, do: base_hue, else: rem(trunc(base_hue + 180), 360)
             saturation = :rand.uniform() * 25 + 60
             lightness = :rand.uniform() * 25 + 45
             hsl = Chameleon.HSL.new(trunc(hue), trunc(saturation), trunc(lightness))
@@ -53,7 +56,7 @@ defmodule Octopus.Apps.SparkleMist do
             1.0,
             2.5,
             25,
-            35
+            50
           )
 
         {{panel, sensor}, particle_system}
@@ -81,12 +84,7 @@ defmodule Octopus.Apps.SparkleMist do
     now = System.os_time(:millisecond)
     last_proximity = Map.put(state.last_proximity, event.panel, now)
 
-    probability =
-      case event.distance_combined do
-        distance when distance <= 300 -> 1.0
-        distance when distance >= 2000 -> 0.2
-        distance -> 0.2 + 0.8 * (2000 - distance) / 1700
-      end
+    probability = 1.0
 
     state =
       case :rand.uniform() do
@@ -98,7 +96,14 @@ defmodule Octopus.Apps.SparkleMist do
           spawn_x = if event.sensor == 0, do: 0, else: Installation.panel_width() - 1
           spawn_y = Installation.panel_height() - 1
 
-          updated_system = Particles.spawn(particle_system, {spawn_x, spawn_y}, 1)
+          {min_speed, max_speed} = scale_distance_to_speed(event.distance_combined)
+
+          updated_system =
+            Particles.spawn(particle_system, {spawn_x, spawn_y}, 1,
+              min_speed: min_speed,
+              max_speed: max_speed
+            )
+
           particles = Map.put(state.particles, key, updated_system)
 
           %{state | particles: particles, last_proximity: last_proximity}
@@ -129,6 +134,7 @@ defmodule Octopus.Apps.SparkleMist do
 
     PerlinNoise.draw(state.noise, empty_canvas, state.last_update / 1000.0)
     |> clear_panels_with_particles(state)
+    # |> dimm_panels(0.5)
     |> update_display(:grayscale)
 
     {:noreply, state}
@@ -174,5 +180,26 @@ defmodule Octopus.Apps.SparkleMist do
 
       Canvas.clear_rect(acc_canvas, {start_x, 0}, {end_x, end_y})
     end)
+  end
+
+  defp dimm_panels(canvas, dimming_factor) do
+    dimming_value = trunc(dimming_factor * 255)
+
+    dimming_canvas =
+      Canvas.new(canvas.width, canvas.height, canvas.mode)
+      |> Canvas.fill({dimming_value, dimming_value, dimming_value})
+
+    Canvas.blend(dimming_canvas, canvas, :multiply)
+  end
+
+  defp scale_distance_to_speed(distance) do
+    clamped_distance = max(400, min(2000, distance))
+
+    normalized = (2000 - clamped_distance) / (2000 - 400)
+
+    min_speed = 15 + normalized * (50 - 15)
+    max_speed = 30 + normalized * (75 - 30)
+
+    {min_speed, max_speed}
   end
 end
