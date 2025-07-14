@@ -109,6 +109,14 @@ defmodule Octopus.Particles do
   - `particles`: The particles struct
   - `coord`: The coordinate to spawn the particles at
   - `amount`: The number of particles to spawn
+  - `opts`: Additional options
+    - `angle`: The angle to spawn the particles at, in radians
+    - `spread`: How much to spread the particles out, 0 is no spread, 1 is full spread (360 degrees)
+    - `colors`: The colors to spawn the particles in, can be a single color or an enumerable of colors
+    - `min_ttl`: The minimum time to live for the particles, in seconds
+    - `max_ttl`: The maximum time to live for the particles, in seconds
+    - `min_speed`: The minimum speed for the particles, in pixels per second
+    - `max_speed`: The maximum speed for the particles, in pixels per second
   """
   @spec spawn(t(), Canvas.coord(), non_neg_integer()) :: t()
   def spawn(%Particles{} = system, {x, y}, amount, opts \\ []) do

@@ -375,8 +375,13 @@ defmodule Octopus.Canvas do
     pixels =
       for x <- 0..(canvas2.width - 1),
           y <- 0..(canvas2.height - 1),
-          do: {{x + dx, y + dy}, Canvas.get_pixel(canvas2, {x, y})},
-          into: canvas1.pixels
+          reduce: canvas1.pixels do
+        pixels ->
+          case Map.get(canvas2.pixels, {x, y}) do
+            nil -> pixels
+            color -> Map.put(pixels, {x + dx, y + dy}, color)
+          end
+      end
 
     {width, height} =
       case direction do

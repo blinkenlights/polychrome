@@ -17,17 +17,22 @@ defmodule Octopus.Apps.Sand.Sim do
           spawn_pos_dir: integer()
         }
 
+  @spec new(integer(), integer()) :: t()
   def new(width, height) do
+    spawn_pos_x = 0..(width - 1) |> Enum.random()
+    spawn_pos_dir = Enum.random([-1, 1])
+
     %Sim{
       width: width,
       height: height,
       particles: %{},
-      spawn_pos: {trunc(width / 2), -1},
-      spawn_pos_dir: 1
+      spawn_pos: {spawn_pos_x, -1},
+      spawn_pos_dir: spawn_pos_dir
     }
   end
 
-  def step(%Sim{} = sim, _) do
+  @spec step(t()) :: t()
+  def step(%Sim{} = sim) do
     hue = :rand.uniform(360)
     saturation = :rand.uniform() * 25 + 60
     lightness = :rand.uniform() * 25 + 45
@@ -87,11 +92,15 @@ defmodule Octopus.Apps.Sand.Sim do
           {{x + sim.spawn_pos_dir, y}, sim.spawn_pos_dir}
       end
 
-    dbg(spawn_pos)
-
-    %Sim{sim | spawn_pos: sim.spawn_pos, spawn_pos_dir: spawn_pos_dir}
+    %Sim{sim | spawn_pos: spawn_pos, spawn_pos_dir: spawn_pos_dir}
   end
 
+  @spec clear(t()) :: t()
+  def clear(%Sim{} = sim) do
+    %Sim{sim | particles: %{}}
+  end
+
+  @spec draw(t(), Canvas.t()) :: Canvas.t()
   def draw(%Sim{} = sim, canvas) do
     for y <- 0..(canvas.height - 1),
         x <- 0..(canvas.width - 1),
@@ -103,7 +112,8 @@ defmodule Octopus.Apps.Sand.Sim do
     end
   end
 
-  defp cell_empty?(sim, {x, y}) do
+  @spec cell_empty?(t(), coord()) :: boolean()
+  def cell_empty?(%Sim{} = sim, {x, y}) do
     if x < 0 or x >= sim.width or y >= sim.height do
       false
     else
@@ -111,15 +121,18 @@ defmodule Octopus.Apps.Sand.Sim do
     end
   end
 
-  defp get_cell(sim, {x, y}, default \\ nil) do
+  @spec get_cell(t(), coord(), particle()) :: particle() | nil
+  def get_cell(%Sim{} = sim, {x, y}, default \\ nil) do
     Map.get(sim.particles, {x, y}, default)
   end
 
-  defp put_cell(sim, {x, y}, value) do
+  @spec put_cell(t(), coord(), particle()) :: t()
+  def put_cell(%Sim{} = sim, {x, y}, value) do
     %Sim{sim | particles: Map.put(sim.particles, {x, y}, value)}
   end
 
-  defp remove_cell(sim, {x, y}) do
+  @spec remove_cell(t(), coord()) :: t()
+  def remove_cell(%Sim{} = sim, {x, y}) do
     %Sim{sim | particles: Map.delete(sim.particles, {x, y})}
   end
 end
