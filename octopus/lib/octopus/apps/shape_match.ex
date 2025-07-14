@@ -41,12 +41,70 @@ defmodule Octopus.Apps.ShapeMatch do
       game_over: false,
       game_start_time: System.monotonic_time(:second),
       game_over_animation_index: 0,
-      game_over_elapsed: 0
+      game_over_elapsed: 0,
+      game_over_animation_phase: nil, # :particles | :time_display
+      game_over_particles: nil,
+      game_over_animation_tick: 0
     }}
   end
 
-  def handle_info(:tick, %{game_over: true, game_over_elapsed: elapsed, game_over_animation_index: offset} = state) do
-    # Game is over → animate time display
+  # --- GAME OVER ANIMATION: PARTICLE EXPLOSION ---
+  def handle_info(:tick, %{game_over: true, game_over_animation_phase: :particles, game_over_particles: particles, game_over_animation_tick: tick, installation_info: installation_info} = state) do
+    panel_width = installation_info.panel_width
+    panel_height = installation_info.panel_height
+    panel_count = installation_info.panel_count
+
+    # Update all particles
+    updated_particles =
+      Enum.map(particles, fn panel_particles ->
+        Enum.map(panel_particles, fn %{x: x, y: y, vx: vx, vy: vy, color: color} = p ->
+          %{p |
+            x: x + vx,
+            y: y + vy,
+            vx: vx * 0.97, # etwas mehr abbremsen
+            vy: vy * 0.97 + 0.05, # leichte Schwerkraft
+            color: color
+          }
+        end)
+      end)
+
+    # Render all panels
+    tiled_canvas = Canvas.new(panel_count * panel_width, panel_height)
+    tiled_canvas =
+      Enum.with_index(updated_particles)
+      |> Enum.reduce(tiled_canvas, fn {panel_particles, panel_index}, acc ->
+        Enum.reduce(panel_particles, acc, fn %{x: x, y: y, color: color}, acc2 ->
+          px = round(x) + panel_index * panel_width
+          py = round(y)
+          if px >= panel_index * panel_width and px < (panel_index + 1) * panel_width and py >= 0 and py < panel_height do
+            Canvas.put_pixel(acc2, {px, py}, color)
+          else
+            acc2
+          end
+        end)
+      end)
+
+    Octopus.App.update_display(tiled_canvas)
+
+    # Nach 100 Ticks (ca. 10-12 Sekunden) zur Zeit-Anzeige wechseln
+    if tick >= 100 do
+      Process.send_after(self(), :tick, 80)
+      {:noreply, %{state |
+        game_over_animation_phase: :time_display,
+        game_over_particles: nil,
+        game_over_animation_tick: 0
+      }}
+    else
+      Process.send_after(self(), :tick, 120)
+      {:noreply, %{state |
+        game_over_particles: updated_particles,
+        game_over_animation_tick: tick + 1
+      }}
+    end
+  end
+
+  # --- GAME OVER ANIMATION: ZEIT-ANZEIGE ---
+  def handle_info(:tick, %{game_over: true, game_over_animation_phase: :time_display, game_over_elapsed: elapsed, game_over_animation_index: offset} = state) do
     formatted = format_time(elapsed)
     font = Font.load("solo-Solomons Key (Tecmo)")
     panel_width = state.installation_info.panel_width
@@ -55,14 +113,25 @@ defmodule Octopus.Apps.ShapeMatch do
     chars = String.graphemes(formatted)
     str_len = length(chars)
 
+    # Offset für Lauflicht
+    shifted = Enum.concat(Enum.drop(chars, offset), Enum.take(chars, offset))
+
     tiled_canvas = Canvas.new(panel_count * panel_width, panel_height)
-    tiled_canvas = Canvas.put_string(tiled_canvas, {0, 0}, formatted, font)
+    tiled_canvas =
+      Enum.with_index(shifted)
+      |> Enum.take(panel_count)
+      |> Enum.reduce(tiled_canvas, fn {char, panel_index}, acc ->
+        x = panel_index * panel_width + div(panel_width - 8, 2)
+        y = div(panel_height - 8, 2)
+        Font.draw_char(font, String.to_charlist(char) |> hd, 0, acc, {x, y})
+      end)
 
     Octopus.App.update_display(tiled_canvas)
-    Process.send_after(self(), :tick, 500)
-    {:noreply, %{state | game_over_animation_index: offset + 1}}
+    Process.send_after(self(), :tick, 250)
+    {:noreply, %{state | game_over_animation_index: rem(offset + 1, str_len)}}
   end
 
+  # --- GAME LOOP ---
   def handle_info(:tick, %{game_over: false, chosen_per_panel: chosen_per_panel, frame_index: frame_index, installation_info: installation_info} = state) do
     panel_width = installation_info.panel_width
     panel_height = installation_info.panel_height
@@ -83,6 +152,7 @@ defmodule Octopus.Apps.ShapeMatch do
     {:noreply, %{state | frame_index: frame_index + 1}}
   end
 
+  # --- GAME OVER TRIGGER: ALLE PANELS GLEICH ---
   def handle_event(
     %Octopus.Events.Event.Input{type: :button, action: :press, button: button},
     %{chosen_per_panel: chosen_per_panel, installation_info: installation_info, game_start_time: nil} = state
@@ -114,7 +184,10 @@ defmodule Octopus.Apps.ShapeMatch do
       game_start_time: System.monotonic_time(:second),
       frame_index: 0,
       game_over_animation_index: 0,
-      game_over_elapsed: 0
+      game_over_elapsed: 0,
+      game_over_animation_phase: nil,
+      game_over_particles: nil,
+      game_over_animation_tick: 0
     }}
   end
 
@@ -147,11 +220,36 @@ defmodule Octopus.Apps.ShapeMatch do
         |> ShapeMatchHighscore.changeset(%{score_seconds: elapsed})
         |> Repo.insert()
 
+        # --- PARTICLE EXPLOSION INIT ---
+        # Hole das aktuelle Symbol-Frame (erstes Frame reicht)
+        {symbol_name, animation} = hd(updated_chosen_per_panel)
+        {frame_canvas, _duration} = hd(animation)
+        # Extrahiere alle Pixel als Partikel
+        panel_particles =
+          for x <- 0..(installation_info.panel_width - 1),
+              y <- 0..(installation_info.panel_height - 1),
+              color = Canvas.get_pixel(frame_canvas, {x, y}),
+              color != {0, 0, 0} do
+            # Richtung: radial von der Mitte
+            cx = installation_info.panel_width / 2
+            cy = installation_info.panel_height / 2
+            dx = x - cx
+            dy = y - cy
+            angle = :math.atan2(dy, dx)
+            speed = 0.4 + :rand.uniform() * 0.6 # langsamer
+            %{x: x * 1.0, y: y * 1.0, vx: :math.cos(angle) * speed, vy: :math.sin(angle) * speed, color: color}
+          end
+        # Für jedes Panel die Partikel kopieren (alle Panels zeigen ja das gleiche Symbol)
+        all_particles = for _ <- 1..installation_info.panel_count, do: panel_particles
+
         {:noreply, %{state |
           chosen_per_panel: updated_chosen_per_panel,
           game_over: true,
           game_over_animation_index: 0,
-          game_over_elapsed: elapsed
+          game_over_elapsed: elapsed,
+          game_over_animation_phase: :particles,
+          game_over_particles: all_particles,
+          game_over_animation_tick: 0
         }}
       else
         {:noreply, %{state | chosen_per_panel: updated_chosen_per_panel}}
