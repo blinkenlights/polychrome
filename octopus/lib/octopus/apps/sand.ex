@@ -62,23 +62,32 @@ defmodule Octopus.Apps.Sand do
     {:noreply, %{state | sims: sims, particle_systems: particle_systems}}
   end
 
-  def handle_event(%Input{type: :button, action: :press} = _input, state) do
-    particles =
+  def handle_event(%Input{type: :button, action: :press} = input, state) do
+    {sims, particle_systems} =
       state.sims
       |> Enum.zip(state.particle_systems)
-      |> Enum.map(fn {%Sim{} = sim, %Particles{} = particles} ->
-        Enum.reduce(sim.particles, particles, fn {{x, y}, {:sand, color}}, particles ->
-          Particles.spawn(particles, {x, y}, 1,
-            angle: :math.pi() * 1.5,
-            spread: 0.25,
-            colors: color
-          )
-        end)
+      |> Enum.with_index()
+      |> Enum.map(fn {{%Sim{} = sim, %Particles{} = particles}, i} ->
+        if i == input.button - 1 do
+          particles =
+            Enum.reduce(sim.particles, particles, fn {{x, y}, {:sand, color}}, particles ->
+              Particles.spawn(particles, {x, y}, 1,
+                angle: :math.pi() * 1.5,
+                spread: 0.25,
+                colors: color
+              )
+            end)
+
+          sim = Sim.clear(sim)
+
+          {sim, particles}
+        else
+          {sim, particles}
+        end
       end)
+      |> Enum.unzip()
 
-    sims = Enum.map(state.sims, &Sim.clear/1)
-
-    {:noreply, %{state | sims: sims, particle_systems: particles}}
+    {:noreply, %{state | sims: sims, particle_systems: particle_systems}}
   end
 
   def handle_event(_event, state) do
