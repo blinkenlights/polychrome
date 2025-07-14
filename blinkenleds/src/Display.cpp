@@ -10,7 +10,11 @@
 #define PIXEL_COUNT (WIDTH * HEIGHT)
 #define DATA_PIN 16
 
+#ifdef SKIP_LEDS
+NeoPixelBus<NeoWrgbTm1814Feature, NeoTm1814Method> strip(PIXEL_COUNT * 2, DATA_PIN);
+#else
 NeoPixelBus<NeoWrgbTm1814Feature, NeoTm1814Method> strip(PIXEL_COUNT, DATA_PIN);
+#endif
 
 Pixel pixel[PIXEL_COUNT];
 
@@ -183,11 +187,11 @@ void Display::handle_packet(Packet packet)
   }
 }
 
-// maps the pixel index to the physical layout of the LED strip. The first LED should be top left.
+// maps the pixel index to the physical layout of the LED strip. The first LED should be bottom left (seen from the front).
 uint32_t Display::map_index(uint32_t index)
 {
   uint32_t x = index % WIDTH;
-  uint32_t y = index / WIDTH;
+  uint32_t y = HEIGHT - 1 - index / WIDTH;
 
   uint32_t mapped_index;
   if (y % 2 == 0)
