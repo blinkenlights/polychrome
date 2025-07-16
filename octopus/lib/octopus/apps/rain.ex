@@ -1,9 +1,6 @@
 # TODO
 # Mehrere Farben im Regen
-# Weißere Splashes
-# Längere Blitze
 # Splashes bei Ultraschall
-# Weißer Flash
 defmodule Octopus.Apps.Rain do
   use Octopus.App, category: :game
 
@@ -28,6 +25,7 @@ defmodule Octopus.Apps.Rain do
   @fps 60
   @frame_time_ms trunc(1000 / @fps)
   @rain_color {100, 180, 255}
+  @splash_color {133, 183, 212}
 
   def app_init(_args) do
     Octopus.App.configure_display(layout: :adjacent_panels)
@@ -38,7 +36,7 @@ defmodule Octopus.Apps.Rain do
     panels =
       for i <- 0..(panel_count - 1), into: %{} do
         drops = new_rain_system(panel_width, panel_height)
-        splash = new_rain_system(panel_width, panel_height)
+        splash = new_splash_system(panel_width, panel_height)
         {i, {drops, splash}}
       end
 
@@ -118,6 +116,23 @@ defmodule Octopus.Apps.Rain do
       :math.pi() / 2,
       0.05,
       [@rain_color],
+      # ttl
+      0.5,
+      1.2,
+      # speed
+      18,
+      28
+    )
+  end
+
+  defp new_splash_system(width, height) do
+    Particles.new(
+      width,
+      height,
+      # downwards
+      :math.pi() / 2,
+      0.05,
+      [@splash_color],
       # ttl
       0.5,
       1.2,
