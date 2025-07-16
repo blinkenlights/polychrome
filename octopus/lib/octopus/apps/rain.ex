@@ -50,12 +50,18 @@ defmodule Octopus.Apps.Rain do
 
   def handle_event(%ProximityEvent{} = event, %State{panels: panels} = state) do
     panel_height = Installation.panel_height()
-    x = case Map.get(event, :sensor) do
-      1 -> 7
-      _ -> 0
-    end
+
+    x =
+      case Map.get(event, :sensor) do
+        1 -> 7
+        _ -> 0
+      end
+
     {drops, splash, proximity_splash} = Map.get(panels, event.panel)
-    proximity_splash = Particles.spawn(proximity_splash, {x, panel_height - 1}, 1, color: @proximity_splash_color)
+
+    proximity_splash =
+      Particles.spawn(proximity_splash, {x, panel_height - 1}, 1, color: @proximity_splash_color)
+
     panels = Map.put(panels, event.panel, {drops, splash, proximity_splash})
     {:noreply, %{state | panels: panels}}
   end
@@ -64,7 +70,7 @@ defmodule Octopus.Apps.Rain do
         %Octopus.Events.Event.Input{type: :button, action: :press, button: button},
         %State{lightning: lightning} = state
       ) do
-    new_lightning = %{panel: button, x: 3, ttl: 8}
+    new_lightning = %{panel: button - 1, x: 3, ttl: 8}
     {:noreply, %{state | lightning: [new_lightning | lightning]}}
   end
 
@@ -112,6 +118,7 @@ defmodule Octopus.Apps.Rain do
         drops_canvas = Particles.draw(drops, Canvas.new(panel_width, panel_height))
         splash_canvas = Particles.draw(splash, Canvas.new(panel_width, panel_height))
         prox_canvas = Particles.draw(proximity_splash, Canvas.new(panel_width, panel_height))
+
         acc
         |> Canvas.overlay(drops_canvas, offset: {i * panel_width, 0})
         |> Canvas.overlay(splash_canvas, offset: {i * panel_width, 0})
@@ -163,11 +170,18 @@ defmodule Octopus.Apps.Rain do
     Particles.new(
       width,
       height,
-      :math.pi() * 1.5, # nach oben
-      0.3,              # spread
-      [@proximity_splash_color],  # knallpink für Debugging
-      0.2, 0.5,         # ttl
-      10, 20            # speed
+      # nach oben
+      :math.pi() * 1.5,
+      # spread
+      0.3,
+      # knallpink für Debugging
+      [@proximity_splash_color],
+      # ttl
+      0.2,
+      0.5,
+      # speed
+      10,
+      20
     )
   end
 
