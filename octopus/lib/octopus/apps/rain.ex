@@ -10,6 +10,7 @@ defmodule Octopus.Apps.Rain do
 
   def compatible?() do
     installation_info = Octopus.App.get_installation_info()
+
     installation_info.panel_width >= 8 and
       installation_info.panel_height >= 8
   end
@@ -27,18 +28,23 @@ defmodule Octopus.Apps.Rain do
     panel_count = Installation.num_panels()
     panel_width = Installation.panel_width()
     panel_height = Installation.panel_height()
-    panels = for i <- 0..(panel_count - 1), into: %{} do
-      {i, new_rain_system(panel_width, panel_height)}
-    end
+
+    panels =
+      for i <- 0..(panel_count - 1), into: %{} do
+        drops = new_rain_system(panel_width, panel_height)
+        splash = new_rain_system(panel_width, panel_height)
+        {i, {drops, splash}}
+      end
+
     state = %State{panels: panels, last_tick: System.monotonic_time(:millisecond), lightning: []}
     :timer.send_interval(@frame_time_ms, :tick)
     {:ok, state}
   end
 
   def handle_event(
-    %Octopus.Events.Event.Input{type: :button, action: :press, button: button},
-    %State{lightning: lightning} = state
-  ) do
+        %Octopus.Events.Event.Input{type: :button, action: :press, button: button},
+        %State{lightning: lightning} = state
+      ) do
     Logger.info("LIGHTNING")
     new_lightning = %{panel: button - 1, x: 3, ttl: 3}
     {:noreply, %{state | lightning: [new_lightning | lightning]}}
@@ -49,10 +55,14 @@ defmodule Octopus.Apps.Rain do
     {:noreply, state}
   end
 
-  def handle_info(:tick, %State{panels: panels, last_tick: last_tick, lightning: lightning} = state) do
+  def handle_info(
+        :tick,
+        %State{panels: panels, last_tick: last_tick, lightning: lightning} = state
+      ) do
     # Logger.info("Active lightning: #{inspect(state)}")
     now = System.monotonic_time(:millisecond)
-    dt = max((now - last_tick) / 1000, 0.001) # seconds, never 0
+    # seconds, never 0
+    dt = max((now - last_tick) / 1000, 0.001)
 
     panel_count = Installation.num_panels()
     panel_width = Installation.panel_width()
@@ -61,11 +71,12 @@ defmodule Octopus.Apps.Rain do
     # Update und maybe spawn new drops
     panels =
       panels
-      |> Enum.map(fn {i, sys} ->
-        sys = maybe_spawn_rain(sys)
-        sys = Particles.update(sys, dt)
-        sys = maybe_splash(sys)
-        {i, sys}
+      |> Enum.map(fn {i, {drops, splash}} ->
+        drops = maybe_spawn_rain(drops)
+        drops = Particles.update(drops, dt)
+        splash = maybe_splash(drops, splash)
+        splash = Particles.update(splash, dt)
+        {i, {drops, splash}}
       end)
       |> Enum.into(%{})
 
@@ -77,10 +88,15 @@ defmodule Octopus.Apps.Rain do
 
     # Draw all panels on a big canvas
     big_canvas = Canvas.new(panel_count * panel_width, panel_height)
+
     big_canvas =
-      Enum.reduce(panels, big_canvas, fn {i, sys}, acc ->
-        small = Particles.draw(sys, Canvas.new(panel_width, panel_height))
-        Canvas.overlay(acc, small, offset: {i * panel_width, 0})
+      Enum.reduce(panels, big_canvas, fn {i, {drops, splash}}, acc ->
+        drops_canvas = Particles.draw(drops, Canvas.new(panel_width, panel_height))
+        splash_canvas = Particles.draw(splash, Canvas.new(panel_width, panel_height))
+
+        acc
+        |> Canvas.overlay(drops_canvas, offset: {i * panel_width, 0})
+        |> Canvas.overlay(splash_canvas, offset: {i * panel_width, 0})
       end)
 
     # Draw lightning
@@ -94,11 +110,16 @@ defmodule Octopus.Apps.Rain do
     Particles.new(
       width,
       height,
-      :math.pi() / 2, # downwards
+      # downwards
+      :math.pi() / 2,
       0.05,
       [@rain_color],
-      0.5, 1.2, # ttl
-      18, 28    # speed
+      # ttl
+      0.5,
+      1.2,
+      # speed
+      18,
+      28
     )
   end
 
@@ -112,18 +133,22 @@ defmodule Octopus.Apps.Rain do
     end
   end
 
-  defp maybe_splash(sys) do
+  defp maybe_splash(drops, splash) do
     # If a drop is near the bottom, spawn a splash up with 10% chance
     splash_particles =
-      sys.particles
-      |> Enum.filter(fn p -> p.y > sys.height - 1 end)
+      drops.particles
+      |> Enum.filter(fn p -> p.y > drops.height - 1 end)
       |> Enum.filter(fn _ -> :rand.uniform() < 0.08 end)
 
-    Enum.reduce(splash_particles, sys, fn p, acc ->
-      # Splash: spawn 2-3 particles upwards
-      splash = Particles.new(acc.width, acc.height, -:math.pi() / 2, 0.3, [@rain_color], 0.2, 0.5, 10, 20)
-      splash = Particles.spawn(splash, {p.x, acc.height}, 1)
-      %{acc | particles: acc.particles ++ splash.particles}
+    Enum.reduce(splash_particles, splash, fn p, acc ->
+      Particles.spawn(acc, {p.x, acc.height}, 1,
+        angle: :math.pi() * 1.5,
+        spread: 0.3,
+        min_ttl: 0.2,
+        max_ttl: 0.5,
+        min_speed: 10,
+        max_speed: 20
+      )
     end)
   end
 
@@ -133,14 +158,15 @@ defmodule Octopus.Apps.Rain do
       x = l.panel * panel_width + l.x
       # Erzeuge Zickzack-Pfad
       {_, path} =
-        Enum.reduce(0..(panel_height-1), {x, []}, fn y, {cur_x, acc_path} ->
+        Enum.reduce(0..(panel_height - 1), {x, []}, fn y, {cur_x, acc_path} ->
           dx = Enum.random([-1, 0, 1])
           next_x = min(max(cur_x + dx, l.panel * panel_width), (l.panel + 1) * panel_width - 1)
           {next_x, [{next_x, y} | acc_path]}
         end)
 
       Enum.reduce(path, acc, fn {px, py}, c ->
-        Canvas.put_pixel(c, {px, py}, {255, 255, 0}) # Gelber Blitz
+        # Gelber Blitz
+        Canvas.put_pixel(c, {px, py}, {255, 255, 0})
       end)
     end)
   end
