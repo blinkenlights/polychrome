@@ -1,3 +1,9 @@
+# TODO
+# Mehrere Farben im Regen
+# Weißere Splashes
+# Längere Blitze
+# Splashes bei Ultraschall
+# Weißer Flash
 defmodule Octopus.Apps.Rain do
   use Octopus.App, category: :game
 
@@ -45,8 +51,7 @@ defmodule Octopus.Apps.Rain do
         %Octopus.Events.Event.Input{type: :button, action: :press, button: button},
         %State{lightning: lightning} = state
       ) do
-    Logger.info("LIGHTNING")
-    new_lightning = %{panel: button - 1, x: 3, ttl: 3}
+    new_lightning = %{panel: button, x: 3, ttl: 8}
     {:noreply, %{state | lightning: [new_lightning | lightning]}}
   end
 
@@ -59,7 +64,6 @@ defmodule Octopus.Apps.Rain do
         :tick,
         %State{panels: panels, last_tick: last_tick, lightning: lightning} = state
       ) do
-    # Logger.info("Active lightning: #{inspect(state)}")
     now = System.monotonic_time(:millisecond)
     # seconds, never 0
     dt = max((now - last_tick) / 1000, 0.001)
@@ -154,7 +158,6 @@ defmodule Octopus.Apps.Rain do
 
   defp draw_lightning(canvas, lightning, panel_width, panel_height) do
     Enum.reduce(lightning, canvas, fn l, acc ->
-      # Logger.info("Drawing lightning at: panel=#{l.panel}, x=#{l.x}")
       x = l.panel * panel_width + l.x
       # Erzeuge Zickzack-Pfad
       {_, path} =
@@ -166,7 +169,7 @@ defmodule Octopus.Apps.Rain do
 
       Enum.reduce(path, acc, fn {px, py}, c ->
         # Gelber Blitz
-        Canvas.put_pixel(c, {px, py}, {255, 255, 0})
+        Canvas.put_pixel(c, {px, py}, {247, 242, 163})
       end)
     end)
   end
