@@ -102,7 +102,13 @@ defmodule Octopus.Installation do
     panel_width = Keyword.fetch!(opts, :panel_width)
     panel_height = Keyword.fetch!(opts, :panel_height)
     panel_gap = Keyword.fetch!(opts, :panel_gap)
-    width = (num_panels - 1) * (panel_width + panel_gap) + panel_width
+
+    width =
+      case arrangement do
+        :linear -> (num_panels - 1) * (panel_width + panel_gap) + panel_width
+        :circular -> num_panels * (panel_width + panel_gap)
+      end
+
     height = panel_height
 
     simulator_layouts =

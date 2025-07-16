@@ -6,7 +6,7 @@ defmodule Octopus.Installation.Nation2025 do
     num_joysticks: 0,
     panel_width: 8,
     panel_height: 8,
-    panel_gap: 26,
+    panel_gap: 18,
     simulator_layouts: [
       [
         name: "Nation 2025",
