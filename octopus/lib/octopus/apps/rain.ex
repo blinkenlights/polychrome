@@ -158,6 +158,7 @@ defmodule Octopus.Apps.Rain do
 
   defp draw_lightning(canvas, lightning, panel_width, panel_height) do
     Enum.reduce(lightning, canvas, fn l, acc ->
+      flash_canvas(canvas)
       x = l.panel * panel_width + l.x
       # Erzeuge Zickzack-Pfad
       {_, path} =
@@ -172,5 +173,10 @@ defmodule Octopus.Apps.Rain do
         Canvas.put_pixel(c, {px, py}, {247, 242, 163})
       end)
     end)
+  end
+
+  # Heller Flash-Effekt für das gesamte Display
+  defp flash_canvas(canvas) do
+    Canvas.fill(canvas, {247, 242, 200})
   end
 end
