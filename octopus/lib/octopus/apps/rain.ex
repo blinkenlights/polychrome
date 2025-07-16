@@ -15,7 +15,7 @@ defmodule Octopus.Apps.Rain do
   end
 
   defmodule State do
-    defstruct panels: %{}, last_tick: nil
+    defstruct panels: %{}, last_tick: nil, lightning: []
   end
 
   @fps 60
@@ -30,12 +30,27 @@ defmodule Octopus.Apps.Rain do
     panels = for i <- 0..(panel_count - 1), into: %{} do
       {i, new_rain_system(panel_width, panel_height)}
     end
-    state = %State{panels: panels, last_tick: System.monotonic_time(:millisecond)}
+    state = %State{panels: panels, last_tick: System.monotonic_time(:millisecond), lightning: []}
     :timer.send_interval(@frame_time_ms, :tick)
     {:ok, state}
   end
 
-  def handle_info(:tick, %State{panels: panels, last_tick: last_tick} = state) do
+  def handle_event(
+    %Octopus.Events.Event.Input{type: :button, action: :press, button: button},
+    %State{lightning: lightning} = state
+  ) do
+    Logger.info("LIGHTNING")
+    new_lightning = %{panel: button - 1, x: 3, ttl: 3}
+    {:noreply, %{state | lightning: [new_lightning | lightning]}}
+  end
+
+  def handle_event(event, state) do
+    Logger.info("Unhandled event: #{inspect(event)}")
+    {:noreply, state}
+  end
+
+  def handle_info(:tick, %State{panels: panels, last_tick: last_tick, lightning: lightning} = state) do
+    # Logger.info("Active lightning: #{inspect(state)}")
     now = System.monotonic_time(:millisecond)
     dt = max((now - last_tick) / 1000, 0.001) # seconds, never 0
 
@@ -43,7 +58,7 @@ defmodule Octopus.Apps.Rain do
     panel_width = Installation.panel_width()
     panel_height = Installation.panel_height()
 
-    # Update and maybe spawn new drops
+    # Update und maybe spawn new drops
     panels =
       panels
       |> Enum.map(fn {i, sys} ->
@@ -54,6 +69,12 @@ defmodule Octopus.Apps.Rain do
       end)
       |> Enum.into(%{})
 
+    # Update lightning (decrease ttl, remove expired)
+    lightning =
+      lightning
+      |> Enum.map(fn l -> %{l | ttl: l.ttl - 1} end)
+      |> Enum.filter(fn l -> l.ttl > 0 end)
+
     # Draw all panels on a big canvas
     big_canvas = Canvas.new(panel_count * panel_width, panel_height)
     big_canvas =
@@ -62,8 +83,11 @@ defmodule Octopus.Apps.Rain do
         Canvas.overlay(acc, small, offset: {i * panel_width, 0})
       end)
 
+    # Draw lightning
+    big_canvas = draw_lightning(big_canvas, lightning, panel_width, panel_height)
+
     Octopus.App.update_display(big_canvas)
-    {:noreply, %State{panels: panels, last_tick: now}}
+    {:noreply, %{state | panels: panels, last_tick: now, lightning: lightning}}
   end
 
   defp new_rain_system(width, height) do
@@ -103,5 +127,21 @@ defmodule Octopus.Apps.Rain do
     end)
   end
 
-  def handle_event(event, state), do: {:noreply, state}
+  defp draw_lightning(canvas, lightning, panel_width, panel_height) do
+    Enum.reduce(lightning, canvas, fn l, acc ->
+      # Logger.info("Drawing lightning at: panel=#{l.panel}, x=#{l.x}")
+      x = l.panel * panel_width + l.x
+      # Erzeuge Zickzack-Pfad
+      {_, path} =
+        Enum.reduce(0..(panel_height-1), {x, []}, fn y, {cur_x, acc_path} ->
+          dx = Enum.random([-1, 0, 1])
+          next_x = min(max(cur_x + dx, l.panel * panel_width), (l.panel + 1) * panel_width - 1)
+          {next_x, [{next_x, y} | acc_path]}
+        end)
+
+      Enum.reduce(path, acc, fn {px, py}, c ->
+        Canvas.put_pixel(c, {px, py}, {255, 255, 0}) # Gelber Blitz
+      end)
+    end)
+  end
 end
