@@ -8,6 +8,7 @@ defmodule Octopus.Apps.Rain do
   alias Octopus.Installation
   alias Octopus.Canvas
   alias Octopus.Particles
+  alias Octopus.Events.Event.Proximity, as: ProximityEvent
 
   def name, do: "Rain"
 
@@ -26,6 +27,7 @@ defmodule Octopus.Apps.Rain do
   @frame_time_ms trunc(1000 / @fps)
   @rain_color {100, 180, 255}
   @splash_color {133, 183, 212}
+  @proximity_splash_color {255, 0, 255}
 
   def app_init(_args) do
     Octopus.App.configure_display(layout: :adjacent_panels)
@@ -37,12 +39,25 @@ defmodule Octopus.Apps.Rain do
       for i <- 0..(panel_count - 1), into: %{} do
         drops = new_rain_system(panel_width, panel_height)
         splash = new_splash_system(panel_width, panel_height)
-        {i, {drops, splash}}
+        proximity_splash = new_proximity_splash_system(panel_width, panel_height)
+        {i, {drops, splash, proximity_splash}}
       end
 
     state = %State{panels: panels, last_tick: System.monotonic_time(:millisecond), lightning: []}
     :timer.send_interval(@frame_time_ms, :tick)
     {:ok, state}
+  end
+
+  def handle_event(%ProximityEvent{} = event, %State{panels: panels} = state) do
+    panel_height = Installation.panel_height()
+    x = case Map.get(event, :sensor) do
+      1 -> 7
+      _ -> 0
+    end
+    {drops, splash, proximity_splash} = Map.get(panels, event.panel)
+    proximity_splash = Particles.spawn(proximity_splash, {x, panel_height - 1}, 1, color: @proximity_splash_color)
+    panels = Map.put(panels, event.panel, {drops, splash, proximity_splash})
+    {:noreply, %{state | panels: panels}}
   end
 
   def handle_event(
@@ -73,12 +88,13 @@ defmodule Octopus.Apps.Rain do
     # Update und maybe spawn new drops
     panels =
       panels
-      |> Enum.map(fn {i, {drops, splash}} ->
+      |> Enum.map(fn {i, {drops, splash, proximity_splash}} ->
         drops = maybe_spawn_rain(drops)
         drops = Particles.update(drops, dt)
         splash = maybe_splash(drops, splash)
         splash = Particles.update(splash, dt)
-        {i, {drops, splash}}
+        proximity_splash = Particles.update(proximity_splash, dt)
+        {i, {drops, splash, proximity_splash}}
       end)
       |> Enum.into(%{})
 
@@ -92,13 +108,14 @@ defmodule Octopus.Apps.Rain do
     big_canvas = Canvas.new(panel_count * panel_width, panel_height)
 
     big_canvas =
-      Enum.reduce(panels, big_canvas, fn {i, {drops, splash}}, acc ->
+      Enum.reduce(panels, big_canvas, fn {i, {drops, splash, proximity_splash}}, acc ->
         drops_canvas = Particles.draw(drops, Canvas.new(panel_width, panel_height))
         splash_canvas = Particles.draw(splash, Canvas.new(panel_width, panel_height))
-
+        prox_canvas = Particles.draw(proximity_splash, Canvas.new(panel_width, panel_height))
         acc
         |> Canvas.overlay(drops_canvas, offset: {i * panel_width, 0})
         |> Canvas.overlay(splash_canvas, offset: {i * panel_width, 0})
+        |> Canvas.overlay(prox_canvas, offset: {i * panel_width, 0})
       end)
 
     # Draw lightning
@@ -139,6 +156,18 @@ defmodule Octopus.Apps.Rain do
       # speed
       18,
       28
+    )
+  end
+
+  defp new_proximity_splash_system(width, height) do
+    Particles.new(
+      width,
+      height,
+      :math.pi() * 1.5, # nach oben
+      0.3,              # spread
+      [@proximity_splash_color],  # knallpink für Debugging
+      0.2, 0.5,         # ttl
+      10, 20            # speed
     )
   end
 
