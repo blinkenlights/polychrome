@@ -52,7 +52,7 @@ defmodule Octopus.Apps.Sand do
            Enum.all?(coords, fn {x, y} ->
              !Sim.cell_empty?(panel.sim, {x, y})
            end) do
-        explode(panel, 5, 15)
+        explode(panel, -5, 0)
       else
         panel
       end
@@ -90,7 +90,7 @@ defmodule Octopus.Apps.Sand do
         Enum.reduce(sim.particles, particles, fn {{x, y}, {:sand, color}}, particles ->
           Particles.spawn(particles, {x, y}, 1,
             angle: :math.pi() * 1.5,
-            spread: 0.35,
+            spread: 0.15,
             colors: color,
             min_speed: min_force,
             max_speed: max_force
