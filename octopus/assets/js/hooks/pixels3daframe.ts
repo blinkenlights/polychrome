@@ -314,7 +314,7 @@ class Pixels3dAframeHook extends Hook {
   createSky() {
     const skyEl = document.createElement('a-sky');
     skyEl.setAttribute('src', '/images/nog_250711.JPG')
-    skyEl.setAttribute('scale', '0.028 0.028 0.028');
+    skyEl.setAttribute('scale', '-0.028 0.028 0.028');
     skyEl.setAttribute('position', '0 1.847 0');
     return skyEl;
   }
