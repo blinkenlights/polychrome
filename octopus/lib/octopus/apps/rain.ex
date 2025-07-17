@@ -1,7 +1,5 @@
-# TODO
-# Splashes bei Ultraschall
 defmodule Octopus.Apps.Rain do
-  use Octopus.App, category: :game
+  use Octopus.App, category: :interactive
 
   require Logger
   alias Octopus.Installation
@@ -9,7 +7,7 @@ defmodule Octopus.Apps.Rain do
   alias Octopus.Particles
   alias Octopus.Events.Event.Proximity, as: ProximityEvent
 
-  def name, do: "Rain"
+  def name, do: "⛈️ Rain"
 
   def compatible?() do
     installation_info = Octopus.App.get_installation_info()
