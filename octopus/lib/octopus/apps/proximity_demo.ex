@@ -101,8 +101,8 @@ defmodule Octopus.Apps.ProximityDemo do
     panel_start_x = (panel_index - 1) * display_info.panel_width
     side_width = div(display_info.panel_width, 2)
 
-    # sensor: 0 = left side, 1 = right side
-    x_start = panel_start_x + if sensor == 0, do: 0, else: side_width
+    # sensor: 0 = right side, 1 = left side
+    x_start = panel_start_x + if sensor == 0, do: side_width, else: 0
     x_end = x_start + side_width - 1
 
     for x <- x_start..x_end,
