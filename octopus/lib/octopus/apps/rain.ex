@@ -1,5 +1,4 @@
 # TODO
-# Mehrere Farben im Regen
 # Splashes bei Ultraschall
 defmodule Octopus.Apps.Rain do
   use Octopus.App, category: :game
@@ -25,7 +24,12 @@ defmodule Octopus.Apps.Rain do
 
   @fps 60
   @frame_time_ms trunc(1000 / @fps)
-  @rain_color {100, 180, 255}
+  @rain_color_1 {100, 180, 255}
+  @rain_color_2 {70, 130, 169}
+  @rain_color_3 {145, 200, 228}
+  @rain_color_4 {137, 138, 196}
+  @rain_color_5 {192, 201, 238}
+  @rain_color_6 {116, 155, 194}
   @splash_color {133, 183, 212}
   @proximity_splash_color {255, 0, 255}
 
@@ -139,7 +143,7 @@ defmodule Octopus.Apps.Rain do
       # downwards
       :math.pi() / 2,
       0.05,
-      [@rain_color],
+      rain_color(),
       # ttl
       0.5,
       1.2,
@@ -189,10 +193,14 @@ defmodule Octopus.Apps.Rain do
     # Spawn new drop with 30% chance per tick
     if :rand.uniform() < 0.3 do
       x = :rand.uniform() * (sys.width - 1)
-      Particles.spawn(sys, {x, 0}, 1)
+      Particles.spawn(sys, {x, 0}, 1, colors: rain_color())
     else
       sys
     end
+  end
+
+  defp rain_color() do
+    Enum.random([@rain_color_1, @rain_color_2, @rain_color_3, @rain_color_4, @rain_color_5, @rain_color_6])
   end
 
   defp maybe_splash(drops, splash) do
