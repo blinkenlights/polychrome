@@ -55,8 +55,8 @@ defmodule Octopus.Apps.Rain do
 
     x =
       case Map.get(event, :sensor) do
-        1 -> 7
-        _ -> 0
+        1 -> 0
+        _ -> 7
       end
 
     panel_index = event.panel - 1
