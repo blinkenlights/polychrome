@@ -48,9 +48,9 @@ defmodule Octopus.Apps.TwighlightZone do
 
     width = panel_count * panel_width
     height = panel_height
-    move_period = 40 * @fps  # 10 Sekunden für eine Runde
+    move_period = 40 * @fps  # 10 seconds per round
     cx = rem(t, move_period) / move_period * width
-    # cy: vertikaler Mittelpunkt, wobbelt um ±2 Pixel
+    # cy: vertical center, wobbling around 2 pixels
     cy_base = height / 2
     cy_offset = :math.sin(2 * :math.pi() * rem(t, move_period) / move_period) * 2
     cy = cy_base + cy_offset
@@ -71,7 +71,7 @@ defmodule Octopus.Apps.TwighlightZone do
 
           # Perlin Noise
           noise = PerlinNoise.multi_octave_noise_3d(x * 0.12, y * 0.12, t * 0.03, 4, 0.5, 0)
-          noise = (noise + 1) / 2  # normiert auf 0..1
+          noise = (noise + 1) / 2
 
           base = if v > 0, do: 255, else: 0
           val = trunc(base * (0.7 + 0.3 * noise))
