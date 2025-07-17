@@ -59,12 +59,13 @@ defmodule Octopus.Apps.Rain do
         _ -> 0
       end
 
-    {drops, splash, proximity_splash} = Map.get(panels, event.panel)
+    panel_index = event.panel - 1
+    {drops, splash, proximity_splash} = Map.get(panels, panel_index)
 
     proximity_splash =
       Particles.spawn(proximity_splash, {x, panel_height - 1}, 1, color: @proximity_splash_color)
 
-    panels = Map.put(panels, event.panel, {drops, splash, proximity_splash})
+    panels = Map.put(panels, panel_index, {drops, splash, proximity_splash})
     {:noreply, %{state | panels: panels}}
   end
 
@@ -72,7 +73,7 @@ defmodule Octopus.Apps.Rain do
         %Octopus.Events.Event.Input{type: :button, action: :press, button: button},
         %State{lightning: lightning} = state
       ) do
-    new_lightning = %{panel: button - 1, x: 3, ttl: 8}
+    new_lightning = %{panel: button - 1, x: 3, ttl: 16}
     {:noreply, %{state | lightning: [new_lightning | lightning]}}
   end
 
@@ -234,7 +235,7 @@ defmodule Octopus.Apps.Rain do
 
       Enum.reduce(path, acc, fn {px, py}, c ->
         # Gelber Blitz
-        Canvas.put_pixel(c, {px, py}, {247, 242, 163})
+        Canvas.put_pixel(c, {px, py}, {255, 241, 23})
       end)
     end)
   end
