@@ -114,7 +114,7 @@ defmodule Octopus.PerlinNoise do
   end
 
   # Multi-octave 3D Perlin noise implementation for stationary evolution
-  defp multi_octave_noise_3d(x, y, z, octaves, persistence, seed) do
+  def multi_octave_noise_3d(x, y, z, octaves, persistence, seed) do
     total = 0.0
     frequency = 1.0
     amplitude = 1.0

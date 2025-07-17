@@ -1,5 +1,6 @@
 defmodule Octopus.Apps.PixelFun.Program do
   require Logger
+  alias Octopus.PerlinNoise
 
   import Bitwise
 
@@ -122,6 +123,17 @@ defmodule Octopus.Apps.PixelFun.Program do
   def do_eval({:call, [~c"fract", expr]}, env) do
     value = do_eval(expr, env)
     value - trunc(value)
+  end
+
+  def do_eval({:call, [~c"noise", x, y, z]}, env) do
+    PerlinNoise.multi_octave_noise_3d(
+      do_eval(x, env),
+      do_eval(y, env),
+      do_eval(z, env),
+      4,
+      0.5,
+      0
+    )
   end
 
   def do_eval(_expr, _env), do: 0.0
