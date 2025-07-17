@@ -65,19 +65,20 @@ defmodule Octopus.Installation do
                          {:keyword_list,
                           [
                             name: [type: :string, required: true],
-                            background_image: [type: :string, required: true],
-                            pixel_image: [type: :string, required: true],
+                            mode: [type: :string, default: "image"],
+                            background_image: [type: :string, required: false],
+                            pixel_image: [type: :string, required: false],
                             image_size: [
                               type: {:tuple, [:pos_integer, :pos_integer]},
-                              required: true
+                              required: false
                             ],
                             pixel_size: [
                               type: {:tuple, [:pos_integer, :pos_integer]},
-                              required: true
+                              required: false
                             ],
-                            offset_x: [type: :non_neg_integer, required: true],
-                            offset_y: [type: :non_neg_integer, required: true],
-                            spacing: [type: :non_neg_integer, required: true]
+                            offset_x: [type: :non_neg_integer, required: false],
+                            offset_y: [type: :non_neg_integer, required: false],
+                            spacing: [type: :non_neg_integer, required: false]
                           ]}}
                     ]
                   )
@@ -91,6 +92,103 @@ defmodule Octopus.Installation do
 
   Supported options:\n#{NimbleOptions.docs(@options_schema)}
   """
+
+  # Helper function for generating image-based layouts (existing logic)
+  def generate_image_layout(name, num_panels, panel_width, panel_height, _panel_gap, layout_opts) do
+    offset_x = Keyword.fetch!(layout_opts, :offset_x)
+    offset_y = Keyword.fetch!(layout_opts, :offset_y)
+    spacing = Keyword.fetch!(layout_opts, :spacing)
+    {pixel_width, pixel_height} = Keyword.fetch!(layout_opts, :pixel_size)
+    {image_width, image_height} = Keyword.fetch!(layout_opts, :image_size)
+    background_image = Keyword.fetch!(layout_opts, :background_image)
+    pixel_image = Keyword.fetch!(layout_opts, :pixel_image)
+
+    positions =
+      for i <- 0..(num_panels - 1),
+          y <- 0..(panel_height - 1),
+          x <- 0..(panel_width - 1) do
+        {
+          offset_x + i * (spacing + pixel_width * panel_width) + x * pixel_width,
+          offset_y + y * pixel_height
+        }
+      end
+
+    %Octopus.Layout{
+      name: name,
+      positions: positions,
+      width: num_panels * panel_width,
+      height: panel_height,
+      pixel_size: {pixel_width, pixel_height},
+      pixel_margin: {0, 0, 0, 0},
+      background_image: background_image,
+      pixel_image: pixel_image,
+      image_size: {image_width, image_height}
+    }
+  end
+
+  # Helper function for generating generic layouts
+  def generate_generic_layout(
+        name,
+        num_panels,
+        panel_width,
+        panel_height,
+        panel_gap,
+        layout_opts,
+        arrangement
+      ) do
+    # Default pixel size for generic mode
+    {pixel_width, pixel_height} = Keyword.get(layout_opts, :pixel_size, {10, 10})
+
+    # Layout dimensions must match frame data structure:
+    # Frame data is structured as num_panels * panel_width * panel_height pixels
+    # So layout width should be num_panels * panel_width, height should be panel_height
+    layout_width = num_panels * panel_width
+    layout_height = panel_height
+
+    # Calculate display width based on arrangement
+    display_width =
+      case arrangement do
+        :linear ->
+          # Linear: panels in a line with gaps between them
+          (num_panels - 1) * (panel_width + panel_gap) + panel_width
+
+        :circular ->
+          # Circular: all panels with gaps, including after the last panel
+          num_panels * (panel_width + panel_gap)
+      end
+
+    # Canvas size matches display size exactly (no extra margins)
+    image_width = display_width * pixel_width
+    image_height = layout_height * pixel_height
+
+    positions =
+      for i <- 0..(num_panels - 1),
+          y <- 0..(panel_height - 1),
+          x <- 0..(panel_width - 1) do
+        # Calculate panel position based on arrangement
+        visual_panel_x = i * (panel_width + panel_gap)
+
+        # Position on canvas (no margins)
+        canvas_x = visual_panel_x * pixel_width + x * pixel_width
+        canvas_y = y * pixel_height
+
+        {canvas_x, canvas_y}
+      end
+
+    %Octopus.Layout{
+      name: name,
+      positions: positions,
+      width: layout_width,
+      height: layout_height,
+      pixel_size: {pixel_width, pixel_height},
+      pixel_margin: {0, 0, 0, 0},
+      # Empty string for black background
+      background_image: "",
+      # Empty string for no overlay
+      pixel_image: "",
+      image_size: {image_width, image_height}
+    }
+  end
 
   defmacro __using__(opts) do
     opts = NimbleOptions.validate!(opts, @options_schema)
@@ -113,38 +211,35 @@ defmodule Octopus.Installation do
 
     simulator_layouts =
       Keyword.fetch!(opts, :simulator_layouts)
-      |> Enum.map(fn opts ->
-        name = Keyword.fetch!(opts, :name)
-        offset_x = Keyword.fetch!(opts, :offset_x)
-        offset_y = Keyword.fetch!(opts, :offset_y)
-        spacing = Keyword.fetch!(opts, :spacing)
-        {pixel_width, pixel_height} = Keyword.fetch!(opts, :pixel_size)
-        {image_width, image_height} = Keyword.fetch!(opts, :image_size)
-        background_image = Keyword.fetch!(opts, :background_image)
-        pixel_image = Keyword.fetch!(opts, :pixel_image)
+      |> Enum.map(fn layout_opts ->
+        name = Keyword.fetch!(layout_opts, :name)
+        mode = Keyword.get(layout_opts, :mode, "image")
 
-        positions =
-          for i <- 0..(num_panels - 1),
-              y <- 0..(panel_height - 1),
-              x <- 0..(panel_width - 1) do
-            {
-              offset_x + i * (spacing + pixel_width * panel_width) + x * pixel_width,
-              offset_y + y * pixel_height
-            }
-          end
+        case mode do
+          "generic" ->
+            __MODULE__.generate_generic_layout(
+              name,
+              num_panels,
+              panel_width,
+              panel_height,
+              panel_gap,
+              layout_opts,
+              arrangement
+            )
 
-        %Octopus.Layout{
-          name: name,
-          positions: positions,
-          # Width should match the logical canvas width (including gaps)
-          width: (num_panels - 1) * (panel_width + panel_gap) + panel_width,
-          height: panel_height,
-          pixel_size: {pixel_width, pixel_height},
-          pixel_margin: {0, 0, 0, 0},
-          background_image: background_image,
-          pixel_image: pixel_image,
-          image_size: {image_width, image_height}
-        }
+          "image" ->
+            __MODULE__.generate_image_layout(
+              name,
+              num_panels,
+              panel_width,
+              panel_height,
+              panel_gap,
+              layout_opts
+            )
+
+          unknown_mode ->
+            raise "Unknown simulator layout mode: #{unknown_mode}. Supported modes: 'image', 'generic'"
+        end
       end)
       |> Macro.escape()
 

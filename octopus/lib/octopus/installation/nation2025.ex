@@ -9,7 +9,13 @@ defmodule Octopus.Installation.Nation2025 do
     panel_gap: 18,
     simulator_layouts: [
       [
+        name: "Generic Development View",
+        mode: "generic",
+        pixel_size: {12, 12}
+      ],
+      [
         name: "Nation 2025",
+        mode: "image",
         background_image: "/images/nation2025-background.webp",
         pixel_image: "/images/nation2025-overlay.webp",
         image_size: {3463, 1469},

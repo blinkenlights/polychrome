@@ -16,11 +16,28 @@ defmodule OctopusWeb.PixelsLive do
   @id_prefix "pixels"
 
   defp get_views() do
-    [default_layout | _] = Installation.simulator_layouts()
+    layouts = Installation.simulator_layouts()
 
-    %{
-      "default" => default_layout
-    }
+    # Create a map with layout names as keys and sanitized keys
+    layout_map =
+      layouts
+      |> Enum.with_index()
+      |> Enum.into(%{}, fn {layout, index} ->
+        # Use the layout name, but sanitize it for use as a map key
+        key = layout.name |> String.downcase() |> String.replace(~r/[^a-z0-9]/, "_")
+        # Always append index to ensure uniqueness
+        unique_key = "#{key}_#{index}"
+        {unique_key, layout}
+      end)
+
+    # Add a "default" key pointing to the first layout only if it doesn't conflict
+    [first_layout | _] = layouts
+
+    if Map.has_key?(layout_map, "default") do
+      layout_map
+    else
+      Map.put(layout_map, "default", first_layout)
+    end
   end
 
   @default_view "default"
