@@ -48,9 +48,9 @@ defmodule Octopus.Apps.PixelFun do
       program: {"Program", :string, %{default: "sin(10*t-hypot(x,y))"}},
       color_interval: {"Color change Interval (s)", :float, %{default: 5, min: 1, max: 20}},
       invert_colors: {"Invert Colors", :boolean, %{default: false}},
-      translate_scale: {"Translate Scale", :float, %{default: 5, min: 0, max: 20}},
-      rotate_scale: {"Rotation Scale", :float, %{default: 0.1, min: 0, max: 4}},
-      zoom_scale: {"Zoom Scale", :float, %{default: 2, min: 0, max: 10}},
+      translate_scale: {"Translate Scale", :float, %{default: 0.0, min: 0, max: 20}},
+      rotate_scale: {"Rotation Scale", :float, %{default: 0.0, min: 0, max: 4}},
+      zoom_scale: {"Zoom Scale", :float, %{default: 1.0, min: 0, max: 10}},
       cycle_functions: {"Cycle Functions", :boolean, %{default: false}},
       cycle_functions_interval:
         {"Cycle Functions Interval (s)", :float, %{default: 30, min: 1, max: 60 * 60}},
@@ -179,8 +179,6 @@ defmodule Octopus.Apps.PixelFun do
     state = lerp_toward_target_colors(state)
 
     {offset_x, offset_y} = state.offset
-    offset_x = offset_x + elem(state.move, 0) * 5 / 60 * 0
-    offset_y = offset_y + elem(state.move, 1) * 5 / 60 * 0
 
     state = %State{
       state
@@ -204,7 +202,6 @@ defmodule Octopus.Apps.PixelFun do
         %InputEvent{type: :joystick, joystick: _joystick, direction: :left},
         %State{move: {_, y}, input: true} = state
       ) do
-    # Left = positive X movement
     {:noreply, %State{state | move: {1, y}}}
   end
 
@@ -212,7 +209,6 @@ defmodule Octopus.Apps.PixelFun do
         %InputEvent{type: :joystick, joystick: _joystick, direction: :right},
         %State{move: {_, y}, input: true} = state
       ) do
-    # Right = negative X movement
     {:noreply, %State{state | move: {-1, y}}}
   end
 
@@ -220,7 +216,6 @@ defmodule Octopus.Apps.PixelFun do
         %InputEvent{type: :joystick, joystick: _joystick, direction: :up},
         %State{move: {x, _}, input: true} = state
       ) do
-    # Up = positive Y movement
     {:noreply, %State{state | move: {x, 1}}}
   end
 
@@ -245,17 +240,9 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   defp render(%State{program: program} = state) do
-    offset_x =
-      :math.sin(0.3 + state.seconds * param(:translate_speed, 0.1)) *
-        param(:translate_scale_x, 200.0)
+    zoom = 1.0
 
-    offset_y =
-      :math.cos(0.7 + state.seconds * param(:translate_speed, 0.1)) *
-        param(:translate_scale_y, 8.0)
-
-    zoom = (:math.sin(state.seconds * 0.1) * 0.5 + 0.5) * param(:zoom_scale, 1.0)
-
-    rotation = state.seconds * param(:rotate_speed, 1.0)
+    rotation = state.seconds * param(:rotate_speed, 0)
 
     {color_a, color_b} = state.colors
 
@@ -266,13 +253,8 @@ defmodule Octopus.Apps.PixelFun do
         {color_a, color_b}
       end
 
-    lerp_fn =
-      if state.lerp_over_black, do: &interpolate_colors_with_black/3, else: &interpolate_colors/3
-
-    # Calculate center from display_info instead of installation
-    display_info = Octopus.App.get_display_info()
-    center_x = display_info.width / 2 - 0.5
-    center_y = display_info.height / 2 - 0.5
+    center_x = Installation.width() / 2 - 0.5
+    center_y = Installation.height() / 2 - 0.5
 
     Installation.virtual_pixel_positions_per_panel()
     |> Enum.map(fn panel ->
@@ -280,8 +262,8 @@ defmodule Octopus.Apps.PixelFun do
         local_x = rem(i, 8)
         local_y = div(i, 8)
 
-        x_translated = x - offset_x - center_x
-        y_translated = y - offset_y - center_y
+        x_translated = x - center_x
+        y_translated = y - center_y
 
         x_rotated = x_translated * :math.cos(rotation) - y_translated * :math.sin(rotation)
         y_rotated = x_translated * :math.sin(rotation) + y_translated * :math.cos(rotation)
@@ -300,7 +282,7 @@ defmodule Octopus.Apps.PixelFun do
            state.audio_input.mid,
            state.audio_input.high,
            colors,
-           lerp_fn
+           &interpolate_colors_with_black/3
          )}
       end
     end)
@@ -374,26 +356,6 @@ defmodule Octopus.Apps.PixelFun do
       end
 
     hsv = %Chameleon.HSV{hsv | h: hsv.h |> max(0) |> min(359)}
-
-    %Chameleon.RGB{r: r, g: g, b: b} = Chameleon.convert(hsv, Chameleon.RGB)
-    {r, g, b}
-  end
-
-  defp interpolate_colors(%Chameleon.HSV{} = a, %Chameleon.HSV{} = b, value) do
-    %Chameleon.RGB{r: a_r, g: a_g, b: a_b} = Chameleon.convert(a, Chameleon.RGB)
-    %Chameleon.RGB{r: b_r, g: b_g, b: b_b} = Chameleon.convert(b, Chameleon.RGB)
-
-    r = lerp(a_r, b_r, value) |> trunc |> min(255) |> max(0)
-    g = lerp(a_g, b_g, value) |> trunc |> min(255) |> max(0)
-    b = lerp(a_b, b_b, value) |> trunc |> min(255) |> max(0)
-
-    hsv = Chameleon.RGB.new(r, g, b) |> Chameleon.convert(Chameleon.HSV)
-
-    hsv = %Chameleon.HSV{
-      hsv
-      | s: param(:saturation_percent, 70),
-        v: trunc(param(:value_percent, 100) * abs(value)) |> min(100) |> max(0)
-    }
 
     %Chameleon.RGB{r: r, g: g, b: b} = Chameleon.convert(hsv, Chameleon.RGB)
     {r, g, b}
