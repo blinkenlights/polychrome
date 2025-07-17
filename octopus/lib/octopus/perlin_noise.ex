@@ -132,6 +132,7 @@ defmodule Octopus.PerlinNoise do
     end
     |> elem(0)
     |> then(fn total -> total / (1 - :math.pow(persistence, octaves)) end)
+    |> then(fn value -> value * 2 end)
   end
 
   # 3D Perlin noise function for stationary evolution
