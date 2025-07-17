@@ -77,3 +77,14 @@ render_pixel_fun_webp_animation =
   else
     nil
   end
+
+change_pixelfun_program =
+  if Code.ensure_loaded?(PixelFun) do
+    fn program ->
+      {:ok, id} = Octopus.AppSupervisor.find_running_app(Octopus.Apps.PixelFun)
+      {pid, _} = Octopus.AppSupervisor.lookup_app(id)
+      PixelFun.update_program(pid, program)
+    end
+  else
+    nil
+  end
