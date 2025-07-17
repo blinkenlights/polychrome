@@ -63,6 +63,10 @@ defmodule Octopus.PlaylistScheduler do
     Repo.get(Playlist, id)
   end
 
+  def get_playlist_by_name(name) do
+    Repo.get_by(Playlist, name: name)
+  end
+
   def selected_playlist() do
     GenServer.call(__MODULE__, :selected_playlist)
   end
@@ -80,6 +84,20 @@ defmodule Octopus.PlaylistScheduler do
   end
 
   def init(:ok) do
+    case Application.fetch_env(:octopus, :default_playlist) do
+      {:ok, playlist_name} ->
+        case get_playlist_by_name(playlist_name) do
+          %Playlist{} = playlist ->
+            start_playlist(playlist.id)
+
+          nil ->
+            Logger.warning("Default playlist #{playlist_name} not found.")
+        end
+
+      :error ->
+        Logger.info("No default playlist defined.")
+    end
+
     {:ok, %State{}}
   end
 
