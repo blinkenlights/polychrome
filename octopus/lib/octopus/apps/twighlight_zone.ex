@@ -4,6 +4,7 @@ defmodule Octopus.Apps.TwighlightZone do
 
   alias Octopus.Canvas
   alias Octopus.Installation
+  alias Octopus.PerlinNoise
 
   @fps 60
   @frame_time_ms trunc(1000 / @fps)
@@ -63,7 +64,15 @@ defmodule Octopus.Apps.TwighlightZone do
           theta = :math.atan2(dy, dx)
           # Spirale: abwechselnd schwarz/weiß
           v = :math.sin(num_arms * theta + r * spiral_width - angle_offset)
-          color = if v > 0, do: {255, 255, 255}, else: {0, 0, 0}
+
+          # Perlin Noise für subtilen Wabereffekt
+          noise = PerlinNoise.multi_octave_noise_3d(x * 0.12, y * 0.12, t * 0.03, 4, 0.5, 0)
+          noise = (noise + 1) / 2  # normiert auf 0..1
+
+          base = if v > 0, do: 255, else: 0
+          val = trunc(base * (0.7 + 0.3 * noise))
+          val = max(0, min(val, 255)) # Clamp!
+          color = {val, val, val}
           Canvas.put_pixel(c, {x, y}, color)
         end)
       end)
