@@ -48,11 +48,15 @@ defmodule Octopus.Apps.TwighlightZone do
 
     width = panel_count * panel_width
     height = panel_height
-    cx = width / 2
-    cy = height / 2
+    move_period = 40 * @fps  # 10 Sekunden für eine Runde
+    cx = rem(t, move_period) / move_period * width
+    # cy: vertikaler Mittelpunkt, wobbelt um ±2 Pixel
+    cy_base = height / 2
+    cy_offset = :math.sin(2 * :math.pi() * rem(t, move_period) / move_period) * 2
+    cy = cy_base + cy_offset
     num_arms = 12
     spiral_width = 0.18
-    speed = 0.08
+    speed = 0.005
     angle_offset = t * speed
 
     big_canvas =
@@ -62,10 +66,10 @@ defmodule Octopus.Apps.TwighlightZone do
           dy = y - cy
           r = :math.sqrt(dx * dx + dy * dy)
           theta = :math.atan2(dy, dx)
-          # Spirale: abwechselnd schwarz/weiß
+          # Spirale
           v = :math.sin(num_arms * theta + r * spiral_width - angle_offset)
 
-          # Perlin Noise für subtilen Wabereffekt
+          # Perlin Noise
           noise = PerlinNoise.multi_octave_noise_3d(x * 0.12, y * 0.12, t * 0.03, 4, 0.5, 0)
           noise = (noise + 1) / 2  # normiert auf 0..1
 
