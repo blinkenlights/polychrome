@@ -182,16 +182,6 @@ defmodule Octopus.Apps.SparkleMist do
     end)
   end
 
-  defp dimm_panels(canvas, dimming_factor) do
-    dimming_value = trunc(dimming_factor * 255)
-
-    dimming_canvas =
-      Canvas.new(canvas.width, canvas.height, canvas.mode)
-      |> Canvas.fill({dimming_value, dimming_value, dimming_value})
-
-    Canvas.blend(dimming_canvas, canvas, :multiply)
-  end
-
   defp scale_distance_to_speed(distance) do
     clamped_distance = max(400, min(2000, distance))
 
