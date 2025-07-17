@@ -91,8 +91,9 @@ defmodule Octopus.Apps.ProximityDemo do
 
   defp render_panel_side(canvas, display_info, panel_index, sensor, saturation, value) do
     # Convert HSV to RGB
+    hue = :rand.uniform(360) - 1
     %Chameleon.RGB{r: r, g: g, b: b} =
-      Chameleon.HSV.new(280, saturation, value)
+      Chameleon.HSV.new(hue, saturation, value)
       |> Chameleon.convert(Chameleon.RGB)
 
     color = {r, g, b}
