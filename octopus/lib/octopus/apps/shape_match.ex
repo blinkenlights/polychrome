@@ -19,6 +19,7 @@ defmodule Octopus.Apps.ShapeMatch do
   @animation_files ["amethyst", "coin", "diamond", "emerald", "heart", "key", "ruby"]
   def app_init(_args) do
     Octopus.App.configure_display(layout: :adjacent_panels)
+    Octopus.App.subscribe_to_button_events()
 
     loaded_animations =
       Enum.map(@animation_files, fn name -> {name, WebP.load_animation(name)} end)

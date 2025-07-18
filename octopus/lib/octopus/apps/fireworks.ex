@@ -32,6 +32,7 @@ defmodule Octopus.Apps.Fireworks do
 
   def app_init(_args) do
     Octopus.App.configure_display(layout: :adjacent_panels)
+    Octopus.App.subscribe_to_button_events()
 
     panels =
       Map.new(0..(Installation.num_panels() - 1), fn i ->

@@ -118,6 +118,7 @@ defmodule Octopus.Apps.Sand do
 
   def app_init(_args) do
     configure_display(layout: :adjacent_panels)
+    Octopus.App.subscribe_to_button_events()
 
     panels =
       for i <- 0..(Installation.num_panels() - 1), into: %{} do

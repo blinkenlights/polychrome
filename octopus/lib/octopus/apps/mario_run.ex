@@ -76,6 +76,7 @@ defmodule Octopus.Apps.MarioRun do
   def app_init(_) do
     # Configure display using new unified API - gapped_panels_wrapped layout for seamless wrapping
     Octopus.App.configure_display(layout: :gapped_panels_wrapped)
+    Octopus.App.subscribe_to_button_events()
 
     sprite_sheets = %{
       mario: "mario-run",

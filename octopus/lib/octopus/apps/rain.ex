@@ -33,6 +33,7 @@ defmodule Octopus.Apps.Rain do
 
   def app_init(_args) do
     Octopus.App.configure_display(layout: :adjacent_panels)
+    Octopus.App.subscribe_to_button_events()
     panel_count = Installation.num_panels()
     panel_width = Installation.panel_width()
     panel_height = Installation.panel_height()
@@ -199,7 +200,14 @@ defmodule Octopus.Apps.Rain do
   end
 
   defp rain_color() do
-    Enum.random([@rain_color_1, @rain_color_2, @rain_color_3, @rain_color_4, @rain_color_5, @rain_color_6])
+    Enum.random([
+      @rain_color_1,
+      @rain_color_2,
+      @rain_color_3,
+      @rain_color_4,
+      @rain_color_5,
+      @rain_color_6
+    ])
   end
 
   defp maybe_splash(drops, splash) do
