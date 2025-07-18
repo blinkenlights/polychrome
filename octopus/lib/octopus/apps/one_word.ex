@@ -68,7 +68,8 @@ defmodule Octopus.Apps.OneWord do
      %{
        word: selected_word,
        display_info: display_info,
-       font: font
+       font: font,
+       timer: duration_ms
      }}
   end
 
@@ -81,7 +82,13 @@ defmodule Octopus.Apps.OneWord do
     # Update display with the word
     Octopus.App.update_display(canvas, :grayscale, easing_interval: 250)
 
-    {:noreply, state}
+    if state.timer > 0 do
+      :timer.send_after(20, {:display_word, canvas})
+    else
+      send(self(), :go_black_and_stop)
+    end
+
+    {:noreply, %{state | timer: state.timer - 20}}
   end
 
   def handle_info(:go_black_and_stop, state) do

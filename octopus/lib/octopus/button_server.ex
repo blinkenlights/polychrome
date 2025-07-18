@@ -99,7 +99,14 @@ defmodule Octopus.ButtonServer do
       end)
 
     if all_buttons_pressed do
-      Logger.info("All buttons pressed")
+      # start one word app and select it
+      case Octopus.AppSupervisor.start_app(Octopus.Apps.OneWord) do
+        {:ok, app_id} ->
+          AppManager.select_app(app_id)
+
+        error ->
+          Logger.error("Could not start OneWord app: #{inspect(error)}")
+      end
     end
 
     %{state | pressed_buttons: buttons}
