@@ -19,7 +19,7 @@ defmodule Octopus.ButtonServer do
     AppManager.subscribe()
     AppSupervisor.subscribe()
 
-    {:ok, %{selected_app: nil, subscribed_apps: MapSet.new()}}
+    {:ok, %{selected_app: nil, subscribed_apps: MapSet.new(), pressed_buttons: []}}
   end
 
   def handle_info({:apps, {:stopped, app_id}}, %{selected_app: app_id} = state) do
@@ -36,6 +36,8 @@ defmodule Octopus.ButtonServer do
 
     if MapSet.member?(state.subscribed_apps, selected_app) do
       turn_on_all_buttons()
+    else
+      turn_off_all_buttons()
     end
 
     {:noreply, state}
@@ -51,8 +53,6 @@ defmodule Octopus.ButtonServer do
   end
 
   def handle_input_event(%Input{type: :button} = input) do
-    dbg("handling input event")
-    dbg(input)
     GenServer.cast(__MODULE__, {:input_event, input})
   end
 
@@ -67,15 +67,42 @@ defmodule Octopus.ButtonServer do
 
   def handle_cast({:input_event, %Input{type: :button} = input}, state) do
     if MapSet.member?(state.subscribed_apps, state.selected_app) do
-      dbg("sending event to #{state.selected_app}")
-
       case Octopus.AppSupervisor.lookup_app(state.selected_app) do
         {pid, _} -> send(pid, {:event, input})
         nil -> Logger.warning("App #{state.selected_app} not found")
       end
     end
 
+    state =
+      if input.action == :press do
+        detect_button_combinations(state, input.button)
+      else
+        state
+      end
+
     {:noreply, state}
+  end
+
+  defp detect_button_combinations(state, button) do
+    now = Time.utc_now()
+    buttons = [{button, now} | state.pressed_buttons]
+
+    dbg(buttons)
+
+    buttons =
+      Enum.reject(buttons, fn {_, timestamp} -> Time.diff(now, timestamp, :millisecond) > 100 end)
+
+    all_buttons_pressed =
+      1..3
+      |> Enum.all?(fn button ->
+        Enum.any?(buttons, fn {b, _} -> b == button end)
+      end)
+
+    if all_buttons_pressed do
+      Logger.info("All buttons pressed")
+    end
+
+    %{state | pressed_buttons: buttons}
   end
 
   defp unsubscribe_app(state, app_id) do
