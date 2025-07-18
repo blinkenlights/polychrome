@@ -183,11 +183,11 @@ defmodule Octopus.AppSupervisor do
   @doc """
   Looks up the pid and module for a given app_id.
   """
-  @spec lookup_app(binary()) :: {pid(), atom()}
-  def lookup_app(app_id) do
+  @spec lookup_app(binary(), term()) :: {pid(), atom()}
+  def lookup_app(app_id, default \\ nil) do
     case Registry.lookup(Octopus.AppRegistry, app_id) do
       [{pid, module}] -> {pid, module}
-      [] -> raise "App #{app_id} not found"
+      [] -> default
     end
   end
 

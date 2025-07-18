@@ -15,6 +15,7 @@ defmodule Octopus.Events.Router do
   alias Octopus.Events.Event.Proximity, as: ProximityEvent
   alias Octopus.Events.Event.Audio, as: AudioEvent
   alias Octopus.Events.Event.Proximity.Processor
+  alias Octopus.ButtonServer
 
   @pubsub_topic "events_router"
 
@@ -40,6 +41,12 @@ defmodule Octopus.Events.Router do
 
   def init(:ok) do
     {:ok, %{}}
+  end
+
+  def handle_cast({:route_event, %InputEvent{type: :button} = input_event}, state) do
+    dbg("routing input event to button server")
+    ButtonServer.handle_input_event(input_event)
+    {:noreply, state}
   end
 
   def handle_cast({:route_event, %InputEvent{} = input_event}, state) do
