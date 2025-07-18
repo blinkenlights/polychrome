@@ -1,5 +1,5 @@
 defmodule Octopus.Apps.Sand do
-  use Octopus.App, category: :game
+  use Octopus.App, category: :interactive
 
   alias Octopus.Installation
   alias Octopus.Canvas

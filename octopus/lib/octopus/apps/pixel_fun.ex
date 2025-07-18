@@ -1,5 +1,5 @@
 defmodule Octopus.Apps.PixelFun do
-  use Octopus.App, category: :animation
+  use Octopus.App, category: :interactive
   use Octopus.Params, prefix: :pixelfun
 
   require Logger
