@@ -18,6 +18,7 @@ config :octopus, broadcast: false, show_sim_preview: true, enable_event_mode: fa
 
 config :octopus, :enable_broadcast, true
 config :octopus, :broadcast_ip, nil
+config :octopus, :show_sim_preview, false
 
 config :octopus, :default_playlist, "Default"
 
