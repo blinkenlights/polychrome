@@ -91,6 +91,8 @@ defmodule Octopus.Apps.PixelFun do
     panel_interaction_factors =
       0..(Installation.num_panels() - 1) |> Enum.map(fn i -> {i, 0.0} end) |> Map.new()
 
+    Octopus.App.subscribe_to_button_events()
+
     {:ok,
      %State{
        program: program,

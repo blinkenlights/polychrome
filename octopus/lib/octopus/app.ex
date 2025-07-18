@@ -54,6 +54,7 @@ defmodule Octopus.App do
   alias Octopus.Events.Event.Input, as: InputEvent
   alias Octopus.Events.Event.Lifecycle, as: LifecycleEvent
   alias Octopus.Installation
+  alias Octopus.ButtonServer
 
   alias Octopus.{Mixer, AppSupervisor}
 
@@ -223,6 +224,11 @@ defmodule Octopus.App do
   def send_canvas(%Canvas{} = canvas) do
     app_id = AppSupervisor.lookup_app_id(self())
     Mixer.handle_canvas(app_id, canvas)
+  end
+
+  def subscribe_to_button_events() do
+    app_id = AppSupervisor.lookup_app_id(self())
+    ButtonServer.subscribe(app_id)
   end
 
   @spec default_config(config_schema()) :: map
