@@ -20,6 +20,7 @@ defmodule Octopus.Apps.FontTester do
   def app_init(_args) do
     # Configure display using new unified API - adjacent layout (was Canvas.to_frame())
     Octopus.App.configure_display(layout: :adjacent_panels)
+    Octopus.App.subscribe_to_button_events()
 
     state = %State{text: @text}
     state = set_font(@max_index, state)

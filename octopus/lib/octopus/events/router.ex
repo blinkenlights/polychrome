@@ -44,7 +44,6 @@ defmodule Octopus.Events.Router do
   end
 
   def handle_cast({:route_event, %InputEvent{type: :button} = input_event}, state) do
-    dbg("routing input event to button server")
     ButtonServer.handle_input_event(input_event)
     {:noreply, state}
   end

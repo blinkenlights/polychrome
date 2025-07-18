@@ -79,6 +79,7 @@ defmodule Octopus.Apps.PixelFun do
   def app_init(config) do
     # Configure display using new unified API - adjacent layout (was Canvas.to_frame())
     Octopus.App.configure_display(layout: :adjacent_panels)
+    Octopus.App.subscribe_to_button_events()
 
     {:ok, program} = config.program |> Program.parse()
 
@@ -90,8 +91,6 @@ defmodule Octopus.Apps.PixelFun do
 
     panel_interaction_factors =
       0..(Installation.num_panels() - 1) |> Enum.map(fn i -> {i, 0.0} end) |> Map.new()
-
-    Octopus.App.subscribe_to_button_events()
 
     {:ok,
      %State{

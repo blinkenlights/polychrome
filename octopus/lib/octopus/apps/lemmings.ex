@@ -19,6 +19,7 @@ defmodule Octopus.Apps.Lemmings do
   def app_init(_args) do
     # Configure display with gapped panels layout (original VirtualMatrix default)
     Octopus.App.configure_display(layout: :gapped_panels)
+    Octopus.App.subscribe_to_button_events()
     display_info = Octopus.App.get_display_info()
 
     button_map =

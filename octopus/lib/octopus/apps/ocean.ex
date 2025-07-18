@@ -69,6 +69,7 @@ defmodule Octopus.Apps.Ocean do
   def app_init(%{wave_strength: wave_strength, damping: damping}) do
     # Configure display using new unified API - gapped_panels_wrapped layout for seamless wrapping
     Octopus.App.configure_display(layout: :gapped_panels_wrapped)
+    Octopus.App.subscribe_to_button_events()
 
     :timer.send_interval(trunc(1000 / @fps), :tick)
 

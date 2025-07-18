@@ -29,6 +29,7 @@ defmodule Octopus.Apps.Whackamole do
   def app_init(_) do
     # Configure display using modern unified API - adjacent layout for whackamole panels
     Octopus.App.configure_display(layout: :adjacent_panels)
+    Octopus.App.subscribe_to_button_events()
 
     # Get display info for the game to use
     display_info = Octopus.App.get_display_info()

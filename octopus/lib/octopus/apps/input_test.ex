@@ -17,6 +17,7 @@ defmodule Octopus.Apps.InputTest do
   def app_init(_args) do
     # Configure display using new unified API - adjacent layout
     Octopus.App.configure_display(layout: :adjacent_panels)
+    Octopus.App.subscribe_to_button_events()
 
     # Get display info once and store it
     display_info = Octopus.App.get_display_info()

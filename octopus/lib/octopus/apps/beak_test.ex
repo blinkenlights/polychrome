@@ -15,6 +15,7 @@ defmodule Octopus.Apps.BeakTest do
   def app_init(_args) do
     # Configure display using new unified API - adjacent layout (was Canvas.to_frame())
     Octopus.App.configure_display(layout: :adjacent_panels)
+    Octopus.App.subscribe_to_button_events()
 
     {:ok, %State{canvas: Canvas.new(80, 8)}}
   end
