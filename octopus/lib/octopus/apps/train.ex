@@ -1,7 +1,6 @@
 defmodule Octopus.Apps.Train do
-  require Logger
-
   use Octopus.App, category: :animation
+  require Logger
 
   alias Octopus.{Canvas, Image}
   alias Octopus.Installation
@@ -10,7 +9,7 @@ defmodule Octopus.Apps.Train do
   @fps 60
 
   defmodule State do
-    defstruct [:canvas, :time, :x, :acceleration, :speed]
+    defstruct canvas: nil, time: 0, x: 0, acceleration: 0.0, speed: 0.0, stars: []
   end
 
   def name(), do: "Train Simulator"
@@ -42,7 +41,7 @@ defmodule Octopus.Apps.Train do
     :timer.send_interval(trunc(1000 / @fps), :tick)
     :timer.send_interval(10_000, :change_acceleration)
 
-    {:ok, %State{canvas: image, time: 0, x: 0, acceleration: 0.1, speed: 0}}
+    {:ok, %State{canvas: image, time: 0, x: 0, acceleration: 0.1, speed: 0, stars: []}}
   end
 
   def add_window_corners(canvas) do
@@ -101,6 +100,19 @@ defmodule Octopus.Apps.Train do
     }
   end
 
+  defp update_stars(stars) do
+    Enum.reduce(stars, [], fn star, acc ->
+      new_x = star.x + star.dx
+      new_y = star.y + star.dy
+      new_ticks = star.ticks_left - 1
+      if new_ticks > 0 and new_x >= 0 and new_y >= 0 do
+        [%{star | x: new_x, y: new_y, ticks_left: new_ticks} | acc]
+      else
+        acc
+      end
+    end)
+  end
+
   def handle_info(:tick, %State{} = state) do
     installation = Octopus.App.get_installation_info()
     gapped_width =
@@ -115,7 +127,17 @@ defmodule Octopus.Apps.Train do
     bg = Canvas.new(gapped_width, panel_height)
     bg = Canvas.fill(bg, sky)
 
+    # Erst Himmel und PNG/Landschaft rendern
     canvas2 = Canvas.overlay(bg, state.canvas) |> Canvas.translate({trunc(state.x), 0}, true)
+
+    # Dann Sterne auf das finale Canvas zeichnen (bleiben fest am Himmel)
+    canvas2 = Enum.reduce(state.stars || [], canvas2, fn star, c ->
+      x = round(star.x)
+      y = round(star.y)
+      Logger.info("Sternschnuppe at x=#{x}, y=#{y}, ticks_left=#{star.ticks_left}")
+      rgb = {255, 255, 0}
+      Canvas.put_pixel(c, {x, y}, rgb)
+    end)
 
     canvas2
     |> add_window_corners()
@@ -125,7 +147,9 @@ defmodule Octopus.Apps.Train do
     speed = min(10, max(-10, speed))
     speed = speed * (1 / (1 + 0.1 / @fps))
 
-    {:noreply, %State{state | time: state.time + 1 / @fps, speed: speed, x: state.x + speed}}
+    stars = update_stars(state.stars || [])
+
+    {:noreply, %State{state | time: state.time + 1 / @fps, speed: speed, x: state.x + speed, stars: stars}}
   end
 
   def handle_info(:change_acceleration, %State{acceleration: 0, speed: speed} = state)
@@ -144,6 +168,30 @@ defmodule Octopus.Apps.Train do
 
   def handle_info(:change_acceleration, %State{acceleration: -0.1} = state) do
     {:noreply, %State{state | acceleration: 0}}
+  end
+
+  def handle_event(
+        %Octopus.Events.Event.Input{type: :button, action: :press, button: button},
+        state
+      ) do
+    panel_id = button - 1
+    panel_width = Installation.panel_width()
+    panel_gap = Installation.panel_gap()
+    panel_start_x = panel_id * (panel_width + panel_gap)
+    start_x = panel_start_x + (:rand.uniform(panel_width) - 1)
+    start_y = 0
+    # Zufälliger Winkel zwischen 20° und 70°
+    min_angle = :math.pi() * 20 / 180
+    max_angle = :math.pi() * 70 / 180
+    angle = min_angle + (:rand.uniform() * (max_angle - min_angle))
+    speed = 1.0
+    direction = if :rand.uniform() < 0.5, do: 1, else: -1
+    dx = direction * :math.cos(angle) * speed
+    dy = :math.sin(angle) * speed
+    ticks_left = 16
+    star = %{x: start_x * 1.0, y: start_y * 1.0, dx: dx, dy: dy, ticks_left: ticks_left}
+    stars = [star | (state.stars || [])]
+    {:noreply, %State{state | stars: stars}}
   end
 
   def handle_event(
