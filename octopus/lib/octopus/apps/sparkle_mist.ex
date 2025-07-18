@@ -1,10 +1,12 @@
 defmodule Octopus.Apps.SparkleMist do
   use Octopus.App, category: :interactive
+  use Octopus.Params, prefix: :sparkle_mist
 
   require Logger
 
   alias Octopus.Installation
   alias Octopus.Events.Event.Proximity, as: ProximityEvent
+  alias Octopus.Events.Event.Input, as: InputEvent
   alias Octopus.Canvas
   alias Octopus.Particles
   alias Octopus.PerlinNoise
@@ -12,14 +14,82 @@ defmodule Octopus.Apps.SparkleMist do
   def name, do: "✨ Sparkle Mist ✨"
 
   defmodule State do
-    defstruct [:particles, :last_update, :noise, :last_proximity]
+    defstruct [
+      :particles,
+      :last_update,
+      :noise,
+      :last_proximity,
+      :color_a,
+      :color_b,
+      # Config parameters
+      :foreground_hue,
+      :background_hue_a,
+      :background_hue_b,
+      :background_sat_a,
+      :background_sat_b,
+      :expr,
+      :particle_speed_scale,
+      :background_speed
+    ]
+  end
+
+  def config_schema() do
+    %{
+      foreground_hue: {"Foreground Hue", :int, %{default: 35, min: 0, max: 255}},
+      background_hue_a: {"Background Hue A", :int, %{default: 200, min: 0, max: 255}},
+      background_hue_b: {"Background Hue B", :int, %{default: 170, min: 0, max: 255}},
+      background_sat_a: {"Background Saturation A", :int, %{default: 100, min: 0, max: 100}},
+      background_sat_b: {"Background Saturation B", :int, %{default: 85, min: 0, max: 100}},
+      expr:
+        {"Background Expression", :string, %{default: "noise(sin(x/26-t+y/40),x*0.01,y*0.01)"}},
+      particle_speed_scale: {"Particle Speed Scale", :float, %{default: 1.0, min: 0.1, max: 5.0}},
+      background_speed: {"Background Speed", :float, %{default: 5.0, min: 0.1, max: 10.0}}
+    }
+  end
+
+  def get_config(%State{} = state) do
+    %{
+      foreground_hue: state.foreground_hue,
+      background_hue_a: state.background_hue_a,
+      background_hue_b: state.background_hue_b,
+      background_sat_a: state.background_sat_a,
+      background_sat_b: state.background_sat_b,
+      expr: state.expr,
+      particle_speed_scale: state.particle_speed_scale,
+      background_speed: state.background_speed
+    }
+  end
+
+  def handle_config(config, %State{} = state) do
+    hue_a = config.background_hue_a
+    hue_b = config.background_hue_b
+    sat_a = config.background_sat_a
+    sat_b = config.background_sat_b
+    color_a = Chameleon.HSV.new(hue_a, sat_a, 100)
+    color_b = Chameleon.HSV.new(hue_b, sat_b, 100)
+
+    new_state = %State{
+      state
+      | foreground_hue: config.foreground_hue,
+        background_hue_a: config.background_hue_a,
+        background_hue_b: config.background_hue_b,
+        background_sat_a: config.background_sat_a,
+        background_sat_b: config.background_sat_b,
+        expr: config.expr,
+        particle_speed_scale: config.particle_speed_scale,
+        background_speed: config.background_speed,
+        color_a: color_a,
+        color_b: color_b
+    }
+
+    {:noreply, new_state}
   end
 
   @fps 60
   @frame_time_ms trunc(1000 / @fps)
   @panel_wait_duration_ms 2000
 
-  def app_init(_args) do
+  def app_init(config) do
     Octopus.App.configure_display(
       layout: :adjacent_panels,
       supports_rgb: true,
@@ -33,7 +103,8 @@ defmodule Octopus.Apps.SparkleMist do
           into: %{} do
         colors =
           Stream.repeatedly(fn ->
-            base_hue = 360 * (panel - 1) / Installation.num_panels()
+            # base_hue = 360 * (panel - 1) / Installation.num_panels()
+            base_hue = config.foreground_hue
             hue = base_hue
             # hue = if sensor == 0, do: base_hue, else: rem(trunc(base_hue + 180), 360)
             saturation = :rand.uniform() * 25 + 60
@@ -67,11 +138,29 @@ defmodule Octopus.Apps.SparkleMist do
         {panel, nil}
       end
 
+    # Use config values for color scheme
+    hue_a = config.background_hue_a
+    hue_b = config.background_hue_b
+    sat_a = config.background_sat_a
+    sat_b = config.background_sat_b
+    color_a = Chameleon.HSV.new(hue_a, sat_a, 100)
+    color_b = Chameleon.HSV.new(hue_b, sat_b, 100)
+
     state = %State{
       particles: particles,
       noise: PerlinNoise.new(),
       last_update: System.os_time(:millisecond),
-      last_proximity: last_proximity
+      last_proximity: last_proximity,
+      color_a: color_a,
+      color_b: color_b,
+      foreground_hue: config.foreground_hue,
+      background_hue_a: config.background_hue_a,
+      background_hue_b: config.background_hue_b,
+      background_sat_a: config.background_sat_a,
+      background_sat_b: config.background_sat_b,
+      expr: config.expr,
+      particle_speed_scale: config.particle_speed_scale,
+      background_speed: config.background_speed
     }
 
     :timer.send_interval(@frame_time_ms, :tick)
@@ -96,7 +185,8 @@ defmodule Octopus.Apps.SparkleMist do
           spawn_x = if event.sensor == 0, do: 0, else: Installation.panel_width() - 1
           spawn_y = Installation.panel_height() - 1
 
-          {min_speed, max_speed} = scale_distance_to_speed(event.distance_combined)
+          {min_speed, max_speed} =
+            scale_distance_to_speed(event.distance_combined, state.particle_speed_scale)
 
           updated_system =
             Particles.spawn(particle_system, {spawn_x, spawn_y}, 1,
@@ -115,6 +205,32 @@ defmodule Octopus.Apps.SparkleMist do
     {:noreply, state}
   end
 
+  def handle_event(
+        %InputEvent{type: :button, action: :press, button: button_number},
+        %State{} = state
+      ) do
+    # Use sensor 0 (left) particle system for button presses
+    key = {button_number, 0}
+
+    case Map.get(state.particles, key) do
+      nil ->
+        {:noreply, state}
+
+      particle_system ->
+        updated_system =
+          particle_system
+          |> Particles.spawn({Installation.panel_width() / 2, Installation.panel_height()}, 25,
+            angle: :math.pi() * 1.5,
+            min_speed: 25,
+            max_speed: 50
+          )
+
+        particles = Map.put(state.particles, key, updated_system)
+
+        {:noreply, %{state | particles: particles}}
+    end
+  end
+
   def handle_event(_event, state) do
     {:noreply, state}
   end
@@ -129,20 +245,26 @@ defmodule Octopus.Apps.SparkleMist do
       )
 
     empty_canvas
+    |> draw_pixel_fun(
+      state.last_update / 1000.0 / state.background_speed,
+      state.color_a,
+      state.color_b,
+      state.expr
+    )
+    # |> clear_panels_with_particles(state)
     |> render_particles(state)
     |> update_display(:rgb)
 
-    PerlinNoise.draw(state.noise, empty_canvas, state.last_update / 1000.0)
-    |> clear_panels_with_particles(state)
-    # |> dimm_panels(0.5)
-    |> update_display(:grayscale)
+    # PerlinNoise.draw(state.noise, empty_canvas, state.last_update / 1000.0)
+    # # |> dimm_panels(0.5)
+    # |> update_display(:grayscale)
 
     {:noreply, state}
   end
 
   defp update_particles(%State{} = state) do
     now = System.os_time(:millisecond)
-    dt = (now - state.last_update) / 1000.0
+    dt = (now - state.last_update) / 1000.0 / 3.0
 
     particles =
       state.particles
@@ -182,14 +304,25 @@ defmodule Octopus.Apps.SparkleMist do
     end)
   end
 
-  defp scale_distance_to_speed(distance) do
+  defp scale_distance_to_speed(distance, scale) do
     clamped_distance = max(400, min(2000, distance))
 
     normalized = (2000 - clamped_distance) / (2000 - 400)
 
-    min_speed = 15 + normalized * (50 - 15)
-    max_speed = 30 + normalized * (75 - 30)
+    min_speed = (15 + normalized * (35 - 15)) * scale
+    max_speed = (30 + normalized * (45 - 30)) * scale
 
     {min_speed, max_speed}
+  end
+
+  defp draw_pixel_fun(canvas, t, color_a, color_b, expr_string) do
+    {:ok, expr} = Octopus.Apps.PixelFun.Program.parse(expr_string)
+
+    for y <- 0..(canvas.height - 1),
+        x <- 0..(canvas.width - 1),
+        i = x + y * canvas.width,
+        into: canvas do
+      {{x, y}, Octopus.Apps.PixelFun.pixels(expr, x, y, i, t, color_a, color_b)}
+    end
   end
 end

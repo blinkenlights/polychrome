@@ -13,7 +13,7 @@ defmodule Octopus.Events.Event.Proximity.Generator do
 
   @default_config %{
     # Base distance in mm
-    base_distance: 1500.0,
+    base_distance: 800.0,
     # Normal variation range (±mm)
     normal_variation: 50.0,
     # Spike probability (0.0 to 1.0, where 0.05 = 5% chance per event)
@@ -30,7 +30,7 @@ defmodule Octopus.Events.Event.Proximity.Generator do
     # mm per event
     movement_speed: 2.0,
     # ±mm from base
-    movement_range: 800.0
+    movement_range: 400.0
   }
 
   defmodule State do
