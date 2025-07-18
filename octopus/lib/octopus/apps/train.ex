@@ -2,6 +2,7 @@ defmodule Octopus.Apps.Train do
   use Octopus.App, category: :animation
 
   alias Octopus.{Canvas, Image}
+  alias Octopus.Installation
   alias Octopus.Events.Event.Input, as: InputEvent
 
   @fps 60
@@ -27,8 +28,22 @@ defmodule Octopus.Apps.Train do
   def app_init(_args) do
     # Configure for gapped panels layout (replaces Canvas.to_frame(drop: true))
     Octopus.App.configure_display(layout: :gapped_panels)
+    panel_count = Installation.num_panels()
+    panel_width = Installation.panel_width()
+    panel_height = Installation.panel_height()
+    installation = Octopus.App.get_installation_info()
+    gapped_width =
+      installation.panel_count * installation.panel_width +
+        (installation.panel_count - 1) * installation.panel_gap
 
-    canvas = Image.load("landscape")
+    image = Image.load("landscape_transparent")
+
+    # Hellblauer Hintergrund
+    bg = Canvas.new(gapped_width, panel_height)
+    bg = Canvas.fill(bg, {100, 180, 255})
+
+    # PNG auf Hintergrund zeichnen (Transparenz wird respektiert)
+    canvas = Canvas.overlay(bg, image)
 
     :timer.send_interval(trunc(1000 / @fps), :tick)
     :timer.send_interval(10_000, :change_acceleration)
