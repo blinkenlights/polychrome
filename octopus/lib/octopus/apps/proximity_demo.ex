@@ -2,6 +2,7 @@ defmodule Octopus.Apps.ProximityDemo do
   use Octopus.App, category: :test
   require Logger
 
+  alias Octopus.Installation
   alias Octopus.Canvas
   alias Octopus.Events.Event.Proximity, as: ProximityEvent
 
@@ -91,7 +92,8 @@ defmodule Octopus.Apps.ProximityDemo do
 
   defp render_panel_side(canvas, display_info, panel_index, sensor, saturation, value) do
     # Convert HSV to RGB
-    hue = :rand.uniform(360) - 1
+    hue = 360 * panel_index / Installation.num_panels()
+    hue = :math.fmod(hue, 360)
     %Chameleon.RGB{r: r, g: g, b: b} =
       Chameleon.HSV.new(hue, saturation, value)
       |> Chameleon.convert(Chameleon.RGB)
