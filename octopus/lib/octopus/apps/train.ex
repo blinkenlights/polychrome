@@ -142,7 +142,7 @@ defmodule Octopus.Apps.Train do
     |> add_window_corners()
     |> Octopus.App.update_display()
 
-    speed = state.speed + state.acceleration / @fps
+    speed = state.speed + state.acceleration / @fps / 3
     speed = min(10, max(-10, speed))
     speed = speed * (1 / (1 + 0.1 / @fps))
 
