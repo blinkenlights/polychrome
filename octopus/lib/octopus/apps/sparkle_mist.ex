@@ -170,6 +170,8 @@ defmodule Octopus.Apps.SparkleMist do
   end
 
   def handle_event(%ProximityEvent{} = event, %State{} = state) do
+    Logger.debug("Proximity Event #{event.panel} #{event.sensor} #{event.distance_combined}")
+
     now = System.os_time(:millisecond)
     last_proximity = Map.put(state.last_proximity, event.panel, now)
 
@@ -189,7 +191,7 @@ defmodule Octopus.Apps.SparkleMist do
             scale_distance_to_speed(event.distance_combined, state.particle_speed_scale)
 
           updated_system =
-            Particles.spawn(particle_system, {spawn_x, spawn_y}, 1,
+            Particles.spawn(particle_system, {spawn_x, spawn_y}, 25,
               min_speed: min_speed,
               max_speed: max_speed
             )
@@ -209,6 +211,8 @@ defmodule Octopus.Apps.SparkleMist do
         %InputEvent{type: :button, action: :press, button: button_number},
         %State{} = state
       ) do
+    Logger.debug("Input Event Button #{button_number}")
+
     colors =
       Stream.repeatedly(fn ->
         # base_hue = 360 * (panel - 1) / Installation.num_panels()
@@ -225,24 +229,18 @@ defmodule Octopus.Apps.SparkleMist do
     # Use sensor 0 (left) particle system for button presses
     key = {button_number, 0}
 
-    case Map.get(state.particles, key) do
-      nil ->
-        {:noreply, state}
+    updated_system =
+      Map.get(state.particles, key)
+      |> Particles.spawn({Installation.panel_width() / 2, Installation.panel_height()}, 25,
+        angle: :math.pi() * 1.5,
+        min_speed: 25,
+        max_speed: 50,
+        colors: colors
+      )
 
-      particle_system ->
-        updated_system =
-          particle_system
-          |> Particles.spawn({Installation.panel_width() / 2, Installation.panel_height()}, 25,
-            angle: :math.pi() * 1.5,
-            min_speed: 25,
-            max_speed: 50,
-            colors: colors
-          )
+    particles = Map.put(state.particles, key, updated_system)
 
-        particles = Map.put(state.particles, key, updated_system)
-
-        {:noreply, %{state | particles: particles}}
-    end
+    {:noreply, %{state | particles: particles}}
   end
 
   def handle_event(_event, state) do
