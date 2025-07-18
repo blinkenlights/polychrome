@@ -58,7 +58,7 @@ defmodule Octopus.Apps.OneWord do
     canvas = Canvas.put_string(canvas, {0, 0}, selected_word, font)
 
     # Send a message to display the word (like StaticImage does)
-    send(self(), {:display_word, canvas})
+    :timer.send_after(10, {:display_word, canvas})
 
     # Schedule the app to go black and stop after the configured duration
     duration_ms = param(:duration_seconds, 5) * 1000
