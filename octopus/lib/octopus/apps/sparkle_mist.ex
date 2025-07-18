@@ -35,7 +35,7 @@ defmodule Octopus.Apps.SparkleMist do
 
   def config_schema() do
     %{
-      foreground_hue: {"Foreground Hue", :int, %{default: 35, min: 0, max: 255}},
+      foreground_hue: {"Foreground Hue", :int, %{default: 25, min: 0, max: 255}},
       background_hue_a: {"Background Hue A", :int, %{default: 200, min: 0, max: 255}},
       background_hue_b: {"Background Hue B", :int, %{default: 170, min: 0, max: 255}},
       background_sat_a: {"Background Saturation A", :int, %{default: 100, min: 0, max: 100}},
@@ -209,6 +209,19 @@ defmodule Octopus.Apps.SparkleMist do
         %InputEvent{type: :button, action: :press, button: button_number},
         %State{} = state
       ) do
+    colors =
+      Stream.repeatedly(fn ->
+        # base_hue = 360 * (panel - 1) / Installation.num_panels()
+        base_hue = 55
+        hue = base_hue
+        # hue = if sensor == 0, do: base_hue, else: rem(trunc(base_hue + 180), 360)
+        saturation = :rand.uniform() * 25 + 60
+        lightness = :rand.uniform() * 25 + 45
+        hsl = Chameleon.HSL.new(trunc(hue), trunc(saturation), trunc(lightness))
+        %Chameleon.RGB{r: r, g: g, b: b} = Chameleon.convert(hsl, Chameleon.RGB)
+        {r, g, b}
+      end)
+
     # Use sensor 0 (left) particle system for button presses
     key = {button_number, 0}
 
@@ -222,7 +235,8 @@ defmodule Octopus.Apps.SparkleMist do
           |> Particles.spawn({Installation.panel_width() / 2, Installation.panel_height()}, 25,
             angle: :math.pi() * 1.5,
             min_speed: 25,
-            max_speed: 50
+            max_speed: 50,
+            colors: colors
           )
 
         particles = Map.put(state.particles, key, updated_system)
