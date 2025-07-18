@@ -121,7 +121,7 @@ defmodule Octopus.Apps.Train do
     panel_height = Installation.panel_height()
 
     # Unabhängige Animation: 1 Tag = 30 Sekunden
-    t = :math.fmod(state.time / 30, 1.0)
+    t = :math.fmod(state.time / 150, 1.0)
     sky = sky_color(t)
 
     bg = Canvas.new(gapped_width, panel_height)
@@ -134,8 +134,7 @@ defmodule Octopus.Apps.Train do
     canvas2 = Enum.reduce(state.stars || [], canvas2, fn star, c ->
       x = round(star.x)
       y = round(star.y)
-      Logger.info("Sternschnuppe at x=#{x}, y=#{y}, ticks_left=#{star.ticks_left}")
-      rgb = {255, 255, 0}
+      rgb = Map.get(star, :color, {255, 255, 0})
       Canvas.put_pixel(c, {x, y}, rgb)
     end)
 
@@ -178,7 +177,7 @@ defmodule Octopus.Apps.Train do
     panel_width = Installation.panel_width()
     panel_gap = Installation.panel_gap()
     panel_start_x = panel_id * (panel_width + panel_gap)
-    t = :math.fmod(state.time / 30, 1.0)
+    t = :math.fmod(state.time / 150, 1.0)
     if is_night?(t) do
       # Sternschnuppe wie bisher
       start_x = panel_start_x + (:rand.uniform(panel_width) - 1)
@@ -197,7 +196,7 @@ defmodule Octopus.Apps.Train do
     else
       # Feuerwerk: mehrere bunte Funken radial
       center_x = panel_start_x + div(panel_width, 2)
-      center_y = Installation.panel_height() - 1
+      center_y = Enum.random(0..3)
       num_particles = 8
       speed = 1.2
       ticks_left = 12
@@ -253,17 +252,14 @@ defmodule Octopus.Apps.Train do
   end
 
   defp random_color() do
-    # Zufällige bunte Farbe für Feuerwerk
-    colors = [
-      {255, 0, 0},    # rot
-      {0, 255, 0},    # grün
-      {0, 0, 255},    # blau
-      {255, 255, 0},  # gelb
-      {255, 0, 255},  # pink
-      {0, 255, 255},  # cyan
-      {255, 128, 0},  # orange
-      {255, 255, 255} # weiß
+    # Knallige, zufällige Farbe (mind. 2 Kanäle >= 200, keiner < 80)
+    channels = Enum.shuffle([:r, :g, :b])
+    vals = [
+      Enum.random(200..255),
+      Enum.random(200..255),
+      Enum.random(80..180)
     ]
-    Enum.random(colors)
+    color_map = Enum.zip(channels, vals) |> Enum.into(%{})
+    {color_map[:r], color_map[:g], color_map[:b]}
   end
 end
