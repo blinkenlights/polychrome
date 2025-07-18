@@ -1,4 +1,6 @@
 defmodule Octopus.Apps.Train do
+  require Logger
+
   use Octopus.App, category: :animation
 
   alias Octopus.{Canvas, Image}
@@ -26,7 +28,6 @@ defmodule Octopus.Apps.Train do
   end
 
   def app_init(_args) do
-    # Configure for gapped panels layout (replaces Canvas.to_frame(drop: true))
     Octopus.App.configure_display(layout: :gapped_panels)
     panel_count = Installation.num_panels()
     panel_width = Installation.panel_width()
@@ -38,17 +39,10 @@ defmodule Octopus.Apps.Train do
 
     image = Image.load("landscape_transparent")
 
-    # Hellblauer Hintergrund
-    bg = Canvas.new(gapped_width, panel_height)
-    bg = Canvas.fill(bg, {100, 180, 255})
-
-    # PNG auf Hintergrund zeichnen (Transparenz wird respektiert)
-    canvas = Canvas.overlay(bg, image)
-
     :timer.send_interval(trunc(1000 / @fps), :tick)
     :timer.send_interval(10_000, :change_acceleration)
 
-    {:ok, %State{canvas: canvas, time: 0, x: 0, acceleration: 0.1, speed: 0}}
+    {:ok, %State{canvas: image, time: 0, x: 0, acceleration: 0.1, speed: 0}}
   end
 
   def add_window_corners(canvas) do
@@ -72,17 +66,63 @@ defmodule Octopus.Apps.Train do
     end)
   end
 
+  defp day_fraction() do
+    {hour, min, sec} = :calendar.local_time() |> elem(1)
+    (hour * 3600 + min * 60 + sec) / 86400
+  end
+
+  defp sky_color(t) do
+    # t: 0.0–1.0, Interpolation zwischen Keyframes
+    # Keyframes als Liste
+    keyframes = [
+      {0.0,   {10, 20, 40}},
+      {0.23,  {255, 120, 60}},
+      {0.27,  {120, 180, 255}},
+      {0.5,   {80, 200, 255}},
+      {0.73,  {255, 120, 60}},
+      {0.77,  {10, 20, 40}},
+      {1.0,   {10, 20, 40}}
+    ]
+    interpolate_keyframes(keyframes, t)
+  end
+
+  defp interpolate_keyframes([{t1, c1}, {t2, c2} | rest], t) when t >= t1 and t <= t2 do
+    f = (t - t1) / (t2 - t1)
+    lerp_color(c1, c2, f)
+  end
+  defp interpolate_keyframes([_ | rest], t), do: interpolate_keyframes(rest, t)
+  defp interpolate_keyframes([last], _t), do: elem(last, 1)
+
+  defp lerp_color({r1, g1, b1}, {r2, g2, b2}, f) do
+    {
+      round(r1 + (r2 - r1) * f),
+      round(g1 + (g2 - g1) * f),
+      round(b1 + (b2 - b1) * f)
+    }
+  end
+
   def handle_info(:tick, %State{} = state) do
-    canvas2 = state.canvas |> Canvas.translate({trunc(state.x), 0}, true)
+    installation = Octopus.App.get_installation_info()
+    gapped_width =
+      installation.panel_count * installation.panel_width +
+        (installation.panel_count - 1) * installation.panel_gap
+    panel_height = Installation.panel_height()
+
+    # Unabhängige Animation: 1 Tag = 30 Sekunden
+    t = :math.fmod(state.time / 30, 1.0)
+    sky = sky_color(t)
+
+    bg = Canvas.new(gapped_width, panel_height)
+    bg = Canvas.fill(bg, sky)
+
+    canvas2 = Canvas.overlay(bg, state.canvas) |> Canvas.translate({trunc(state.x), 0}, true)
 
     canvas2
     |> add_window_corners()
     |> Octopus.App.update_display()
 
     speed = state.speed + state.acceleration / @fps
-    # Limit speed
     speed = min(10, max(-10, speed))
-    # Apply friction
     speed = speed * (1 / (1 + 0.1 / @fps))
 
     {:noreply, %State{state | time: state.time + 1 / @fps, speed: speed, x: state.x + speed}}
