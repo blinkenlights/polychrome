@@ -178,20 +178,39 @@ defmodule Octopus.Apps.Train do
     panel_width = Installation.panel_width()
     panel_gap = Installation.panel_gap()
     panel_start_x = panel_id * (panel_width + panel_gap)
-    start_x = panel_start_x + (:rand.uniform(panel_width) - 1)
-    start_y = 0
-    # Zufälliger Winkel zwischen 20° und 70°
-    min_angle = :math.pi() * 20 / 180
-    max_angle = :math.pi() * 70 / 180
-    angle = min_angle + (:rand.uniform() * (max_angle - min_angle))
-    speed = 1.0
-    direction = if :rand.uniform() < 0.5, do: 1, else: -1
-    dx = direction * :math.cos(angle) * speed
-    dy = :math.sin(angle) * speed
-    ticks_left = 16
-    star = %{x: start_x * 1.0, y: start_y * 1.0, dx: dx, dy: dy, ticks_left: ticks_left}
-    stars = [star | (state.stars || [])]
-    {:noreply, %State{state | stars: stars}}
+    t = :math.fmod(state.time / 30, 1.0)
+    if is_night?(t) do
+      # Sternschnuppe wie bisher
+      start_x = panel_start_x + (:rand.uniform(panel_width) - 1)
+      start_y = 0
+      min_angle = :math.pi() * 20 / 180
+      max_angle = :math.pi() * 70 / 180
+      angle = min_angle + (:rand.uniform() * (max_angle - min_angle))
+      speed = 1.0
+      direction = if :rand.uniform() < 0.5, do: 1, else: -1
+      dx = direction * :math.cos(angle) * speed
+      dy = :math.sin(angle) * speed
+      ticks_left = 16
+      star = %{x: start_x * 1.0, y: start_y * 1.0, dx: dx, dy: dy, ticks_left: ticks_left, color: {255, 255, 0}}
+      stars = [star | (state.stars || [])]
+      {:noreply, %State{state | stars: stars}}
+    else
+      # Feuerwerk: mehrere bunte Funken radial
+      center_x = panel_start_x + div(panel_width, 2)
+      center_y = Installation.panel_height() - 1
+      num_particles = 8
+      speed = 1.2
+      ticks_left = 12
+      new_particles = for i <- 0..(num_particles-1) do
+        angle = 2 * :math.pi() * i / num_particles + (:rand.uniform() - 0.5) * 0.3
+        dx = :math.cos(angle) * speed * (0.7 + :rand.uniform() * 0.6)
+        dy = -:math.sin(angle) * speed * (0.7 + :rand.uniform() * 0.6)
+        color = random_color()
+        %{x: center_x * 1.0, y: center_y * 1.0, dx: dx, dy: dy, ticks_left: ticks_left, color: color}
+      end
+      stars = new_particles ++ (state.stars || [])
+      {:noreply, %State{state | stars: stars}}
+    end
   end
 
   def handle_event(
@@ -227,5 +246,24 @@ defmodule Octopus.Apps.Train do
 
   def handle_event(_, state) do
     {:noreply, state}
+  end
+
+  defp is_night?(t) do
+    t < 0.23 or t > 0.77
+  end
+
+  defp random_color() do
+    # Zufällige bunte Farbe für Feuerwerk
+    colors = [
+      {255, 0, 0},    # rot
+      {0, 255, 0},    # grün
+      {0, 0, 255},    # blau
+      {255, 255, 0},  # gelb
+      {255, 0, 255},  # pink
+      {0, 255, 255},  # cyan
+      {255, 128, 0},  # orange
+      {255, 255, 255} # weiß
+    ]
+    Enum.random(colors)
   end
 end
