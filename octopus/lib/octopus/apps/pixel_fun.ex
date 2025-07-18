@@ -32,7 +32,9 @@ defmodule Octopus.Apps.PixelFun do
       :move,
       :input,
       :audio_input,
-      :seconds
+      :seconds,
+      :buttons,
+      :panel_interaction_factors
     ]
   end
 
@@ -86,6 +88,9 @@ defmodule Octopus.Apps.PixelFun do
     {seconds, micros} = NaiveDateTime.utc_now() |> NaiveDateTime.to_gregorian_seconds()
     seconds = seconds + micros / 1_000_000
 
+    panel_interaction_factors =
+      0..(Installation.num_panels() - 1) |> Enum.map(fn i -> {i, 0.0} end) |> Map.new()
+
     {:ok,
      %State{
        program: program,
@@ -106,7 +111,9 @@ defmodule Octopus.Apps.PixelFun do
        move: {0, 0},
        input: config.input,
        audio_input: %{low: 0.0, mid: 0.0, high: 0.0},
-       seconds: seconds
+       seconds: seconds,
+       buttons: %{},
+       panel_interaction_factors: panel_interaction_factors
      }}
   end
 
@@ -180,10 +187,18 @@ defmodule Octopus.Apps.PixelFun do
 
     {offset_x, offset_y} = state.offset
 
+    panel_interaction_factors =
+      Map.new(state.panel_interaction_factors, fn {i, value} ->
+        target = if Map.get(state.buttons, i, false), do: 1.0, else: 0.0
+        value = lerp(value, target, 0.05)
+        {i, value}
+      end)
+
     state = %State{
       state
       | offset: {offset_x, offset_y},
-        seconds: state.seconds + 1 / @fps * param(:time_scale, 1.0)
+        seconds: state.seconds + 1 / @fps * param(:time_scale, 1.0),
+        panel_interaction_factors: panel_interaction_factors
     }
 
     canvas = state |> render()
@@ -223,7 +238,6 @@ defmodule Octopus.Apps.PixelFun do
         %InputEvent{type: :joystick, joystick: _joystick, direction: :down},
         %State{move: {x, _}, input: true} = state
       ) do
-    # Down = negative Y movement
     {:noreply, %State{state | move: {x, -1}}}
   end
 
@@ -231,8 +245,12 @@ defmodule Octopus.Apps.PixelFun do
         %InputEvent{type: :joystick, joystick: _joystick, direction: :center},
         %State{input: true} = state
       ) do
-    # Center = no movement
     {:noreply, %State{state | move: {0, 0}}}
+  end
+
+  def handle_event(%InputEvent{type: :button} = event, state) do
+    pressed = event.action == :press
+    {:noreply, %State{state | buttons: Map.put(state.buttons, event.button - 1, pressed)}}
   end
 
   def handle_event(_event, state) do
@@ -257,7 +275,18 @@ defmodule Octopus.Apps.PixelFun do
     center_y = Installation.height() / 2 - 0.5
 
     Installation.virtual_pixel_positions_per_panel()
-    |> Enum.map(fn panel ->
+    |> Enum.with_index()
+    |> Enum.map(fn {panel, index} ->
+      interaction_factor = Map.get(state.panel_interaction_factors, index, 0.0)
+      hue_shift = interaction_factor * 180 * 5
+
+      {color_a, color_b} = colors
+
+      colors = {
+        %Chameleon.HSV{color_a | h: rem(trunc(color_a.h + hue_shift), 360)},
+        %Chameleon.HSV{color_b | h: rem(trunc(color_b.h + hue_shift), 360)}
+      }
+
       for {{x, y}, i} <- Enum.with_index(panel), into: Canvas.new(8, 8) do
         local_x = rem(i, 8)
         local_y = div(i, 8)
