@@ -90,7 +90,7 @@ defmodule Octopus.ButtonServer do
     dbg(buttons)
 
     buttons =
-      Enum.reject(buttons, fn {_, timestamp} -> Time.diff(now, timestamp, :millisecond) > 100 end)
+      Enum.reject(buttons, fn {_, timestamp} -> Time.diff(now, timestamp, :millisecond) > 250 end)
 
     all_buttons_pressed =
       1..3
