@@ -59,6 +59,8 @@ defmodule Octopus.PlaylistScheduler do
     |> Repo.update!()
   end
 
+  def get_playlist(nil), do: nil
+
   def get_playlist(id) do
     Repo.get(Playlist, id)
   end
