@@ -262,10 +262,11 @@ defmodule Octopus.Apps.PixelFun do
     distance_normalized = 1.0 - max(min(distance / 2500.0, 1.0), 0.0)
 
     panel_proximities =
-      Map.put(
+      Map.update(
         state.panel_proximities,
         panel - 1,
-        distance_normalized
+        distance_normalized,
+        &lerp(&1, distance_normalized, 0.5)
       )
 
     {:noreply, %State{state | panel_proximities: panel_proximities}}
