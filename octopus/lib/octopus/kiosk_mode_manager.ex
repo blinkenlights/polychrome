@@ -7,7 +7,7 @@ defmodule Octopus.KioskModeManager do
   alias Octopus.PlaylistScheduler.Playlist
   alias Octopus.Installation
 
-  @game Octopus.Apps.Whackamole
+  @game Octopus.Apps.OneWord
   @playlist_name "Default"
 
   @idle_animation_interval 2_000
@@ -34,6 +34,14 @@ defmodule Octopus.KioskModeManager do
     GenServer.cast(__MODULE__, :stop)
   end
 
+  def start_game() do
+    GenServer.cast(__MODULE__, :start_game)
+  end
+
+  def game_finished() do
+    GenServer.cast(__MODULE__, :game_finished)
+  end
+
   def is_started?() do
     GenServer.call(__MODULE__, :is_started?)
   end
@@ -45,20 +53,13 @@ defmodule Octopus.KioskModeManager do
   * `{:kiosk_mode_manager, :started}` - kiosk mode was started
   * `{:kiosk_mode_manager, :stopped}` - kiosk mode was stopped
   """
+
   def subscribe() do
     Phoenix.PubSub.subscribe(Octopus.PubSub, @topic)
   end
 
-  def handle_event(%InputEvent{} = input_event) do
-    GenServer.cast(__MODULE__, {:input_event, input_event})
-  end
-
-  def game_finished() do
-    GenServer.cast(__MODULE__, :game_finished)
-  end
-
   def init(:ok) do
-    case Application.fetch_env(:octopus, :enable_event_mode) do
+    case Application.fetch_env(:octopus, :enable_kiosk_mode) do
       {:ok, true} ->
         Logger.info("KioskModeManager: event mode enabled. Starting")
         start()
@@ -78,8 +79,6 @@ defmodule Octopus.KioskModeManager do
         _ ->
           nil
       end
-
-    :timer.send_interval(@idle_animation_interval, :idle)
 
     {:ok, %State{status: :off, playlist_id: playlist_id}}
   end
@@ -101,18 +100,19 @@ defmodule Octopus.KioskModeManager do
     {:noreply, %State{state | status: :off}}
   end
 
-  # Any button press starts the game
-  def handle_cast(
-        {:input_event, %InputEvent{type: :button, action: :press}},
-        %State{status: :playlist} = state
-      ) do
-    Logger.info("KioskModeManager: game button pressed, starting game")
+  # Start the game
+  def handle_cast(:start_game, %State{status: :playlist} = state) do
+    Logger.info("KioskModeManager: starting game")
 
     PlaylistScheduler.pause_playlist()
     {:ok, app_id} = AppSupervisor.start_app(@game)
     AppManager.select_app(app_id)
 
     {:noreply, %State{state | status: :game, game_app_id: app_id}}
+  end
+
+  def handle_cast(:start_game, state) do
+    {:noreply, state}
   end
 
   def handle_cast({:input_event, %InputEvent{}}, state) do
@@ -132,15 +132,4 @@ defmodule Octopus.KioskModeManager do
 
   def handle_call(:is_started?, _, %State{status: :off} = state), do: {:reply, false, state}
   def handle_call(:is_started?, _, state), do: {:reply, true, state}
-
-  def handle_info(:idle, %State{status: :playlist} = state) do
-    num_buttons = Installation.num_buttons()
-    InputAdapter.send_light_event(Enum.random(1..num_buttons), @idle_animation_duration)
-
-    {:noreply, state}
-  end
-
-  def handle_info(:idle, state) do
-    {:noreply, state}
-  end
 end

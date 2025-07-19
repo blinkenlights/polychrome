@@ -92,21 +92,16 @@ defmodule Octopus.ButtonServer do
     buttons =
       Enum.reject(buttons, fn {_, timestamp} -> Time.diff(now, timestamp, :millisecond) > 250 end)
 
+    button_range = Application.get_env(:octopus, :kiosk_button_combination_range, 1..12)
+
     all_buttons_pressed =
-      1..3
+      button_range
       |> Enum.all?(fn button ->
         Enum.any?(buttons, fn {b, _} -> b == button end)
       end)
 
     if all_buttons_pressed do
-      # start one word app and select it
-      case Octopus.AppSupervisor.start_app(Octopus.Apps.OneWord) do
-        {:ok, app_id} ->
-          AppManager.select_app(app_id)
-
-        error ->
-          Logger.error("Could not start OneWord app: #{inspect(error)}")
-      end
+      Octopus.KioskModeManager.start_game()
     end
 
     %{state | pressed_buttons: buttons}

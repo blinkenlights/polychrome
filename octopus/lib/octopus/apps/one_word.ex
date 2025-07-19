@@ -101,8 +101,7 @@ defmodule Octopus.Apps.OneWord do
     Octopus.App.update_display(black_canvas, :grayscale, easing_interval: 150)
 
     # Stop the app using the proper supervisor method
-    app_id = Octopus.AppSupervisor.lookup_app_id(self())
-    Octopus.AppSupervisor.stop_app(app_id)
+    Octopus.KioskModeManager.game_finished()
 
     {:noreply, state}
   end

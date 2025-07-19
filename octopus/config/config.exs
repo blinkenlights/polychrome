@@ -12,7 +12,8 @@ config :octopus,
   ecto_repos: [Octopus.Repo],
   generators: [binary_id: true],
   show_sim_preview: true,
-  enable_event_mode: false
+  enable_kiosk_mode: true,
+  kiosk_button_combination_range: 1..3
 
 # =============================================================================
 # UDP NETWORK CONFIGURATION

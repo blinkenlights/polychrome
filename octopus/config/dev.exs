@@ -61,6 +61,9 @@ config :octopus, OctopusWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :octopus, dev_routes: true
 
+# Development mode: require only buttons 1-3 for kiosk mode activation
+config :octopus, kiosk_button_combination_range: 1..3
+
 # Do not include metadata nor timestamps in development logs
 config :logger, :console, format: "[$level] $message\n"
 
