@@ -312,7 +312,7 @@ defmodule Octopus.Apps.PixelFun do
            state.audio_input.mid,
            state.audio_input.high,
            colors,
-           &interpolate_colors_with_black/3
+           &lerp_colors/3
          )}
       end
     end)
@@ -428,5 +428,51 @@ defmodule Octopus.Apps.PixelFun do
     hsv_a = Chameleon.HSV.new(hue_a, sat_a, 100)
     hsv_b = Chameleon.HSV.new(hue_b, sat_b, 100)
     {hsv_a, hsv_b}
+  end
+
+  defp lerp_colors(%Chameleon.HSV{} = a, %Chameleon.HSV{} = b, value) do
+    cond do
+      value > 0 ->
+        # Use color A, adjust brightness based on value, hardcode saturation at 70%
+        hsv = %Chameleon.HSV{a | s: 70, v: trunc(100 * value) |> max(0) |> min(100)}
+        fast_hsv_to_rgb(hsv.h, hsv.s, hsv.v)
+
+      value < 0 ->
+        # Use color B, adjust brightness based on absolute value, hardcode saturation at 70%
+        hsv = %Chameleon.HSV{b | s: 70, v: trunc(100 * -value) |> max(0) |> min(100)}
+        fast_hsv_to_rgb(hsv.h, hsv.s, hsv.v)
+
+      true ->
+        # Black
+        {0, 0, 0}
+    end
+  end
+
+  defp fast_hsv_to_rgb(h, s, v) do
+    # Normalize inputs
+    h_norm = rem(h, 360) / 60.0
+    s_norm = s / 100.0
+    v_norm = v / 100.0
+
+    c = v_norm * s_norm
+    x = c * (1 - abs(:math.fmod(h_norm, 2.0) - 1))
+    m = v_norm - c
+
+    {r, g, b} =
+      cond do
+        h_norm < 1 -> {c, x, 0}
+        h_norm < 2 -> {x, c, 0}
+        h_norm < 3 -> {0, c, x}
+        h_norm < 4 -> {0, x, c}
+        h_norm < 5 -> {x, 0, c}
+        true -> {c, 0, x}
+      end
+
+    # Convert to 0-255 range and ensure integer values
+    {
+      trunc((r + m) * 255) |> max(0) |> min(255),
+      trunc((g + m) * 255) |> max(0) |> min(255),
+      trunc((b + m) * 255) |> max(0) |> min(255)
+    }
   end
 end
