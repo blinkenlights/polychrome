@@ -11,7 +11,7 @@ defmodule Octopus.Apps.SparkleMist do
   alias Octopus.Particles
   alias Octopus.PerlinNoise
 
-  @fps 30
+  @fps 60
   @frame_time_ms trunc(1000 / @fps)
   @panel_wait_duration_ms 2000
 
@@ -41,12 +41,13 @@ defmodule Octopus.Apps.SparkleMist do
 
   def config_schema() do
     %{
-      foreground_hue: {"Foreground Hue", :int, %{default: 25, min: 0, max: 255}},
-      background_hue_a: {"Background Hue A", :int, %{default: 200, min: 0, max: 255}},
-      background_hue_b: {"Background Hue B", :int, %{default: 170, min: 0, max: 255}},
+      foreground_hue: {"Foreground Hue", :int, %{default: 25, min: 0, max: 359}},
+      background_hue_a: {"Background Hue A", :int, %{default: 200, min: 0, max: 359}},
+      background_hue_b: {"Background Hue B", :int, %{default: 170, min: 0, max: 359}},
       background_sat_a: {"Background Saturation A", :int, %{default: 100, min: 0, max: 100}},
       background_sat_b: {"Background Saturation B", :int, %{default: 85, min: 0, max: 100}},
-      expr: {"Background Expression", :string, %{default: "sin(x/26-t+y/40)"}},
+      expr:
+        {"Background Expression", :string, %{default: "noise(sin(x/26-t+y/40),x*0.01,y*0.01)"}},
       particle_speed_scale: {"Particle Speed Scale", :float, %{default: 1.0, min: 0.1, max: 5.0}},
       background_speed: {"Background Speed", :float, %{default: 5.0, min: 0.1, max: 10.0}}
     }
@@ -343,7 +344,81 @@ defmodule Octopus.Apps.SparkleMist do
         x <- 0..(canvas.width - 1),
         i = x + y * canvas.width,
         into: canvas do
-      {{x, y}, Octopus.Apps.PixelFun.pixels(parsed_expr, x, y, i, t, color_a, color_b)}
+      {{x, y},
+       Octopus.Apps.PixelFun.pixels(
+         parsed_expr,
+         x,
+         y,
+         i,
+         t,
+         color_a,
+         color_b,
+         &lerp_colors/3
+       )}
     end
+  end
+
+  defp lerp_colors(%Chameleon.HSV{} = a, %Chameleon.HSV{} = b, value) do
+    cond do
+      value > 0 ->
+        # Use color A, adjust brightness based on value, hardcode saturation at 70%
+        hsv = %Chameleon.HSV{a | s: 70, v: trunc(100 * value) |> max(0) |> min(100)}
+        fast_hsv_to_rgb(hsv.h, hsv.s, hsv.v)
+
+      value < 0 ->
+        # Use color B, adjust brightness based on absolute value, hardcode saturation at 70%
+        hsv = %Chameleon.HSV{b | s: 70, v: trunc(100 * -value) |> max(0) |> min(100)}
+        fast_hsv_to_rgb(hsv.h, hsv.s, hsv.v)
+
+      true ->
+        # Black
+        {0, 0, 0}
+    end
+  end
+
+  defp fast_hsv_to_rgb(h, s, v) do
+    # Normalize inputs
+    h_norm = rem(h, 360) / 60.0
+    s_norm = s / 100.0
+    v_norm = v / 100.0
+
+    c = v_norm * s_norm
+    x = c * (1 - abs(:math.fmod(h_norm, 2.0) - 1))
+    m = v_norm - c
+
+    {r, g, b} =
+      cond do
+        h_norm < 1 -> {c, x, 0}
+        h_norm < 2 -> {x, c, 0}
+        h_norm < 3 -> {0, c, x}
+        h_norm < 4 -> {0, x, c}
+        h_norm < 5 -> {x, 0, c}
+        true -> {c, 0, x}
+      end
+
+    # Convert to 0-255 range and ensure integer values
+    {
+      trunc((r + m) * 255) |> max(0) |> min(255),
+      trunc((g + m) * 255) |> max(0) |> min(255),
+      trunc((b + m) * 255) |> max(0) |> min(255)
+    }
+  end
+
+  # Profile target function for tprof
+  def profile_draw_pixel_fun() do
+    # Create test canvas and parameters similar to real usage
+    # Typical total canvas size
+    canvas = Canvas.new(8 * 12, 8)
+    {:ok, parsed_expr} = Octopus.Apps.PixelFun.Program.parse("sin(x/26-t+y/40)")
+    color_a = Chameleon.HSV.new(200, 100, 100)
+    color_b = Chameleon.HSV.new(170, 85, 100)
+    t = 1.0
+
+    # Run multiple iterations to get meaningful data
+    for _i <- 1..10 do
+      draw_pixel_fun(canvas, t, color_a, color_b, parsed_expr)
+    end
+
+    :ok
   end
 end
