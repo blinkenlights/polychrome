@@ -13,7 +13,7 @@ config :octopus,
   generators: [binary_id: true],
   show_sim_preview: true,
   enable_kiosk_mode: true,
-  kiosk_button_combination_range: 1..3
+  button_combination_range: 1..3
 
 # =============================================================================
 # UDP NETWORK CONFIGURATION

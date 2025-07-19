@@ -92,7 +92,7 @@ defmodule Octopus.ButtonServer do
     buttons =
       Enum.reject(buttons, fn {_, timestamp} -> Time.diff(now, timestamp, :millisecond) > 250 end)
 
-    button_range = Application.get_env(:octopus, :kiosk_button_combination_range, 1..12)
+    button_range = Application.get_env(:octopus, :button_combination_range, 1..12)
 
     all_buttons_pressed =
       button_range
