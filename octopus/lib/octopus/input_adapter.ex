@@ -41,7 +41,7 @@ defmodule Octopus.InputAdapter do
   def handle_cast({:send_binary, binary}, %State{udp: udp} = state) do
     case state do
       %State{from_ip: nil} ->
-        Logger.warning("InputAdapter: No destination IP, skipping packet")
+        Logger.debug("InputAdapter: No destination IP, skipping packet")
 
       %State{from_ip: from_ip, from_port: from_port} ->
         Logger.debug("InputAdapter: Sending packet to #{from_ip}:#{from_port}")
