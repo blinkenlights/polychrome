@@ -28,6 +28,10 @@ defmodule Octopus.Events.Event.Proximity.Processor do
     :filtered
   end
 
+  def process_event(%ProximityEvent{panel: 3, sensor: 0}) do
+    :filtered
+  end
+
   def process_event(%ProximityEvent{} = event) do
     event = GenServer.call(__MODULE__, {:process_event, event})
 

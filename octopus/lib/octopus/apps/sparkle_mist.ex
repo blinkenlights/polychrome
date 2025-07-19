@@ -196,8 +196,8 @@ defmodule Octopus.Apps.SparkleMist do
           key = {event.panel, event.sensor}
           particle_system = Map.get(state.particles, key)
 
-          # Spawn from corners based on sensor: 0 = left, 1 = right
-          spawn_x = if event.sensor == 0, do: 0, else: Installation.panel_width() - 1
+          # Spawn from corners based on sensor: 1 = left, 0 = right
+          spawn_x = if event.sensor == 1, do: 0, else: Installation.panel_width() - 1
           spawn_y = Installation.panel_height() - 1
 
           {min_speed, max_speed} =
