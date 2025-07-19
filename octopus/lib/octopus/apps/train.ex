@@ -28,11 +28,12 @@ defmodule Octopus.Apps.Train do
 
   def app_init(_args) do
     Octopus.App.configure_display(layout: :gapped_panels)
-    panel_count = Installation.num_panels()
-    panel_width = Installation.panel_width()
-    panel_height = Installation.panel_height()
+    _panel_count = Installation.num_panels()
+    _panel_width = Installation.panel_width()
+    _panel_height = Installation.panel_height()
     installation = Octopus.App.get_installation_info()
-    gapped_width =
+
+    _gapped_width =
       installation.panel_count * installation.panel_width +
         (installation.panel_count - 1) * installation.panel_gap
 
@@ -65,34 +66,31 @@ defmodule Octopus.Apps.Train do
     end)
   end
 
-  defp day_fraction() do
-    {hour, min, sec} = :calendar.local_time() |> elem(1)
-    (hour * 3600 + min * 60 + sec) / 86400
-  end
-
   defp sky_color(t) do
     # t: 0.0–1.0, Interpolation zwischen Keyframes
     # Keyframes als Liste
     keyframes = [
-      {0.0,   {10, 5, 20}},
-      {0.15,  {120, 30, 120}},
-      {0.25,  {255, 60, 80}},
-      {0.35,  {255, 120, 40}},
-      {0.5,   {255, 200, 80}},
-      {0.65,  {255, 120, 40}},
-      {0.75,  {255, 60, 80}},
-      {0.85,  {120, 30, 120}},
-      {1.0,   {10, 5, 20}}
+      {0.0, {10, 5, 20}},
+      {0.15, {120, 30, 120}},
+      {0.25, {255, 60, 80}},
+      {0.35, {255, 120, 40}},
+      {0.5, {255, 200, 80}},
+      {0.65, {255, 120, 40}},
+      {0.75, {255, 60, 80}},
+      {0.85, {120, 30, 120}},
+      {1.0, {10, 5, 20}}
     ]
+
     interpolate_keyframes(keyframes, t)
   end
 
-  defp interpolate_keyframes([{t1, c1}, {t2, c2} | rest], t) when t >= t1 and t <= t2 do
+  defp interpolate_keyframes([{t1, c1}, {t2, c2} | _rest], t) when t >= t1 and t <= t2 do
     f = (t - t1) / (t2 - t1)
     lerp_color(c1, c2, f)
   end
-  defp interpolate_keyframes([_ | rest], t), do: interpolate_keyframes(rest, t)
+
   defp interpolate_keyframes([last], _t), do: elem(last, 1)
+  defp interpolate_keyframes([_ | rest], t), do: interpolate_keyframes(rest, t)
 
   defp lerp_color({r1, g1, b1}, {r2, g2, b2}, f) do
     {
@@ -107,6 +105,7 @@ defmodule Octopus.Apps.Train do
       new_x = star.x + star.dx
       new_y = star.y + star.dy
       new_ticks = star.ticks_left - 1
+
       if new_ticks > 0 and new_x >= 0 and new_y >= 0 do
         [%{star | x: new_x, y: new_y, ticks_left: new_ticks} | acc]
       else
@@ -117,9 +116,11 @@ defmodule Octopus.Apps.Train do
 
   def handle_info(:tick, %State{} = state) do
     installation = Octopus.App.get_installation_info()
+
     gapped_width =
       installation.panel_count * installation.panel_width +
         (installation.panel_count - 1) * installation.panel_gap
+
     panel_height = Installation.panel_height()
 
     # Unabhängige Animation: 1 Tag = 30 Sekunden
@@ -133,12 +134,13 @@ defmodule Octopus.Apps.Train do
     canvas2 = Canvas.overlay(bg, state.canvas) |> Canvas.translate({trunc(state.x), 0}, true)
 
     # Dann Sterne auf das finale Canvas zeichnen (bleiben fest am Himmel)
-    canvas2 = Enum.reduce(state.stars || [], canvas2, fn star, c ->
-      x = round(star.x)
-      y = round(star.y)
-      rgb = Map.get(star, :color, {255, 255, 0})
-      Canvas.put_pixel(c, {x, y}, rgb)
-    end)
+    canvas2 =
+      Enum.reduce(state.stars || [], canvas2, fn star, c ->
+        x = round(star.x)
+        y = round(star.y)
+        rgb = Map.get(star, :color, {255, 255, 0})
+        Canvas.put_pixel(c, {x, y}, rgb)
+      end)
 
     canvas2
     |> add_window_corners()
@@ -150,7 +152,8 @@ defmodule Octopus.Apps.Train do
 
     stars = update_stars(state.stars || [])
 
-    {:noreply, %State{state | time: state.time + 1 / @fps, speed: speed, x: state.x + speed, stars: stars}}
+    {:noreply,
+     %State{state | time: state.time + 1 / @fps, speed: speed, x: state.x + speed, stars: stars}}
   end
 
   def handle_info(:change_acceleration, %State{acceleration: 0, speed: speed} = state)
@@ -180,20 +183,30 @@ defmodule Octopus.Apps.Train do
     panel_gap = Installation.panel_gap()
     panel_start_x = panel_id * (panel_width + panel_gap)
     t = :math.fmod(state.time / 150, 1.0)
+
     if is_night?(t) do
       # Sternschnuppe wie bisher
       start_x = panel_start_x + (:rand.uniform(panel_width) - 1)
       start_y = 0
       min_angle = :math.pi() * 20 / 180
       max_angle = :math.pi() * 70 / 180
-      angle = min_angle + (:rand.uniform() * (max_angle - min_angle))
+      angle = min_angle + :rand.uniform() * (max_angle - min_angle)
       speed = 1.0
       direction = if :rand.uniform() < 0.5, do: 1, else: -1
       dx = direction * :math.cos(angle) * speed
       dy = :math.sin(angle) * speed
       ticks_left = 16
-      star = %{x: start_x * 1.0, y: start_y * 1.0, dx: dx, dy: dy, ticks_left: ticks_left, color: {255, 255, 0}}
-      stars = [star | (state.stars || [])]
+
+      star = %{
+        x: start_x * 1.0,
+        y: start_y * 1.0,
+        dx: dx,
+        dy: dy,
+        ticks_left: ticks_left,
+        color: {255, 255, 0}
+      }
+
+      stars = [star | state.stars || []]
       {:noreply, %State{state | stars: stars}}
     else
       # Feuerwerk: mehrere bunte Funken radial
@@ -202,13 +215,24 @@ defmodule Octopus.Apps.Train do
       num_particles = 8
       speed = 1.2
       ticks_left = 12
-      new_particles = for i <- 0..(num_particles-1) do
-        angle = 2 * :math.pi() * i / num_particles + (:rand.uniform() - 0.5) * 0.3
-        dx = :math.cos(angle) * speed * (0.7 + :rand.uniform() * 0.6)
-        dy = -:math.sin(angle) * speed * (0.7 + :rand.uniform() * 0.6)
-        color = random_color()
-        %{x: center_x * 1.0, y: center_y * 1.0, dx: dx, dy: dy, ticks_left: ticks_left, color: color}
-      end
+
+      new_particles =
+        for i <- 0..(num_particles - 1) do
+          angle = 2 * :math.pi() * i / num_particles + (:rand.uniform() - 0.5) * 0.3
+          dx = :math.cos(angle) * speed * (0.7 + :rand.uniform() * 0.6)
+          dy = -:math.sin(angle) * speed * (0.7 + :rand.uniform() * 0.6)
+          color = random_color()
+
+          %{
+            x: center_x * 1.0,
+            y: center_y * 1.0,
+            dx: dx,
+            dy: dy,
+            ticks_left: ticks_left,
+            color: color
+          }
+        end
+
       stars = new_particles ++ (state.stars || [])
       {:noreply, %State{state | stars: stars}}
     end
@@ -256,11 +280,13 @@ defmodule Octopus.Apps.Train do
   defp random_color() do
     # Knallige, zufällige Farbe (mind. 2 Kanäle >= 200, keiner < 80)
     channels = Enum.shuffle([:r, :g, :b])
+
     vals = [
       Enum.random(200..255),
       Enum.random(200..255),
       Enum.random(80..180)
     ]
+
     color_map = Enum.zip(channels, vals) |> Enum.into(%{})
     {color_map[:r], color_map[:g], color_map[:b]}
   end
