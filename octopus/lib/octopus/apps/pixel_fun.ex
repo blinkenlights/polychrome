@@ -6,6 +6,7 @@ defmodule Octopus.Apps.PixelFun do
   alias Octopus.Canvas
   alias Octopus.Events.Event.Audio, as: AudioEvent
   alias Octopus.Events.Event.Input, as: InputEvent
+  alias Octopus.Events.Event.Proximity, as: ProximityEvent
   alias Octopus.Apps.PixelFun.Program
   alias Octopus.Installation
 
@@ -34,7 +35,8 @@ defmodule Octopus.Apps.PixelFun do
       :audio_input,
       :seconds,
       :buttons,
-      :panel_interaction_factors
+      :panel_interaction_factors,
+      :panel_proximities
     ]
   end
 
@@ -114,7 +116,8 @@ defmodule Octopus.Apps.PixelFun do
        audio_input: %{low: 0.0, mid: 0.0, high: 0.0},
        seconds: seconds,
        buttons: %{},
-       panel_interaction_factors: panel_interaction_factors
+       panel_interaction_factors: panel_interaction_factors,
+       panel_proximities: Map.new(0..(Installation.num_panels() - 1), fn i -> {i, 0.0} end)
      }}
   end
 
@@ -254,6 +257,20 @@ defmodule Octopus.Apps.PixelFun do
     {:noreply, %State{state | buttons: Map.put(state.buttons, event.button - 1, pressed)}}
   end
 
+  def handle_event(%ProximityEvent{panel: panel} = event, state) do
+    distance = event.distance_combined
+    distance_normalized = 1.0 - max(min(distance / 2500.0, 1.0), 0.0)
+
+    panel_proximities =
+      Map.put(
+        state.panel_proximities,
+        panel - 1,
+        distance_normalized
+      )
+
+    {:noreply, %State{state | panel_proximities: panel_proximities}}
+  end
+
   def handle_event(_event, state) do
     {:noreply, state}
   end
@@ -278,8 +295,9 @@ defmodule Octopus.Apps.PixelFun do
     Installation.virtual_pixel_positions_per_panel()
     |> Enum.with_index()
     |> Enum.map(fn {panel, index} ->
+      proximity = Map.get(state.panel_proximities, index, 0.0)
+      hue_shift = proximity * 180 * 5
       interaction_factor = Map.get(state.panel_interaction_factors, index, 0.0)
-      hue_shift = interaction_factor * 180 * 5
 
       {color_a, color_b} = colors
 
@@ -307,7 +325,7 @@ defmodule Octopus.Apps.PixelFun do
            x_scaled,
            y_scaled,
            i,
-           state.seconds,
+           state.seconds + interaction_factor * 5,
            state.audio_input.low,
            state.audio_input.mid,
            state.audio_input.high,
