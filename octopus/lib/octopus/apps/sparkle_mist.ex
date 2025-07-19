@@ -13,6 +13,7 @@ defmodule Octopus.Apps.SparkleMist do
 
   @fps 60
   @frame_time_ms trunc(1000 / @fps)
+  # Currently unused, kept for potential future use
   @panel_wait_duration_ms 2000
 
   def name, do: "✨ Sparkle Mist ✨"
@@ -311,24 +312,24 @@ defmodule Octopus.Apps.SparkleMist do
     end)
   end
 
-  defp clear_panels_with_particles(canvas, %State{} = state) do
-    now = System.os_time(:millisecond)
+  # defp clear_panels_with_particles(canvas, %State{} = state) do
+  #   now = System.os_time(:millisecond)
 
-    panels_to_clean =
-      state.last_proximity
-      |> Enum.filter(fn {_panel, last_proximity} ->
-        last_proximity != nil and now - last_proximity <= @panel_wait_duration_ms
-      end)
-      |> Enum.map(fn {panel, _} -> panel end)
+  #   panels_to_clean =
+  #     state.last_proximity
+  #     |> Enum.filter(fn {_panel, last_proximity} ->
+  #       last_proximity != nil and now - last_proximity <= @panel_wait_duration_ms
+  #     end)
+  #     |> Enum.map(fn {panel, _} -> panel end)
 
-    Enum.reduce(panels_to_clean, canvas, fn panel, acc_canvas ->
-      start_x = (panel - 1) * Installation.panel_width()
-      end_x = start_x + Installation.panel_width() - 1
-      end_y = Installation.panel_height() - 1
+  #   Enum.reduce(panels_to_clean, canvas, fn panel, acc_canvas ->
+  #     start_x = (panel - 1) * Installation.panel_width()
+  #     end_x = start_x + Installation.panel_width() - 1
+  #     end_y = Installation.panel_height() - 1
 
-      Canvas.clear_rect(acc_canvas, {start_x, 0}, {end_x, end_y})
-    end)
-  end
+  #     Canvas.clear_rect(acc_canvas, {start_x, 0}, {end_x, end_y})
+  #   end)
+  # end
 
   defp scale_distance_to_speed(distance, scale) do
     clamped_distance = max(400, min(2000, distance))
