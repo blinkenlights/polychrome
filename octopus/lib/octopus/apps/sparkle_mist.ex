@@ -13,8 +13,7 @@ defmodule Octopus.Apps.SparkleMist do
 
   @fps 60
   @frame_time_ms trunc(1000 / @fps)
-  # Currently unused, kept for potential future use
-  @panel_wait_duration_ms 2000
+  # @panel_wait_duration_ms 2000  # Currently unused, kept for potential future use with clear_panels_with_particles
 
   def name, do: "✨ Sparkle Mist ✨"
 
