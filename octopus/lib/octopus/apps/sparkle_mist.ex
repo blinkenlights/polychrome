@@ -11,6 +11,10 @@ defmodule Octopus.Apps.SparkleMist do
   alias Octopus.Particles
   alias Octopus.PerlinNoise
 
+  @fps 30
+  @frame_time_ms trunc(1000 / @fps)
+  @panel_wait_duration_ms 2000
+
   def name, do: "✨ Sparkle Mist ✨"
 
   defmodule State do
@@ -21,6 +25,7 @@ defmodule Octopus.Apps.SparkleMist do
       :last_proximity,
       :color_a,
       :color_b,
+
       # Config parameters
       :foreground_hue,
       :background_hue_a,
@@ -28,6 +33,7 @@ defmodule Octopus.Apps.SparkleMist do
       :background_sat_a,
       :background_sat_b,
       :expr,
+      :parsed_expr,
       :particle_speed_scale,
       :background_speed
     ]
@@ -40,8 +46,7 @@ defmodule Octopus.Apps.SparkleMist do
       background_hue_b: {"Background Hue B", :int, %{default: 170, min: 0, max: 255}},
       background_sat_a: {"Background Saturation A", :int, %{default: 100, min: 0, max: 100}},
       background_sat_b: {"Background Saturation B", :int, %{default: 85, min: 0, max: 100}},
-      expr:
-        {"Background Expression", :string, %{default: "noise(sin(x/26-t+y/40),x*0.01,y*0.01)"}},
+      expr: {"Background Expression", :string, %{default: "sin(x/26-t+y/40)"}},
       particle_speed_scale: {"Particle Speed Scale", :float, %{default: 1.0, min: 0.1, max: 5.0}},
       background_speed: {"Background Speed", :float, %{default: 5.0, min: 0.1, max: 10.0}}
     }
@@ -68,6 +73,12 @@ defmodule Octopus.Apps.SparkleMist do
     color_a = Chameleon.HSV.new(hue_a, sat_a, 100)
     color_b = Chameleon.HSV.new(hue_b, sat_b, 100)
 
+    parsed_expr =
+      case Octopus.Apps.PixelFun.Program.parse(config.expr) do
+        {:ok, expr} -> expr
+        {:error, _} -> state.parsed_expr
+      end
+
     new_state = %State{
       state
       | foreground_hue: config.foreground_hue,
@@ -76,6 +87,7 @@ defmodule Octopus.Apps.SparkleMist do
         background_sat_a: config.background_sat_a,
         background_sat_b: config.background_sat_b,
         expr: config.expr,
+        parsed_expr: parsed_expr,
         particle_speed_scale: config.particle_speed_scale,
         background_speed: config.background_speed,
         color_a: color_a,
@@ -84,10 +96,6 @@ defmodule Octopus.Apps.SparkleMist do
 
     {:noreply, new_state}
   end
-
-  @fps 60
-  @frame_time_ms trunc(1000 / @fps)
-  @panel_wait_duration_ms 2000
 
   def app_init(config) do
     Octopus.App.configure_display(
@@ -146,6 +154,8 @@ defmodule Octopus.Apps.SparkleMist do
     color_a = Chameleon.HSV.new(hue_a, sat_a, 100)
     color_b = Chameleon.HSV.new(hue_b, sat_b, 100)
 
+    {:ok, parsed_expr} = Octopus.Apps.PixelFun.Program.parse(config.expr)
+
     state = %State{
       particles: particles,
       noise: PerlinNoise.new(),
@@ -159,12 +169,12 @@ defmodule Octopus.Apps.SparkleMist do
       background_sat_a: config.background_sat_a,
       background_sat_b: config.background_sat_b,
       expr: config.expr,
+      parsed_expr: parsed_expr,
       particle_speed_scale: config.particle_speed_scale,
       background_speed: config.background_speed
     }
 
     :timer.send_interval(@frame_time_ms, :tick)
-    send(self(), :tick)
 
     {:ok, state}
   end
@@ -244,6 +254,7 @@ defmodule Octopus.Apps.SparkleMist do
   end
 
   def handle_event(_event, state) do
+    Logger.debug("Sparkle Mist: Unhandled event")
     {:noreply, state}
   end
 
@@ -261,7 +272,7 @@ defmodule Octopus.Apps.SparkleMist do
       state.last_update / 1000.0 / state.background_speed,
       state.color_a,
       state.color_b,
-      state.expr
+      state.parsed_expr
     )
     # |> clear_panels_with_particles(state)
     |> render_particles(state)
@@ -327,14 +338,12 @@ defmodule Octopus.Apps.SparkleMist do
     {min_speed, max_speed}
   end
 
-  defp draw_pixel_fun(canvas, t, color_a, color_b, expr_string) do
-    {:ok, expr} = Octopus.Apps.PixelFun.Program.parse(expr_string)
-
+  defp draw_pixel_fun(canvas, t, color_a, color_b, parsed_expr) do
     for y <- 0..(canvas.height - 1),
         x <- 0..(canvas.width - 1),
         i = x + y * canvas.width,
         into: canvas do
-      {{x, y}, Octopus.Apps.PixelFun.pixels(expr, x, y, i, t, color_a, color_b)}
+      {{x, y}, Octopus.Apps.PixelFun.pixels(parsed_expr, x, y, i, t, color_a, color_b)}
     end
   end
 end
