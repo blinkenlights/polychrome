@@ -106,6 +106,8 @@ defmodule Octopus.Apps.SparkleMist do
       merge_rgbw: true
     )
 
+    subscribe_to_button_events()
+
     particles =
       for panel <- 1..Installation.num_panels(),
           sensor <- 0..1,
