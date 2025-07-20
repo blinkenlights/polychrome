@@ -52,7 +52,7 @@ defmodule Octopus.Events.Router do
     # Route input events to selected app and kiosk mode manager
     selected_app = AppManager.get_selected_app()
     AppSupervisor.send_event(selected_app, input_event)
-    KioskModeManager.handle_event(input_event)
+    GenServer.cast(KioskModeManager, {:input_event, input_event})
 
     Phoenix.PubSub.broadcast(
       Octopus.PubSub,
