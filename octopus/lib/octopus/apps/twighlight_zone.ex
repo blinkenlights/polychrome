@@ -24,9 +24,6 @@ defmodule Octopus.Apps.TwighlightZone do
 
   def app_init(_args) do
     Octopus.App.configure_display(layout: :adjacent_panels)
-    panel_count = Installation.num_panels()
-    panel_width = Installation.panel_width()
-    panel_height = Installation.panel_height()
 
     state = %State{t: 0}
     :timer.send_interval(@frame_time_ms, :tick)
@@ -39,16 +36,17 @@ defmodule Octopus.Apps.TwighlightZone do
   end
 
   def handle_info(
-    :tick,
-    %State{panels: panels, t: t} = state
-  ) do
+        :tick,
+        %State{panels: panels, t: t} = state
+      ) do
     panel_count = Installation.num_panels()
     panel_width = Installation.panel_width()
     panel_height = Installation.panel_height()
 
     width = panel_count * panel_width
     height = panel_height
-    move_period = 40 * @fps  # 10 seconds per round
+    # 10 seconds per round
+    move_period = 40 * @fps
     cx = rem(t, move_period) / move_period * width
     # cy: vertical center, wobbling around 2 pixels
     cy_base = height / 2
@@ -60,8 +58,8 @@ defmodule Octopus.Apps.TwighlightZone do
     angle_offset = t * speed
 
     big_canvas =
-      Enum.reduce(0..(width-1), Canvas.new(width, height), fn x, canvas ->
-        Enum.reduce(0..(height-1), canvas, fn y, c ->
+      Enum.reduce(0..(width - 1), Canvas.new(width, height), fn x, canvas ->
+        Enum.reduce(0..(height - 1), canvas, fn y, c ->
           dx = x - cx
           dy = y - cy
           r = :math.sqrt(dx * dx + dy * dy)
@@ -75,7 +73,8 @@ defmodule Octopus.Apps.TwighlightZone do
 
           base = if v > 0, do: 255, else: 0
           val = trunc(base * (0.7 + 0.3 * noise))
-          val = max(0, min(val, 255)) # Clamp!
+          # Clamp!
+          val = max(0, min(val, 255))
           color = {val, val, val}
           Canvas.put_pixel(c, {x, y}, color)
         end)
