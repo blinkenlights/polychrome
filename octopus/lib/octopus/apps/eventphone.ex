@@ -1,10 +1,16 @@
-defmodule Octopus.Apps.StaticImage do
+defmodule Octopus.Apps.Eventphone do
   alias Octopus.Events.Event.Lifecycle, as: LifecycleEvent
 
   alias Octopus.WebP
-  use Octopus.App, category: :animation
+  use Octopus.App, category: :test
 
-  def name, do: "Static Image"
+  def name, do: "Eventphone"
+
+  def compatible?() do
+    # Only compatible with 10-panel installations like Nation2024
+    installation_info = Octopus.App.get_installation_info()
+    installation_info.panel_count == 10
+  end
 
   def config_schema do
     %{
