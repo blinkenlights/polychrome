@@ -2,16 +2,12 @@ defmodule Octopus.KioskModeManager do
   use GenServer
   require Logger
 
-  alias Octopus.{AppSupervisor, AppManager, PlaylistScheduler, InputAdapter}
+  alias Octopus.{AppSupervisor, AppManager, PlaylistScheduler}
   alias Octopus.Events.Event.Input, as: InputEvent
   alias Octopus.PlaylistScheduler.Playlist
-  alias Octopus.Installation
 
   @game Octopus.Apps.OneWord
   @playlist_name "Default"
-
-  @idle_animation_interval 2_000
-  @idle_animation_duration 3_000
 
   @topic "kiosk_mode_manager"
 
