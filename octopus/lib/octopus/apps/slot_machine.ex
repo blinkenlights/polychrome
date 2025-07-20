@@ -236,7 +236,6 @@ defmodule Octopus.Apps.SlotMachine do
     )
 
     if is_running and not is_animating do
-      Logger.info("Slot Machine: Starting animation for slot #{slot_panel_idx}")
       # Start animation - next one will be scheduled when this completes
       state = animate_next_sprite_for_slot(state, slot_panel_idx)
       {:noreply, state}
