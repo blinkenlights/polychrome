@@ -19,13 +19,15 @@ defmodule Octopus.Apps.SlotMachine do
   alias Octopus.Events.Event.Input, as: InputEvent
 
   # Default animation duration (milliseconds)
-  @default_animation_duration 600
+  @default_animation_duration 1_000
   # Speed variation range (+/- milliseconds)
   @speed_variation 100
   # Blink speed when winning
   @blink_interval 300
   # Number of blinks on win
   @blink_count 5
+  # Auto-restart timer for stopped slots (milliseconds)
+  @auto_restart_timer 10_000
 
   # Sprite groups with at least 6 sprites for slot machine
   @sprite_groups [
@@ -64,11 +66,83 @@ defmodule Octopus.Apps.SlotMachine do
       :slot_animation_durations,
       # Track which slots are currently animating to prevent multiple animations
       :slot_animating_states,
+      # Auto-restart timer references for stopped slots
+      :slot_auto_restart_timers,
       :panel_width,
       :display_info,
       :last_win_check_time,
-      :blink_state
+      # Track which sections are blinking and their blink state (section_id -> :on/:off or nil)
+      :section_blink_states,
+      # Track which sections are in push-down animation phase
+      :section_pushdown_states
     ]
+  end
+
+  # Centralized slot state transition function - proper state machine
+  defp set_slot_running(state, slot_panel_idx, running) do
+    current_running = Map.get(state.slot_states, slot_panel_idx, false)
+
+    # Only process if state actually changes
+    if current_running != running do
+      new_slot_states = Map.put(state.slot_states, slot_panel_idx, running)
+
+      updated_state = %State{state | slot_states: new_slot_states}
+
+      if running do
+        # Transition to running: Start rolling animations
+        start_slot_rolling(updated_state, slot_panel_idx)
+      else
+        # Transition to stopped: Cancel any auto-restart timer and mark as stopped
+        stop_slot_rolling(updated_state, slot_panel_idx)
+      end
+    else
+      # No state change
+      state
+    end
+  end
+
+  # Start rolling animations for a slot (centralized logic)
+  defp start_slot_rolling(state, slot_panel_idx) do
+    # Cancel any existing auto-restart timer
+    new_slot_auto_restart_timers =
+      case Map.get(state.slot_auto_restart_timers, slot_panel_idx) do
+        nil ->
+          state.slot_auto_restart_timers
+
+        {timer_ref, _timer_id} ->
+          :timer.cancel(timer_ref)
+          Map.delete(state.slot_auto_restart_timers, slot_panel_idx)
+      end
+
+    # Generate new animation duration
+    new_duration = generate_slot_animation_duration()
+
+    new_slot_animation_durations =
+      Map.put(state.slot_animation_durations, slot_panel_idx, new_duration)
+
+    # Start rolling with random initial delay
+    initial_delay = :rand.uniform(200)
+    :timer.send_after(initial_delay, {:roll_slot, slot_panel_idx})
+
+    %State{
+      state
+      | slot_animation_durations: new_slot_animation_durations,
+        slot_auto_restart_timers: new_slot_auto_restart_timers
+    }
+  end
+
+  # Stop rolling animations for a slot (centralized logic)
+  defp stop_slot_rolling(state, slot_panel_idx) do
+    # Start auto-restart timer
+    timer_id = make_ref()
+
+    timer_ref =
+      :timer.send_after(@auto_restart_timer, {:auto_restart_slot, slot_panel_idx, timer_id})
+
+    new_slot_auto_restart_timers =
+      Map.put(state.slot_auto_restart_timers, slot_panel_idx, {timer_ref, timer_id})
+
+    %State{state | slot_auto_restart_timers: new_slot_auto_restart_timers}
   end
 
   def name(), do: "Slot Machine"
@@ -154,12 +228,17 @@ defmodule Octopus.Apps.SlotMachine do
       slot_animation_durations: slot_animation_durations,
       # Track which slots are currently animating
       slot_animating_states: %{},
+      # Auto-restart timer references for stopped slots
+      slot_auto_restart_timers: %{},
       section_slot_indices: section_slot_indices,
       slot_states: slot_states,
       panel_width: display_info.panel_width,
       display_info: display_info,
       last_win_check_time: 0,
-      blink_state: nil
+      # Initialize section blink states (no sections blinking initially)
+      section_blink_states: %{},
+      # Initialize section push-down states (no sections in push-down initially)
+      section_pushdown_states: %{}
     }
 
     # Start rolling timers for all slots (all slots start running)
@@ -245,50 +324,80 @@ defmodule Octopus.Apps.SlotMachine do
     end
   end
 
-  # Blink animation handler
-  def handle_info({:blink, count_remaining}, state) when count_remaining > 0 do
-    # Toggle blink state and update display
-    new_blink_state = if state.blink_state == :on, do: :off, else: :on
-    state = %State{state | blink_state: new_blink_state}
-    render_display(state)
+  # Section-specific blink animation handler
+  def handle_info({:blink_section, section, count_remaining}, state) when count_remaining > 0 do
+    # Toggle blink state for this specific section
+    current_section_blink = Map.get(state.section_blink_states, section, :on)
+    new_section_blink = if current_section_blink == :on, do: :off, else: :on
 
-    # Schedule next blink
-    :timer.send_after(@blink_interval, {:blink, count_remaining - 1})
-    {:noreply, state}
+    new_section_blink_states = Map.put(state.section_blink_states, section, new_section_blink)
+    updated_state = %State{state | section_blink_states: new_section_blink_states}
+    render_display(updated_state)
+
+    # Schedule next blink for this section
+    :timer.send_after(@blink_interval, {:blink_section, section, count_remaining - 1})
+    {:noreply, updated_state}
   end
 
-  def handle_info({:blink, 0}, state) do
-    # Blinking finished, restart all slots with new random animation durations
+  def handle_info({:blink_section, section, 0}, state) do
+    # Blinking finished for this section, start synchronized push-down animation
 
-    # Restart rolling for all active slots with new random animation durations
-    active_slots = [0, 1, 2, 4, 5, 6, 8, 9, 10]
+    # Get panels for this specific section
+    section_panels = section_to_panels(section)
 
-    new_slot_animation_durations =
-      active_slots
-      |> Enum.map(fn slot_panel_idx -> {slot_panel_idx, generate_slot_animation_duration()} end)
-      |> Enum.into(%{})
+    # Clear blink state for this section
+    new_section_blink_states = Map.delete(state.section_blink_states, section)
 
-    # Restart all slots
-    new_slot_states =
-      active_slots
-      |> Enum.map(fn slot_panel_idx -> {slot_panel_idx, true} end)
-      |> Enum.into(%{})
+    # Mark this section as in push-down animation
+    new_section_pushdown_states = Map.put(state.section_pushdown_states, section, :animating)
 
-    for slot_panel_idx <- active_slots do
-      # Add random initial delay
-      initial_delay = :rand.uniform(200)
-      :timer.send_after(initial_delay, {:roll_slot, slot_panel_idx})
+    # Create empty canvases for push-down target
+    empty_canvas = Canvas.new(state.panel_width, state.panel_width)
 
-      Logger.info(
-        "Slot Machine: Restarting slot #{slot_panel_idx} rolling in #{initial_delay}ms (new duration: #{Map.get(new_slot_animation_durations, slot_panel_idx)}ms)"
+    # Start synchronized push-down animation for all slots in this section
+    for slot_panel_idx <- section_panels do
+      # Get current sprite canvas for this slot
+      current_canvas =
+        case Map.get(state.slot_canvases, slot_panel_idx) do
+          nil ->
+            # Load current sprite if no animated canvas exists
+            slot_in_section = panel_to_slot_in_section(slot_panel_idx)
+            {_group_name, slot_sprite_lists} = Map.get(state.section_sprite_groups, section)
+            slot_indices = Map.get(state.section_slot_indices, section)
+
+            sprite_list = Enum.at(slot_sprite_lists, slot_in_section)
+            current_index = Enum.at(slot_indices, slot_in_section)
+            sprite_id = Enum.at(sprite_list, current_index)
+            load_sprite(sprite_id, state.panel_width)
+
+          existing_canvas ->
+            existing_canvas
+        end
+
+      # Create push-down transition function (bottom direction like sprites falling)
+      transition_fun = fn _blank, _target ->
+        Transitions.push(current_canvas, empty_canvas, direction: :bottom, separation: 0)
+      end
+
+      animation_id = {:pushdown, section, slot_panel_idx}
+
+      # Use Animator.animate API
+      Animator.animate(
+        animation_id: animation_id,
+        app_pid: self(),
+        canvas: empty_canvas,
+        position: {0, 0},
+        transition_fun: transition_fun,
+        duration: @default_animation_duration,
+        canvas_size: {state.panel_width, state.panel_width},
+        frame_rate: 30
       )
     end
 
     updated_state = %State{
       state
-      | slot_animation_durations: new_slot_animation_durations,
-        slot_states: new_slot_states,
-        blink_state: nil
+      | section_blink_states: new_section_blink_states,
+        section_pushdown_states: new_section_pushdown_states
     }
 
     render_display(updated_state)
@@ -334,6 +443,22 @@ defmodule Octopus.Apps.SlotMachine do
   def handle_info({:animator_update, animation_id, canvas, frame_status}, state) do
     # Handle canvas updates from the Animator module
     case animation_id do
+      {:pushdown, section, slot_panel_idx} ->
+        # Update the specific slot canvas for push-down animation
+        updated_slot_canvases = Map.put(state.slot_canvases, slot_panel_idx, canvas)
+
+        updated_state = %State{state | slot_canvases: updated_slot_canvases}
+
+        # Check if push-down animation is completed
+        if frame_status == :final do
+          # Check if this was the last slot to complete push-down in this section
+          # We'll trigger restart when we get the final frame from any slot
+          send(self(), {:check_pushdown_complete, section})
+        end
+
+        render_display(updated_state)
+        {:noreply, updated_state}
+
       {:slot, slot_panel_idx} ->
         # Update the specific slot canvas
         updated_slot_canvases = Map.put(state.slot_canvases, slot_panel_idx, canvas)
@@ -370,6 +495,70 @@ defmodule Octopus.Apps.SlotMachine do
     end
   end
 
+  # Auto-restart timer handler
+  def handle_info({:auto_restart_slot, slot_panel_idx, timer_id}, state) do
+    # Only restart if slot is still stopped and no win is active
+    current_state = Map.get(state.slot_states, slot_panel_idx, false)
+
+    # Validate this is the current timer (not a stale timer)
+    timer_still_valid =
+      case Map.get(state.slot_auto_restart_timers, slot_panel_idx) do
+        {_timer_ref, current_timer_id} -> current_timer_id == timer_id
+        _ -> false
+      end
+
+    # Check if any section is blinking or in push-down (which would prevent auto-restart)
+    any_section_blinking = not Enum.empty?(state.section_blink_states)
+    any_section_pushdown = not Enum.empty?(state.section_pushdown_states)
+
+    if not current_state and not any_section_blinking and not any_section_pushdown and
+         timer_still_valid do
+      # Restart the slot automatically using state machine
+      updated_state = set_slot_running(state, slot_panel_idx, true)
+      {:noreply, updated_state}
+    else
+      # Slot was manually started or win is active, just clear timer reference
+      new_slot_auto_restart_timers =
+        Map.delete(state.slot_auto_restart_timers, slot_panel_idx)
+
+      updated_state = %State{
+        state
+        | slot_auto_restart_timers: new_slot_auto_restart_timers
+      }
+
+      {:noreply, updated_state}
+    end
+  end
+
+  # Handle push-down completion check
+  def handle_info({:check_pushdown_complete, section}, state) do
+    # Only process if this section is still in push-down state
+    case Map.get(state.section_pushdown_states, section) do
+      :animating ->
+        # All push-down animations completed, restart slots in this section using state machine
+        section_panels = section_to_panels(section)
+
+        # Use centralized state machine to set all slots to running
+        updated_state =
+          section_panels
+          |> Enum.reduce(state, fn slot_panel_idx, acc_state ->
+            set_slot_running(acc_state, slot_panel_idx, true)
+          end)
+
+        # Clear push-down state for this section
+        new_section_pushdown_states = Map.delete(updated_state.section_pushdown_states, section)
+
+        final_state = %State{updated_state | section_pushdown_states: new_section_pushdown_states}
+
+        render_display(final_state)
+        {:noreply, final_state}
+
+      _ ->
+        # Section not in push-down state, ignore
+        {:noreply, state}
+    end
+  end
+
   def handle_info(msg, state) do
     Logger.warning("Unexpected message in Slot Machine: #{inspect(msg)}")
     {:noreply, state}
@@ -382,43 +571,18 @@ defmodule Octopus.Apps.SlotMachine do
         {:noreply, state}
 
       slot_panel_idx ->
-        # Toggle slot state (stop or start rolling)
+        # Toggle slot state using centralized state machine
         current_state = Map.get(state.slot_states, slot_panel_idx, false)
-        new_slot_states = Map.put(state.slot_states, slot_panel_idx, not current_state)
-
-        updated_state =
-          if current_state do
-            # Slot was running, now stopped
-            state
-          else
-            # Slot was stopped, now starting
-            # Generate new random animation duration for this slot
-            new_duration = generate_slot_animation_duration()
-
-            new_slot_animation_durations =
-              Map.put(state.slot_animation_durations, slot_panel_idx, new_duration)
-
-            # Start rolling with random initial delay
-            initial_delay = :rand.uniform(200)
-            :timer.send_after(initial_delay, {:roll_slot, slot_panel_idx})
-
-            Logger.debug(
-              "Slot Machine: Starting slot #{slot_panel_idx} rolling in #{initial_delay}ms (duration: #{new_duration}ms)"
-            )
-
-            %State{state | slot_animation_durations: new_slot_animation_durations}
-          end
-
-        final_state = %State{updated_state | slot_states: new_slot_states}
+        updated_state = set_slot_running(state, slot_panel_idx, not current_state)
 
         # Check for win condition for this slot's section
         section = panel_to_section(slot_panel_idx)
 
         final_state_with_win_check =
           if section != nil do
-            check_section_win_condition(final_state, section)
+            check_section_win_condition(updated_state, section)
           else
-            final_state
+            updated_state
           end
 
         {:noreply, final_state_with_win_check}
@@ -492,10 +656,33 @@ defmodule Octopus.Apps.SlotMachine do
 
       # Check if all sprites in this section are the same
       if Enum.uniq(current_sprites) |> length() == 1 do
-        # Start blinking animation
-        :timer.send_after(@blink_interval, {:blink, @blink_count * 2})
+        # Cancel auto-restart timers only for this winning section
+        section_panels = section_to_panels(section)
 
-        %State{state | blink_state: :on}
+        new_slot_auto_restart_timers =
+          section_panels
+          |> Enum.reduce(state.slot_auto_restart_timers, fn slot_panel_idx, acc_timers ->
+            case Map.get(acc_timers, slot_panel_idx) do
+              nil ->
+                acc_timers
+
+              {timer_ref, _timer_id} ->
+                :timer.cancel(timer_ref)
+                Map.delete(acc_timers, slot_panel_idx)
+            end
+          end)
+
+        # Start blinking animation for this specific section
+        :timer.send_after(@blink_interval, {:blink_section, section, @blink_count * 2})
+
+        # Set this section to blink on
+        new_section_blink_states = Map.put(state.section_blink_states, section, :on)
+
+        %State{
+          state
+          | section_blink_states: new_section_blink_states,
+            slot_auto_restart_timers: new_slot_auto_restart_timers
+        }
       else
         state
       end
@@ -536,10 +723,12 @@ defmodule Octopus.Apps.SlotMachine do
               animated_canvas
           end
 
-        # Apply blink effect if winning
+        # Apply blink effect if this section is winning
+        section_blink_state = Map.get(state.section_blink_states, section)
+
         final_sprite_canvas =
-          if state.blink_state == :off do
-            # Blank for blink off
+          if section_blink_state == :off do
+            # Blank for blink off (only for this section)
             Canvas.new(state.panel_width, state.panel_width)
           else
             sprite_canvas
