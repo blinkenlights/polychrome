@@ -172,51 +172,17 @@ defmodule Octopus.Mixer do
 
       app_display ->
         updated_display = %{app_display | rgb_buffer: canvas}
-        new_app_displays = Map.put(state.app_displays, app_id, updated_display)
-        new_state = %State{state | app_displays: new_app_displays}
+        new_state = update_app_displays(state, app_id, updated_display)
 
-        if state.rendered_app == app_id do
-          display_info = updated_display.display_info
-
-          easing_interval =
-            easing_interval_override || Map.get(updated_display.config, :easing_interval, 0)
-
-          # Apply mask if in masked mode
-          frame =
-            if state.output_mode == :masked and state.mask_app_id do
-              mask_display = Map.get(new_state.app_displays, state.mask_app_id)
-
-              if mask_display do
-                mask_canvas = get_mask_canvas(mask_display)
-
-                if mask_canvas do
-                  # RGB frame with masking
-                  canvas_to_frame_with_mask(
-                    canvas,
-                    mask_canvas,
-                    display_info,
-                    easing_interval,
-                    :rgb,
-                    app_display
-                  )
-                else
-                  canvas_to_frame(canvas, display_info, easing_interval, app_display)
-                end
-              else
-                # RGB frame without masking
-                canvas_to_frame(canvas, display_info, easing_interval, app_display)
-              end
-            else
-              # RGB frame without masking
-              canvas_to_frame(canvas, display_info, easing_interval, app_display)
-            end
-
-          frame
-          |> Protobuf.split_and_encode()
-          |> Enum.each(fn binary ->
-            send_frame(binary, frame)
-          end)
-        end
+        new_state =
+          handle_buffer_update(
+            new_state,
+            app_id,
+            canvas,
+            updated_display,
+            :rgb,
+            easing_interval_override
+          )
 
         {:noreply, new_state}
     end
@@ -234,55 +200,17 @@ defmodule Octopus.Mixer do
 
       app_display ->
         updated_display = %{app_display | grayscale_buffer: canvas}
-        new_app_displays = Map.put(state.app_displays, app_id, updated_display)
-        new_state = %State{state | app_displays: new_app_displays}
+        new_state = update_app_displays(state, app_id, updated_display)
 
-        # If this app is currently selected, generate and send frame
-        if state.rendered_app == app_id do
-          display_info = updated_display.display_info
-
-          easing_interval =
-            easing_interval_override || Map.get(updated_display.config, :easing_interval, 0)
-
-          # Apply mask if in masked mode
-          if state.output_mode == :masked and state.mask_app_id do
-            mask_display = Map.get(new_state.app_displays, state.mask_app_id)
-
-            if mask_display do
-              mask_canvas = get_mask_canvas(mask_display)
-
-              if mask_canvas do
-                # Send WFrame with masking
-                frame =
-                  canvas_to_wframe_with_mask(
-                    canvas,
-                    mask_canvas,
-                    display_info,
-                    easing_interval,
-                    app_display
-                  )
-
-                binary = Protobuf.encode(frame)
-                send_frame(binary, frame)
-              else
-                # Send WFrame without masking
-                frame = canvas_to_wframe(canvas, display_info, easing_interval, app_display)
-                binary = Protobuf.encode(frame)
-                send_frame(binary, frame)
-              end
-            else
-              # Send WFrame without masking
-              frame = canvas_to_wframe(canvas, display_info, easing_interval, app_display)
-              binary = Protobuf.encode(frame)
-              send_frame(binary, frame)
-            end
-          else
-            # Send WFrame without masking
-            frame = canvas_to_wframe(canvas, display_info, easing_interval, app_display)
-            binary = Protobuf.encode(frame)
-            send_frame(binary, frame)
-          end
-        end
+        new_state =
+          handle_buffer_update(
+            new_state,
+            app_id,
+            canvas,
+            updated_display,
+            :grayscale,
+            easing_interval_override
+          )
 
         {:noreply, new_state}
     end
@@ -754,6 +682,193 @@ defmodule Octopus.Mixer do
   """
   def get_app_display_info(app_id) do
     GenServer.call(__MODULE__, {:get_display_info, app_id})
+  end
+
+  # Helper functions for buffer updates
+
+  defp update_app_displays(state, app_id, updated_display) do
+    new_app_displays = Map.put(state.app_displays, app_id, updated_display)
+    %State{state | app_displays: new_app_displays}
+  end
+
+  defp should_update_frame?(state, app_id) do
+    state.rendered_app == app_id or
+      (state.output_mode == :masked && state.mask_app_id == app_id && state.rendered_app)
+  end
+
+  defp handle_buffer_update(
+         state,
+         app_id,
+         canvas,
+         updated_display,
+         mode,
+         easing_interval_override
+       ) do
+    if should_update_frame?(state, app_id) do
+      case get_render_context(state, app_id, canvas, updated_display, mode) do
+        {:ok, main_canvas, main_display_info, main_app_display, main_app_mode} ->
+          easing_interval =
+            easing_interval_override || Map.get(main_app_display.config, :easing_interval, 0)
+
+          generate_and_send_frame(
+            state,
+            main_canvas,
+            main_display_info,
+            main_app_display,
+            easing_interval,
+            main_app_mode
+          )
+
+          state
+
+        :error ->
+          state
+      end
+    else
+      state
+    end
+  end
+
+  defp get_render_context(state, app_id, canvas, updated_display, updating_mode) do
+    if state.rendered_app == app_id do
+      # This is the rendered app updating - use its mode and canvas
+      {:ok, canvas, updated_display.display_info, updated_display, updating_mode}
+    else
+      # This is the mask app updating, get rendered app's data
+      with rendered_display when not is_nil(rendered_display) <-
+             Map.get(state.app_displays, state.rendered_app),
+           {rendered_canvas, rendered_mode} when not is_nil(rendered_canvas) <-
+             get_best_rendered_canvas(rendered_display) do
+        {:ok, rendered_canvas, rendered_display.display_info, rendered_display, rendered_mode}
+      else
+        _ -> :error
+      end
+    end
+  end
+
+  defp get_best_rendered_canvas(rendered_display) do
+    # Try RGB buffer first (most common), then grayscale
+    cond do
+      rendered_display.rgb_buffer ->
+        {rendered_display.rgb_buffer, :rgb}
+
+      rendered_display.grayscale_buffer ->
+        {rendered_display.grayscale_buffer, :grayscale}
+
+      true ->
+        {nil, nil}
+    end
+  end
+
+  defp generate_and_send_frame(
+         state,
+         main_canvas,
+         main_display_info,
+         main_app_display,
+         easing_interval,
+         main_app_mode
+       ) do
+    case state.output_mode do
+      :masked when not is_nil(state.mask_app_id) ->
+        # Send frame type based on selected app's mode, but with masking applied
+        case main_app_mode do
+          :rgb ->
+            send_masked_rgb_frame(
+              state,
+              main_canvas,
+              main_display_info,
+              main_app_display,
+              easing_interval
+            )
+
+          :grayscale ->
+            send_masked_wframe(
+              state,
+              main_canvas,
+              main_display_info,
+              main_app_display,
+              easing_interval
+            )
+        end
+
+      _ ->
+        # Not in masked mode, send frame based on the selected app's mode
+        case main_app_mode do
+          :rgb ->
+            send_rgb_frame(main_canvas, main_display_info, main_app_display, easing_interval)
+
+          :grayscale ->
+            send_wframe(main_canvas, main_display_info, main_app_display, easing_interval)
+        end
+    end
+  end
+
+  defp send_masked_rgb_frame(
+         state,
+         main_canvas,
+         main_display_info,
+         main_app_display,
+         easing_interval
+       ) do
+    with mask_display when not is_nil(mask_display) <-
+           Map.get(state.app_displays, state.mask_app_id),
+         mask_canvas when not is_nil(mask_canvas) <- get_mask_canvas(mask_display) do
+      frame =
+        canvas_to_frame_with_mask(
+          main_canvas,
+          mask_canvas,
+          main_display_info,
+          easing_interval,
+          :rgb,
+          main_app_display
+        )
+
+      frame
+      |> Protobuf.split_and_encode()
+      |> Enum.each(&send_frame(&1, frame))
+    else
+      _ -> send_rgb_frame(main_canvas, main_display_info, main_app_display, easing_interval)
+    end
+  end
+
+  defp send_masked_wframe(
+         state,
+         main_canvas,
+         main_display_info,
+         main_app_display,
+         easing_interval
+       ) do
+    with mask_display when not is_nil(mask_display) <-
+           Map.get(state.app_displays, state.mask_app_id),
+         mask_canvas when not is_nil(mask_canvas) <- get_mask_canvas(mask_display) do
+      frame =
+        canvas_to_wframe_with_mask(
+          main_canvas,
+          mask_canvas,
+          main_display_info,
+          easing_interval,
+          main_app_display
+        )
+
+      binary = Protobuf.encode(frame)
+      send_frame(binary, frame)
+    else
+      _ -> send_wframe(main_canvas, main_display_info, main_app_display, easing_interval)
+    end
+  end
+
+  defp send_rgb_frame(main_canvas, main_display_info, main_app_display, easing_interval) do
+    frame = canvas_to_frame(main_canvas, main_display_info, easing_interval, main_app_display)
+
+    frame
+    |> Protobuf.split_and_encode()
+    |> Enum.each(&send_frame(&1, frame))
+  end
+
+  defp send_wframe(main_canvas, main_display_info, main_app_display, easing_interval) do
+    frame = canvas_to_wframe(main_canvas, main_display_info, easing_interval, main_app_display)
+    binary = Protobuf.encode(frame)
+    send_frame(binary, frame)
   end
 
   defp update_output_mode(%State{rendered_app: main, mask_app_id: mask} = state) do
