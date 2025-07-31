@@ -12,7 +12,6 @@ defmodule Octopus.Apps.StoryTeller do
   @frame_time_ms trunc(1000 / @fps)
 
   defmodule State do
-    @derive {Inspect, only: [:line, :lines, :pause, :buffer, :clear_buffer]}
     @keys [
       :font,
       :canvas,
@@ -26,6 +25,22 @@ defmodule Octopus.Apps.StoryTeller do
     ]
     @enforce_keys @keys
     defstruct @keys
+
+    defimpl Inspect do
+      def inspect(state, opts) do
+        # Only show the fields relevant for debugging story progression
+        # Excludes large/complex fields like :font and :canvas
+        filtered_fields = Map.take(state, [:line, :lines, :pause, :buffer, :clear_buffer])
+
+        concat([
+          "#StoryTeller.State<",
+          Inspect.Map.inspect(filtered_fields, opts),
+          ">"
+        ])
+      end
+
+      defp concat(list), do: Enum.join(list, "")
+    end
   end
 
   def name(), do: "Storyteller"
