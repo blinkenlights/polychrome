@@ -16,14 +16,21 @@ defmodule OctopusWeb.PixelsLive do
   @id_prefix "pixels"
 
   defp get_views() do
-    [default_layout | _] = Installation.simulator_layouts()
+    layouts = Installation.simulator_layouts()
 
-    %{
-      "default" => default_layout
-    }
+    # Create a map with indexed layout keys to ensure uniqueness
+    layouts
+    |> Enum.with_index()
+    |> Enum.into(%{}, fn {layout, index} ->
+      # Use the layout name, but sanitize it for use as a map key
+      key = layout.name |> String.downcase() |> String.replace(~r/[^a-z0-9]/, "_")
+      # Always append index to ensure uniqueness
+      unique_key = "#{key}_#{index}"
+      {unique_key, layout}
+    end)
   end
 
-  @default_view "default"
+  # Will be set to the first layout key dynamically
 
   defp get_key_map() do
     num_buttons = Installation.num_buttons()
@@ -67,7 +74,8 @@ defmodule OctopusWeb.PixelsLive do
 
   def mount(_params, _session, socket) do
     views = get_views()
-    pixel_layout = views[@default_view]
+    default_view = views |> Map.keys() |> List.first()
+    pixel_layout = views[default_view]
 
     socket =
       if connected?(socket) do
@@ -81,7 +89,7 @@ defmodule OctopusWeb.PixelsLive do
         }
 
         socket
-        |> push_layout(views[@default_view])
+        |> push_layout(views[default_view])
         |> push_config(@default_config)
         |> push_frame(frame)
         |> push_pixel_offset(0)
@@ -98,8 +106,9 @@ defmodule OctopusWeb.PixelsLive do
      |> assign(
        id: socket.id,
        id_prefix: @id_prefix,
-       pixel_layout: views[@default_view],
-       view: @default_view,
+       pixel_layout: views[default_view],
+       view: default_view,
+       default_view: default_view,
        view_options: view_options,
        views: views,
        max_windows: max_windows,
@@ -122,7 +131,7 @@ defmodule OctopusWeb.PixelsLive do
         <form id="view-form" phx-change="view-changed">
           <.input type="select" name="view" options={@view_options} value={@view} />
         </form>
-        <div :if={@view != "default"}>
+        <div :if={@view != @default_view}>
           <button
             :for={window <- 1..@max_windows}
             phx-click="window-changed"
@@ -177,7 +186,8 @@ defmodule OctopusWeb.PixelsLive do
 
   def handle_event("view-changed", %{"view" => view}, socket) do
     views = socket.assigns.views
-    view = if Map.has_key?(views, view), do: view, else: @default_view
+    default_view = views |> Map.keys() |> List.first()
+    view = if Map.has_key?(views, view), do: view, else: default_view
     pixel_layout = Map.get(views, view)
 
     socket =
@@ -190,9 +200,12 @@ defmodule OctopusWeb.PixelsLive do
   end
 
   def handle_event("window-changed", %{"window" => window_string}, socket) do
+    views = socket.assigns.views
+    default_view = views |> Map.keys() |> List.first()
+
     {window, pixel_offset} =
       case socket.assigns.view do
-        "default" ->
+        ^default_view ->
           {1, 0}
 
         _ ->

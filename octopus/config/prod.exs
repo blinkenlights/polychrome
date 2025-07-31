@@ -16,14 +16,7 @@ config :octopus, OctopusWeb.Endpoint,
 
 config :octopus, broadcast: false, show_sim_preview: true, enable_event_mode: false
 
-config :octopus, :enable_broadcast, true
-config :octopus, :broadcast_ip, nil
-config :octopus, :show_sim_preview, false
-
-config :octopus, :default_playlist, "Default"
-
-config :octopus, :enable_kiosk_mode, true
-config :octopus, :button_combination_range, 1..12
+# Network configuration moved to Installation modules
 
 # Configures Swoosh API Client
 config :swoosh, api_client: Swoosh.ApiClient.Finch, finch_name: Octopus.Finch

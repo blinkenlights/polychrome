@@ -450,14 +450,14 @@ defmodule Octopus.Canvas do
   def to_svg(%Canvas{mode: :rgb} = canvas, opts) do
     opts =
       Keyword.validate!(opts,
-        width: canvas.width,
-        height: canvas.height
+        width: "#{canvas.width}px",
+        height: "#{canvas.height}px"
       )
 
     svg_header = """
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            width="#{opts[:width]}px" height="#{opts[:height]}px"
+            width="#{opts[:width]}" height="#{opts[:height]}"
             viewbox="0 0 #{canvas.width} #{canvas.height}">
     """
 
@@ -481,14 +481,14 @@ defmodule Octopus.Canvas do
   def to_svg(%Canvas{mode: :grayscale} = canvas, opts) do
     opts =
       Keyword.validate!(opts,
-        width: canvas.width,
-        height: canvas.height
+        width: "#{canvas.width}px",
+        height: "#{canvas.height}px"
       )
 
     svg_header = """
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            width="#{opts[:width]}px" height="#{opts[:height]}px"
+            width="#{opts[:width]}" height="#{opts[:height]}"
             viewbox="0 0 #{canvas.width} #{canvas.height}">
     """
 

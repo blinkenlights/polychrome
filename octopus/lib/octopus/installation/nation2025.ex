@@ -7,9 +7,20 @@ defmodule Octopus.Installation.Nation2025 do
     panel_width: 8,
     panel_height: 8,
     panel_gap: 18,
+    network_config: [
+      mode: :broadcast,
+      broadcast_ip: :auto,
+      send_in_dev: false
+    ],
     simulator_layouts: [
       [
+        name: "Generic Development View",
+        mode: "generic",
+        pixel_size: {12, 12}
+      ],
+      [
         name: "Nation 2025",
+        mode: "image",
         background_image: "/images/nation2025-background.webp",
         pixel_image: "/images/nation2025-overlay.webp",
         image_size: {3463, 1469},
