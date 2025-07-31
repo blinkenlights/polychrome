@@ -6,8 +6,13 @@ defmodule Octopus.Installation.Prototype do
     num_joysticks: 0,
     panel_width: 8,
     panel_height: 8,
-    panel_gap: 1,
+    panel_gap: 0,
     simulator_layouts: [
+      [
+        name: "Generic Development View",
+        mode: "generic",
+        pixel_size: {12, 12}
+      ],
       [
         name: "Prototype",
         background_image: "/images/nation.webp",
