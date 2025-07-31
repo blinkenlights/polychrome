@@ -58,7 +58,7 @@ defmodule Octopus.Installation do
                     num_joysticks: [type: :non_neg_integer, required: true],
                     panel_width: [type: :pos_integer, required: true],
                     panel_height: [type: :pos_integer, required: true],
-                    panel_gap: [type: :pos_integer, required: true],
+                    panel_gap: [type: :non_neg_integer, required: true],
                     simulator_layouts: [
                       type:
                         {:list,
