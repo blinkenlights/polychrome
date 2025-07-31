@@ -28,7 +28,7 @@ defmodule Octopus.Apps.Matrix do
             end
 
           %Particle{
-            x: :rand.uniform(width),
+            x: :rand.uniform(width) - 1,
             y: :rand.uniform(height) - 12,
             z: :rand.uniform() * 0.5 + 0.5,
             speed: speed,
