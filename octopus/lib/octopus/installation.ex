@@ -51,6 +51,11 @@ defmodule Octopus.Installation do
   """
   @callback num_buttons() :: pos_integer()
 
+  @doc """
+  Returns the network configuration for this installation
+  """
+  @callback network_config() :: keyword()
+
   @options_schema NimbleOptions.new!(
                     arrangement: [type: {:in, [:linear, :circular]}, required: true],
                     num_panels: [type: :pos_integer, required: true],
@@ -59,6 +64,30 @@ defmodule Octopus.Installation do
                     panel_width: [type: :pos_integer, required: true],
                     panel_height: [type: :pos_integer, required: true],
                     panel_gap: [type: :non_neg_integer, required: true],
+                    network_config: [
+                      type: :keyword_list,
+                      default: [],
+                      keys: [
+                        mode: [type: {:in, [:broadcast, :individual]}, default: :broadcast],
+                        broadcast_ip: [
+                          type:
+                            {:or,
+                             [
+                               :string,
+                               {:tuple, [:integer, :integer, :integer, :integer]},
+                               {:in, [:auto]}
+                             ]},
+                          required: false
+                        ],
+                        panel_ips: [
+                          type:
+                            {:list,
+                             {:or, [:string, {:tuple, [:integer, :integer, :integer, :integer]}]}},
+                          default: []
+                        ],
+                        send_in_dev: [type: :boolean, default: false]
+                      ]
+                    ],
                     simulator_layouts: [
                       type:
                         {:list,
@@ -200,6 +229,7 @@ defmodule Octopus.Installation do
     panel_width = Keyword.fetch!(opts, :panel_width)
     panel_height = Keyword.fetch!(opts, :panel_height)
     panel_gap = Keyword.fetch!(opts, :panel_gap)
+    network_config = Keyword.fetch!(opts, :network_config)
 
     width =
       case arrangement do
@@ -266,6 +296,8 @@ defmodule Octopus.Installation do
       def height, do: unquote(height)
       @impl Octopus.Installation
       def simulator_layouts, do: unquote(simulator_layouts)
+      @impl Octopus.Installation
+      def network_config, do: unquote(network_config)
     end
   end
 
@@ -295,6 +327,8 @@ defmodule Octopus.Installation do
   def simulator_layouts, do: installation().simulator_layouts()
   @impl __MODULE__
   def num_buttons, do: installation().num_buttons()
+  @impl __MODULE__
+  def network_config, do: installation().network_config()
 
   @doc """
   Returns the concrete pixel positions of all panels in the installation

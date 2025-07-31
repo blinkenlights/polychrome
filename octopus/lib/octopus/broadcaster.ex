@@ -5,6 +5,7 @@ defmodule Octopus.Broadcaster do
   alias Phoenix.Tracker.State
   alias Octopus.Protobuf
   alias Octopus.Protobuf.{FirmwareConfig, RemoteLog, FirmwareInfo, FirmwarePacket, ProximityEvent}
+  alias Octopus.Installation
 
   @default_config %FirmwareConfig{
     luminance: 150,
@@ -14,7 +15,7 @@ defmodule Octopus.Broadcaster do
   }
 
   defmodule State do
-    defstruct [:udp, :config, :remote_ip, :remote_port, firmware_stats: %{}]
+    defstruct [:udp, :config, :target_ips, :remote_port, :should_send_udp, firmware_stats: %{}]
   end
 
   defmodule FirmwareInfoMeta do
@@ -42,25 +43,24 @@ defmodule Octopus.Broadcaster do
   end
 
   def init(:ok) do
-    # Configuration is centralized in config.exs
-    target_ip =
-      case Application.fetch_env!(:octopus, :enable_broadcast) do
-        true -> get_broadcast_ip()
-        false -> Application.fetch_env!(:octopus, :localhost_ip)
-      end
-
+    network_config = Installation.network_config()
     remote_port = Application.fetch_env!(:octopus, :firmware_broadcaster_remote_port)
     local_port = Application.fetch_env!(:octopus, :firmware_broadcaster_local_port)
 
-    Logger.info("Broadcasting to #{inspect(target_ip)}. Port #{remote_port}")
+    {target_ips, should_send_udp} = determine_target_ips(network_config)
+
+    Logger.info(
+      "Broadcasting to #{inspect(target_ips)}. Port #{remote_port}. Send UDP: #{should_send_udp}"
+    )
 
     {:ok, udp} = :gen_udp.open(local_port, [:binary, active: true, broadcast: true])
 
     state = %State{
       udp: udp,
       config: @default_config,
-      remote_ip: target_ip,
-      remote_port: remote_port
+      target_ips: target_ips,
+      remote_port: remote_port,
+      should_send_udp: should_send_udp
     }
 
     state = send_config(@default_config, state)
@@ -143,8 +143,17 @@ defmodule Octopus.Broadcaster do
   end
 
   defp send_binary(binary, %State{} = state) do
-    # Logger.debug("Sending UDP Packet: #{inspect(binary)}")
-    :gen_udp.send(state.udp, state.remote_ip, state.remote_port, binary)
+    if state.should_send_udp do
+      for target_ip <- state.target_ips do
+        Logger.debug(
+          "Sending UDP Packet to #{inspect(target_ip)}:#{state.remote_port} (#{byte_size(binary)} bytes)"
+        )
+
+        :gen_udp.send(state.udp, target_ip, state.remote_port, binary)
+      end
+    else
+      Logger.debug("UDP sending disabled - packets not sent")
+    end
   end
 
   defp handle_firmware_packet(%RemoteLog{message: message}, from_ip, %State{} = state) do
@@ -188,29 +197,70 @@ defmodule Octopus.Broadcaster do
     %State{state | firmware_stats: firmware_stats}
   end
 
-  def get_broadcast_ip() do
-    case Application.fetch_env!(:octopus, :broadcast_ip) do
-      ip when is_tuple(ip) ->
+  defp determine_target_ips(network_config) do
+    current_env = Mix.env()
+    send_in_dev = Keyword.get(network_config, :send_in_dev, false)
+
+    should_send_udp =
+      case current_env do
+        :dev -> send_in_dev
+        _ -> true
+      end
+
+    target_ips =
+      case Keyword.get(network_config, :mode, :broadcast) do
+        :broadcast ->
+          broadcast_ip =
+            case Keyword.get(network_config, :broadcast_ip, :auto) do
+              :auto -> get_broadcast_ip()
+              ip when is_binary(ip) -> resolve_hostname(ip)
+              ip when is_tuple(ip) -> ip
+            end
+
+          [broadcast_ip]
+
+        :individual ->
+          panel_ips = Keyword.get(network_config, :panel_ips, [])
+
+          Enum.map(panel_ips, fn ip ->
+            case ip do
+              ip when is_binary(ip) -> resolve_hostname(ip)
+              ip when is_tuple(ip) -> ip
+            end
+          end)
+      end
+
+    {target_ips, should_send_udp}
+  end
+
+  defp resolve_hostname(hostname) when is_binary(hostname) do
+    case :inet.gethostbyname(String.to_charlist(hostname)) do
+      {:ok, {:hostent, _, _, :inet, 4, [ip | _]}} ->
         ip
 
-      _ ->
-        {:ok, ifaddrs} = :inet.getifaddrs()
+      {:error, _} ->
+        Logger.warning("Could not resolve hostname: #{hostname}. Using localhost.")
+        {127, 0, 0, 1}
+    end
+  end
 
-        ifaddrs
-        |> Enum.map(fn {_ifname, ifprops} -> Keyword.get(ifprops, :broadaddr) end)
-        |> Enum.reject(&is_nil/1)
-        |> Enum.uniq()
-        |> case do
-          [] ->
-            {127, 0, 0, 1}
+  def get_broadcast_ip() do
+    {:ok, ifaddrs} = :inet.getifaddrs()
 
-          [ip] ->
-            ip
+    ifaddrs
+    |> Enum.map(fn {_ifname, ifprops} -> Keyword.get(ifprops, :broadaddr) end)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> case do
+      [] ->
+        {127, 0, 0, 1}
 
-          [ip, _ | _] ->
-            Logger.warning("Multiple broadcast IPs found. Using the first one: #{inspect(ip)}")
-            ip
-        end
+      [ip] ->
+        ip
+
+      [ip, _ | _] ->
+        Logger.warning("Multiple broadcast IPs found. Using the first one: #{inspect(ip)}")
+        ip
     end
   end
 end
