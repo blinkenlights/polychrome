@@ -6,7 +6,7 @@ defmodule Octopus.Apps.FairyDust do
   @fps 60
 
   defmodule State do
-    defstruct [:fairy_dust, :time, :particles, :speed]
+    defstruct [:fairy_dust, :time, :particles, :speed, :global_speed]
   end
 
   defmodule Particle do
@@ -27,6 +27,12 @@ defmodule Octopus.Apps.FairyDust do
     # Configure display using new unified API - gapped layout
     Octopus.App.configure_display(layout: :gapped_panels)
 
+    # Subscribe to global parameter changes
+    Octopus.Params.Global.subscribe()
+
+    # Read initial global speed value
+    global_speed = Octopus.Params.Global.speed()
+
     :timer.send_interval(trunc(1000 / @fps), :tick)
 
     fairy_dust = Image.load("fairy-dust")
@@ -36,7 +42,8 @@ defmodule Octopus.Apps.FairyDust do
        fairy_dust: fairy_dust,
        time: 0,
        particles: [],
-       speed: speed
+       speed: speed,
+       global_speed: global_speed
      }}
   end
 
@@ -89,8 +96,18 @@ defmodule Octopus.Apps.FairyDust do
     end)
   end
 
+  def handle_info({:param_updated, :speed, new_value}, %State{} = state) do
+    # Global speed parameter changed - update stored value
+    {:noreply, %{state | global_speed: new_value}}
+  end
+
+  def handle_info({:param_updated, _key, _value}, %State{} = state) do
+    # Other global parameters changed - ignore
+    {:noreply, state}
+  end
+
   def handle_info(:tick, %State{} = state) do
-    dt = 1 / @fps * state.speed
+    dt = 1 / @fps * state.speed * state.global_speed
 
     # Get display info instead of virtual_matrix
     display_info = Octopus.App.get_display_info()
