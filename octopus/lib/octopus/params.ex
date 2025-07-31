@@ -34,7 +34,7 @@ defmodule Octopus.Params do
     import Ecto.Changeset
 
     schema "params" do
-      field :params, :binary
+      field(:params, :binary)
 
       timestamps()
     end
@@ -56,10 +56,11 @@ defmodule Octopus.Params do
 
   def load_persisted_config(offset \\ 0) do
     query =
-      from p in Schema,
+      from(p in Schema,
         order_by: [desc: p.inserted_at],
         limit: 1,
         offset: ^offset
+      )
 
     Repo.all(query)
     |> Enum.map(&:erlang.binary_to_term(&1.params))
