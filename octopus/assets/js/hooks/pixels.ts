@@ -158,10 +158,26 @@ class PixelsHook extends Hook {
 
       ctx.save();
 
-      const scale = Math.min(
-        canvas.width / layout.imageSize[0],
-        canvas.height / layout.imageSize[1]
-      );
+      // Check if this is a generic layout (empty background image)
+      const isGenericLayout = !layout.backgroundImage || layout.backgroundImage === "";
+
+      let scale: number;
+      if (isGenericLayout) {
+        // For generic layouts, don't scale beyond 1.0 to preserve pixel size
+        scale = Math.min(
+          1.0,
+          Math.min(
+            canvas.width / layout.imageSize[0],
+            canvas.height / layout.imageSize[1]
+          )
+        );
+      } else {
+        // For image-based layouts, scale to fit the window as before
+        scale = Math.min(
+          canvas.width / layout.imageSize[0],
+          canvas.height / layout.imageSize[1]
+        );
+      }
 
       const offsetX = canvas.width / 2 - (layout.imageSize[0] / 2) * scale;
       const offsetY = canvas.height / 2 - (layout.imageSize[1] / 2) * scale;
@@ -173,9 +189,6 @@ class PixelsHook extends Hook {
         [number, number],
         [number, number, number] | undefined
       ][] = layout.positions.map((pos, i) => [pos, pixels[i + pixelOffset]]);
-
-      // Check if this is a generic layout (empty background image)
-      const isGenericLayout = !layout.backgroundImage || layout.backgroundImage === "";
 
       positionsWithPixels.forEach(([[x, y], pixel]) => {
         let rgb = pixel || [0, 0, 0];
