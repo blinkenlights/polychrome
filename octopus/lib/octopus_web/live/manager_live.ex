@@ -15,6 +15,7 @@ defmodule OctopusWeb.ManagerLive do
       PlaylistScheduler.subscribe()
       KioskModeManager.subscribe()
       AppManager.subscribe()
+      Octopus.Params.Global.subscribe()
     end
 
     socket =
@@ -93,6 +94,21 @@ defmodule OctopusWeb.ManagerLive do
               Open 3D Sim Aframe
             </button>
           </a>
+        </div>
+
+        <%!-- Global Parameters --%>
+        <div class="border rounded m-2 p-0">
+          <div class="flex flex-row">
+            <div class="p-1 font-bold m-0 flex-grow">
+              Global Parameters
+            </div>
+          </div>
+          <div class="p-4">
+            <.live_component
+              id="global-params"
+              module={OctopusWeb.GlobalParamsComponent}
+            />
+          </div>
         </div>
 
         <%!-- Playlists --%>
@@ -463,6 +479,16 @@ defmodule OctopusWeb.ManagerLive do
 
   def handle_info({:kiosk_mode_manager, :stopped}, socket) do
     socket = assign(socket, :event_scheduler_started, false)
+    {:noreply, socket}
+  end
+
+  def handle_info({:param_updated, _key, _value}, socket) do
+    # Update the global params component when parameters change via OSC
+    send_update(OctopusWeb.GlobalParamsComponent,
+      id: "global-params",
+      config: Octopus.Params.Global.config()
+    )
+
     {:noreply, socket}
   end
 
