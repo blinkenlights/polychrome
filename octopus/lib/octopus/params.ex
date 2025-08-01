@@ -109,12 +109,21 @@ defmodule Octopus.Params do
         end)
       end)
 
-    # Override global speed with installation-specific value if available
+    # Override global parameters with installation-specific values if available
     case Application.fetch_env(:octopus, :installation) do
       {:ok, installation_module} ->
-        if function_exported?(installation_module, :global_speed, 0) do
-          installation_speed = installation_module.global_speed()
-          Map.put(initial_params, {"global", "speed"}, installation_speed)
+        initial_params =
+          if function_exported?(installation_module, :global_speed, 0) do
+            installation_speed = installation_module.global_speed()
+            Map.put(initial_params, {"global", "speed"}, installation_speed)
+          else
+            initial_params
+          end
+
+        # Override auto_brightness with installation-specific value
+        if function_exported?(installation_module, :auto_brightness, 0) do
+          installation_auto_brightness = installation_module.auto_brightness()
+          Map.put(initial_params, {"global", "auto_brightness"}, installation_auto_brightness)
         else
           initial_params
         end

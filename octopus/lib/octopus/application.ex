@@ -43,6 +43,7 @@ defmodule Octopus.Application do
         Octopus.KioskModeManager,
         Octopus.Mixer,
         Octopus.ButtonServer,
+        Octopus.Sunlight,
 
         # WebApp
         {Finch, name: Octopus.Finch},

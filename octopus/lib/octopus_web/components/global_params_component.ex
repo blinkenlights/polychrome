@@ -22,15 +22,24 @@ defmodule OctopusWeb.GlobalParamsComponent do
     <div>
       <form class="flex flex-col gap-4" phx-change="change" phx-target={@myself}>
         <div :for={{key, {name, type, opts}} <- @config_schema}>
-          <label class="font-semibold" for={"global-#{key}"} class="block">{name}</label>
+          <label class="font-semibold" for={"global-#{key}"} class="block">
+            {name}
+            <%= if key == :brightness && @config[:auto_brightness] do %>
+              <span class="text-xs text-blue-600 font-normal">(Auto-controlled)</span>
+            <% end %>
+          </label>
           <div class="flex flex-row items-center gap-2">
             <.config_input
-              class="flex-grow"
+              class={[
+                "flex-grow",
+                if(key == :brightness && @config[:auto_brightness], do: "opacity-50", else: "")
+              ]}
               key={key}
               name={name}
               type={type}
               opts={opts}
               value={@config[key]}
+              disabled={key == :brightness && @config[:auto_brightness]}
             />
             <span class="text-sm text-gray-600 min-w-[3rem]">{@config[key]}</span>
           </div>
@@ -50,6 +59,7 @@ defmodule OctopusWeb.GlobalParamsComponent do
         {key, parse_option(key, value, socket.assigns.config_schema)}
       end)
       |> Map.new()
+      |> ensure_boolean_params(socket.assigns.config_schema)
 
     Global.update_config(config)
 
@@ -75,12 +85,26 @@ defmodule OctopusWeb.GlobalParamsComponent do
     end
   end
 
+  # Ensure all boolean parameters are present in config
+  # Missing boolean params (unchecked checkboxes) should be set to false
+  defp ensure_boolean_params(config, config_schema) do
+    boolean_keys =
+      config_schema
+      |> Enum.filter(fn {_key, {_name, type, _opts}} -> type == :boolean end)
+      |> Enum.map(fn {key, _} -> key end)
+
+    Enum.reduce(boolean_keys, config, fn key, acc ->
+      Map.put_new(acc, key, false)
+    end)
+  end
+
   attr(:key, :atom, required: true)
   attr(:type, :atom, required: true)
   attr(:name, :string, required: true)
   attr(:opts, :map, required: true)
   attr(:debounce, :integer, default: 100)
   attr(:value, :any, required: true)
+  attr(:disabled, :boolean, default: false)
   attr(:rest, :global)
 
   defp config_input(%{type: :float} = assigns) do
@@ -94,6 +118,7 @@ defmodule OctopusWeb.GlobalParamsComponent do
       max={@opts[:max]}
       phx-debounce={@debounce}
       value={@value}
+      disabled={@disabled}
       {@rest}
     />
     """
@@ -110,6 +135,7 @@ defmodule OctopusWeb.GlobalParamsComponent do
       max={@opts[:max]}
       phx-debounce={@debounce}
       value={@value}
+      disabled={@disabled}
       {@rest}
     />
     """
@@ -123,6 +149,7 @@ defmodule OctopusWeb.GlobalParamsComponent do
       id={"global-#{@key}"}
       phx-debounce={@debounce}
       value={@value}
+      disabled={@disabled}
       {@rest}
     />
     """
@@ -137,6 +164,7 @@ defmodule OctopusWeb.GlobalParamsComponent do
         id={"global-#{@key}"}
         phx-debounce={@debounce}
         checked={@value}
+        disabled={@disabled}
       />
     </div>
     """

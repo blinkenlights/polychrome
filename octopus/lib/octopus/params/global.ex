@@ -3,6 +3,7 @@ defmodule Octopus.Params.Global do
 
   def brightness, do: param(:brightness, 128)
   def speed, do: param(:speed, 1.0)
+  def auto_brightness, do: param(:auto_brightness, false)
 
   @doc """
   Config schema for web UI - similar to app config schemas
@@ -10,7 +11,8 @@ defmodule Octopus.Params.Global do
   def config_schema do
     %{
       brightness: {"Global Brightness", :int, %{default: 128, min: 0, max: 255}},
-      speed: {"Animation Speed", :float, %{default: 1.0, min: 0.1, max: 2.0, step: 0.1}}
+      speed: {"Animation Speed", :float, %{default: 1.0, min: 0.1, max: 2.0, step: 0.1}},
+      auto_brightness: {"Auto Brightness", :boolean, %{default: false}}
     }
   end
 
@@ -20,7 +22,8 @@ defmodule Octopus.Params.Global do
   def config do
     %{
       brightness: brightness(),
-      speed: speed()
+      speed: speed(),
+      auto_brightness: auto_brightness()
     }
   end
 
@@ -32,6 +35,7 @@ defmodule Octopus.Params.Global do
       case key do
         :brightness -> handle_param("brightness", [value])
         :speed -> handle_param("speed", [value])
+        :auto_brightness -> handle_param("auto_brightness", [value])
         _ -> :ignore
       end
 
@@ -52,9 +56,13 @@ defmodule Octopus.Params.Global do
 
   def handle_param("brightness", [value]) when is_number(value) do
     clamped_value = value |> min(255) |> max(0)
-    Octopus.Broadcaster.set_luminance(clamped_value)
 
-    # Broadcast for UI sync (OSC changes should update web UI)
+    # Only apply manual brightness changes if auto-brightness is disabled
+    if not auto_brightness() do
+      Octopus.Broadcaster.set_luminance(clamped_value)
+    end
+
+    # Always broadcast for UI sync (so the parameter gets stored and UI updates)
     Phoenix.PubSub.broadcast(
       Octopus.PubSub,
       "global_params",
@@ -72,6 +80,27 @@ defmodule Octopus.Params.Global do
       Octopus.PubSub,
       "global_params",
       {:param_updated, :speed, clamped_value}
+    )
+
+    :ok
+  end
+
+  def handle_param("auto_brightness", [value]) when is_boolean(value) do
+    # When auto-brightness is toggled, we need to restart/stop the sunlight service
+    # For now, just broadcast the change - the sunlight service will handle restart logic
+
+    # Broadcast for UI sync
+    Phoenix.PubSub.broadcast(
+      Octopus.PubSub,
+      "global_params",
+      {:param_updated, :auto_brightness, value}
+    )
+
+    # Also broadcast on sunlight topic for service restart
+    Phoenix.PubSub.broadcast(
+      Octopus.PubSub,
+      "sunlight:config",
+      {:auto_brightness_changed, value}
     )
 
     :ok
