@@ -12,7 +12,7 @@ defmodule Octopus.Apps.Matrix do
 
     alias Octopus.Canvas
 
-    defstruct [:canvas, :particles, :width, :height]
+    defstruct [:canvas, :particles, :width, :height, :global_speed]
 
     def spawn_particles(
           %State{particles: particles, width: width, height: height} = state,
@@ -116,6 +116,12 @@ defmodule Octopus.Apps.Matrix do
     # Configure display using new unified API - adjacent layout (was Canvas.to_frame())
     Octopus.App.configure_display(layout: :adjacent_panels)
 
+    # Subscribe to global parameter changes
+    Octopus.Params.Global.subscribe()
+
+    # Read initial global speed value
+    global_speed = Octopus.Params.Global.speed()
+
     # This is for the 10 panel installation that Matrix was made for
 
     # Get dimensions from display info instead of installation
@@ -128,7 +134,25 @@ defmodule Octopus.Apps.Matrix do
     :timer.send_interval(trunc(1000 / 60), :tick)
     :timer.send_interval(50, :spawn_particles)
     :timer.send_interval(50, :change_colors)
-    {:ok, %State{canvas: canvas, particles: particles, width: width, height: height}}
+
+    {:ok,
+     %State{
+       canvas: canvas,
+       particles: particles,
+       width: width,
+       height: height,
+       global_speed: global_speed
+     }}
+  end
+
+  def handle_info({:param_updated, :speed, new_value}, %State{} = state) do
+    # Global speed parameter changed - update stored value
+    {:noreply, %{state | global_speed: new_value}}
+  end
+
+  def handle_info({:param_updated, _key, _value}, %State{} = state) do
+    # Other global parameters changed - ignore
+    {:noreply, state}
   end
 
   def handle_info(:change_colors, %State{} = state) do
@@ -147,7 +171,8 @@ defmodule Octopus.Apps.Matrix do
   end
 
   def handle_info(:tick, %State{} = state) do
-    state = state |> State.update(1 / 60 * param(:speed, 1.0)) |> State.render()
+    dt = 1 / 60 * param(:speed, 1.0) * state.global_speed
+    state = state |> State.update(dt) |> State.render()
     Octopus.App.update_display(state.canvas)
     {:noreply, state}
   end
