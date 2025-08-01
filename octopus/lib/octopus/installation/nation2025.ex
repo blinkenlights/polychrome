@@ -8,6 +8,8 @@ defmodule Octopus.Installation.Nation2025 do
     panel_height: 8,
     panel_gap: 18,
     global_speed: 0.8,
+    location: {52.684273, 12.959300},
+    auto_brightness: false,
     network_config: [
       mode: :broadcast,
       broadcast_ip: :auto,

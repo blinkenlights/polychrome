@@ -61,6 +61,16 @@ defmodule Octopus.Installation do
   """
   @callback global_speed() :: float()
 
+  @doc """
+  Returns the location coordinates for this installation
+  """
+  @callback location() :: {float(), float()} | :auto | binary()
+
+  @doc """
+  Returns whether automatic brightness adjustment is enabled for this installation
+  """
+  @callback auto_brightness() :: boolean()
+
   @options_schema NimbleOptions.new!(
                     arrangement: [type: {:in, [:linear, :circular]}, required: true],
                     num_panels: [type: :pos_integer, required: true],
@@ -70,6 +80,20 @@ defmodule Octopus.Installation do
                     panel_height: [type: :pos_integer, required: true],
                     panel_gap: [type: :non_neg_integer, required: true],
                     global_speed: [type: :float, default: 1.0],
+                    location: [
+                      type:
+                        {:or,
+                         [
+                           # {latitude, longitude}
+                           {:tuple, [:float, :float]},
+                           # location name for Nominatim
+                           :string,
+                           # IP-based detection
+                           {:in, [:auto]}
+                         ]},
+                      default: :auto
+                    ],
+                    auto_brightness: [type: :boolean, default: false],
                     network_config: [
                       type: :keyword_list,
                       default: [],
@@ -236,6 +260,8 @@ defmodule Octopus.Installation do
     panel_height = Keyword.fetch!(opts, :panel_height)
     panel_gap = Keyword.fetch!(opts, :panel_gap)
     global_speed = Keyword.fetch!(opts, :global_speed)
+    location = Keyword.fetch!(opts, :location)
+    auto_brightness = Keyword.fetch!(opts, :auto_brightness)
     network_config = Keyword.fetch!(opts, :network_config)
 
     width =
@@ -307,6 +333,10 @@ defmodule Octopus.Installation do
       def network_config, do: unquote(network_config)
       @impl Octopus.Installation
       def global_speed, do: unquote(global_speed)
+      @impl Octopus.Installation
+      def location, do: unquote(location)
+      @impl Octopus.Installation
+      def auto_brightness, do: unquote(auto_brightness)
     end
   end
 
@@ -340,6 +370,10 @@ defmodule Octopus.Installation do
   def network_config, do: installation().network_config()
   @impl __MODULE__
   def global_speed, do: installation().global_speed()
+  @impl __MODULE__
+  def location, do: installation().location()
+  @impl __MODULE__
+  def auto_brightness, do: installation().auto_brightness()
 
   @doc """
   Returns the concrete pixel positions of all panels in the installation

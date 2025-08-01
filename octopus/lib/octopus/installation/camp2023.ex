@@ -8,6 +8,8 @@ defmodule Octopus.Installation.Camp2023 do
     panel_height: 8,
     panel_gap: 18,
     global_speed: 1.0,
+    location: {53.030246, 13.305036},
+    auto_brightness: false,
     network_config: [
       mode: :broadcast,
       broadcast_ip: :auto,
