@@ -65,20 +65,61 @@ defmodule Octopus.Apps.DoomFire do
     # Configure display using new unified API - adjacent layout (was Canvas.to_frame())
     Octopus.App.configure_display(layout: :adjacent_panels)
 
+    # Subscribe to global parameter changes
+    Octopus.Params.Global.subscribe()
+
+    # Read initial global speed value
+    global_speed = Octopus.Params.Global.speed()
+
     # Get dimensions from display info instead of installation
     display_info = Octopus.App.get_display_info()
     width = display_info.width
     height = display_info.height
 
     :timer.send_interval(trunc(1000 / 10), :tick)
-    {:ok, %{fire: Fire.new(width, height), canvas: Canvas.new(width, height)}}
+
+    {:ok,
+     %{
+       fire: Fire.new(width, height),
+       canvas: Canvas.new(width, height),
+       global_speed: global_speed,
+       last_update: :erlang.monotonic_time(:millisecond)
+     }}
   end
 
-  def handle_info(:tick, %{fire: fire, canvas: canvas} = state) do
+  def handle_info({:param_updated, :speed, new_value}, state) do
+    # Global speed parameter changed - update stored value
+    {:noreply, %{state | global_speed: new_value}}
+  end
+
+  def handle_info({:param_updated, _key, _value}, state) do
+    # Other global parameters changed - ignore
+    {:noreply, state}
+  end
+
+  def handle_info(
+        :tick,
+        %{fire: fire, canvas: canvas, global_speed: global_speed, last_update: last_update} =
+          state
+      ) do
+    current_time = :erlang.monotonic_time(:millisecond)
+    time_since_last = current_time - last_update
+
+    # Apply global speed - only update fire if enough time has passed based on speed
+    # Base interval is 100ms (10 FPS), with 10% influence from global speed
+    speed_factor = 0.9 + 0.1 * global_speed
+    target_interval = trunc(100 / speed_factor)
+
+    {fire, last_update} =
+      if time_since_last >= target_interval do
+        {Fire.step(fire), current_time}
+      else
+        {fire, last_update}
+      end
+
     canvas = Canvas.clear(canvas)
     canvas = Fire.draw(fire, canvas)
-    fire = Fire.step(fire)
     Octopus.App.update_display(canvas)
-    {:noreply, %{state | fire: fire, canvas: canvas}}
+    {:noreply, %{state | fire: fire, canvas: canvas, last_update: last_update}}
   end
 end
