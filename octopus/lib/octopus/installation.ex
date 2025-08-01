@@ -56,6 +56,11 @@ defmodule Octopus.Installation do
   """
   @callback network_config() :: keyword()
 
+  @doc """
+  Returns the global speed for this installation
+  """
+  @callback global_speed() :: float()
+
   @options_schema NimbleOptions.new!(
                     arrangement: [type: {:in, [:linear, :circular]}, required: true],
                     num_panels: [type: :pos_integer, required: true],
@@ -64,6 +69,7 @@ defmodule Octopus.Installation do
                     panel_width: [type: :pos_integer, required: true],
                     panel_height: [type: :pos_integer, required: true],
                     panel_gap: [type: :non_neg_integer, required: true],
+                    global_speed: [type: :float, default: 1.0],
                     network_config: [
                       type: :keyword_list,
                       default: [],
@@ -229,6 +235,7 @@ defmodule Octopus.Installation do
     panel_width = Keyword.fetch!(opts, :panel_width)
     panel_height = Keyword.fetch!(opts, :panel_height)
     panel_gap = Keyword.fetch!(opts, :panel_gap)
+    global_speed = Keyword.fetch!(opts, :global_speed)
     network_config = Keyword.fetch!(opts, :network_config)
 
     width =
@@ -298,6 +305,8 @@ defmodule Octopus.Installation do
       def simulator_layouts, do: unquote(simulator_layouts)
       @impl Octopus.Installation
       def network_config, do: unquote(network_config)
+      @impl Octopus.Installation
+      def global_speed, do: unquote(global_speed)
     end
   end
 
@@ -329,6 +338,8 @@ defmodule Octopus.Installation do
   def num_buttons, do: installation().num_buttons()
   @impl __MODULE__
   def network_config, do: installation().network_config()
+  @impl __MODULE__
+  def global_speed, do: installation().global_speed()
 
   @doc """
   Returns the concrete pixel positions of all panels in the installation

@@ -1,4 +1,4 @@
-defmodule Octopus.Installation.Nation2024 do
+defmodule Octopus.Installation.Camp2023 do
   use Octopus.Installation,
     arrangement: :linear,
     num_panels: 10,
@@ -6,7 +6,7 @@ defmodule Octopus.Installation.Nation2024 do
     num_joysticks: 0,
     panel_width: 8,
     panel_height: 8,
-    panel_gap: 17,
+    panel_gap: 18,
     global_speed: 1.0,
     network_config: [
       mode: :broadcast,
@@ -15,8 +15,8 @@ defmodule Octopus.Installation.Nation2024 do
     ],
     simulator_layouts: [
       [
-        name: "Nation 2024",
-        background_image: "/images/nation.webp",
+        name: "Camp 2023",
+        background_image: "/images/mildenberg-dark.webp",
         pixel_image: "/images/mildenberg-pixel-overlay.webp",
         image_size: {12900, 5470},
         pixel_size: {25, 25},

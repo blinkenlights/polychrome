@@ -99,14 +99,29 @@ defmodule Octopus.Params do
 
     Code.ensure_all_loaded!(modules)
 
-    modules
-    |> Enum.filter(&function_exported?(&1, :__params__, 0))
-    |> Enum.reduce(%{}, fn module, acc ->
-      module.__params__()
-      |> Enum.reduce(acc, fn {key, default}, acc ->
-        Map.put(acc, {to_string(module.__prefix__()), to_string(key)}, default)
+    initial_params =
+      modules
+      |> Enum.filter(&function_exported?(&1, :__params__, 0))
+      |> Enum.reduce(%{}, fn module, acc ->
+        module.__params__()
+        |> Enum.reduce(acc, fn {key, default}, acc ->
+          Map.put(acc, {to_string(module.__prefix__()), to_string(key)}, default)
+        end)
       end)
-    end)
+
+    # Override global speed with installation-specific value if available
+    case Application.fetch_env(:octopus, :installation) do
+      {:ok, installation_module} ->
+        if function_exported?(installation_module, :global_speed, 0) do
+          installation_speed = installation_module.global_speed()
+          Map.put(initial_params, {"global", "speed"}, installation_speed)
+        else
+          initial_params
+        end
+
+      :error ->
+        initial_params
+    end
   end
 
   defmacro param(key, default) do

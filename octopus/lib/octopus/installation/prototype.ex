@@ -7,6 +7,7 @@ defmodule Octopus.Installation.Prototype do
     panel_width: 8,
     panel_height: 8,
     panel_gap: 0,
+    global_speed: 0.3,
     network_config: [
       mode: :individual,
       panel_ips: ["blinkenleds-prototype.local"],
