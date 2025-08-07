@@ -75,13 +75,13 @@ defmodule OctopusWeb.GlobalParamsComponent do
     end
   end
 
-  attr(:key, :atom, required: true)
-  attr(:type, :atom, required: true)
-  attr(:name, :string, required: true)
-  attr(:opts, :map, required: true)
-  attr(:debounce, :integer, default: 100)
-  attr(:value, :any, required: true)
-  attr(:rest, :global)
+  attr :key, :atom, required: true
+  attr :type, :atom, required: true
+  attr :name, :string, required: true
+  attr :opts, :map, required: true
+  attr :debounce, :integer, default: 100
+  attr :value, :any, required: true
+  attr :rest, :global
 
   defp config_input(%{type: :float} = assigns) do
     ~H"""
