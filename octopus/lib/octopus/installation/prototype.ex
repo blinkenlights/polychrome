@@ -9,7 +9,7 @@ defmodule Octopus.Installation.Prototype do
     panel_gap: 0,
     global_speed: 0.3,
     location: :auto,
-    auto_brightness: true,
+    auto_brightness: false,
     network_config: [
       mode: :individual,
       panel_ips: ["blinkenleds-prototype.local"],
