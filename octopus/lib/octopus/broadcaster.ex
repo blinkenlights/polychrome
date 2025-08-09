@@ -198,7 +198,8 @@ defmodule Octopus.Broadcaster do
   end
 
   defp determine_target_ips(network_config) do
-    current_env = Mix.env()
+    # Use Application.get_env to determine environment, defaulting to :prod
+    current_env = Application.get_env(:octopus, :env, :prod)
     send_in_dev = Keyword.get(network_config, :send_in_dev, false)
 
     should_send_udp =
