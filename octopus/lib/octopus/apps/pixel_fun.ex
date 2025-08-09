@@ -36,7 +36,8 @@ defmodule Octopus.Apps.PixelFun do
       :seconds,
       :buttons,
       :panel_interaction_factors,
-      :panel_proximities
+      :panel_proximities,
+      :speed
     ]
   end
 
@@ -82,6 +83,7 @@ defmodule Octopus.Apps.PixelFun do
     # Configure display using new unified API - adjacent layout (was Canvas.to_frame())
     Octopus.App.configure_display(layout: :adjacent_panels)
     Octopus.App.subscribe_to_button_events()
+    Octopus.Params.Global.subscribe()
 
     {:ok, program} = config.program |> Program.parse()
 
@@ -117,7 +119,8 @@ defmodule Octopus.Apps.PixelFun do
        seconds: seconds,
        buttons: %{},
        panel_interaction_factors: panel_interaction_factors,
-       panel_proximities: Map.new(0..(Installation.num_panels() - 1), fn i -> {i, 0.0} end)
+       panel_proximities: Map.new(0..(Installation.num_panels() - 1), fn i -> {i, 0.0} end),
+       speed: Octopus.Params.Global.speed()
      }}
   end
 
@@ -186,6 +189,14 @@ defmodule Octopus.Apps.PixelFun do
      }}
   end
 
+  def handle_info({:param_updated, :speed, new_value}, %State{} = state) do
+    {:noreply, %{state | speed: new_value}}
+  end
+
+  def handle_info({:param_updated, _key, _value}, %State{} = state) do
+    {:noreply, state}
+  end
+
   def handle_info(:tick, %State{} = state) do
     state = lerp_toward_target_colors(state)
 
@@ -201,7 +212,7 @@ defmodule Octopus.Apps.PixelFun do
     state = %State{
       state
       | offset: {offset_x, offset_y},
-        seconds: state.seconds + 1 / @fps * param(:time_scale, 1.0),
+        seconds: state.seconds + 1 / @fps * param(:time_scale, 1.0) * state.speed,
         panel_interaction_factors: panel_interaction_factors
     }
 
