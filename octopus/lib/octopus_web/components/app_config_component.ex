@@ -20,20 +20,20 @@ defmodule OctopusWeb.AppConfigComponent do
   def render(assigns) do
     ~H"""
     <div>
-      <form class="flex flex-col gap-4" phx-change="change" phx-target={@myself}>
-        <div :for={{key, {name, type, opts}} <- @config_schema}>
-          <label class="font-semibold" for={"#{@app_id}-#{key}"} class="block">{name}</label>
-          <div class="flex flex-row">
-            <.config_input
-              class="w-full"
-              app_id={@app_id}
-              key={key}
-              name={name}
-              type={type}
-              opts={opts}
-              value={@config[key]}
-            />
-          </div>
+      <form class="space-y-4" phx-change="change" phx-target={@myself}>
+        <div :for={{key, {name, type, opts}} <- @config_schema} class="form-control">
+          <label class="label" for={"#{@app_id}-#{key}"}>
+            <span class="label-text font-semibold">{name}</span>
+          </label>
+          <.config_input
+            class="w-full"
+            app_id={@app_id}
+            key={key}
+            name={name}
+            type={type}
+            opts={opts}
+            value={@config[key]}
+          />
         </div>
       </form>
     </div>
@@ -108,6 +108,7 @@ defmodule OctopusWeb.AppConfigComponent do
       max={@opts[:max]}
       phx-debounce={@debounce}
       value={@value}
+      class="range range-primary"
       {@rest}
     />
     """
@@ -124,6 +125,7 @@ defmodule OctopusWeb.AppConfigComponent do
       max={@opts[:max]}
       phx-debounce={@debounce}
       value={@value}
+      class="range range-primary"
       {@rest}
     />
     """
@@ -137,6 +139,7 @@ defmodule OctopusWeb.AppConfigComponent do
       id={"#{@app_id}-#{@key}"}
       phx-debounce={@debounce}
       value={@value}
+      class="input input-bordered w-full"
       {@rest}
     />
     """
@@ -144,21 +147,21 @@ defmodule OctopusWeb.AppConfigComponent do
 
   defp config_input(%{type: :boolean} = assigns) do
     ~H"""
-    <div {@rest}>
-      <input
-        type="checkbox"
-        name={@key}
-        id={"#{@app_id}-#{@key}"}
-        phx-debounce={@debounce}
-        checked={@value}
-      />
-    </div>
+    <input
+      type="checkbox"
+      name={@key}
+      id={"#{@app_id}-#{@key}"}
+      phx-debounce={@debounce}
+      checked={@value}
+      class="checkbox checkbox-primary"
+      {@rest}
+    />
     """
   end
 
   defp config_input(%{type: :select} = assigns) do
     ~H"""
-    <select name={@key} id={"#{@app_id}-#{@key}"} phx-debounce={@debounce} {@rest}>
+    <select name={@key} id={"#{@app_id}-#{@key}"} phx-debounce={@debounce} class="select select-bordered w-full" {@rest}>
       <option :for={{{name, _value}, i} <- Enum.with_index(@opts.options)} value={i}>
         {name}
       </option>

@@ -85,33 +85,35 @@ defmodule OctopusWeb.ProximityLive do
   def render(assigns) do
     ~H"""
     <div class="w-full p-4">
-      <div class="bg-white shadow rounded-lg p-4">
-        <h1 class="text-2xl font-bold mb-4">Proximity Readings - Algorithm Comparison</h1>
-        <div class="mb-4">
-          <div class="flex flex-wrap gap-4 text-sm">
-            <div class="flex items-center">
-              <div class="w-4 h-0.5 bg-red-500 mr-2"></div>
-              <span>Raw</span>
-            </div>
-            <div class="flex items-center">
-              <div class="w-4 h-0.5 bg-orange-500 mr-2"></div>
-              <span>Combined (Median + EMA)</span>
+      <div class="card bg-base-100 shadow-lg">
+        <div class="card-body">
+          <h1 class="card-title text-2xl mb-4">Proximity Readings - Algorithm Comparison</h1>
+          <div class="mb-4">
+            <div class="flex flex-wrap gap-4 text-sm">
+              <div class="badge badge-outline gap-2">
+                <div class="w-4 h-0.5 bg-red-500"></div>
+                <span>Raw</span>
+              </div>
+              <div class="badge badge-outline gap-2">
+                <div class="w-4 h-0.5 bg-orange-500"></div>
+                <span>Combined (Median + EMA)</span>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="w-full h-96">
-          <canvas id="proximity-chart" phx-hook="ProximityChart" class="w-full h-full"></canvas>
-        </div>
-        <div class="mt-4 text-sm text-gray-600">
-          <p>This chart compares raw proximity sensor data with a combined smoothing algorithm.</p>
-          <p>The comparison shows the difference between unfiltered and processed sensor readings:</p>
-          <ul class="list-disc list-inside mt-2 space-y-1">
-            <li><strong>Raw:</strong> Shows all sensor noise and spikes from the proximity sensor</li>
-            <li>
-              <strong>Combined:</strong>
-              Uses median filter first, then exponential moving average for optimal smoothing
-            </li>
-          </ul>
+          <div class="w-full h-96">
+            <canvas id="proximity-chart" phx-hook="ProximityChart" class="w-full h-full"></canvas>
+          </div>
+          <div class="mt-4 text-sm text-base-content/70">
+            <p>This chart compares raw proximity sensor data with a combined smoothing algorithm.</p>
+            <p>The comparison shows the difference between unfiltered and processed sensor readings:</p>
+            <ul class="list-disc list-inside mt-2 space-y-1">
+              <li><strong>Raw:</strong> Shows all sensor noise and spikes from the proximity sensor</li>
+              <li>
+                <strong>Combined:</strong>
+                Uses median filter first, then exponential moving average for optimal smoothing
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>

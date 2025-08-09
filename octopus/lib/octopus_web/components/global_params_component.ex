@@ -20,15 +20,17 @@ defmodule OctopusWeb.GlobalParamsComponent do
   def render(assigns) do
     ~H"""
     <div>
-      <form class="flex flex-col gap-4" phx-change="change" phx-target={@myself}>
-        <div :for={{key, {name, type, opts}} <- @config_schema}>
-          <label class="font-semibold" for={"global-#{key}"} class="block">
-            {name}
-            <%= if key == :brightness && @config[:auto_brightness] do %>
-              <span class="text-xs text-blue-600 font-normal">(Auto-controlled)</span>
-            <% end %>
+      <form class="space-y-4" phx-change="change" phx-target={@myself}>
+        <div :for={{key, {name, type, opts}} <- @config_schema} class="form-control">
+          <label class="label" for={"global-#{key}"}>
+            <span class="label-text font-semibold">
+              {name}
+              <%= if key == :brightness && @config[:auto_brightness] do %>
+                <span class="text-xs text-info font-normal ml-1">(Auto-controlled)</span>
+              <% end %>
+            </span>
           </label>
-          <div class="flex flex-row items-center gap-2">
+          <div class="flex items-center gap-3">
             <.config_input
               class={[
                 "flex-grow",
@@ -41,7 +43,7 @@ defmodule OctopusWeb.GlobalParamsComponent do
               value={@config[key]}
               disabled={key == :brightness && @config[:auto_brightness]}
             />
-            <span class="text-sm text-gray-600 min-w-[3rem]">{@config[key]}</span>
+            <span class="badge badge-outline min-w-[3rem]">{@config[key]}</span>
           </div>
         </div>
       </form>
@@ -119,6 +121,7 @@ defmodule OctopusWeb.GlobalParamsComponent do
       phx-debounce={@debounce}
       value={@value}
       disabled={@disabled}
+      class="range range-primary"
       {@rest}
     />
     """
@@ -136,6 +139,7 @@ defmodule OctopusWeb.GlobalParamsComponent do
       phx-debounce={@debounce}
       value={@value}
       disabled={@disabled}
+      class="range range-primary"
       {@rest}
     />
     """
@@ -150,6 +154,7 @@ defmodule OctopusWeb.GlobalParamsComponent do
       phx-debounce={@debounce}
       value={@value}
       disabled={@disabled}
+      class="input input-bordered w-full"
       {@rest}
     />
     """
@@ -157,16 +162,16 @@ defmodule OctopusWeb.GlobalParamsComponent do
 
   defp config_input(%{type: :boolean} = assigns) do
     ~H"""
-    <div {@rest}>
-      <input
-        type="checkbox"
-        name={@key}
-        id={"global-#{@key}"}
-        phx-debounce={@debounce}
-        checked={@value}
-        disabled={@disabled}
-      />
-    </div>
+    <input
+      type="checkbox"
+      name={@key}
+      id={"global-#{@key}"}
+      phx-debounce={@debounce}
+      checked={@value}
+      disabled={@disabled}
+      class="checkbox checkbox-primary"
+      {@rest}
+    />
     """
   end
 end

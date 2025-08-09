@@ -4,3 +4,61 @@
 @import "../../deps/live_monaco_editor/priv/static/live_monaco_editor.min.css";
 
 /* This file is for your main application CSS */
+
+/* Custom app button styles - theme independent colors */
+.btn-app-rgb {
+    background-color: #3b82f6 !important;
+    border-color: #3b82f6 !important;
+    color: white !important;
+}
+
+.btn-app-rgb:hover {
+    background-color: #2563eb !important;
+    border-color: #2563eb !important;
+}
+
+.btn-app-rgb:disabled,
+.btn-app-rgb.btn-disabled {
+    background-color: #93c5fd !important;
+    border-color: #93c5fd !important;
+    color: black !important;
+    opacity: 0.6;
+}
+
+.btn-app-grayscale {
+    background-color: #6b7280 !important;
+    border-color: #6b7280 !important;
+    color: white !important;
+}
+
+.btn-app-grayscale:hover {
+    background-color: #4b5563 !important;
+    border-color: #4b5563 !important;
+}
+
+.btn-app-grayscale:disabled,
+.btn-app-grayscale.btn-disabled {
+    background-color: #d1d5db !important;
+    border-color: #d1d5db !important;
+    color: black !important;
+    opacity: 0.6;
+}
+
+.btn-app-both {
+    background-color: #8b5cf6 !important;
+    border-color: #8b5cf6 !important;
+    color: white !important;
+}
+
+.btn-app-both:hover {
+    background-color: #7c3aed !important;
+    border-color: #7c3aed !important;
+}
+
+.btn-app-both:disabled,
+.btn-app-both.btn-disabled {
+    background-color: #c4b5fd !important;
+    border-color: #c4b5fd !important;
+    color: black !important;
+    opacity: 0.6;
+}

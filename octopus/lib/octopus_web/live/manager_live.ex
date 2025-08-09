@@ -52,58 +52,33 @@ defmodule OctopusWeb.ManagerLive do
         </div>
       <% end %>
 
-      <div class="container mx-auto">
-        <div class="border rounded m-2 p-2 flex flex-row justify-end gap-2">
-          <a href="/proximity">
-            <button
-              class="text-slate-800 background-transparent font-bold uppercase px-3 py-1 text-xs outline-none focus:outline-none mr-1 mb-1 ease-linear transition-all duration-150"
-              type="button"
-            >
-              Proximity Charts
-            </button>
-          </a>
-          <a href="/firmware-info">
-            <button
-              class="text-slate-800 background-transparent font-bold uppercase px-3 py-1 text-xs outline-none focus:outline-none mr-1 mb-1 ease-linear transition-all duration-150"
-              type="button"
-            >
-              Firmware Info
-            </button>
-          </a>
-          <a href="/sim">
-            <button
-              class="text-slate-800 background-transparent font-bold uppercase px-3 py-1 text-xs outline-none focus:outline-none mr-1 mb-1 ease-linear transition-all duration-150"
-              type="button"
-            >
-              Open Sim
-            </button>
-          </a>
-          <a href="/sim3d">
-            <button
-              class="text-slate-800 background-transparent font-bold uppercase px-3 py-1 text-xs outline-none focus:outline-none mr-1 mb-1 ease-linear transition-all duration-150"
-              type="button"
-            >
-              Open 3D Sim
-            </button>
-          </a>
-          <a href="/sim3daframe">
-            <button
-              class="text-slate-800 background-transparent font-bold uppercase px-3 py-1 text-xs outline-none focus:outline-none mr-1 mb-1 ease-linear transition-all duration-150"
-              type="button"
-            >
-              Open 3D Sim Aframe
-            </button>
-          </a>
+            <div class="container mx-auto">
+        <div class="card bg-base-100 shadow-md m-4">
+          <div class="card-body">
+            <div class="flex flex-wrap gap-2 justify-end">
+              <a href="/proximity" class="btn btn-outline btn-sm">
+                Proximity Charts
+              </a>
+              <a href="/firmware-info" class="btn btn-outline btn-sm">
+                Firmware Info
+              </a>
+              <a href="/sim" class="btn btn-outline btn-sm">
+                Open Sim
+              </a>
+              <a href="/sim3d" class="btn btn-outline btn-sm">
+                Open 3D Sim
+              </a>
+              <a href="/sim3daframe" class="btn btn-outline btn-sm">
+                Open 3D Sim Aframe
+              </a>
+            </div>
+          </div>
         </div>
 
         <%!-- Global Parameters --%>
-        <div class="border rounded m-2 p-0">
-          <div class="flex flex-row">
-            <div class="p-1 font-bold m-0 flex-grow">
-              Global Parameters
-            </div>
-          </div>
-          <div class="p-4">
+        <div class="card bg-base-100 shadow-md m-4">
+          <div class="card-body">
+            <h2 class="card-title">Global Parameters</h2>
             <.live_component
               id="global-params"
               module={OctopusWeb.GlobalParamsComponent}
@@ -112,45 +87,43 @@ defmodule OctopusWeb.ManagerLive do
         </div>
 
         <%!-- Playlists --%>
-        <div class="border rounded m-2 p-0">
-          <div class="flex flex-row">
-            <div class="p-1 font-bold m-0 flex-grow">
-              Playlists
-            </div>
-            <div>
+        <div class="card bg-base-100 shadow-md m-4">
+          <div class="card-body">
+            <h2 class="card-title">Playlists</h2>
+            <div class="card-actions">
               <button
-                class="text-slate-800 background-transparent font-bold uppercase px-3 py-1 text-xs outline-none focus:outline-none mr-1 mb-1 ease-linear transition-all duration-150"
+                class="btn btn-primary btn-sm"
                 type="button"
                 phx-click="playlist-new"
               >
                 New Playlist
               </button>
             </div>
-          </div>
-          <table class="w-full text-left m-0">
+            <table class="table table-zebra w-full">
             <tbody>
               <tr :for={{playlist_id, name} <- @playlists}>
-                <td class={"w-1/2 p-2 #{if playlist_id == @playlist_selected_id, do: "bg-slate-300 font-bold"}"}>
+                <td class={if playlist_id == @playlist_selected_id, do: "font-bold"}>
                   <%= if playlist_id == @playlist_selected_id do %>
-                    <div class="flex flex-row flex-wrap gap-2">
+                    <div class="flex flex-row flex-wrap gap-2 items-center">
                       {name}
                       <div :if={playlist_id == @playlist_selected_id}>
-                        <div class={
-                          if @playlist_status && @playlist_status.status == :running,
-                            do: "text-green-600",
-                            else: "text-red-600"
-                        }>
+                        <span class={[
+                          "badge badge-sm",
+                          (if @playlist_status && @playlist_status.status == :running,
+                            do: "badge-success",
+                            else: "badge-error")
+                        ]}>
                           {if @playlist_status, do: @playlist_status.status}
-                        </div>
+                        </span>
                       </div>
                     </div>
                   <% else %>
                     {name}
                   <% end %>
                 </td>
-                <td class="p-2 flex flex-row flex-wrap gap-2">
+                <td class="flex flex-row flex-wrap gap-2">
                   <button
-                    class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
+                    class="btn btn-primary btn-sm"
                     phx-click="playlist-start"
                     phx-value-playlist-id={playlist_id}
                   >
@@ -158,8 +131,8 @@ defmodule OctopusWeb.ManagerLive do
                   </button>
                   <button
                     class={[
-                      "border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1",
-                      playlist_id == @playlist_selected_id || "opacity-50"
+                      "btn btn-secondary btn-sm",
+                      (if playlist_id != @playlist_selected_id, do: "btn-disabled", else: "")
                     ]}
                     phx-click="playlist-stop"
                     phx-value-playlist-id={playlist_id}
@@ -169,8 +142,8 @@ defmodule OctopusWeb.ManagerLive do
                   </button>
                   <button
                     class={[
-                      "border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1",
-                      playlist_id == @playlist_selected_id || "opacity-50"
+                      "btn btn-outline btn-sm",
+                      (if playlist_id != @playlist_selected_id, do: "btn-disabled", else: "")
                     ]}
                     phx-click="playlist-prev"
                     phx-value-playlist-id={playlist_id}
@@ -180,8 +153,8 @@ defmodule OctopusWeb.ManagerLive do
                   </button>
                   <button
                     class={[
-                      "border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1",
-                      playlist_id == @playlist_selected_id || "opacity-50"
+                      "btn btn-outline btn-sm",
+                      (if playlist_id != @playlist_selected_id, do: "btn-disabled", else: "")
                     ]}
                     phx-click="playlist-next"
                     phx-value-playlist-id={playlist_id}
@@ -190,13 +163,13 @@ defmodule OctopusWeb.ManagerLive do
                     ⏭
                   </button>
                   <.link
-                    class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
+                    class="btn btn-accent btn-sm"
                     navigate={~p"/playlist/#{playlist_id}"}
                   >
                     ✎
                   </.link>
                   <button
-                    class="border py-1 px-2 rounded bg-slate-500 text-white flex flex-row items-center gap-1"
+                    class="btn btn-error btn-sm"
                     phx-click="playlist-delete"
                     phx-value-playlist-id={playlist_id}
                   >
@@ -226,17 +199,16 @@ defmodule OctopusWeb.ManagerLive do
               </tbody>
             </table>
           </div>
+          </div>
         </div>
 
         <%!-- Running Apps --%>
-        <div class="border rounded m-2 p-0">
-          <div class="flex flex-row">
-            <div class="p-1 font-bold m-0 flex-grow">
-              Running Apps
-            </div>
-            <div>
+        <div class="card bg-base-100 shadow-md m-4">
+          <div class="card-body">
+            <div class="flex items-center justify-between">
+              <h2 class="card-title">Running Apps</h2>
               <button
-                class="text-slate-800 background-transparent font-bold uppercase px-3 py-1 text-xs outline-none focus:outline-none mr-1 mb-1 ease-linear transition-all duration-150"
+                class="btn btn-outline btn-sm"
                 phx-click="toggle_event_scheduler"
                 phx-value-val={to_string(!@event_scheduler_started)}
               >
@@ -248,45 +220,54 @@ defmodule OctopusWeb.ManagerLive do
                 Event Scheduler
               </button>
             </div>
-          </div>
-          <table class="w-full text-left m-0">
+            <table class="table table-zebra w-full">
             <tbody>
               <tr :for={%{module: module, app_id: app_id, name: name, selected: selected, output_type: _output_type, masked: masked} <- @running_apps}
                 class={
                   cond do
-                    selected -> "bg-green-200"
-                    masked -> "bg-gray-200"
-                    true -> "bg-white"
+                    selected -> ""
+                    masked -> "opacity-60"
+                    true -> ""
                   end
                 }>
-                <td class="w-1/2 p-2">
-                  {name}
+                <td class="w-1/2">
+                  <div class="flex items-center gap-2">
+                    {name}
+                    <%= if selected do %>
+                      <span class="badge badge-success badge-sm">Active</span>
+                    <% end %>
+                    <%= if masked do %>
+                      <span class="badge badge-neutral badge-sm">Masked</span>
+                    <% end %>
+                  </div>
                 </td>
-                <td class="flex flex-row gap-2 p-1 pl-3">
+                <td class="flex flex-row gap-2">
                   <button
-                    class="border py-1 px-2 rounded bg-slate-300"
+                    class="btn btn-error btn-sm"
                     phx-click="stop"
                     phx-value-module={module}
                     phx-value-app-id={app_id}
                   >
                     Stop
                   </button>
-                  <.link navigate={~p"/app/#{app_id}"} class="border py-1 px-2 rounded bg-slate-300">
+                  <.link navigate={~p"/app/#{app_id}"} class="btn btn-outline btn-sm">
                     Configure
                   </.link>
                   <button
-                    class={"border py-1 px-2 rounded " <>
-                      if(selected, do: "bg-green-500 text-white", else: "bg-slate-300")
-                    }
+                    class={[
+                      "btn btn-sm",
+                      if(selected, do: "btn-success", else: "btn-outline")
+                    ]}
                     phx-click="select"
                     phx-value-app-id={app_id}
                   >
                     Show
                   </button>
                   <button
-                    class={"ml-2 border py-1 px-2 rounded " <>
-                      if(masked, do: "bg-gray-500 text-white", else: "bg-slate-300")
-                    }
+                    class={[
+                      "btn btn-sm",
+                      if(masked, do: "btn-neutral", else: "btn-outline")
+                    ]}
                     phx-click="mask"
                     phx-value-app-id={app_id}
                   >
@@ -296,30 +277,29 @@ defmodule OctopusWeb.ManagerLive do
               </tr>
             </tbody>
           </table>
+          </div>
         </div>
 
         <div :for={{category, apps} <- @available_apps}>
-          <div class="flex flex-col m-2">
-            <div class="p-2 font-bold">
-              {category |> to_string |> String.capitalize()} Apps
-            </div>
-            <div class="border p-2 flex flex-row flex-wrap">
-              <div
-                :for={%{module: module, name: name, icon: icon, compatible: compatible, output_type: output_type} <- apps}
-                class="m-0 p-1"
-              >
+          <div class="card bg-base-100 shadow-md m-4">
+            <div class="card-body">
+              <h2 class="card-title">
+                {category |> to_string |> String.capitalize()} Apps
+              </h2>
+              <div class="flex flex-row flex-wrap gap-2">
                 <button
+                  :for={%{module: module, name: name, icon: icon, compatible: compatible, output_type: output_type} <- apps}
                   class={[
-                    "border py-1 px-2 rounded flex flex-row items-center gap-1",
+                    "btn btn-sm gap-2",
                     case {output_type, compatible} do
-                      {:rgb, true} -> "bg-blue-500 text-white"
-                      {:rgb, false} -> "bg-blue-100 text-blue-500 cursor-not-allowed"
-                      {:grayscale, true} -> "bg-slate-500 text-white"
-                      {:grayscale, false} -> "bg-gray-300 text-gray-500 cursor-not-allowed"
-                      {:both, true} -> "bg-purple-600 text-white"
-                      {:both, false} -> "bg-purple-200 text-purple-600 cursor-not-allowed"
-                      {_, true} -> "bg-slate-500 text-white"
-                      {_, false} -> "bg-gray-300 text-gray-500 cursor-not-allowed"
+                      {:rgb, true} -> "btn-app-rgb"
+                      {:rgb, false} -> "btn-app-rgb btn-disabled"
+                      {:grayscale, true} -> "btn-app-grayscale"
+                      {:grayscale, false} -> "btn-app-grayscale btn-disabled"
+                      {:both, true} -> "btn-app-both"
+                      {:both, false} -> "btn-app-both btn-disabled"
+                      {_, true} -> "btn-outline"
+                      {_, false} -> "btn-outline btn-disabled"
                     end
                   ]}
                   phx-click={if compatible, do: "start", else: nil}

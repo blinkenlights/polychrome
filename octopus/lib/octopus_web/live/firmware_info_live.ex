@@ -29,46 +29,54 @@ defmodule OctopusWeb.FirmwareInfoLive do
   def render(assigns) do
     ~H"""
     <div class="container mx-auto p-4">
-      <div class="bg-white shadow rounded-lg p-4">
-        <table class="min-w-full table-auto border-collapse border border-gray-300 text-center">
+      <div class="card bg-base-100 shadow-lg">
+        <div class="card-body">
+          <h1 class="card-title text-2xl mb-4">Firmware Information</h1>
+          <div class="overflow-x-auto">
+            <table class="table table-zebra w-full text-center">
           <thead>
-            <tr class="bg-gray-100">
-              <th class="border py-1">Panel Index</th>
-              <th class="border py-1">Hostname</th>
-              <th class="border py-1">MAC</th>
-              <th class="border py-1">IPv4</th>
-              <th class="border py-1">Build Time</th>
-              <th class="border py-1">Config Phash</th>
-              <th class="border py-1">FPS</th>
-              <th class="border py-1">Packets/s</th>
-              <th class="border py-1">Proximity/s</th>
-              <th class="border py-1">Uptime</th>
-              <th class="border py-1">Last Seen</th>
+            <tr>
+              <th>Panel Index</th>
+              <th>Hostname</th>
+              <th>MAC</th>
+              <th>IPv4</th>
+              <th>Build Time</th>
+              <th>Config Phash</th>
+              <th>FPS</th>
+              <th>Packets/s</th>
+              <th>Proximity/s</th>
+              <th>Uptime</th>
+              <th>Last Seen</th>
             </tr>
           </thead>
           <tbody>
             <%= for {mac, meta} <- @firmware_stats do %>
               <tr>
-                <td class="border py-1">{meta.firmware_info.panel_index}</td>
-                <td class="border py-1">{meta.firmware_info.hostname}</td>
-                <td class="border py-1">{mac}</td>
-                <td class="border py-1">{meta.firmware_info.ipv4}</td>
-                <td class="border py-1">
+                <td>{meta.firmware_info.panel_index}</td>
+                <td>{meta.firmware_info.hostname}</td>
+                <td class="font-mono text-sm">{mac}</td>
+                <td class="font-mono text-sm">{meta.firmware_info.ipv4}</td>
+                <td>
                   {format_build_time(meta.firmware_info.build_time, @current_time)}
                 </td>
-                <td class="border py-1">{meta.firmware_info.config_phash}</td>
-                <td class="border py-1">{meta.firmware_info.frames_per_second}</td>
-                <td class="border py-1">{meta.firmware_info.packets_per_second}</td>
-                <td class="border py-1">{meta.firmware_info.proximity_readings_per_second}</td>
-                <td class="border py-1">{format_uptime(meta.firmware_info.uptime)}</td>
-                <td class="border py-1">{time_ago(meta.last_seen, @current_time)}</td>
+                <td class="font-mono text-xs">{meta.firmware_info.config_phash}</td>
+                <td>{meta.firmware_info.frames_per_second}</td>
+                <td>{meta.firmware_info.packets_per_second}</td>
+                <td>{meta.firmware_info.proximity_readings_per_second}</td>
+                <td>{format_uptime(meta.firmware_info.uptime)}</td>
+                <td>{time_ago(meta.last_seen, @current_time)}</td>
               </tr>
             <% end %>
           </tbody>
-        </table>
-        <%= if length(@firmware_stats) == 0 do %>
-          <p class="text-gray-600 mt-4">No firmware devices found.</p>
-        <% end %>
+            </table>
+          </div>
+          <%= if length(@firmware_stats) == 0 do %>
+            <div class="alert alert-info mt-4">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              <span>No firmware devices found.</span>
+            </div>
+          <% end %>
+        </div>
       </div>
     </div>
     """

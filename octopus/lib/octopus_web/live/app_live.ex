@@ -25,18 +25,27 @@ defmodule OctopusWeb.AppLive do
 
   def render(assigns) do
     ~H"""
-    <div class="container mx-auto flex flex-col items-center">
-      <h1 class="text-2xl font-semibold leading-loose">{@name}</h1>
-      <.live_component
-        id={"app-config-#{@app_id}"}
-        module={OctopusWeb.AppConfigComponent}
-        app_id={@app_id}
-        app_module={@module}
-      />
-      <h2 class="text-2xl font-semibold leading-loose">Config for Playlist</h2>
-      <code>
-        {@playlist_config}
-      </code>
+    <div class="container mx-auto p-4">
+      <div class="card bg-base-100 shadow-lg max-w-2xl mx-auto">
+        <div class="card-body">
+          <h1 class="card-title text-3xl justify-center">{@name}</h1>
+          <.live_component
+            id={"app-config-#{@app_id}"}
+            module={OctopusWeb.AppConfigComponent}
+            app_id={@app_id}
+            app_module={@module}
+          />
+        </div>
+      </div>
+      
+      <div class="card bg-base-100 shadow-lg max-w-2xl mx-auto mt-4">
+        <div class="card-body">
+          <h2 class="card-title">Config for Playlist</h2>
+          <div class="mockup-code">
+            <pre><code>{@playlist_config}</code></pre>
+          </div>
+        </div>
+      </div>
     </div>
     """
   end

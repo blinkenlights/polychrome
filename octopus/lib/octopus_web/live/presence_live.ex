@@ -31,15 +31,13 @@ defmodule OctopusWeb.PresenceLive do
   def render(assigns) do
     ~H"""
     <div
-      class="absolute top-0 left-0 p-2 text-white flex flex-row items-center gap-2"
+      class="absolute top-0 left-0 p-2 z-50"
       title="Users online"
     >
-      <div class="relative float-left">
-        <div class="w-4 h-4 rounded-full bg-green-400 blur-sm"></div>
-        <div class="w-4 h-4 absolute top-0 left-0 rounded-full bg-green-600 border border-green-700">
-        </div>
+      <div class="badge badge-success gap-2">
+        <div class="w-2 h-2 rounded-full bg-success-content animate-pulse"></div>
+        <span class="font-mono"><%= @online %></span>
       </div>
-      <pre><%= @online %></pre>
     </div>
     """
   end

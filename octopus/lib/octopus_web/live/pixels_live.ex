@@ -131,14 +131,14 @@ defmodule OctopusWeb.PixelsLive do
         <form id="view-form" phx-change="view-changed">
           <.input type="select" name="view" options={@view_options} value={@view} />
         </form>
-        <div :if={@view != @default_view}>
+        <div :if={@view != @default_view} class="flex gap-1">
           <button
             :for={window <- 1..@max_windows}
             phx-click="window-changed"
             phx-value-window={window}
             class={[
-              if(@window == window, do: "bg-neutral-100/20", else: "bg-neutral-900/20"),
-              "text-neutral-100 rounded inline-block mx-1 w-6 border border-neutral-500 shadow text-center"
+              "btn btn-sm btn-square",
+              if(@window == window, do: "btn-primary", else: "btn-outline btn-primary")
             ]}
           >
             {window}
@@ -166,11 +166,11 @@ defmodule OctopusWeb.PixelsLive do
               phx-click="button-click"
               phx-value-button={i}
               class={[
-                "rounded px-3 py-2 text-sm font-mono border shadow transition-colors select-none min-w-[2.5rem] cursor-pointer",
+                "btn btn-sm font-mono min-w-[2.5rem]",
                 if MapSet.member?(@pressed_buttons, i) do
-                  "bg-green-600 hover:bg-green-500 border-green-400 text-white"
+                  "btn-success"
                 else
-                  "bg-neutral-700 hover:bg-neutral-600 active:bg-neutral-500 text-neutral-100 border-neutral-500"
+                  "btn-neutral"
                 end
               ]}
               type="button"
