@@ -57,8 +57,8 @@ protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTOBUF_SRCS})
 include_directories(SYSTEM ${Protobuf_INCLUDE_DIRS})
 include_directories(SYSTEM ${CMAKE_CURRENT_BINARY_DIR})
 
-# JUCE framework
-CPMAddPackage("gh:juce-framework/JUCE#7.0.5@7.0.5")
+# JUCE framework (track master for latest macOS 15 fixes)
+CPMAddPackage("gh:juce-framework/JUCE#master@master")
 
 # juce_add_console_app(${TARGET_NAME}
 # PRODUCT_NAME "analyzer"
@@ -113,6 +113,7 @@ target_link_libraries(${TARGET_NAME}
   PRIVATE
   plog::plog
   fmt::fmt
+  juce::juce_audio_processors
   juce::juce_core
   juce::juce_audio_devices
   juce::juce_audio_formats
