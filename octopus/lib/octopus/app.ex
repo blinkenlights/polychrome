@@ -53,6 +53,7 @@ defmodule Octopus.App do
   alias Octopus.Events.Event.Audio, as: AudioEvent
   alias Octopus.Events.Event.Input, as: InputEvent
   alias Octopus.Events.Event.Lifecycle, as: LifecycleEvent
+  alias Octopus.Events.Event.SpaceMouse, as: SpaceMouseEvent
   alias Octopus.Installation
   alias Octopus.ButtonServer
 
@@ -89,7 +90,7 @@ defmodule Octopus.App do
   Optional callback to handle events. An app will only receive events if it is selected as active in the mixer.
   """
   @callback handle_event(
-              %InputEvent{} | %AudioEvent{} | %ProximityEvent{} | %LifecycleEvent{},
+              %InputEvent{} | %AudioEvent{} | %ProximityEvent{} | %LifecycleEvent{} | %SpaceMouseEvent{},
               state :: any
             ) ::
               {:noreply, state :: any}

@@ -14,6 +14,7 @@ defmodule Octopus.Events.Router do
   alias Octopus.Events.Event.Input, as: InputEvent
   alias Octopus.Events.Event.Proximity, as: ProximityEvent
   alias Octopus.Events.Event.Audio, as: AudioEvent
+  alias Octopus.Events.Event.SpaceMouse, as: SpaceMouseEvent
   alias Octopus.Events.Event.Proximity.Processor
   alias Octopus.ButtonServer
 
@@ -91,6 +92,20 @@ defmodule Octopus.Events.Router do
       _ ->
         :noop
     end
+
+    {:noreply, state}
+  end
+
+  def handle_cast({:route_event, %SpaceMouseEvent{} = spacemouse_event}, state) do
+    selected_app = AppManager.get_selected_app()
+    Logger.debug("Events Router: Routing SpaceMouse event #{spacemouse_event.type} to app #{selected_app}")
+    AppSupervisor.send_event(selected_app, spacemouse_event)
+
+    Phoenix.PubSub.broadcast(
+      Octopus.PubSub,
+      @pubsub_topic,
+      {:events_router, {:spacemouse_event, spacemouse_event}}
+    )
 
     {:noreply, state}
   end

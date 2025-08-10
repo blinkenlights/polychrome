@@ -66,7 +66,8 @@ defmodule Octopus.MixProject do
       {:nimble_parsec, "~> 1.4"},
       {:nimble_options, "~> 1.0"},
       {:mdns_lite, "~> 0.8.10"},
-      {:oscx, "~> 0.1.1"}
+      {:oscx, "~> 0.1.1"},
+      {:space_mouse, git: "https://github.com/timpritlove/space_mouse.git"}
     ]
   end
 

@@ -21,7 +21,7 @@ import Config
 # end
 
 # config :octopus, :installation,
-config :octopus, :installation, Octopus.Installation.Nation2025
+config :octopus, :installation, Octopus.Installation.Prototype
 
 if config_env() == :prod do
   database_path =
