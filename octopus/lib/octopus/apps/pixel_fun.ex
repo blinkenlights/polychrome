@@ -7,6 +7,7 @@ defmodule Octopus.Apps.PixelFun do
   alias Octopus.Events.Event.Audio, as: AudioEvent
   alias Octopus.Events.Event.Input, as: InputEvent
   alias Octopus.Events.Event.Proximity, as: ProximityEvent
+  alias Octopus.Events.Event.SpaceMouse, as: SpaceMouseEvent
   alias Octopus.Apps.PixelFun.Program
   alias Octopus.Installation
 
@@ -37,20 +38,23 @@ defmodule Octopus.Apps.PixelFun do
       :buttons,
       :panel_interaction_factors,
       :panel_proximities,
-      :speed
+      :speed,
+      :rotation,
+      :translate_x,
+      :translate_y,
+      :zoom
     ]
   end
 
   def name(), do: "Pixel Fun"
 
   def compatible?() do
-    installation_info = Octopus.App.get_installation_info()
-    installation_info.panel_width == 8 and installation_info.panel_height == 8
+    true
   end
 
   def config_schema() do
     %{
-      program: {"Program", :string, %{default: "sin(10*t-hypot(x,y))"}},
+      program: {"Program", :string, %{default: "sin(t*10+hypot(sin(t+x)*16,sin(t+y)*16)*0.5)"}},
       color_interval: {"Color change Interval (s)", :float, %{default: 5, min: 1, max: 20}},
       invert_colors: {"Invert Colors", :boolean, %{default: false}},
       translate_scale: {"Translate Scale", :float, %{default: 0.0, min: 0, max: 20}},
@@ -84,6 +88,7 @@ defmodule Octopus.Apps.PixelFun do
     Octopus.App.configure_display(layout: :adjacent_panels)
     Octopus.App.subscribe_to_button_events()
     Octopus.Params.Global.subscribe()
+    Octopus.SpaceMouse.enable()
 
     {:ok, program} = config.program |> Program.parse()
 
@@ -120,7 +125,11 @@ defmodule Octopus.Apps.PixelFun do
        buttons: %{},
        panel_interaction_factors: panel_interaction_factors,
        panel_proximities: Map.new(0..(Installation.num_panels() - 1), fn i -> {i, 0.0} end),
-       speed: Octopus.Params.Global.speed()
+       speed: Octopus.Params.Global.speed(),
+       rotation: 0.0,
+       translate_x: 0.0,
+       translate_y: 0.0,
+       zoom: 1.0
      }}
   end
 
@@ -283,6 +292,24 @@ defmodule Octopus.Apps.PixelFun do
     {:noreply, %State{state | panel_proximities: panel_proximities}}
   end
 
+  def handle_event(%SpaceMouseEvent{type: :motion, motion: motion}, state) do
+    new_translate_x = state.translate_x + motion.x * 0.1
+    new_translate_y = state.translate_y + motion.y * 0.1
+    zoom_factor = 1.0 / :math.pow(state.zoom + 1.0, 3.0)
+    new_zoom = max(state.zoom - motion.z * 0.001 * zoom_factor, 0.0)
+    new_rotation = state.rotation - motion.rz * 0.01
+
+    new_state = %State{
+      state
+      | translate_x: new_translate_x,
+        translate_y: new_translate_y,
+        zoom: new_zoom,
+        rotation: new_rotation
+    }
+
+    {:noreply, new_state}
+  end
+
   def handle_event(_event, state) do
     {:noreply, state}
   end
@@ -290,7 +317,8 @@ defmodule Octopus.Apps.PixelFun do
   defp render(%State{program: program} = state) do
     zoom = 1.0
 
-    rotation = state.seconds * param(:rotate_speed, 0)
+    # rotation = state.seconds * param(:rotate_speed, 0)
+    rotation = state.rotation
 
     {color_a, color_b} = state.colors
 
@@ -318,18 +346,21 @@ defmodule Octopus.Apps.PixelFun do
         %Chameleon.HSV{color_b | h: rem(trunc(color_b.h + hue_shift), 360)}
       }
 
-      for {{x, y}, i} <- Enum.with_index(panel), into: Canvas.new(8, 8) do
-        local_x = rem(i, 8)
-        local_y = div(i, 8)
+      panel_width = Installation.panel_width()
+      panel_height = Installation.panel_height()
 
-        x_translated = x - center_x
-        y_translated = y - center_y
+      for {{x, y}, i} <- Enum.with_index(panel), into: Canvas.new(panel_width, panel_height) do
+        local_x = rem(i, panel_width)
+        local_y = div(i, panel_width)
+
+        x_translated = x - center_x - state.translate_x
+        y_translated = y - center_y - state.translate_y
 
         x_rotated = x_translated * :math.cos(rotation) - y_translated * :math.sin(rotation)
         y_rotated = x_translated * :math.sin(rotation) + y_translated * :math.cos(rotation)
 
-        x_scaled = x_rotated * zoom
-        y_scaled = y_rotated * zoom
+        x_scaled = x_rotated * state.zoom
+        y_scaled = y_rotated * state.zoom
 
         {{local_x, local_y},
          pixels(
