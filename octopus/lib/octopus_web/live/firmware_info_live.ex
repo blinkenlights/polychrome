@@ -4,7 +4,7 @@ defmodule OctopusWeb.FirmwareInfoLive do
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket) do
-      :timer.send_interval(1000, :update)
+      :timer.send_interval(1_000, :update)
       send(self(), :update)
     end
 
@@ -104,9 +104,9 @@ defmodule OctopusWeb.FirmwareInfoLive do
   defp format_duration(seconds) do
     cond do
       seconds < 60 -> "#{seconds}s"
-      seconds < 3600 -> "#{div(seconds, 60)}m"
-      seconds < 86400 -> "#{div(seconds, 3600)}h"
-      true -> "#{div(seconds, 86400)}d"
+      seconds < 3_600 -> "#{div(seconds, 60)}m"
+      seconds < 86_400 -> "#{div(seconds, 3_600)}h"
+      true -> "#{div(seconds, 86_400)}d"
     end
   end
 end
