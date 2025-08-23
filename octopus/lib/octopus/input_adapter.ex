@@ -51,7 +51,7 @@ defmodule Octopus.InputAdapter do
     {:noreply, state}
   end
 
-  def handle_info({:udp, _socket, from_ip, from_port, packet}, state = %State{}) do
+  def handle_info({:udp, _socket, from_ip, from_port, packet}, %State{} = state) do
     case Protobuf.decode_packet(packet) do
       {:ok, %InputEvent{} = input_event} ->
         domain_event = Factory.create_input_event(input_event)

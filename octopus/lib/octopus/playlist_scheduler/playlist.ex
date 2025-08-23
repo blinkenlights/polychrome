@@ -22,7 +22,7 @@ defmodule Octopus.PlaylistScheduler.Playlist do
     timestamps()
   end
 
-  def changeset(playlist = %__MODULE__{}, attrs) do
+  def changeset(%__MODULE__{} = playlist, attrs) do
     playlist
     |> Changeset.cast(attrs, [:name])
     |> Changeset.cast_embed(:animations, with: &animation_changeset/2)

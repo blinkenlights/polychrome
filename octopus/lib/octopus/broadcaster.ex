@@ -81,7 +81,7 @@ defmodule Octopus.Broadcaster do
     {:noreply, state}
   end
 
-  def handle_info({:udp, _socket, from_ip, _port, protobuf}, state = %State{}) do
+  def handle_info({:udp, _socket, from_ip, _port, protobuf}, %State{} = state) do
     state =
       case Protobuf.decode_firmware_packet(protobuf) do
         {:ok, %FirmwarePacket{content: {_, content}}} ->
