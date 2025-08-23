@@ -38,8 +38,8 @@ defmodule Octopus.KioskModeManager do
     GenServer.cast(__MODULE__, :game_finished)
   end
 
-  def is_started?() do
-    GenServer.call(__MODULE__, :is_started?)
+  def started?() do
+    GenServer.call(__MODULE__, :started?)
   end
 
   @doc """
@@ -126,6 +126,6 @@ defmodule Octopus.KioskModeManager do
 
   def handle_cast(:game_finished, state), do: {:noreply, state}
 
-  def handle_call(:is_started?, _, %State{status: :off} = state), do: {:reply, false, state}
-  def handle_call(:is_started?, _, state), do: {:reply, true, state}
+  def handle_call(:started?, _, %State{status: :off} = state), do: {:reply, false, state}
+  def handle_call(:started?, _, state), do: {:reply, true, state}
 end
