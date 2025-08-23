@@ -20,7 +20,7 @@ defmodule Octopus.Installation.Camp2023 do
         name: "Camp 2023",
         background_image: "/images/mildenberg-dark.webp",
         pixel_image: "/images/mildenberg-pixel-overlay.webp",
-        image_size: {12900, 5470},
+        image_size: {12_900, 5470},
         pixel_size: {25, 25},
         offset_x: 1750,
         offset_y: 3750,

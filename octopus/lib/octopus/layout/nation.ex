@@ -5,7 +5,7 @@ defmodule Octopus.Layout.Nation do
   @height 8
   @pixel_width 25
   @pixel_height 25
-  @image_width 12900
+  @image_width 12_900
   @image_height 5470
   @offset_x 1750
   @offset_y 3750
