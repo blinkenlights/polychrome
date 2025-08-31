@@ -69,7 +69,7 @@ defmodule Octopus.MixProject do
       {:mdns_lite, "~> 0.8.10"},
       {:oscx, "~> 0.1.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:igniter, "~> 0.3", only: [:dev]}
+      {:igniter, "~> 0.6", only: [:dev]}
     ]
   end
 
