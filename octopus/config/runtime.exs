@@ -20,9 +20,6 @@ import Config
 #   config :octopus, OctopusWeb.Endpoint, server: true
 # end
 
-# config :octopus, :installation,
-config :octopus, :installation, Octopus.Installation.Nation2025
-
 if config_env() == :prod do
   database_path =
     System.get_env("DATABASE_PATH") ||

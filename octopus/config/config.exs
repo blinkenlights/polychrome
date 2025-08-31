@@ -35,6 +35,9 @@ config :octopus, :osc_server_port, 8000
 # Network addresses are now configured in Installation modules
 # See lib/octopus/installation/*.ex files
 
+# Installation configuration (compile-time setting)
+config :octopus, :installation, Octopus.Installation.Nation2025
+
 # Configures the endpoint
 config :octopus, OctopusWeb.Endpoint,
   url: [host: "localhost"],
