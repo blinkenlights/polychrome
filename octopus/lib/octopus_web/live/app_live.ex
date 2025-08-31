@@ -37,7 +37,7 @@ defmodule OctopusWeb.AppLive do
           />
         </div>
       </div>
-      
+
       <div class="card bg-base-100 shadow-lg max-w-2xl mx-auto mt-4">
         <div class="card-body">
           <h2 class="card-title">Config for Playlist</h2>
@@ -66,7 +66,7 @@ defmodule OctopusWeb.AppLive do
     config = %{
       app: Module.split(socket.assigns.module) |> List.last(),
       config: AppSupervisor.config(socket.assigns.app_id),
-      timeout: 60000
+      timeout: 60_000
     }
 
     socket =

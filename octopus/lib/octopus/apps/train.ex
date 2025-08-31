@@ -184,7 +184,7 @@ defmodule Octopus.Apps.Train do
     panel_start_x = panel_id * (panel_width + panel_gap)
     t = :math.fmod(state.time / 150, 1.0)
 
-    if is_night?(t) do
+    if night?(t) do
       # Sternschnuppe wie bisher
       start_x = panel_start_x + (:rand.uniform(panel_width) - 1)
       start_y = 0
@@ -273,7 +273,7 @@ defmodule Octopus.Apps.Train do
     {:noreply, state}
   end
 
-  defp is_night?(t) do
+  defp night?(t) do
     t < 0.23 or t > 0.77
   end
 

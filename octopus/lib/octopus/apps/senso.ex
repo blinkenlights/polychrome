@@ -112,7 +112,7 @@ defmodule Octopus.Apps.Senso do
   end
 
   def handle_info(:reset, state) do
-    newState = %State{
+    new_state = %State{
       expected_sequence: generate_sequence(@first_squence_len, state.display_info.num_panels),
       index: 0,
       successes: 0,
@@ -122,11 +122,11 @@ defmodule Octopus.Apps.Senso do
 
     send(self(), :run)
 
-    {:noreply, newState}
+    {:noreply, new_state}
   end
 
   def handle_info(:success, %State{} = state) do
-    newState = %State{
+    new_state = %State{
       expected_sequence:
         state.expected_sequence ++ generate_sequence(1, state.display_info.num_panels),
       index: 0,
@@ -139,7 +139,7 @@ defmodule Octopus.Apps.Senso do
 
     send(self(), :run)
 
-    {:noreply, newState}
+    {:noreply, new_state}
   end
 
   def handle_event(_input_event, %State{input_blocked: true} = state) do

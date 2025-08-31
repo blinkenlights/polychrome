@@ -500,7 +500,7 @@ defmodule Octopus.Apps.Ocean do
 
       Enum.reduce(0..(state.height - 1), canvas, fn y, canvas ->
         # Check if this pixel is in a button flash area
-        in_button_flash = is_pixel_in_button_flash(x, y, button_flashes)
+        in_button_flash = pixel_in_button_flash?(x, y, button_flashes)
 
         # Determine if this pixel should show water
         if y >= actual_water_level do
@@ -703,7 +703,7 @@ defmodule Octopus.Apps.Ocean do
   end
 
   # Check if a pixel is within any button flash area
-  defp is_pixel_in_button_flash(x, y, button_flashes) do
+  defp pixel_in_button_flash?(x, y, button_flashes) do
     Enum.any?(button_flashes, fn flash ->
       x >= flash.panel_x && x < flash.panel_x + flash.panel_width &&
         y >= flash.panel_y && y < flash.panel_y + flash.panel_height
