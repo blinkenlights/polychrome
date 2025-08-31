@@ -66,7 +66,8 @@ defmodule Octopus.MixProject do
       {:nimble_parsec, "~> 1.4"},
       {:nimble_options, "~> 1.0"},
       {:mdns_lite, "~> 0.8.10"},
-      {:oscx, "~> 0.1.1"}
+      {:oscx, "~> 0.1.1"},
+      {:igniter, "~> 0.3", only: [:dev]}
     ]
   end
 
