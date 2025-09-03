@@ -52,7 +52,7 @@ defmodule OctopusWeb.ManagerLive do
         </div>
       <% end %>
 
-            <div class="container mx-auto">
+      <div class="container mx-auto">
         <div class="card bg-base-100 shadow-md m-4">
           <div class="card-body">
             <div class="flex flex-wrap gap-2 justify-end">
@@ -100,105 +100,106 @@ defmodule OctopusWeb.ManagerLive do
               </button>
             </div>
             <table class="table table-zebra w-full">
-            <tbody>
-              <tr :for={{playlist_id, name} <- @playlists}>
-                <td class={if playlist_id == @playlist_selected_id, do: "font-bold"}>
-                  <%= if playlist_id == @playlist_selected_id do %>
-                    <div class="flex flex-row flex-wrap gap-2 items-center">
-                      {name}
-                      <div :if={playlist_id == @playlist_selected_id}>
-                        <span class={[
-                          "badge badge-sm",
-                          (if @playlist_status && @playlist_status.status == :running,
-                            do: "badge-success",
-                            else: "badge-error")
-                        ]}>
-                          {if @playlist_status, do: @playlist_status.status}
-                        </span>
-                      </div>
-                    </div>
-                  <% else %>
-                    {name}
-                  <% end %>
-                </td>
-                <td class="flex flex-row flex-wrap gap-2">
-                  <button
-                    class="btn btn-primary btn-sm"
-                    phx-click="playlist-start"
-                    phx-value-playlist-id={playlist_id}
-                  >
-                    ▶
-                  </button>
-                  <button
-                    class={[
-                      "btn btn-secondary btn-sm",
-                      (if playlist_id != @playlist_selected_id, do: "btn-disabled", else: "")
-                    ]}
-                    phx-click="playlist-stop"
-                    phx-value-playlist-id={playlist_id}
-                    disabled={playlist_id != @playlist_selected_id}
-                  >
-                    ⏹︎
-                  </button>
-                  <button
-                    class={[
-                      "btn btn-outline btn-sm",
-                      (if playlist_id != @playlist_selected_id, do: "btn-disabled", else: "")
-                    ]}
-                    phx-click="playlist-prev"
-                    phx-value-playlist-id={playlist_id}
-                    disabled={playlist_id != @playlist_selected_id}
-                  >
-                    ⏮
-                  </button>
-                  <button
-                    class={[
-                      "btn btn-outline btn-sm",
-                      (if playlist_id != @playlist_selected_id, do: "btn-disabled", else: "")
-                    ]}
-                    phx-click="playlist-next"
-                    phx-value-playlist-id={playlist_id}
-                    disabled={playlist_id != @playlist_selected_id}
-                  >
-                    ⏭
-                  </button>
-                  <.link
-                    class="btn btn-accent btn-sm"
-                    navigate={~p"/playlist/#{playlist_id}"}
-                  >
-                    ✎
-                  </.link>
-                  <button
-                    class="btn btn-error btn-sm"
-                    phx-click="playlist-delete"
-                    phx-value-playlist-id={playlist_id}
-                  >
-                    🗑
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          <div :if={@playlist_status && @playlist_status.playlist} class="m-2 border-4">
-            <table class="w-full text-left m-0">
               <tbody>
-                <tr
-                  :for={
-                    {%Animation{app: app, config: config, timeout: timeout}, index} <-
-                      Enum.with_index(@playlist_status.playlist.animations)
-                  }
-                  class={index != @playlist_status.index || "bg-slate-200 font-bold"}
-                >
-                  <td class="w-1/4 p-2">
-                    {app}
+                <tr :for={{playlist_id, name} <- @playlists}>
+                  <td class={if playlist_id == @playlist_selected_id, do: "font-bold"}>
+                    <%= if playlist_id == @playlist_selected_id do %>
+                      <div class="flex flex-row flex-wrap gap-2 items-center">
+                        {name}
+                        <div :if={playlist_id == @playlist_selected_id}>
+                          <span class={[
+                            "badge badge-sm",
+                            if(@playlist_status && @playlist_status.status == :running,
+                              do: "badge-success",
+                              else: "badge-error"
+                            )
+                          ]}>
+                            {if @playlist_status, do: @playlist_status.status}
+                          </span>
+                        </div>
+                      </div>
+                    <% else %>
+                      {name}
+                    <% end %>
                   </td>
-                  <td>{timeout}</td>
-                  <td class="w-1/2 ">{config |> Jason.encode!()}</td>
+                  <td class="flex flex-row flex-wrap gap-2">
+                    <button
+                      class="btn btn-primary btn-sm"
+                      phx-click="playlist-start"
+                      phx-value-playlist-id={playlist_id}
+                    >
+                      ▶
+                    </button>
+                    <button
+                      class={[
+                        "btn btn-secondary btn-sm",
+                        if(playlist_id != @playlist_selected_id, do: "btn-disabled", else: "")
+                      ]}
+                      phx-click="playlist-stop"
+                      phx-value-playlist-id={playlist_id}
+                      disabled={playlist_id != @playlist_selected_id}
+                    >
+                      ⏹︎
+                    </button>
+                    <button
+                      class={[
+                        "btn btn-outline btn-sm",
+                        if(playlist_id != @playlist_selected_id, do: "btn-disabled", else: "")
+                      ]}
+                      phx-click="playlist-prev"
+                      phx-value-playlist-id={playlist_id}
+                      disabled={playlist_id != @playlist_selected_id}
+                    >
+                      ⏮
+                    </button>
+                    <button
+                      class={[
+                        "btn btn-outline btn-sm",
+                        if(playlist_id != @playlist_selected_id, do: "btn-disabled", else: "")
+                      ]}
+                      phx-click="playlist-next"
+                      phx-value-playlist-id={playlist_id}
+                      disabled={playlist_id != @playlist_selected_id}
+                    >
+                      ⏭
+                    </button>
+                    <.link
+                      class="btn btn-accent btn-sm"
+                      navigate={~p"/playlist/#{playlist_id}"}
+                    >
+                      ✎
+                    </.link>
+                    <button
+                      class="btn btn-error btn-sm"
+                      phx-click="playlist-delete"
+                      phx-value-playlist-id={playlist_id}
+                    >
+                      🗑
+                    </button>
+                  </td>
                 </tr>
               </tbody>
             </table>
-          </div>
+
+            <div :if={@playlist_status && @playlist_status.playlist} class="m-2 border-4">
+              <table class="w-full text-left m-0">
+                <tbody>
+                  <tr
+                    :for={
+                      {%Animation{app: app, config: config, timeout: timeout}, index} <-
+                        Enum.with_index(@playlist_status.playlist.animations)
+                    }
+                    class={index != @playlist_status.index || "bg-slate-200 font-bold"}
+                  >
+                    <td class="w-1/4 p-2">
+                      {app}
+                    </td>
+                    <td>{timeout}</td>
+                    <td class="w-1/2 ">{config |> Jason.encode!()}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -221,62 +222,73 @@ defmodule OctopusWeb.ManagerLive do
               </button>
             </div>
             <table class="table table-zebra w-full">
-            <tbody>
-              <tr :for={%{module: module, app_id: app_id, name: name, selected: selected, output_type: _output_type, masked: masked} <- @running_apps}
-                class={
-                  cond do
-                    selected -> ""
-                    masked -> "opacity-60"
-                    true -> ""
-                  end
-                }>
-                <td class="w-1/2">
-                  <div class="flex items-center gap-2">
-                    {name}
-                    <%= if selected do %>
-                      <span class="badge badge-success badge-sm">Active</span>
-                    <% end %>
-                    <%= if masked do %>
-                      <span class="badge badge-neutral badge-sm">Masked</span>
-                    <% end %>
-                  </div>
-                </td>
-                <td class="flex flex-row gap-2">
-                  <button
-                    class="btn btn-error btn-sm"
-                    phx-click="stop"
-                    phx-value-module={module}
-                    phx-value-app-id={app_id}
-                  >
-                    Stop
-                  </button>
-                  <.link navigate={~p"/app/#{app_id}"} class="btn btn-outline btn-sm">
-                    Configure
-                  </.link>
-                  <button
-                    class={[
-                      "btn btn-sm",
-                      if(selected, do: "btn-success", else: "btn-outline")
-                    ]}
-                    phx-click="select"
-                    phx-value-app-id={app_id}
-                  >
-                    Show
-                  </button>
-                  <button
-                    class={[
-                      "btn btn-sm",
-                      if(masked, do: "btn-neutral", else: "btn-outline")
-                    ]}
-                    phx-click="mask"
-                    phx-value-app-id={app_id}
-                  >
-                    Mask
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+              <tbody>
+                <tr
+                  :for={
+                    %{
+                      module: module,
+                      app_id: app_id,
+                      name: name,
+                      selected: selected,
+                      output_type: _output_type,
+                      masked: masked
+                    } <- @running_apps
+                  }
+                  class={
+                    cond do
+                      selected -> ""
+                      masked -> "opacity-60"
+                      true -> ""
+                    end
+                  }
+                >
+                  <td class="w-1/2">
+                    <div class="flex items-center gap-2">
+                      {name}
+                      <%= if selected do %>
+                        <span class="badge badge-success badge-sm">Active</span>
+                      <% end %>
+                      <%= if masked do %>
+                        <span class="badge badge-neutral badge-sm">Masked</span>
+                      <% end %>
+                    </div>
+                  </td>
+                  <td class="flex flex-row gap-2">
+                    <button
+                      class="btn btn-error btn-sm"
+                      phx-click="stop"
+                      phx-value-module={module}
+                      phx-value-app-id={app_id}
+                    >
+                      Stop
+                    </button>
+                    <.link navigate={~p"/app/#{app_id}"} class="btn btn-outline btn-sm">
+                      Configure
+                    </.link>
+                    <button
+                      class={[
+                        "btn btn-sm",
+                        if(selected, do: "btn-success", else: "btn-outline")
+                      ]}
+                      phx-click="select"
+                      phx-value-app-id={app_id}
+                    >
+                      Show
+                    </button>
+                    <button
+                      class={[
+                        "btn btn-sm",
+                        if(masked, do: "btn-neutral", else: "btn-outline")
+                      ]}
+                      phx-click="mask"
+                      phx-value-app-id={app_id}
+                    >
+                      Mask
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -288,7 +300,15 @@ defmodule OctopusWeb.ManagerLive do
               </h2>
               <div class="flex flex-row flex-wrap gap-2">
                 <button
-                  :for={%{module: module, name: name, icon: icon, compatible: compatible, output_type: output_type} <- apps}
+                  :for={
+                    %{
+                      module: module,
+                      name: name,
+                      icon: icon,
+                      compatible: compatible,
+                      output_type: output_type
+                    } <- apps
+                  }
                   class={[
                     "btn btn-sm gap-2",
                     case {output_type, compatible} do

@@ -94,6 +94,7 @@ defmodule Octopus.Apps.ProximityDemo do
     # Convert HSV to RGB
     hue = 360 * panel_index / Installation.num_panels()
     hue = :math.fmod(hue, 360)
+
     %Chameleon.RGB{r: r, g: g, b: b} =
       Chameleon.HSV.new(hue, saturation, value)
       |> Chameleon.convert(Chameleon.RGB)

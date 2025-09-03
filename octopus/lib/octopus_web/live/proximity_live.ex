@@ -105,9 +105,13 @@ defmodule OctopusWeb.ProximityLive do
           </div>
           <div class="mt-4 text-sm text-base-content/70">
             <p>This chart compares raw proximity sensor data with a combined smoothing algorithm.</p>
-            <p>The comparison shows the difference between unfiltered and processed sensor readings:</p>
+            <p>
+              The comparison shows the difference between unfiltered and processed sensor readings:
+            </p>
             <ul class="list-disc list-inside mt-2 space-y-1">
-              <li><strong>Raw:</strong> Shows all sensor noise and spikes from the proximity sensor</li>
+              <li>
+                <strong>Raw:</strong> Shows all sensor noise and spikes from the proximity sensor
+              </li>
               <li>
                 <strong>Combined:</strong>
                 Uses median filter first, then exponential moving average for optimal smoothing

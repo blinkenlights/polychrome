@@ -120,8 +120,16 @@ defmodule OctopusWeb.CoreComponents do
       {@rest}
     >
       <div>
-        <.icon :if={@kind == :info} name="hero-information-circle-mini" class="stroke-current shrink-0 h-6 w-6" />
-        <.icon :if={@kind == :error} name="hero-exclamation-circle-mini" class="stroke-current shrink-0 h-6 w-6" />
+        <.icon
+          :if={@kind == :info}
+          name="hero-information-circle-mini"
+          class="stroke-current shrink-0 h-6 w-6"
+        />
+        <.icon
+          :if={@kind == :error}
+          name="hero-exclamation-circle-mini"
+          class="stroke-current shrink-0 h-6 w-6"
+        />
         <div>
           <h3 :if={@title} class="font-bold">{@title}</h3>
           <div class="text-xs">{msg}</div>
@@ -451,7 +459,6 @@ defmodule OctopusWeb.CoreComponents do
         <tbody
           id={@id}
           phx-update={match?(%Phoenix.LiveView.LiveStream{}, @rows) && "stream"}
-
         >
           <tr :for={row <- @rows} id={@row_id && @row_id.(row)} class="hover">
             <td

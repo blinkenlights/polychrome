@@ -424,8 +424,8 @@ defmodule Octopus.Apps.TripleTla do
       )
 
     Logger.info(
-      "Section #{section} - Targeted change at position #{target_letter_position}: #{current_word} → #{next_word}")
-    
+      "Section #{section} - Targeted change at position #{target_letter_position}: #{current_word} → #{next_word}"
+    )
 
     # Update state
     updated_tlas = List.replace_at(current_tlas, section, next_word)

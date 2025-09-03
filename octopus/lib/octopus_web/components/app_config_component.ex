@@ -161,7 +161,13 @@ defmodule OctopusWeb.AppConfigComponent do
 
   defp config_input(%{type: :select} = assigns) do
     ~H"""
-    <select name={@key} id={"#{@app_id}-#{@key}"} phx-debounce={@debounce} class="select select-bordered w-full" {@rest}>
+    <select
+      name={@key}
+      id={"#{@app_id}-#{@key}"}
+      phx-debounce={@debounce}
+      class="select select-bordered w-full"
+      {@rest}
+    >
       <option :for={{{name, _value}, i} <- Enum.with_index(@opts.options)} value={i}>
         {name}
       </option>

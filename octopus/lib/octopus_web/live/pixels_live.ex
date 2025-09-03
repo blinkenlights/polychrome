@@ -157,7 +157,7 @@ defmodule OctopusWeb.PixelsLive do
           src={@pixel_layout.pixel_image}
           class="absolute left-0 top-0 w-full h-full object-contain mix-blend-multiply pointer-events-none"
         /> --%>
-
+        
     <!-- Button UI Panel - Bottom -->
         <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-10">
           <div class="flex gap-2 justify-center">

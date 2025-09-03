@@ -115,7 +115,8 @@ defmodule Octopus.Apps.Whackamole.Game do
       |> Canvas.put_string({0, 0}, "   TILT!", game.font, 3)
 
     blank_canvas =
-      Canvas.new(Installation.num_panels() * game.panel_width, game.panel_height) |> Canvas.fill({0, 0, 0})
+      Canvas.new(Installation.num_panels() * game.panel_width, game.panel_height)
+      |> Canvas.fill({0, 0, 0})
 
     transition_fun = &[&1, tilt, blank_canvas, tilt, blank_canvas, &2]
 

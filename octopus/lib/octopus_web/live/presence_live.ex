@@ -36,7 +36,7 @@ defmodule OctopusWeb.PresenceLive do
     >
       <div class="badge badge-success gap-2">
         <div class="w-2 h-2 rounded-full bg-success-content animate-pulse"></div>
-        <span class="font-mono"><%= @online %></span>
+        <span class="font-mono">{@online}</span>
       </div>
     </div>
     """
