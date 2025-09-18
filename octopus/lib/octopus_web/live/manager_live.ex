@@ -24,7 +24,7 @@ defmodule OctopusWeb.ManagerLive do
       |> assign_apps()
       |> assign(playlist_status: nil)
       |> assign(playlist_selected_id: nil)
-      |> assign(event_scheduler_started: KioskModeManager.is_started?())
+      |> assign(event_scheduler_started: KioskModeManager.started?())
       |> assign_playlists()
 
     {:ok, socket, temporary_assigns: [pixel_layout: nil]}
