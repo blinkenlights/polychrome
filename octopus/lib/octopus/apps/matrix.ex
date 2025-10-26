@@ -42,7 +42,7 @@ defmodule Octopus.Apps.Matrix do
       %State{state | particles: particles ++ new_particles}
     end
 
-    def update(state, dt) do
+    def update(%State{} = state, dt) do
       particles =
         state.particles
         |> Enum.map(fn %Particle{x: x, y: y, speed: speed, age: age} = particle ->

@@ -120,7 +120,7 @@ defmodule Octopus.Animator do
   def handle_call(
         {:start_animation, {target_canvas, {pos_x, pos_y}, animation_fun, duration, easing_fun}},
         _from,
-        state
+        %State{} = state
       ) do
     current_canvas =
       Canvas.cut(

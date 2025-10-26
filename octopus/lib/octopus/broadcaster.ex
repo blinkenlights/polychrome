@@ -70,7 +70,7 @@ defmodule Octopus.Broadcaster do
     {:ok, state}
   end
 
-  def handle_info({:bot_update, update}, state) do
+  def handle_info({:bot_update, update}, %State{} = state) do
     case update["message"]["text"] do
       "bright" -> set_luminance(255)
       "normal" -> set_luminance(150)
@@ -97,7 +97,7 @@ defmodule Octopus.Broadcaster do
     {:noreply, state}
   end
 
-  def handle_cast({:send_binary, frame}, state) do
+  def handle_cast({:send_binary, frame}, %State{} = state) do
     frame
     |> send_binary(state)
 
@@ -106,7 +106,7 @@ defmodule Octopus.Broadcaster do
 
   def handle_cast({:set_luminance, luminance}, %State{} = state) do
     state =
-      %FirmwareConfig{state.config | luminance: luminance}
+      %FirmwareConfig{(%FirmwareConfig{} = state.config) | luminance: luminance}
       |> send_config(state)
 
     {:noreply, state}
@@ -114,7 +114,7 @@ defmodule Octopus.Broadcaster do
 
   def handle_cast({:set_calibration, set_calibration}, %State{} = state) do
     state =
-      %FirmwareConfig{state.config | enable_calibration: set_calibration}
+      %FirmwareConfig{(%FirmwareConfig{} = state.config) | enable_calibration: set_calibration}
       |> send_config(state)
 
     {:noreply, state}

@@ -27,18 +27,18 @@ defmodule Octopus.Apps.ProximityDemo do
     {:ok, %State{proximity_events: %{}}}
   end
 
-  def handle_event(%ProximityEvent{} = event, state) do
+  def handle_event(%ProximityEvent{} = event, %State{} = state) do
     key = {event.panel, event.sensor}
     state = %State{state | proximity_events: Map.put(state.proximity_events, key, event)}
 
     {:noreply, state}
   end
 
-  def handle_event(_any_event, state) do
+  def handle_event(_any_event, %State{} = state) do
     {:noreply, state}
   end
 
-  def handle_info(:tick, state) do
+  def handle_info(:tick, %State{} = state) do
     display_info = Octopus.App.get_display_info()
     canvas = Canvas.new(display_info.width, display_info.height)
     current_time = System.os_time(:millisecond)
@@ -51,11 +51,11 @@ defmodule Octopus.Apps.ProximityDemo do
     {:noreply, state}
   end
 
-  def handle_info(_any_info, state) do
+  def handle_info(_any_info, %State{} = state) do
     {:noreply, state}
   end
 
-  defp render_event(canvas, display_info, %ProximityEvent{} = event, current_time) do
+  defp render_event(%Canvas{} = canvas, display_info, %ProximityEvent{} = event, current_time) do
     time_since_event = current_time - event.timestamp
 
     saturation = saturation(event.distance)

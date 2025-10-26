@@ -57,7 +57,7 @@ defmodule Octopus.PerlinNoise do
   - `elapsed_time`: Time elapsed in seconds
   """
   @spec draw(t(), Canvas.t(), float()) :: Canvas.t()
-  def draw(%PerlinNoise{} = noise, canvas, elapsed_time) do
+  def draw(%PerlinNoise{} = noise, %Canvas{} = canvas, elapsed_time) do
     # Calculate current time based on elapsed time and speed
     current_time = elapsed_time * noise.speed
 

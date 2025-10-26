@@ -26,7 +26,7 @@ defmodule Octopus.Apps.Diamonds do
     {:ok, %State{panel_events: %{}, diamond_animation: diamond_animation}}
   end
 
-  def handle_event(%ProximityEvent{} = event, state) do
+  def handle_event(%ProximityEvent{} = event, %State{} = state) do
     # Store the last proximity event for each panel (not panel+sensor)
     key = event.panel
     state = %State{state | panel_events: Map.put(state.panel_events, key, event)}

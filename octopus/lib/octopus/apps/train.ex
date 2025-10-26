@@ -176,7 +176,7 @@ defmodule Octopus.Apps.Train do
 
   def handle_event(
         %Octopus.Events.Event.Input{type: :button, action: :press, button: button},
-        state
+        %State{} = state
       ) do
     panel_id = button - 1
     panel_width = Installation.panel_width()
@@ -240,7 +240,7 @@ defmodule Octopus.Apps.Train do
 
   def handle_event(
         %InputEvent{type: :joystick, joystick: _joystick, direction: :left},
-        state
+        %State{} = state
       ) do
     # Go forward (left moves landscape right)
     state = %State{state | acceleration: 0.1}
@@ -249,7 +249,7 @@ defmodule Octopus.Apps.Train do
 
   def handle_event(
         %InputEvent{type: :joystick, joystick: _joystick, direction: :right},
-        state
+        %State{} = state
       ) do
     # Go backward (right moves landscape left)
     state = %State{state | acceleration: -0.1}
@@ -258,7 +258,7 @@ defmodule Octopus.Apps.Train do
 
   def handle_event(
         %InputEvent{type: :joystick, joystick: _joystick, direction: :center},
-        state
+        %State{} = state
       ) do
     # Stop accelerating
     state = %State{state | acceleration: 0}

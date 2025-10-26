@@ -180,7 +180,7 @@ defmodule Octopus.Apps.Senso do
     {:noreply, state}
   end
 
-  def handle_event(%InputEvent{type: :button, action: :release, button: button}, state)
+  def handle_event(%InputEvent{type: :button, action: :release, button: button}, %State{} = state)
       when button >= 1 and button <= state.display_info.num_panels do
     btn_num = button
 
@@ -224,7 +224,7 @@ defmodule Octopus.Apps.Senso do
     {:noreply, %State{state | index: state.index + increment, input_blocked: block_input}}
   end
 
-  def handle_event(%LifecycleEvent{type: :app_selected}, state) do
+  def handle_event(%LifecycleEvent{type: :app_selected}, %State{} = state) do
     Enum.map(1..state.display_info.num_panels, fn channel ->
       %SynthFrame{
         event_type: :CONFIG,
@@ -240,7 +240,7 @@ defmodule Octopus.Apps.Senso do
     {:noreply, %State{state | input_blocked: true}}
   end
 
-  def handle_event(_event, state) do
+  def handle_event(_event, %State{} = state) do
     {:noreply, state}
   end
 

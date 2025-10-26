@@ -371,7 +371,7 @@ defmodule Octopus.Mixer do
     Process.send_after(self(), :transition, @transition_frame_time)
   end
 
-  defp handle_new_canvas(state, canvas, offset) do
+  defp handle_new_canvas(%State{} = state, %Canvas{} = canvas, offset) do
     buffer_canvas =
       state.buffer_canvas
       |> Canvas.clear()
@@ -686,7 +686,7 @@ defmodule Octopus.Mixer do
 
   # Helper functions for buffer updates
 
-  defp update_app_displays(state, app_id, updated_display) do
+  defp update_app_displays(%State{} = state, app_id, updated_display) do
     new_app_displays = Map.put(state.app_displays, app_id, updated_display)
     %State{state | app_displays: new_app_displays}
   end

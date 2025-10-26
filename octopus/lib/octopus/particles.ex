@@ -159,7 +159,7 @@ defmodule Octopus.Particles do
   def update(%Particles{} = system, dt) do
     particles =
       system.particles
-      |> Enum.map(fn particle ->
+      |> Enum.map(fn %Particle{} = particle ->
         vx = particle.vx
         vy = particle.vy + 90.81 * dt
 

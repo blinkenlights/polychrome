@@ -63,7 +63,7 @@ defmodule Octopus.Apps.SampleApp do
      }}
   end
 
-  def handle_event(%InputEvent{type: :button, action: :press, button: 1}, state) do
+  def handle_event(%InputEvent{type: :button, action: :press, button: 1}, %State{} = state) do
     canvas =
       state.canvas
       |> Canvas.fill_rect(
@@ -78,7 +78,7 @@ defmodule Octopus.Apps.SampleApp do
     {:noreply, %State{state | canvas: canvas}}
   end
 
-  def handle_event(%InputEvent{type: :button, action: :press, button: 2}, state) do
+  def handle_event(%InputEvent{type: :button, action: :press, button: 2}, %State{} = state) do
     canvas =
       state.canvas
       |> Canvas.fill_rect(

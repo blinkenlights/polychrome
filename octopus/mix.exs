@@ -5,7 +5,7 @@ defmodule Octopus.MixProject do
     [
       app: :octopus,
       version: "0.1.0",
-      elixir: "~> 1.14",
+      elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       compilers: [:yecc, :leex] ++ Mix.compilers(),
@@ -55,7 +55,7 @@ defmodule Octopus.MixProject do
       {:gettext, "~> 0.20"},
       {:jason, "~> 1.2"},
       {:bandit, "~> 1.7"},
-      {:protobuf, "~> 0.14.0"},
+      {:protobuf, "~> 0.15.0"},
       {:ex_png, "~> 1.0.0"},
       {:easing, "~> 0.3.1"},
       {:cachex, "~> 4.1"},

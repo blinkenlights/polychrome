@@ -409,16 +409,17 @@ defmodule Octopus.Apps.Blocks.Game do
       end
 
     %Game{
-      case rem(new_game.t, speed) do
-        0 ->
-          new_game
-          |> move_or_place_tile()
-          |> score_and_remove_lines()
-          |> check_gameover()
+      (%Game{} =
+         case rem(new_game.t, speed) do
+           0 ->
+             new_game
+             |> move_or_place_tile()
+             |> score_and_remove_lines()
+             |> check_gameover()
 
-        _ ->
-          new_game
-      end
+           _ ->
+             new_game
+         end)
       | t: new_game.t + 1
     }
   end

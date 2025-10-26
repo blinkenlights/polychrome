@@ -206,19 +206,19 @@ defmodule Octopus.Apps.BomberPerson do
             :pause_player_1_victory -> 1
           end
 
-        player = players[player_index]
+        %Player{} = player = players[player_index]
         Map.put(players, player_index, %Player{player | score: player.score + 1})
       end
 
     # Tick bombs and explosion tiles.
     bombs =
       for {coordinate, bomb} <- bombs, bomb.remaining_ticks > 0, into: %{} do
-        {coordinate, %Bomb{bomb | remaining_ticks: bomb.remaining_ticks - 1}}
+        {coordinate, %Bomb{(%Bomb{} = bomb) | remaining_ticks: bomb.remaining_ticks - 1}}
       end
 
     explosions =
       for explosion <- explosions, explosion.remaining_ticks > 0 do
-        %Explosion{explosion | remaining_ticks: explosion.remaining_ticks - 1}
+        %Explosion{(%Explosion{} = explosion) | remaining_ticks: explosion.remaining_ticks - 1}
       end
 
     state =
@@ -236,7 +236,7 @@ defmodule Octopus.Apps.BomberPerson do
     {:noreply, state}
   end
 
-  def render_canvas(state) do
+  def render_canvas(%State{} = state) do
     canvas = state.canvas |> Canvas.clear()
 
     canvas =
@@ -280,7 +280,7 @@ defmodule Octopus.Apps.BomberPerson do
     %State{state | score_canvas: Map.put(state.score_canvas, player_index, canvas)}
   end
 
-  def combine_and_send_canvas(state) do
+  def combine_and_send_canvas(%State{} = state) do
     big_canvas =
       state.big_canvas
       |> Canvas.clear()
@@ -315,7 +315,7 @@ defmodule Octopus.Apps.BomberPerson do
     end
   end
 
-  def place_bomb(state, player_index) do
+  def place_bomb(%State{} = state, player_index) do
     coordinate = state.players[player_index].position
 
     bomb_count =
@@ -341,7 +341,7 @@ defmodule Octopus.Apps.BomberPerson do
 
   def handle_event(
         %InputEvent{type: :joystick, joystick: joystick, joy_button: :a, action: :press},
-        state
+        %State{} = state
       ) do
     # Convert to 0-based player index
     place_bomb(state, joystick - 1)
@@ -349,7 +349,7 @@ defmodule Octopus.Apps.BomberPerson do
 
   def handle_event(
         %InputEvent{type: :joystick, joystick: joystick, direction: direction},
-        state
+        %State{} = state
       )
       when direction in [:left, :right, :up, :down] do
     if state.game_state == :running do
@@ -361,18 +361,18 @@ defmodule Octopus.Apps.BomberPerson do
 
   def handle_event(
         %InputEvent{type: :joystick, joystick: _joystick, direction: :center},
-        state
+        %State{} = state
       ) do
     # Joystick returned to center - no movement needed
     {:noreply, state}
   end
 
-  def handle_event(_event, state) do
+  def handle_event(_event, %State{} = state) do
     {:noreply, state}
   end
 
-  defp move_player(state, player_index, direction) do
-    player = state.players[player_index]
+  defp move_player(%State{} = state, player_index, direction) do
+    %Player{} = player = state.players[player_index]
     %Player{position: {player_x, player_y}} = player
 
     {dx, dy} = direction_to_delta(direction)

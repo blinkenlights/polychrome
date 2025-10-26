@@ -18,7 +18,8 @@ defmodule Octopus.Apps.Supermario.Animation.GameOver do
     diff = Time.diff(Time.utc_now(), start_time, :microsecond)
     offset = Enum.min([Integer.floor_div(diff, div(4_000_000, 9)), 9]) * 8
 
-    canvas =
+    %Canvas{} =
+      canvas =
       "Game Over"
       |> Canvas.from_string(font, 5)
 

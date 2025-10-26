@@ -224,7 +224,7 @@ defmodule Octopus.Apps.PixelFun do
     {:noreply, state}
   end
 
-  def handle_event(%AudioEvent{bass: low, mid: mid, high: high}, state) do
+  def handle_event(%AudioEvent{bass: low, mid: mid, high: high}, %State{} = state) do
     {:noreply, %State{state | audio_input: %{low: low, mid: mid, high: high}}}
   end
 
@@ -263,12 +263,12 @@ defmodule Octopus.Apps.PixelFun do
     {:noreply, %State{state | move: {0, 0}}}
   end
 
-  def handle_event(%InputEvent{type: :button} = event, state) do
+  def handle_event(%InputEvent{type: :button} = event, %State{} = state) do
     pressed = event.action == :press
     {:noreply, %State{state | buttons: Map.put(state.buttons, event.button - 1, pressed)}}
   end
 
-  def handle_event(%ProximityEvent{panel: panel} = event, state) do
+  def handle_event(%ProximityEvent{panel: panel} = event, %State{} = state) do
     distance = event.distance_combined
     distance_normalized = 1.0 - max(min(distance / 2500.0, 1.0), 0.0)
 
@@ -283,7 +283,7 @@ defmodule Octopus.Apps.PixelFun do
     {:noreply, %State{state | panel_proximities: panel_proximities}}
   end
 
-  def handle_event(_event, state) do
+  def handle_event(_event, %State{} = state) do
     {:noreply, state}
   end
 
@@ -314,8 +314,8 @@ defmodule Octopus.Apps.PixelFun do
       {color_a, color_b} = colors
 
       colors = {
-        %Chameleon.HSV{color_a | h: rem(trunc(color_a.h + hue_shift), 360)},
-        %Chameleon.HSV{color_b | h: rem(trunc(color_b.h + hue_shift), 360)}
+        %Chameleon.HSV{(%Chameleon.HSV{} = color_a) | h: rem(trunc(color_a.h + hue_shift), 360)},
+        %Chameleon.HSV{(%Chameleon.HSV{} = color_b) | h: rem(trunc(color_b.h + hue_shift), 360)}
       }
 
       for {{x, y}, i} <- Enum.with_index(panel), into: Canvas.new(8, 8) do

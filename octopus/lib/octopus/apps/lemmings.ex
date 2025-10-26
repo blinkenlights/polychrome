@@ -78,7 +78,7 @@ defmodule Octopus.Apps.Lemmings do
 
   defp tick_reaction(state), do: state
 
-  defp tick_postprocess(state) do
+  defp tick_postprocess(%State{} = state) do
     display_info = Octopus.App.get_display_info()
 
     # Render and send the current frame
@@ -151,7 +151,7 @@ defmodule Octopus.Apps.Lemmings do
     end
   end
 
-  defp add_lemming(state, direction_fun) do
+  defp add_lemming(%State{} = state, direction_fun) do
     action = __ENV__.function |> elem(0)
     display_info = Octopus.App.get_display_info()
     new_lem = direction_fun.(display_info)
@@ -173,10 +173,10 @@ defmodule Octopus.Apps.Lemmings do
   end
 
   def add_left(%State{} = state), do: add_lemming(state, &Lemming.walking_right/1)
-  def add_left(state), do: state
+  def add_left(%State{} = state), do: state
 
   def add_right(%State{} = state), do: add_lemming(state, &Lemming.walking_left/1)
-  def add_right(state), do: state
+  def add_right(%State{} = state), do: state
 
   def explode_first([%Lemming{state: state} = lem | tail], acc)
       when state in [:stopper, :walk_left, :walk_right] do
@@ -192,7 +192,7 @@ defmodule Octopus.Apps.Lemmings do
     {:noreply, tick(state)}
   end
 
-  def handle_event(%InputEvent{type: :button, action: :press, button: button}, state) do
+  def handle_event(%InputEvent{type: :button, action: :press, button: button}, %State{} = state) do
     # Convert to 0-based indexing for button_map
     button_index = button - 1
     handle_number_button_press(state, button_index)
@@ -200,7 +200,7 @@ defmodule Octopus.Apps.Lemmings do
 
   def handle_event(
         %InputEvent{type: :joystick, joystick: _joystick, direction: :right},
-        state
+        %State{} = state
       ) do
     # Right direction adds left-walking lemming
     state = add_left(state)
@@ -209,7 +209,7 @@ defmodule Octopus.Apps.Lemmings do
 
   def handle_event(
         %InputEvent{type: :joystick, joystick: _joystick, direction: :left},
-        state
+        %State{} = state
       ) do
     # Left direction adds right-walking lemming
     state = add_right(state)
@@ -218,13 +218,13 @@ defmodule Octopus.Apps.Lemmings do
 
   def handle_event(
         %InputEvent{type: :joystick, joystick: _joystick, direction: :down},
-        state
+        %State{} = state
       ) do
     # Down direction explodes a lemming
     handle_kill(state)
   end
 
-  def handle_event(_, state) do
+  def handle_event(_, %State{} = state) do
     {:noreply, state}
   end
 

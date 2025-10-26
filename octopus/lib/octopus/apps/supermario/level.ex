@@ -154,7 +154,7 @@ defmodule Octopus.Apps.Supermario.Level do
     matrix
   end
 
-  def update(%Game{level: level} = game) do
+  def update(%Game{level: %Level{} = level} = game) do
     level = %Level{
       level
       | bad_guys: Enum.map(level.bad_guys, fn bad_guy -> BadGuy.update(bad_guy) end)

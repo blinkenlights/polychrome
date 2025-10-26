@@ -57,7 +57,7 @@ defmodule Octopus.Apps.FairyDust do
 
   defp update_particles(particles, dt) do
     particles
-    |> Enum.map(fn particle ->
+    |> Enum.map(fn %Particle{} = particle ->
       %Particle{
         particle
         | x: particle.x + particle.vx * dt,

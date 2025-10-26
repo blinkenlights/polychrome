@@ -131,7 +131,7 @@ defmodule Octopus.Apps.Snake.Game do
     new_game =
       case hd(new_worm.parts) do
         {^food, _} ->
-          wormy = %Worm{new_worm | parts: [hd(new_worm.parts) | game.worm.parts]}
+          wormy = %Worm{(%Worm{} = new_worm) | parts: [hd(new_worm.parts) | game.worm.parts]}
 
           Octopus.App.play_sample("snake/food_eaten.wav", game.layout.playfield_channel)
 

@@ -18,7 +18,8 @@ defmodule Octopus.Apps.Supermario.Animation.Completed do
     diff = Time.diff(Time.utc_now(), start_time, :microsecond)
     offset = Enum.min([Integer.floor_div(diff, 150_000), 160])
 
-    canvas =
+    %Canvas{} =
+      canvas =
       "You win!"
       |> Canvas.from_string(font)
 

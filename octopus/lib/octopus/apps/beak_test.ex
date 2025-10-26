@@ -65,7 +65,7 @@ defmodule Octopus.Apps.BeakTest do
     {:noreply, %State{state | canvas: canvas}}
   end
 
-  def handle_event(%InputEvent{type: :button, action: :release, button: button}, state)
+  def handle_event(%InputEvent{type: :button, action: :release, button: button}, %State{} = state)
       when button >= 1 and button <= 10 do
     channel = button
 
@@ -80,7 +80,7 @@ defmodule Octopus.Apps.BeakTest do
     {:noreply, %State{state | canvas: canvas}}
   end
 
-  def handle_event(_event, state) do
+  def handle_event(_event, %State{} = state) do
     {:noreply, state}
   end
 end
