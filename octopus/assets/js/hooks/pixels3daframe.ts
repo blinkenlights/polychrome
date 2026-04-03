@@ -112,7 +112,7 @@ const skyFragmentShader = `
   }
 `;
 
-let panelDiameter = 20;
+let panelDiameter = 16;
 const buttonPoleHeight = 1.0;
 const buttonPoleRadius = 0.05;
 const buttonBaseHeight = 0.02;
@@ -184,8 +184,8 @@ class Pixels3dAframeHook extends Hook {
     const panelsEl = this.createPanels();
     sceneEl.appendChild(panelsEl);
 
-    const buttonPolesEl = this.createButtonPoles();
-    sceneEl.appendChild(buttonPolesEl);
+    // const buttonPolesEl = this.createButtonPoles();
+    // sceneEl.appendChild(buttonPolesEl);
 
     const sky = this.createSky();
     sceneEl.appendChild(sky);
@@ -195,6 +195,9 @@ class Pixels3dAframeHook extends Hook {
 
     const groundEl = this.createGround();
     sceneEl.appendChild(groundEl);
+
+    const centralCylinder = this.createCentralCylinder();
+    sceneEl.appendChild(centralCylinder);
 
     const cameraRig = this.createCameraRig();
     sceneEl.appendChild(cameraRig);
@@ -306,6 +309,16 @@ class Pixels3dAframeHook extends Hook {
     });
 
     return groundEl;
+  }
+
+  createCentralCylinder() {
+    const cyl = document.createElement('a-cylinder');
+    cyl.setAttribute('id', 'central-platform');
+    cyl.setAttribute('radius', '1.5');
+    cyl.setAttribute('height', '0.5');
+    cyl.setAttribute('position', '0 0.25 0');
+    cyl.setAttribute('color', '#8B4513');
+    return cyl;
   }
 
   createLight() {

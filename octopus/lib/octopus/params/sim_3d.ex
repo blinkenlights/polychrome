@@ -3,7 +3,7 @@ defmodule Octopus.Params.Sim3d do
 
   def topic, do: "sim_3d"
 
-  def diameter, do: param(:diameter, 20.0)
+  def diameter, do: param(:diameter, 16.0)
   def move, do: param(:move, [0.0, 0.0])
   def position, do: param(:position, [0.0, 0.0])
   def height, do: param(:height, 0.4)
