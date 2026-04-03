@@ -10,6 +10,7 @@ defmodule Octopus.Params.Sim3d do
   def pole_diameter, do: param(:pole_diameter, 0.15)
   def foot_diameter, do: param(:foot_diameter, 0.3)
   def button_diameter, do: param(:button_diameter, 5.0)
+  def radar_count, do: param(:radar_count, 6)
 
   def handle_param("diameter", [value]) do
     Phoenix.PubSub.broadcast(Octopus.PubSub, topic(), {:diameter, value})
@@ -37,5 +38,9 @@ defmodule Octopus.Params.Sim3d do
 
   def handle_param("button_diameter", [value]) do
     Phoenix.PubSub.broadcast(Octopus.PubSub, topic(), {:button_diameter, value})
+  end
+
+  def handle_param("radar_count", [value]) do
+    Phoenix.PubSub.broadcast(Octopus.PubSub, topic(), {:radar_count, value})
   end
 end

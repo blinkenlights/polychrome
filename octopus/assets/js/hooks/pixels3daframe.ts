@@ -1,7 +1,11 @@
 import { Hook, makeHook } from "phoenix_typed_hook";
 import AFRAME from "aframe";
-import * as THREE from "three";
 import { Frame, RGB, rgbPixelsFromFrame } from "./shared/frame";
+
+/** A-Frame ships its own THREE (~r173). Never mix the npm `three` package here — duplicate runtime breaks `setObject3D` / materials. */
+function getThree() {
+  return (AFRAME as any).THREE;
+}
 
 const vertexShader = `
   varying vec2 vUv;
@@ -126,6 +130,15 @@ let poleDiameter: number = 0.4;
 let poleHeight: number = 0.4;
 const textures: any[] = [];
 
+/** Radar-Sensoren: kleiner Innenkreis (~30 cm Ø), Höhe ~3,5 m, Kegel-Visualisierung */
+const RADAR_HEIGHT = 3.5;
+const RADAR_RING_RADIUS = 0.15;
+const RADAR_BOX = 0.1;
+const RADAR_TILT_DEG = 45;
+/** Halbwinkel des Kegels (nur Visualisierung) */
+const RADAR_CONE_HALF_ANGLE_DEG = 22;
+let radarCount = 6;
+
 type Param = {
   param: {
     diameter?: number;
@@ -135,6 +148,7 @@ type Param = {
     pole_diameter?: number;
     foot_diameter?: number;
     button_diameter?: number;
+    radar_count?: number;
   };
 };
 
@@ -198,6 +212,12 @@ class Pixels3dAframeHook extends Hook {
 
     const centralCylinder = this.createCentralCylinder();
     sceneEl.appendChild(centralCylinder);
+
+    const radarGround = this.createRadarGroundRings();
+    sceneEl.appendChild(radarGround);
+
+    const radarSensors = this.createRadarSensors();
+    sceneEl.appendChild(radarSensors);
 
     const cameraRig = this.createCameraRig();
     sceneEl.appendChild(cameraRig);
@@ -300,7 +320,7 @@ class Pixels3dAframeHook extends Hook {
       ['map', 'normalMap', 'roughnessMap'].forEach((key) => {
         const tex = mesh.material[key];
         if (tex) {
-          tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+          tex.wrapS = tex.wrapT = getThree().RepeatWrapping;
           tex.repeat.set(1000, 1000); // oder gewünschtes repeat
           tex.needsUpdate = true;
         }
@@ -309,6 +329,75 @@ class Pixels3dAframeHook extends Hook {
     });
 
     return groundEl;
+  }
+
+  createRadarGroundRings() {
+    const g = document.createElement('a-entity');
+    g.setAttribute('id', 'radar-ground-rings');
+    const inner = document.createElement('a-ring');
+    inner.setAttribute('position', '0 0.02 0');
+    inner.setAttribute('rotation', '-90 0 0');
+    inner.setAttribute('radius-inner', '0.14');
+    inner.setAttribute('radius-outer', '0.16');
+    inner.setAttribute(
+      'material',
+      'shader: flat; color: #222; opacity: 0.85; transparent: true; side: double'
+    );
+    g.appendChild(inner);
+    const outer = document.createElement('a-ring');
+    outer.setAttribute('id', 'radar-outer-ring');
+    outer.setAttribute('position', '0 0.015 0');
+    outer.setAttribute('rotation', '-90 0 0');
+    const outerR = panelDiameter / 2;
+    outer.setAttribute('radius-inner', (outerR - 0.04).toString());
+    outer.setAttribute('radius-outer', (outerR + 0.04).toString());
+    outer.setAttribute(
+      'material',
+      'shader: flat; color: #4488cc; opacity: 0.35; transparent: true; side: double'
+    );
+    g.appendChild(outer);
+    return g;
+  }
+
+  createRadarSensors() {
+    const root = document.createElement('a-entity');
+    root.setAttribute('id', 'radar-sensors');
+    const n = Math.min(12, Math.max(3, Math.round(radarCount)));
+    const outerR = panelDiameter / 2;
+    const radialSpan = Math.max(0.01, outerR - RADAR_RING_RADIUS);
+    const beamLen = Math.sqrt(radialSpan * radialSpan + RADAR_HEIGHT * RADAR_HEIGHT);
+    const T = getThree();
+    for (let i = 0; i < n; i++) {
+      const angle = (i / n) * Math.PI * 2;
+      const x = RADAR_RING_RADIUS * Math.sin(angle);
+      const z = RADAR_RING_RADIUS * Math.cos(angle);
+      // +Z radial nach außen (ohne +180 — sonst zeigen Sensoren zur Mitte)
+      const yawDeg = T.MathUtils.radToDeg(angle);
+      const pivot = document.createElement('a-entity');
+      pivot.setAttribute('position', `${x} ${RADAR_HEIGHT} ${z}`);
+      pivot.setAttribute('rotation', `0 ${yawDeg} 0`);
+      const tilt = document.createElement('a-entity');
+      tilt.setAttribute('rotation', `${-RADAR_TILT_DEG} 0 0`);
+      const box = document.createElement('a-box');
+      box.setAttribute('width', RADAR_BOX.toString());
+      box.setAttribute('height', RADAR_BOX.toString());
+      box.setAttribute('depth', RADAR_BOX.toString());
+      box.setAttribute('color', '#0a0a0a');
+      box.setAttribute('position', '0 0 0');
+      box.setAttribute('roughness', '0.6');
+      const coneHost = document.createElement('a-entity');
+      coneHost.setAttribute('position', '0 0 0');
+      coneHost.setAttribute(
+        'radar-cone-viz',
+        `length: ${beamLen}; halfAngleDeg: ${RADAR_CONE_HALF_ANGLE_DEG}`
+      );
+      // Kegel unter gleicher tilt-Gruppe wie die Box: Spitze = Boxmitte, Öffnung in -Y = Neigungswinkel
+      tilt.appendChild(coneHost);
+      tilt.appendChild(box);
+      pivot.appendChild(tilt);
+      root.appendChild(pivot);
+    }
+    return root;
   }
 
   createCentralCylinder() {
@@ -362,7 +451,8 @@ class Pixels3dAframeHook extends Hook {
         data[k * 4 + 2] = 0;   // B
         data[k * 4 + 3] = 255; // A
       }
-      const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+      const T = getThree();
+      const texture = new T.DataTexture(data, size, size, T.RGBAFormat);
       texture.needsUpdate = true;
       textures.push(texture);
       // Front-Plane
@@ -408,7 +498,8 @@ class Pixels3dAframeHook extends Hook {
   handleParams(param: Param["param"]) {
     if (param.diameter) {
       panelDiameter = param.diameter;
-      this.updatePanels()
+      this.updatePanels();
+      this.updateRadarVisualization();
     }
     if (param.height) {
       poleHeight  = param.height;
@@ -422,9 +513,43 @@ class Pixels3dAframeHook extends Hook {
       buttonPolesRadius  = param.button_diameter / 2;
       this.updatePanels()
     }
+    if (param.radar_count !== undefined && param.radar_count !== null) {
+      radarCount = Number(param.radar_count);
+      this.updateRadarVisualization();
+    }
   }
 
   registerComponents() {
+    AFRAME.registerComponent('radar-cone-viz', {
+      schema: {
+        length: { type: 'number', default: 8 },
+        halfAngleDeg: { type: 'number', default: RADAR_CONE_HALF_ANGLE_DEG },
+      },
+      init: function (this: {
+        el: any;
+        data: { length: number; halfAngleDeg: number };
+      }) {
+        const T = getThree();
+        const h = this.data.length;
+        const r = Math.tan(T.MathUtils.degToRad(this.data.halfAngleDeg)) * h;
+        const geo = new T.CylinderGeometry(0, r, h, 32, 1, false);
+        const mat = new T.MeshBasicMaterial({
+          color: 0x66aaff,
+          transparent: true,
+          opacity: 0.16,
+          depthWrite: false,
+          side: T.DoubleSide,
+        });
+        const mesh = new T.Mesh(geo, mat);
+        // Spitze (Sensor) am Entity-Ursprung = Mitte der Box; Achse entlang -Y = gleiche Achse
+        // wie die 45°-Tilt-Gruppe (kein extra X-Flip — sonst zeigt der Kegel nicht „mit“ der Box).
+        mesh.position.y = -h / 2;
+        this.el.setObject3D('mesh', mesh);
+      },
+      remove: function (this: { el: any }) {
+        this.el.removeObject3D('mesh');
+      },
+    });
     AFRAME.registerComponent('led-panel', {
       schema: {
         textureIndex: {type: 'int'},
@@ -433,6 +558,7 @@ class Pixels3dAframeHook extends Hook {
       init: function () {
         const mesh = this.el.getObject3D('mesh');
         if (!mesh) return;
+        const T = getThree();
         let uniforms;
         if (this.data.side === 'front') {
           uniforms = {
@@ -449,7 +575,7 @@ class Pixels3dAframeHook extends Hook {
             uMaskSize: { value: 0.1 },
           };
         }
-        mesh.material = new THREE.ShaderMaterial({
+        mesh.material = new T.ShaderMaterial({
           vertexShader: vertexShader,
           fragmentShader: fragmentShader,
           transparent: true,
@@ -505,6 +631,17 @@ class Pixels3dAframeHook extends Hook {
     if (sceneEl) {
       sceneEl.appendChild(newPanels);
     }
+  }
+
+  updateRadarVisualization() {
+    const sceneEl = document.querySelector('a-scene');
+    if (!sceneEl) return;
+    const oldRings = document.querySelector('#radar-ground-rings');
+    const oldRadar = document.querySelector('#radar-sensors');
+    oldRings?.parentNode?.removeChild(oldRings);
+    oldRadar?.parentNode?.removeChild(oldRadar);
+    sceneEl.appendChild(this.createRadarGroundRings());
+    sceneEl.appendChild(this.createRadarSensors());
   }
 }
 

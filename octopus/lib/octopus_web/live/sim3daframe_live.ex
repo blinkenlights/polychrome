@@ -34,6 +34,7 @@ defmodule OctopusWeb.Sim3dAframeLive do
         |> push_param(%{pole_diameter: Params.pole_diameter()})
         |> push_param(%{foot_diameter: Params.foot_diameter()})
         |> push_param(%{button_diameter: Params.button_diameter()})
+        |> push_param(%{radar_count: Params.radar_count()})
       else
         socket
       end
@@ -84,6 +85,10 @@ defmodule OctopusWeb.Sim3dAframeLive do
 
   def handle_info({:button_diameter, value}, socket) do
     {:noreply, push_param(socket, %{button_diameter: value})}
+  end
+
+  def handle_info({:radar_count, value}, socket) do
+    {:noreply, push_param(socket, %{radar_count: value})}
   end
 
   def handle_info({:mixer, {:frame, frame}}, socket) do
