@@ -164,34 +164,41 @@ class Pixels3dAframeHook extends Hook {
   }
 
   createScene() {
-    const sceneEl = document.createElement('a-scene');
-    sceneEl.setAttribute('embedded', '');
-    sceneEl.setAttribute('vr-mode-ui', 'enabled: false');
+    const root = this.el as HTMLElement;
+    root.style.minHeight = "100vh";
+    root.style.width = "100%";
+
+    const sceneEl = document.createElement("a-scene");
+    sceneEl.setAttribute("embedded", "");
+    sceneEl.setAttribute("vr-mode-ui", "enabled: false");
+    sceneEl.style.display = "block";
+    sceneEl.style.width = "100%";
+    sceneEl.style.height = "100vh";
 
     this.registerComponents();
     const assetsEl = this.createAssets();
     sceneEl.appendChild(assetsEl);
-  
-    assetsEl.addEventListener('loaded', () => {
-      const panelsEl = this.createPanels();
-      sceneEl.appendChild(panelsEl);
 
-      const buttonPolesEl = this.createButtonPoles();
-      sceneEl.appendChild(buttonPolesEl)
-  
-      const sky = this.createSky();
-      sceneEl.appendChild(sky);
+    // Do not gate the scene on a-assets "loaded": missing/404 textures can prevent
+    // that event from firing, leaving an empty embedded scene (beige page only).
+    const panelsEl = this.createPanels();
+    sceneEl.appendChild(panelsEl);
 
-      const light = this.createLight();
-      sceneEl.appendChild(light)
-  
-      const groundEl = this.createGround();
-      sceneEl.appendChild(groundEl);
-  
-      const cameraRig = this.createCameraRig();
-      sceneEl.appendChild(cameraRig);
-  
-    });
+    const buttonPolesEl = this.createButtonPoles();
+    sceneEl.appendChild(buttonPolesEl);
+
+    const sky = this.createSky();
+    sceneEl.appendChild(sky);
+
+    const light = this.createLight();
+    sceneEl.appendChild(light);
+
+    const groundEl = this.createGround();
+    sceneEl.appendChild(groundEl);
+
+    const cameraRig = this.createCameraRig();
+    sceneEl.appendChild(cameraRig);
+
     this.el.appendChild(sceneEl);
   }
 
@@ -221,8 +228,8 @@ class Pixels3dAframeHook extends Hook {
     normal.setAttribute('src', '/images/patchy-meadow1/patchy-meadow1_normal-ogl.png');
     assetsEl.appendChild(normal);
     const skysphere = document.createElement('img');
-    albedo.setAttribute('id', 'skysphere');
-    albedo.setAttribute('src', '/images/nog_250711.JPG');
+    skysphere.setAttribute('id', 'skysphere');
+    skysphere.setAttribute('src', '/images/nog_250711.JPG');
     assetsEl.appendChild(skysphere);
     return assetsEl;
   }

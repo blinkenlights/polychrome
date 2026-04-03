@@ -51,7 +51,7 @@ defmodule OctopusWeb.Sim3dAframeLive do
     <div
       id={"#{@id_prefix}-#{@id}"}
       num-panels={@num_panels}
-      class="flex w-full h-full"
+      class="flex w-full min-h-screen"
       phx-hook="Pixels3dAframe"
     >
     </div>
