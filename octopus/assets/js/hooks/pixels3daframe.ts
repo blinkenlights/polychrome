@@ -1,5 +1,6 @@
 import { Hook, makeHook } from "phoenix_typed_hook";
 import AFRAME from "aframe";
+import { GUI } from "three/addons/libs/lil-gui.module.min.js";
 import { Frame, RGB, rgbPixelsFromFrame } from "./shared/frame";
 
 /** A-Frame ships its own THREE (~r173). Never mix the npm `three` package here — duplicate runtime breaks `setObject3D` / materials. */
@@ -130,14 +131,16 @@ let poleDiameter: number = 0.4;
 let poleHeight: number = 0.4;
 const textures: any[] = [];
 
-/** Radar-Sensoren: kleiner Innenkreis (~30 cm Ø), Höhe ~3,5 m, Kegel-Visualisierung */
-const RADAR_HEIGHT = 3.5;
+/** Radar-Sensoren: kleiner Innenkreis (~30 cm Ø), Kegel-Visualisierung; Höhe per lil-gui / radarHeight */
+let radarHeight = 3.5;
 const RADAR_RING_RADIUS = 0.15;
 const RADAR_BOX = 0.1;
 const RADAR_TILT_DEG = 45;
 /** Halbwinkel des Kegels (nur Visualisierung) */
 const RADAR_CONE_HALF_ANGLE_DEG = 22;
 let radarCount = 6;
+
+let radarLilGui: GUI | null = null;
 
 type Param = {
   param: {
@@ -223,6 +226,28 @@ class Pixels3dAframeHook extends Hook {
     sceneEl.appendChild(cameraRig);
 
     this.el.appendChild(sceneEl);
+    this.setupRadarHeightGui();
+  }
+
+  setupRadarHeightGui() {
+    radarLilGui?.destroy();
+    const params = { radarHeight };
+    const gui = new GUI({ title: "Sim 3D" });
+    radarLilGui = gui;
+    const folder = gui.addFolder("Radar");
+    folder
+      .add(params, "radarHeight", 0.5, 12, 0.05)
+      .name("Gruppen-Höhe (m)")
+      .onChange((v: number) => {
+        radarHeight = v;
+        this.updateRadarVisualization();
+      });
+    folder.open();
+  }
+
+  destroyed() {
+    radarLilGui?.destroy();
+    radarLilGui = null;
   }
 
   createCameraRig() {
@@ -365,7 +390,7 @@ class Pixels3dAframeHook extends Hook {
     const n = Math.min(12, Math.max(3, Math.round(radarCount)));
     const outerR = panelDiameter / 2;
     const radialSpan = Math.max(0.01, outerR - RADAR_RING_RADIUS);
-    const beamLen = Math.sqrt(radialSpan * radialSpan + RADAR_HEIGHT * RADAR_HEIGHT);
+    const beamLen = Math.sqrt(radialSpan * radialSpan + radarHeight * radarHeight);
     const T = getThree();
     for (let i = 0; i < n; i++) {
       const angle = (i / n) * Math.PI * 2;
@@ -374,7 +399,7 @@ class Pixels3dAframeHook extends Hook {
       // +Z radial nach außen (ohne +180 — sonst zeigen Sensoren zur Mitte)
       const yawDeg = T.MathUtils.radToDeg(angle);
       const pivot = document.createElement('a-entity');
-      pivot.setAttribute('position', `${x} ${RADAR_HEIGHT} ${z}`);
+      pivot.setAttribute('position', `${x} ${radarHeight} ${z}`);
       pivot.setAttribute('rotation', `0 ${yawDeg} 0`);
       const tilt = document.createElement('a-entity');
       tilt.setAttribute('rotation', `${-RADAR_TILT_DEG} 0 0`);
@@ -394,6 +419,17 @@ class Pixels3dAframeHook extends Hook {
       // Kegel unter gleicher tilt-Gruppe wie die Box: Spitze = Boxmitte, Öffnung in -Y = Neigungswinkel
       tilt.appendChild(coneHost);
       tilt.appendChild(box);
+      // Spot entlang lokalem -Y (Kegelachse): Default -Z → Rx(-90) → -Y
+      const spot = document.createElement('a-light');
+      spot.setAttribute('type', 'spot');
+      spot.setAttribute('color', '#9ec8ff');
+      spot.setAttribute('intensity', '0.45');
+      spot.setAttribute('angle', String(Math.min(85, RADAR_CONE_HALF_ANGLE_DEG * 2)));
+      spot.setAttribute('distance', String(beamLen * 1.25));
+      spot.setAttribute('decay', '1.5');
+      spot.setAttribute('cast-shadow', 'false');
+      spot.setAttribute('rotation', '-90 0 0');
+      tilt.appendChild(spot);
       pivot.appendChild(tilt);
       root.appendChild(pivot);
     }
