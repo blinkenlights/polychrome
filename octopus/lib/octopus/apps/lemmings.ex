@@ -173,10 +173,8 @@ defmodule Octopus.Apps.Lemmings do
   end
 
   def add_left(%State{} = state), do: add_lemming(state, &Lemming.walking_right/1)
-  def add_left(%State{} = state), do: state
 
   def add_right(%State{} = state), do: add_lemming(state, &Lemming.walking_left/1)
-  def add_right(%State{} = state), do: state
 
   def explode_first([%Lemming{state: state} = lem | tail], acc)
       when state in [:stopper, :walk_left, :walk_right] do
