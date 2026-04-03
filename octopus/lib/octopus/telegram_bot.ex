@@ -1,14 +1,14 @@
 defmodule Octopus.TelegramBot do
   @moduledoc """
-  Simple interface to a telegram bot. Use the TELEGRAM_BOT_SECRET environment variable
-  to pass a Telegram bot token to the library. The library connects to Telegram and waits
-  for commands. Any received command is announced via PubSub and can be consumed by any
-  module subscribing to it.
+  Simple interface to a Telegram bot. Use the `TELEGRAM_BOT_SECRET` environment variable
+  to pass a bot token. This module calls the Telegram Bot API with Req, long-polls for
+  updates, and broadcasts each update on PubSub for subscribers.
   """
   use GenServer
   require Logger
 
   @connection_attempt_timeout 60_000
+  @api_base "https://api.telegram.org"
 
   @topic "polychrome_bot_update"
   defstruct [:bot_key, :me, :last_seen]
@@ -26,7 +26,7 @@ defmodule Octopus.TelegramBot do
   def handle_continue(:init, opts) do
     {key, _opts} = Keyword.pop!(opts, :bot_key)
 
-    case Telegram.Api.request(key, "getMe") do
+    case api_request(key, "getMe", %{}) do
       {:ok, me} ->
         Logger.info("Bot successfully self-identified: #{me["username"]}")
 
@@ -50,26 +50,23 @@ defmodule Octopus.TelegramBot do
   @impl GenServer
   def handle_info(:check, %{bot_key: key, last_seen: last_seen} = state) do
     state =
-      key
-      |> Telegram.Api.request("getUpdates", offset: last_seen + 1, timeout: 30)
+      api_request(key, "getUpdates", %{
+        offset: last_seen + 1,
+        timeout: 30
+      })
       |> case do
-        # Empty, typically a timeout. State returned unchanged.
         {:ok, []} ->
           next_loop()
           state
 
-        # A response with content, exciting!
         {:ok, updates} ->
-          # Process our updates and return the latest update ID
           last_seen = handle_updates(updates, last_seen)
-
-          # Update the last_seen state so we only get new updates on the
-          # next check
           next_loop()
           %{state | last_seen: last_seen}
 
         {:error, reason} ->
           Logger.warning("Bot: Can't get updates: #{reason}")
+          next_loop()
           state
       end
 
@@ -78,27 +75,48 @@ defmodule Octopus.TelegramBot do
 
   defp handle_updates(updates, last_seen) do
     updates
-    # Process our updates
     |> Enum.map(fn update ->
       Logger.debug("Update received: #{inspect(update)}")
-      # Offload the updates to whoever they may concern
       broadcast(update)
-
-      # Return the update ID so we can boil it down to a new last_seen
       update["update_id"]
     end)
-    # Get the highest seen id from the new updates or fall back to last_seen
     |> Enum.max(fn -> last_seen end)
   end
 
   def topic, do: @topic
 
   defp broadcast(update) do
-    # Send each update to a topic for others to listen to.
     Phoenix.PubSub.broadcast!(Octopus.PubSub, @topic, {:bot_update, update})
   end
 
   defp next_loop do
     Process.send_after(self(), :check, 0)
+  end
+
+  defp api_request(token, method, params) when is_map(params) do
+    url = "#{@api_base}/bot#{token}/#{method}"
+
+    opts = [
+      json: params,
+      connect_options: [timeout: 15_000],
+      receive_timeout: 45_000
+    ]
+
+    case Req.post(url, opts) do
+      {:ok, %Req.Response{status: 200, body: %{"ok" => true, "result" => result}}} ->
+        {:ok, result}
+
+      {:ok, %Req.Response{status: 200, body: %{"ok" => false, "description" => desc}}} ->
+        {:error, desc}
+
+      {:ok, %Req.Response{status: 200, body: body}} ->
+        {:error, "unexpected response: #{inspect(body)}"}
+
+      {:ok, %Req.Response{status: status, body: body}} ->
+        {:error, "HTTP #{status}: #{inspect(body)}"}
+
+      {:error, reason} ->
+        {:error, inspect(reason)}
+    end
   end
 end
