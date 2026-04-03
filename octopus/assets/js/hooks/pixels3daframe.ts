@@ -135,7 +135,8 @@ const textures: any[] = [];
 let radarHeight = 3.5;
 const RADAR_RING_RADIUS = 0.15;
 const RADAR_BOX = 0.1;
-const RADAR_TILT_DEG = 45;
+/** Neigung der Box/Kegel/Spot um lokale X-Achse (nach unten zur Mitte), ein Wert für alle Sensoren */
+let radarTiltDeg = 45;
 /** Halbwinkel des Kegels (nur Visualisierung) */
 const RADAR_CONE_HALF_ANGLE_DEG = 22;
 let radarCount = 6;
@@ -226,12 +227,12 @@ class Pixels3dAframeHook extends Hook {
     sceneEl.appendChild(cameraRig);
 
     this.el.appendChild(sceneEl);
-    this.setupRadarHeightGui();
+    this.setupRadarGui();
   }
 
-  setupRadarHeightGui() {
+  setupRadarGui() {
     radarLilGui?.destroy();
-    const params = { radarHeight };
+    const params = { radarHeight, radarTiltDeg };
     const gui = new GUI({ title: "Sim 3D" });
     radarLilGui = gui;
     const folder = gui.addFolder("Radar");
@@ -240,6 +241,13 @@ class Pixels3dAframeHook extends Hook {
       .name("Gruppen-Höhe (m)")
       .onChange((v: number) => {
         radarHeight = v;
+        this.updateRadarVisualization();
+      });
+    folder
+      .add(params, "radarTiltDeg", 5, 85, 1)
+      .name("Neigung (°)")
+      .onChange((v: number) => {
+        radarTiltDeg = v;
         this.updateRadarVisualization();
       });
     folder.open();
@@ -402,7 +410,7 @@ class Pixels3dAframeHook extends Hook {
       pivot.setAttribute('position', `${x} ${radarHeight} ${z}`);
       pivot.setAttribute('rotation', `0 ${yawDeg} 0`);
       const tilt = document.createElement('a-entity');
-      tilt.setAttribute('rotation', `${-RADAR_TILT_DEG} 0 0`);
+      tilt.setAttribute('rotation', `${-radarTiltDeg} 0 0`);
       const box = document.createElement('a-box');
       box.setAttribute('width', RADAR_BOX.toString());
       box.setAttribute('height', RADAR_BOX.toString());
