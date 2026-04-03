@@ -137,8 +137,12 @@ const RADAR_RING_RADIUS = 0.15;
 const RADAR_BOX = 0.1;
 /** Neigung der Box/Kegel/Spot um lokale X-Achse (nach unten zur Mitte), ein Wert für alle Sensoren */
 let radarTiltDeg = 45;
-/** Halbwinkel des Kegels (nur Visualisierung) */
-const RADAR_CONE_HALF_ANGLE_DEG = 22;
+/**
+ * Voller Öffnungswinkel des Radar-Spotlights (A-Frame `light.angle`, Grad).
+ * Der blaue Kegel (`radar-cone-viz`) nutzt denselben Winkel — Halbwinkel = /2.
+ */
+const RADAR_SPOT_ANGLE_DEG = 120;
+const RADAR_SPOT_HALF_ANGLE_DEG = RADAR_SPOT_ANGLE_DEG / 2;
 let radarCount = 6;
 
 let radarLilGui: GUI | null = null;
@@ -232,10 +236,18 @@ class Pixels3dAframeHook extends Hook {
 
   setupRadarGui() {
     radarLilGui?.destroy();
-    const params = { radarHeight, radarTiltDeg };
+    const params = { radarHeight, radarTiltDeg, radarCount };
     const gui = new GUI({ title: "Sim 3D" });
     radarLilGui = gui;
     const folder = gui.addFolder("Radar");
+    folder
+      .add(params, "radarCount", 3, 12, 1)
+      .name("Anzahl Boxen")
+      .onChange((v: number) => {
+        radarCount = Math.min(12, Math.max(3, Math.round(v)));
+        params.radarCount = radarCount;
+        this.updateRadarVisualization();
+      });
     folder
       .add(params, "radarHeight", 0.5, 12, 0.05)
       .name("Gruppen-Höhe (m)")
@@ -422,7 +434,7 @@ class Pixels3dAframeHook extends Hook {
       coneHost.setAttribute('position', '0 0 0');
       coneHost.setAttribute(
         'radar-cone-viz',
-        `length: ${beamLen}; halfAngleDeg: ${RADAR_CONE_HALF_ANGLE_DEG}`
+        `length: ${beamLen}; halfAngleDeg: ${RADAR_SPOT_HALF_ANGLE_DEG}`
       );
       // Kegel unter gleicher tilt-Gruppe wie die Box: Spitze = Boxmitte, Öffnung in -Y = Neigungswinkel
       tilt.appendChild(coneHost);
@@ -432,7 +444,7 @@ class Pixels3dAframeHook extends Hook {
       spot.setAttribute('type', 'spot');
       spot.setAttribute('color', '#9ec8ff');
       spot.setAttribute('intensity', '0.45');
-      spot.setAttribute('angle', String(Math.min(85, RADAR_CONE_HALF_ANGLE_DEG * 2)));
+      spot.setAttribute('angle', String(RADAR_SPOT_ANGLE_DEG));
       spot.setAttribute('distance', String(beamLen * 1.25));
       spot.setAttribute('decay', '1.5');
       spot.setAttribute('cast-shadow', 'false');
@@ -567,7 +579,7 @@ class Pixels3dAframeHook extends Hook {
     AFRAME.registerComponent('radar-cone-viz', {
       schema: {
         length: { type: 'number', default: 8 },
-        halfAngleDeg: { type: 'number', default: RADAR_CONE_HALF_ANGLE_DEG },
+        halfAngleDeg: { type: 'number', default: RADAR_SPOT_HALF_ANGLE_DEG },
       },
       init: function (this: {
         el: any;
