@@ -38,7 +38,8 @@ defmodule Octopus.Apps.Encounter do
       |> Path.join("midi")
       |> Path.join("encounter.json")
       |> File.read!()
-      |> Jason.decode!(keys: :atoms)
+      |> JSON.decode!()
+      |> atomize_keys()
 
     # Dynamically assign channels based on available panels
     panel_count = display_info.num_panels
@@ -184,6 +185,13 @@ defmodule Octopus.Apps.Encounter do
     random_index = :rand.uniform(length(list)) - 1
     Enum.at(list, random_index)
   end
+
+  defp atomize_keys(map) when is_map(map) do
+    Map.new(map, fn {k, v} -> {String.to_atom(k), atomize_keys(v)} end)
+  end
+
+  defp atomize_keys(list) when is_list(list), do: Enum.map(list, &atomize_keys/1)
+  defp atomize_keys(value), do: value
 
   def handle_info({:NOTE_ON, channel, note}, %State{} = state) do
     %Chameleon.RGB{r: r, g: g, b: b} =

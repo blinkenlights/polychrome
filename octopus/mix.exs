@@ -11,7 +11,15 @@ defmodule Octopus.MixProject do
       compilers: [:yecc, :leex] ++ Mix.compilers(),
       listeners: [Phoenix.CodeReloader],
       aliases: aliases(),
-      deps: deps()
+      deps: deps(),
+      usage_rules: usage_rules()
+    ]
+  end
+
+  defp usage_rules do
+    [
+      file: "AGENTS.md",
+      usage_rules: :all
     ]
   end
 
@@ -34,41 +42,41 @@ defmodule Octopus.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
-      {:usage_rules, "~> 0.1", only: [:dev]},
+      {:usage_rules, "~> 1.2", only: [:dev]},
       {:phoenix, "~> 1.8.0"},
-      {:phoenix_ecto, "~> 4.4"},
-      {:ecto_sql, "~> 3.12"},
-      {:ecto_sqlite3, ">= 0.0.0"},
+      {:phoenix_ecto, "~> 4.7"},
+      {:ecto_sql, "~> 3.13"},
+      {:ecto_sqlite3, ">= 0.22.0"},
       {:ecto_sqlite3_extras, "~> 1.2.0"},
-      {:phoenix_html, "~> 4.1"},
-      {:phoenix_live_reload, "~> 1.2", only: :dev},
+      {:phoenix_html, "~> 4.3"},
+      {:phoenix_live_reload, "~> 1.6.2", only: :dev},
       {:phoenix_live_view, "~> 1.1"},
-      {:floki, ">= 0.30.0", only: :test},
-      {:phoenix_live_dashboard, "~> 0.7"},
-      {:esbuild, "~> 0.7", runtime: Mix.env() == :dev},
-      {:tailwind, "~> 0.3.0", runtime: Mix.env() == :dev},
-      {:swoosh, "~> 1.3"},
-      {:finch, "~> 0.13"},
+      {:floki, ">= 0.38.0", only: :test},
+      {:phoenix_live_dashboard, "~> 0.8.7"},
+      {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
+      {:tailwind, "~> 0.4.1", runtime: Mix.env() == :dev},
+      {:swoosh, "~> 1.25"},
+      {:finch, "~> 0.21"},
       {:req, "~> 0.5.0"},
-      {:telemetry_metrics, "~> 1.0"},
-      {:telemetry_poller, "~> 1.0"},
+      {:telemetry_metrics, "~> 1.1"},
+      {:telemetry_poller, "~> 1.3"},
       {:gettext, "~> 0.20"},
-      {:jason, "~> 1.2"},
-      {:bandit, "~> 1.7"},
+
+      {:bandit, "~> 1.10"},
       {:protobuf, "~> 0.15.0"},
       {:ex_png, "~> 1.0.0"},
       {:easing, "~> 0.3.1"},
       {:cachex, "~> 4.1"},
-      {:ex_doc, "~> 0.21", only: :dev, runtime: false},
+      {:ex_doc, "~> 0.40", only: :dev, runtime: false},
       {:rustler, "~> 0.36.0"},
       {:chameleon, "~> 2.5"},
       {:live_monaco_editor, "~> 0.2"},
       {:nimble_parsec, "~> 1.4"},
       {:nimble_options, "~> 1.0"},
-      {:mdns_lite, "~> 0.8.10"},
+      {:mdns_lite, "~> 0.9.1"},
       {:oscx, "~> 0.1.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:igniter, "~> 0.6", only: [:dev]}
+      {:igniter, "~> 0.7", only: [:dev]}
     ]
   end
 

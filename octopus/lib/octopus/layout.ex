@@ -44,9 +44,9 @@ defmodule Octopus.Layout do
     end
   end
 
-  defimpl Jason.Encoder, for: Octopus.Layout do
-    def encode(%Octopus.Layout{} = layout, opts) do
-      Jason.Encode.map(
+  defimpl JSON.Encoder, for: Octopus.Layout do
+    def encode(%Octopus.Layout{} = layout, encoder) do
+      encoder.(
         %{
           name: layout.name,
           positions: layout.positions |> Enum.map(&Tuple.to_list/1),
@@ -58,7 +58,7 @@ defmodule Octopus.Layout do
           backgroundImage: layout.background_image,
           pixelImage: layout.pixel_image
         },
-        opts
+        encoder
       )
     end
   end

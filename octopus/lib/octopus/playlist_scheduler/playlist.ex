@@ -6,7 +6,7 @@ defmodule Octopus.PlaylistScheduler.Playlist do
   defmodule Animation do
     use Ecto.Schema
 
-    @derive {Jason.Encoder, except: [:id]}
+    @derive {JSON.Encoder, except: [:id]}
     embedded_schema do
       field :app, :string
       field :config, :map, default: %{}

@@ -71,7 +71,7 @@ defmodule OctopusWeb.AppLive do
 
     socket =
       socket
-      |> assign(playlist_config: Jason.encode!(config))
+      |> assign(playlist_config: JSON.encode!(config))
 
     socket
   end

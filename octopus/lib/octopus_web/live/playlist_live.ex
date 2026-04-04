@@ -14,7 +14,7 @@ defmodule OctopusWeb.PlaylistLive do
       |> assign(playlist_id: id)
       |> assign(playlist: playlist)
       |> assign(name: playlist.name)
-      |> assign(animations: Jason.encode!(playlist.animations))
+      |> assign(animations: JSON.encode!(playlist.animations))
       |> put_flash(:error, nil)
       |> assign(info: nil)
       |> validate_animations()
@@ -78,7 +78,7 @@ defmodule OctopusWeb.PlaylistLive do
   end
 
   def validate_animations(socket) do
-    case Jason.decode(socket.assigns.animations) do
+    case JSON.decode(socket.assigns.animations) do
       {:error, _error} ->
         socket
         |> assign(valid?: false)
@@ -103,11 +103,11 @@ defmodule OctopusWeb.PlaylistLive do
   end
 
   def format_animations(%Socket{assigns: %{valid?: true}} = socket) do
-    list = Jason.decode!(socket.assigns.animations)
+    list = JSON.decode!(socket.assigns.animations)
 
     json_str =
       list
-      |> Enum.map(fn map -> "  #{Jason.encode!(map)}" end)
+      |> Enum.map(fn map -> "  #{JSON.encode!(map)}" end)
       |> Enum.join(",\n")
 
     socket
@@ -117,7 +117,7 @@ defmodule OctopusWeb.PlaylistLive do
   def format_animations(socket), do: socket
 
   def store_animations(%Socket{assigns: %{valid?: true}} = socket) do
-    list = Jason.decode!(socket.assigns.animations)
+    list = JSON.decode!(socket.assigns.animations)
 
     PlaylistScheduler.update_playlist!(socket.assigns.playlist_id, %{
       animations: list,

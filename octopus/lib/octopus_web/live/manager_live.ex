@@ -195,7 +195,7 @@ defmodule OctopusWeb.ManagerLive do
                       {app}
                     </td>
                     <td>{timeout}</td>
-                    <td class="w-1/2 ">{config |> Jason.encode!()}</td>
+                    <td class="w-1/2 ">{config |> JSON.encode!()}</td>
                   </tr>
                 </tbody>
               </table>
