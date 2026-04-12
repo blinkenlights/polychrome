@@ -60,8 +60,7 @@ defmodule Octopus.MixProject do
       {:req, "~> 0.5.0"},
       {:telemetry_metrics, "~> 1.1"},
       {:telemetry_poller, "~> 1.3"},
-      {:gettext, "~> 0.20"},
-
+      {:gettext, ">= 0.0.0"},
       {:bandit, "~> 1.10"},
       {:protobuf, "~> 0.15.0"},
       {:ex_png, "~> 1.0.0"},
