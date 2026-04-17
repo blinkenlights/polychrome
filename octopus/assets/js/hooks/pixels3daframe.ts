@@ -162,7 +162,7 @@ const RADAR_SPOT_HALF_ANGLE_DEG = RADAR_SPOT_ANGLE_DEG / 2;
 const RADAR_SPOT_DISTANCE_M = 8;
 const RADAR_COUNT_MIN = 1;
 const RADAR_COUNT_MAX = 12;
-let radarCount = 6;
+let radarCount = 8;
 /** Zentraler Mast (unter den Radarboxen): Durchmesser per GUI 5–50 cm, Default 15 cm */
 let mastDiameterM = 0.15;
 const MAST_DIAMETER_MIN_M = 0.05;
