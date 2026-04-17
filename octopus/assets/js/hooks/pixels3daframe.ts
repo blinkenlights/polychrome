@@ -145,7 +145,13 @@ let renderRadar = true;
  */
 const RADAR_SPOT_ANGLE_DEG = 120;
 const RADAR_SPOT_HALF_ANGLE_DEG = RADAR_SPOT_ANGLE_DEG / 2;
+const RADAR_COUNT_MIN = 1;
+const RADAR_COUNT_MAX = 12;
 let radarCount = 6;
+
+function clampRadarCount(v: number): number {
+  return Math.min(RADAR_COUNT_MAX, Math.max(RADAR_COUNT_MIN, Math.round(Number(v))));
+}
 
 let radarLilGui: GUI | null = null;
 
@@ -255,10 +261,10 @@ class Pixels3dAframeHook extends Hook {
         this.updateRadarVisualization();
       });
     folder
-      .add(params, "radarCount", 3, 12, 1)
+      .add(params, "radarCount", RADAR_COUNT_MIN, RADAR_COUNT_MAX, 1)
       .name("Anzahl Boxen")
       .onChange((v: number) => {
-        radarCount = Math.min(12, Math.max(3, Math.round(v)));
+        radarCount = clampRadarCount(v);
         params.radarCount = radarCount;
         this.updateRadarVisualization();
       });
@@ -421,7 +427,7 @@ class Pixels3dAframeHook extends Hook {
   createRadarSensors() {
     const root = document.createElement('a-entity');
     root.setAttribute('id', 'radar-sensors');
-    const n = Math.min(12, Math.max(3, Math.round(radarCount)));
+    const n = clampRadarCount(radarCount);
     const outerR = panelDiameter / 2;
     const radialSpan = Math.max(0.01, outerR - RADAR_RING_RADIUS);
     const beamLen = Math.sqrt(radialSpan * radialSpan + radarHeight * radarHeight);
@@ -473,7 +479,7 @@ class Pixels3dAframeHook extends Hook {
   createCentralCylinder() {
     const cyl = document.createElement('a-cylinder');
     cyl.setAttribute('id', 'central-platform');
-    cyl.setAttribute('radius', '1.5');
+    cyl.setAttribute('radius', '2.5');
     cyl.setAttribute('height', '0.5');
     cyl.setAttribute('position', '0 0.25 0');
     cyl.setAttribute('color', '#8B4513');
@@ -584,7 +590,7 @@ class Pixels3dAframeHook extends Hook {
       this.updatePanels()
     }
     if (param.radar_count !== undefined && param.radar_count !== null) {
-      radarCount = Number(param.radar_count);
+      radarCount = clampRadarCount(Number(param.radar_count));
       this.updateRadarVisualization();
     }
   }
