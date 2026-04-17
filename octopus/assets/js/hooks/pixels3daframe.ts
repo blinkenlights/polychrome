@@ -131,9 +131,12 @@ let poleDiameter: number = 0.4;
 let poleHeight: number = 0.4;
 const textures: any[] = [];
 
-/** Radar-Sensoren: kleiner Innenkreis (~30 cm Ø), Kegel-Visualisierung; Höhe per lil-gui / radarHeight */
+/** Radar-Sensoren: Abstand zum Zentrum (m) per lil-gui; Kegel-Visualisierung; Höhe per radarHeight */
 let radarHeight = 3.5;
-const RADAR_RING_RADIUS = 0.15;
+const RADAR_RADIUS_MIN_M = 0;
+const RADAR_RADIUS_MAX_M = 2;
+/** Horizontaler Abstand der Boxen von der Y-Achse (Kreisradius), Default ~15 cm wie bisher */
+let radarRadiusM = 0.15;
 const RADAR_BOX = 0.1;
 /** Neigung der Box/Kegel/Spot um lokale X-Achse (nach unten zur Mitte), ein Wert für alle Sensoren */
 let radarTiltDeg = 45;
@@ -250,7 +253,13 @@ class Pixels3dAframeHook extends Hook {
 
   setupRadarGui() {
     radarLilGui?.destroy();
-    const params = { radarHeight, radarTiltDeg, radarCount, renderRadar };
+    const params = {
+      radarHeight,
+      radarTiltDeg,
+      radarCount,
+      radarRadiusM,
+      renderRadar,
+    };
     const gui = new GUI({ title: "Sim 3D" });
     radarLilGui = gui;
     const folder = gui.addFolder("Radar");
@@ -268,6 +277,17 @@ class Pixels3dAframeHook extends Hook {
       .onChange((v: number) => {
         radarCount = clampRadarCount(v);
         params.radarCount = radarCount;
+        this.updateRadarVisualization();
+      });
+    folder
+      .add(params, "radarRadiusM", RADAR_RADIUS_MIN_M, RADAR_RADIUS_MAX_M, 0.01)
+      .name("Abstand zum Zentrum (m)")
+      .onChange((v: number) => {
+        radarRadiusM = Math.min(
+          RADAR_RADIUS_MAX_M,
+          Math.max(RADAR_RADIUS_MIN_M, Number(v))
+        );
+        params.radarRadiusM = radarRadiusM;
         this.updateRadarVisualization();
       });
     folder
@@ -404,8 +424,10 @@ class Pixels3dAframeHook extends Hook {
     const inner = document.createElement('a-ring');
     inner.setAttribute('position', '0 0.02 0');
     inner.setAttribute('rotation', '-90 0 0');
-    inner.setAttribute('radius-inner', '0.14');
-    inner.setAttribute('radius-outer', '0.16');
+    const rInner = Math.max(0, radarRadiusM - 0.01);
+    const rOuter = radarRadiusM + 0.01;
+    inner.setAttribute('radius-inner', rInner.toString());
+    inner.setAttribute('radius-outer', rOuter.toString());
     inner.setAttribute(
       'material',
       'shader: flat; color: #222; opacity: 0.85; transparent: true; side: double'
@@ -433,8 +455,8 @@ class Pixels3dAframeHook extends Hook {
     const T = getThree();
     for (let i = 0; i < n; i++) {
       const angle = (i / n) * Math.PI * 2;
-      const x = RADAR_RING_RADIUS * Math.sin(angle);
-      const z = RADAR_RING_RADIUS * Math.cos(angle);
+      const x = radarRadiusM * Math.sin(angle);
+      const z = radarRadiusM * Math.cos(angle);
       // +Z radial nach außen (ohne +180 — sonst zeigen Sensoren zur Mitte)
       const yawDeg = T.MathUtils.radToDeg(angle);
       const pivot = document.createElement('a-entity');
