@@ -118,7 +118,7 @@ const skyFragmentShader = `
 `;
 
 let panelDiameter = 18;
-const PANEL_DIAMETER_MIN = 15;
+const PANEL_DIAMETER_MIN = 10;
 const PANEL_DIAMETER_MAX = 20;
 
 function clampPanelDiameter(v: number): number {
@@ -174,7 +174,71 @@ function clampRadarCount(v: number): number {
   return Math.min(RADAR_COUNT_MAX, Math.max(RADAR_COUNT_MIN, Math.round(Number(v))));
 }
 
+/** Wenn true: Neigung so, dass die Oberkante der LED-Front (Panel 0) auf dem Kegelmantel liegt; Neigung-Slider gesperrt. */
+let radarTiltAutoAlign = false;
+
 let radarLilGui: GUI | null = null;
+/** lil-gui Controller für „Neigung (°)“ — zum Sperren bei Auto-Ausrichtung */
+let radarNeigungCtrl: { disable: (v: boolean) => void } | null = null;
+
+/** Kegelachse (vom Sensor in den Kegel) wie in `createRadarSensors`: R_y(yaw) · R_x(-tilt) · (0,-1,0). */
+function radarConeAxisFromTiltYawDeg(tiltDeg: number, yawDeg: number) {
+  const T = getThree();
+  const ax = new T.Vector3(0, -1, 0);
+  const xAxis = new T.Vector3(1, 0, 0);
+  const yAxis = new T.Vector3(0, 1, 0);
+  ax.applyAxisAngle(xAxis, T.MathUtils.degToRad(-tiltDeg));
+  ax.applyAxisAngle(yAxis, T.MathUtils.degToRad(yawDeg));
+  ax.normalize();
+  return ax;
+}
+
+/**
+ * Neigung (°), sodass die Oberkante der Front-Plane (Panel azimuth 0) auf dem Kegelmantel liegt
+ * (Halbwinkel = RADAR_SPOT_HALF_ANGLE_DEG) und knapp darüber außerhalb des Kegels.
+ */
+function computeAutoRadarTiltDeg(): number {
+  const T = getThree();
+  const yTop = poleHeight + PANEL_SIZE;
+  const zFace = PANEL_DEPTH / 2 + 0.1;
+  const TzWorld = panelDiameter / 2 - zFace;
+  const S = new T.Vector3(0, radarHeight, radarRadiusM);
+  const Top = new T.Vector3(0, yTop, TzWorld);
+  const w = new T.Vector3().subVectors(Top, S);
+  const wLen = w.length();
+  if (wLen < 1e-6) return T.MathUtils.clamp(radarTiltDeg, 5, 85);
+  w.multiplyScalar(1 / wLen);
+  const TopUp = new T.Vector3(0, yTop + 0.05, TzWorld);
+  const wUp = new T.Vector3().subVectors(TopUp, S).normalize();
+  const gamma = T.MathUtils.degToRad(RADAR_SPOT_HALF_ANGLE_DEG);
+
+  let best = T.MathUtils.clamp(radarTiltDeg, 5, 85);
+  let bestErr = Infinity;
+  for (let t = 5; t <= 85; t += 0.04) {
+    const ax = radarConeAxisFromTiltYawDeg(t, 0);
+    const ang = Math.acos(T.MathUtils.clamp(w.dot(ax), -1, 1));
+    const angUp = Math.acos(T.MathUtils.clamp(wUp.dot(ax), -1, 1));
+    if (angUp <= gamma + 0.008) continue;
+    const err = Math.abs(ang - gamma);
+    if (err < bestErr) {
+      bestErr = err;
+      best = t;
+    }
+  }
+  if (bestErr > 0.08) {
+    bestErr = Infinity;
+    for (let t = 5; t <= 85; t += 0.04) {
+      const ax = radarConeAxisFromTiltYawDeg(t, 0);
+      const ang = Math.acos(T.MathUtils.clamp(w.dot(ax), -1, 1));
+      const err = Math.abs(ang - gamma);
+      if (err < bestErr) {
+        bestErr = err;
+        best = t;
+      }
+    }
+  }
+  return best;
+}
 
 type Param = {
   param: {
@@ -270,6 +334,10 @@ class Pixels3dAframeHook extends Hook {
 
   setupRadarGui() {
     radarLilGui?.destroy();
+    radarNeigungCtrl = null;
+    if (radarTiltAutoAlign) {
+      radarTiltDeg = computeAutoRadarTiltDeg();
+    }
     const params = {
       panelDiameter,
       radarHeight,
@@ -278,6 +346,7 @@ class Pixels3dAframeHook extends Hook {
       radarRadiusM,
       mastDiameterM,
       renderRadarCones,
+      radarTiltAutoAlign,
     };
     const gui = new GUI({ title: "Sim 3D" });
     radarLilGui = gui;
@@ -294,6 +363,22 @@ class Pixels3dAframeHook extends Hook {
     panelsFolder.open();
     const folder = gui.addFolder("Radar");
     const radarRadiusMinM = Math.max(RADAR_RADIUS_MIN_M, mastDiameterM / 2);
+    folder
+      .add(params, "radarTiltAutoAlign")
+      .name("Neigung: Auto (Kante = Kegel)")
+      .onChange((v: boolean) => {
+        radarTiltAutoAlign = !!v;
+        params.radarTiltAutoAlign = radarTiltAutoAlign;
+        if (radarTiltAutoAlign) {
+          radarTiltDeg = computeAutoRadarTiltDeg();
+          params.radarTiltDeg = radarTiltDeg;
+        }
+        this.updateRadarVisualization();
+        radarNeigungCtrl?.disable(!!radarTiltAutoAlign);
+        const nc = radarNeigungCtrl as { object?: { radarTiltDeg?: number }; updateDisplay?: () => void } | null;
+        if (nc?.object) nc.object.radarTiltDeg = radarTiltDeg;
+        nc?.updateDisplay?.();
+      });
     folder
       .add(params, "renderRadarCones")
       .name("Blaue Licht-Kegel")
@@ -339,22 +424,27 @@ class Pixels3dAframeHook extends Hook {
         );
         params.mastDiameterM = mastDiameterM;
         this.applyRadarMastConstraints();
-        this.setupRadarGui();
         this.updateRadarVisualization();
+        this.setupRadarGui();
       });
-    folder
+    radarNeigungCtrl = folder
       .add(params, "radarTiltDeg", 5, 85, 1)
       .name("Neigung (°)")
       .onChange((v: number) => {
+        if (radarTiltAutoAlign) return;
         radarTiltDeg = v;
         this.updateRadarVisualization();
       });
+    if (radarTiltAutoAlign) {
+      radarNeigungCtrl.disable(true);
+    }
     folder.open();
   }
 
   destroyed() {
     radarLilGui?.destroy();
     radarLilGui = null;
+    radarNeigungCtrl = null;
   }
 
   createCameraRig() {
@@ -691,8 +781,11 @@ class Pixels3dAframeHook extends Hook {
       this.setupRadarGui();
     }
     if (param.height) {
-      poleHeight  = param.height;
-      this.updatePanels()
+      poleHeight = param.height;
+      this.updatePanels();
+      if (radarTiltAutoAlign) {
+        this.updateRadarVisualization();
+      }
     }
     if (param.foot_diameter) {
       poleDiameter  = param.foot_diameter;
@@ -825,6 +918,9 @@ class Pixels3dAframeHook extends Hook {
   updateRadarVisualization() {
     const sceneEl = document.querySelector('a-scene');
     if (!sceneEl) return;
+    if (radarTiltAutoAlign) {
+      radarTiltDeg = computeAutoRadarTiltDeg();
+    }
     if (this.applyRadarMastConstraints()) {
       this.setupRadarGui();
     }
@@ -837,6 +933,14 @@ class Pixels3dAframeHook extends Hook {
     sceneEl.appendChild(this.createRadarGroundRings());
     sceneEl.appendChild(this.createRadarMast());
     sceneEl.appendChild(this.createRadarSensors());
+    if (radarTiltAutoAlign && radarNeigungCtrl) {
+      const nc = radarNeigungCtrl as {
+        object?: { radarTiltDeg?: number };
+        updateDisplay?: () => void;
+      };
+      if (nc.object) nc.object.radarTiltDeg = radarTiltDeg;
+      nc.updateDisplay?.();
+    }
   }
 }
 
