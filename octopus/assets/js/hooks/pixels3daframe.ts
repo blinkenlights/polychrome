@@ -153,6 +153,10 @@ const RADAR_SPOT_DISTANCE_M = 8;
 const RADAR_COUNT_MIN = 1;
 const RADAR_COUNT_MAX = 12;
 let radarCount = 6;
+/** Zentraler Mast (unter den Radarboxen): Durchmesser per GUI 5–50 cm, Default 15 cm */
+let mastDiameterM = 0.15;
+const MAST_DIAMETER_MIN_M = 0.05;
+const MAST_DIAMETER_MAX_M = 0.5;
 
 function clampRadarCount(v: number): number {
   return Math.min(RADAR_COUNT_MAX, Math.max(RADAR_COUNT_MIN, Math.round(Number(v))));
@@ -239,6 +243,11 @@ class Pixels3dAframeHook extends Hook {
       sceneEl.appendChild(radarGround);
     }
 
+    const radarMast = this.createRadarMast();
+    if (renderRadar) {
+      sceneEl.appendChild(radarMast);
+    }
+
     const radarSensors = this.createRadarSensors();
     if (renderRadar) {
       sceneEl.appendChild(radarSensors);
@@ -258,6 +267,7 @@ class Pixels3dAframeHook extends Hook {
       radarTiltDeg,
       radarCount,
       radarRadiusM,
+      mastDiameterM,
       renderRadar,
     };
     const gui = new GUI({ title: "Sim 3D" });
@@ -295,6 +305,18 @@ class Pixels3dAframeHook extends Hook {
       .name("Gruppen-Höhe (m)")
       .onChange((v: number) => {
         radarHeight = v;
+        params.radarHeight = radarHeight;
+        this.updateRadarVisualization();
+      });
+    folder
+      .add(params, "mastDiameterM", MAST_DIAMETER_MIN_M, MAST_DIAMETER_MAX_M, 0.005)
+      .name("Mast-Durchmesser (m)")
+      .onChange((v: number) => {
+        mastDiameterM = Math.min(
+          MAST_DIAMETER_MAX_M,
+          Math.max(MAST_DIAMETER_MIN_M, Number(v))
+        );
+        params.mastDiameterM = mastDiameterM;
         this.updateRadarVisualization();
       });
     folder
@@ -448,6 +470,32 @@ class Pixels3dAframeHook extends Hook {
     return g;
   }
 
+  /**
+   * Mast im Zentrum, gleiche Farbe wie `central-platform` (#8B4513).
+   * Oberkante bündig unter der Unterkante der Radarboxen (Pivot y = radarHeight, Box-Höhe RADAR_BOX).
+   * Unterkante auf dem Podest (Höhe 0.5 m).
+   */
+  createRadarMast() {
+    const PEDESTAL_TOP_Y = 0.5;
+    const boxBottomY = radarHeight - RADAR_BOX / 2;
+    const mastHeightM = Math.max(0, boxBottomY - PEDESTAL_TOP_Y);
+    const holder = document.createElement("a-entity");
+    holder.setAttribute("id", "radar-mast");
+    if (mastHeightM > 1e-6) {
+      const cyl = document.createElement("a-cylinder");
+      cyl.setAttribute("radius", (mastDiameterM / 2).toString());
+      cyl.setAttribute("height", mastHeightM.toString());
+      cyl.setAttribute("color", "#8B4513");
+      cyl.setAttribute("roughness", "0.65");
+      cyl.setAttribute(
+        "position",
+        `0 ${PEDESTAL_TOP_Y + mastHeightM / 2} 0`
+      );
+      holder.appendChild(cyl);
+    }
+    return holder;
+  }
+
   createRadarSensors() {
     const root = document.createElement('a-entity');
     root.setAttribute('id', 'radar-sensors');
@@ -477,20 +525,11 @@ class Pixels3dAframeHook extends Hook {
         'radar-cone-viz',
         `length: ${RADAR_SPOT_DISTANCE_M}; halfAngleDeg: ${RADAR_SPOT_HALF_ANGLE_DEG}`
       );
-      // Kegel unter gleicher tilt-Gruppe wie die Box: Spitze = Boxmitte, Öffnung in -Y = Neigungswinkel
+      // Kegel unter gleicher tilt-Gruppe wie die Box: Spitze = Boxmitte, Öffnung in -Y = Neigungswinkel.
+      // Kein a-light Spot: sonst würde das Radar andere Meshes (Mast, Boden) mitblau anstrahlen; der Effekt
+      // kommt nur noch aus dem halbtransparenten Kegel-Mesh (radar-cone-viz), nicht aus Scene-Lighting.
       tilt.appendChild(coneHost);
       tilt.appendChild(box);
-      // Spot entlang lokalem -Y (Kegelachse): Default -Z → Rx(-90) → -Y
-      const spot = document.createElement('a-light');
-      spot.setAttribute('type', 'spot');
-      spot.setAttribute('color', '#9ec8ff');
-      spot.setAttribute('intensity', '0.45');
-      spot.setAttribute('angle', String(RADAR_SPOT_ANGLE_DEG));
-      spot.setAttribute('distance', String(RADAR_SPOT_DISTANCE_M));
-      spot.setAttribute('decay', '1.5');
-      spot.setAttribute('cast-shadow', 'false');
-      spot.setAttribute('rotation', '-90 0 0');
-      tilt.appendChild(spot);
       pivot.appendChild(tilt);
       root.appendChild(pivot);
     }
@@ -735,10 +774,13 @@ class Pixels3dAframeHook extends Hook {
     if (!sceneEl) return;
     const oldRings = document.querySelector('#radar-ground-rings');
     const oldRadar = document.querySelector('#radar-sensors');
+    const oldMast = document.querySelector('#radar-mast');
     oldRings?.parentNode?.removeChild(oldRings);
     oldRadar?.parentNode?.removeChild(oldRadar);
+    oldMast?.parentNode?.removeChild(oldMast);
     if (!renderRadar) return;
     sceneEl.appendChild(this.createRadarGroundRings());
+    sceneEl.appendChild(this.createRadarMast());
     sceneEl.appendChild(this.createRadarSensors());
   }
 }
