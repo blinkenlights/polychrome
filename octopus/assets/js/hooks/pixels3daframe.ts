@@ -145,6 +145,8 @@ let renderRadar = true;
  */
 const RADAR_SPOT_ANGLE_DEG = 120;
 const RADAR_SPOT_HALF_ANGLE_DEG = RADAR_SPOT_ANGLE_DEG / 2;
+/** Three.js SpotLight: Intensität fällt auf 0 bei dieser Entfernung (m) */
+const RADAR_SPOT_DISTANCE_M = 8;
 const RADAR_COUNT_MIN = 1;
 const RADAR_COUNT_MAX = 12;
 let radarCount = 6;
@@ -428,9 +430,6 @@ class Pixels3dAframeHook extends Hook {
     const root = document.createElement('a-entity');
     root.setAttribute('id', 'radar-sensors');
     const n = clampRadarCount(radarCount);
-    const outerR = panelDiameter / 2;
-    const radialSpan = Math.max(0.01, outerR - RADAR_RING_RADIUS);
-    const beamLen = Math.sqrt(radialSpan * radialSpan + radarHeight * radarHeight);
     const T = getThree();
     for (let i = 0; i < n; i++) {
       const angle = (i / n) * Math.PI * 2;
@@ -454,7 +453,7 @@ class Pixels3dAframeHook extends Hook {
       coneHost.setAttribute('position', '0 0 0');
       coneHost.setAttribute(
         'radar-cone-viz',
-        `length: ${beamLen}; halfAngleDeg: ${RADAR_SPOT_HALF_ANGLE_DEG}`
+        `length: ${RADAR_SPOT_DISTANCE_M}; halfAngleDeg: ${RADAR_SPOT_HALF_ANGLE_DEG}`
       );
       // Kegel unter gleicher tilt-Gruppe wie die Box: Spitze = Boxmitte, Öffnung in -Y = Neigungswinkel
       tilt.appendChild(coneHost);
@@ -465,7 +464,7 @@ class Pixels3dAframeHook extends Hook {
       spot.setAttribute('color', '#9ec8ff');
       spot.setAttribute('intensity', '0.45');
       spot.setAttribute('angle', String(RADAR_SPOT_ANGLE_DEG));
-      spot.setAttribute('distance', String(beamLen * 1.25));
+      spot.setAttribute('distance', String(RADAR_SPOT_DISTANCE_M));
       spot.setAttribute('decay', '1.5');
       spot.setAttribute('cast-shadow', 'false');
       spot.setAttribute('rotation', '-90 0 0');
