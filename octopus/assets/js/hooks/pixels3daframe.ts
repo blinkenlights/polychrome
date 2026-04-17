@@ -157,6 +157,8 @@ let radarCount = 6;
 let mastDiameterM = 0.15;
 const MAST_DIAMETER_MIN_M = 0.05;
 const MAST_DIAMETER_MAX_M = 0.5;
+/** Scheibe auf dem Mast: fest 3 cm (kein GUI) */
+const MAST_PLATE_THICKNESS_M = 0.03;
 
 function clampRadarCount(v: number): number {
   return Math.min(RADAR_COUNT_MAX, Math.max(RADAR_COUNT_MIN, Math.round(Number(v))));
@@ -238,6 +240,8 @@ class Pixels3dAframeHook extends Hook {
     const centralCylinder = this.createCentralCylinder();
     sceneEl.appendChild(centralCylinder);
 
+    this.applyRadarMastConstraints();
+
     const radarGround = this.createRadarGroundRings();
     if (renderRadar) {
       sceneEl.appendChild(radarGround);
@@ -273,6 +277,7 @@ class Pixels3dAframeHook extends Hook {
     const gui = new GUI({ title: "Sim 3D" });
     radarLilGui = gui;
     const folder = gui.addFolder("Radar");
+    const radarRadiusMinM = Math.max(RADAR_RADIUS_MIN_M, mastDiameterM / 2);
     folder
       .add(params, "renderRadar")
       .name("Rendern")
@@ -290,12 +295,12 @@ class Pixels3dAframeHook extends Hook {
         this.updateRadarVisualization();
       });
     folder
-      .add(params, "radarRadiusM", RADAR_RADIUS_MIN_M, RADAR_RADIUS_MAX_M, 0.01)
+      .add(params, "radarRadiusM", radarRadiusMinM, RADAR_RADIUS_MAX_M, 0.01)
       .name("Abstand zum Zentrum (m)")
       .onChange((v: number) => {
         radarRadiusM = Math.min(
           RADAR_RADIUS_MAX_M,
-          Math.max(RADAR_RADIUS_MIN_M, Number(v))
+          Math.max(radarRadiusMinM, Number(v))
         );
         params.radarRadiusM = radarRadiusM;
         this.updateRadarVisualization();
@@ -317,6 +322,8 @@ class Pixels3dAframeHook extends Hook {
           Math.max(MAST_DIAMETER_MIN_M, Number(v))
         );
         params.mastDiameterM = mastDiameterM;
+        this.applyRadarMastConstraints();
+        this.setupRadarGui();
         this.updateRadarVisualization();
       });
     folder
@@ -471,27 +478,52 @@ class Pixels3dAframeHook extends Hook {
   }
 
   /**
-   * Mast im Zentrum, gleiche Farbe wie `central-platform` (#8B4513).
-   * Oberkante bündig unter der Unterkante der Radarboxen (Pivot y = radarHeight, Box-Höhe RADAR_BOX).
-   * Unterkante auf dem Podest (Höhe 0.5 m).
+   * Kreis der Radarboxen: Radius mindestens Mast-Radius (Abstand ≥ Mast-Durchmesser/2).
+   * @returns true wenn radarRadiusM angepasst wurde (GUI ggf. neu aufsetzen)
+   */
+  applyRadarMastConstraints(): boolean {
+    const rMin = mastDiameterM / 2;
+    const prev = radarRadiusM;
+    radarRadiusM = Math.max(rMin, Math.min(RADAR_RADIUS_MAX_M, radarRadiusM));
+    return Math.abs(prev - radarRadiusM) > 1e-9;
+  }
+
+  /**
+   * Mast + horizontale Platte (#8B4513): Unterkante Podest (0.5 m), oberste Fläche bündig unter
+   * Radarbox-Unterkante. Platte: Durchmesser = Kreis der Boxen (2·radarRadiusM), Höhe fest 3 cm.
    */
   createRadarMast() {
     const PEDESTAL_TOP_Y = 0.5;
     const boxBottomY = radarHeight - RADAR_BOX / 2;
-    const mastHeightM = Math.max(0, boxBottomY - PEDESTAL_TOP_Y);
+    const totalSpan = Math.max(0, boxBottomY - PEDESTAL_TOP_Y);
     const holder = document.createElement("a-entity");
     holder.setAttribute("id", "radar-mast");
-    if (mastHeightM > 1e-6) {
+    if (totalSpan <= 1e-6) return holder;
+
+    const plateH = Math.min(MAST_PLATE_THICKNESS_M, totalSpan);
+    const mastBodyH = totalSpan - plateH;
+
+    if (mastBodyH > 1e-6) {
       const cyl = document.createElement("a-cylinder");
       cyl.setAttribute("radius", (mastDiameterM / 2).toString());
-      cyl.setAttribute("height", mastHeightM.toString());
+      cyl.setAttribute("height", mastBodyH.toString());
       cyl.setAttribute("color", "#8B4513");
       cyl.setAttribute("roughness", "0.65");
       cyl.setAttribute(
         "position",
-        `0 ${PEDESTAL_TOP_Y + mastHeightM / 2} 0`
+        `0 ${PEDESTAL_TOP_Y + mastBodyH / 2} 0`
       );
       holder.appendChild(cyl);
+    }
+    if (plateH > 1e-6) {
+      const plate = document.createElement("a-cylinder");
+      plate.setAttribute("radius", radarRadiusM.toString());
+      plate.setAttribute("height", plateH.toString());
+      plate.setAttribute("color", "#8B4513");
+      plate.setAttribute("roughness", "0.65");
+      const plateY = PEDESTAL_TOP_Y + mastBodyH + plateH / 2;
+      plate.setAttribute("position", `0 ${plateY} 0`);
+      holder.appendChild(plate);
     }
     return holder;
   }
@@ -772,6 +804,9 @@ class Pixels3dAframeHook extends Hook {
   updateRadarVisualization() {
     const sceneEl = document.querySelector('a-scene');
     if (!sceneEl) return;
+    if (this.applyRadarMastConstraints()) {
+      this.setupRadarGui();
+    }
     const oldRings = document.querySelector('#radar-ground-rings');
     const oldRadar = document.querySelector('#radar-sensors');
     const oldMast = document.querySelector('#radar-mast');
