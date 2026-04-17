@@ -117,7 +117,17 @@ const skyFragmentShader = `
   }
 `;
 
-let panelDiameter = 16;
+let panelDiameter = 18;
+const PANEL_DIAMETER_MIN = 15;
+const PANEL_DIAMETER_MAX = 20;
+
+function clampPanelDiameter(v: number): number {
+  return Math.min(
+    PANEL_DIAMETER_MAX,
+    Math.max(PANEL_DIAMETER_MIN, Number(v))
+  );
+}
+
 const buttonPoleHeight = 1.0;
 const buttonPoleRadius = 0.05;
 const buttonBaseHeight = 0.02;
@@ -135,13 +145,13 @@ const textures: any[] = [];
 let radarHeight = 3.5;
 const RADAR_RADIUS_MIN_M = 0;
 const RADAR_RADIUS_MAX_M = 2;
-/** Horizontaler Abstand der Boxen von der Y-Achse (Kreisradius), Default ~15 cm wie bisher */
-let radarRadiusM = 0.15;
+/** Horizontaler Abstand der Boxen von der Y-Achse (Kreisradius), Default 50 cm */
+let radarRadiusM = 0.5;
 const RADAR_BOX = 0.1;
 /** Neigung der Box/Kegel/Spot um lokale X-Achse (nach unten zur Mitte), ein Wert für alle Sensoren */
 let radarTiltDeg = 45;
-/** Toggle: render radar boxes + blue lights at all */
-let renderRadar = true;
+/** Toggle: semi-transparent blue cone meshes (`radar-cone-viz`) on each sensor */
+let renderRadarCones = true;
 /**
  * Voller Öffnungswinkel des Radar-Spotlights (A-Frame `light.angle`, Grad).
  * Der blaue Kegel (`radar-cone-viz`) nutzt denselben Winkel — Halbwinkel = /2.
@@ -243,19 +253,13 @@ class Pixels3dAframeHook extends Hook {
     this.applyRadarMastConstraints();
 
     const radarGround = this.createRadarGroundRings();
-    if (renderRadar) {
-      sceneEl.appendChild(radarGround);
-    }
+    sceneEl.appendChild(radarGround);
 
     const radarMast = this.createRadarMast();
-    if (renderRadar) {
-      sceneEl.appendChild(radarMast);
-    }
+    sceneEl.appendChild(radarMast);
 
     const radarSensors = this.createRadarSensors();
-    if (renderRadar) {
-      sceneEl.appendChild(radarSensors);
-    }
+    sceneEl.appendChild(radarSensors);
 
     const cameraRig = this.createCameraRig();
     sceneEl.appendChild(cameraRig);
@@ -267,23 +271,35 @@ class Pixels3dAframeHook extends Hook {
   setupRadarGui() {
     radarLilGui?.destroy();
     const params = {
+      panelDiameter,
       radarHeight,
       radarTiltDeg,
       radarCount,
       radarRadiusM,
       mastDiameterM,
-      renderRadar,
+      renderRadarCones,
     };
     const gui = new GUI({ title: "Sim 3D" });
     radarLilGui = gui;
+    const panelsFolder = gui.addFolder("Panels");
+    panelsFolder
+      .add(params, "panelDiameter", PANEL_DIAMETER_MIN, PANEL_DIAMETER_MAX, 0.1)
+      .name("Durchmesser")
+      .onChange((v: number) => {
+        panelDiameter = clampPanelDiameter(v);
+        params.panelDiameter = panelDiameter;
+        this.updatePanels();
+        this.updateRadarVisualization();
+      });
+    panelsFolder.open();
     const folder = gui.addFolder("Radar");
     const radarRadiusMinM = Math.max(RADAR_RADIUS_MIN_M, mastDiameterM / 2);
     folder
-      .add(params, "renderRadar")
-      .name("Rendern")
+      .add(params, "renderRadarCones")
+      .name("Blaue Licht-Kegel")
       .onChange((v: boolean) => {
-        renderRadar = !!v;
-        params.renderRadar = renderRadar;
+        renderRadarCones = !!v;
+        params.renderRadarCones = renderRadarCones;
         this.updateRadarVisualization();
       });
     folder
@@ -344,6 +360,8 @@ class Pixels3dAframeHook extends Hook {
   createCameraRig() {
     const cameraRig = document.createElement('a-entity');
     cameraRig.setAttribute('id', 'cameraRig');
+    cameraRig.setAttribute('position', '-2 0 0');
+    cameraRig.setAttribute('rotation', '0 90 0');
     const camera = document.createElement('a-entity');
     camera.setAttribute('camera', '');
     camera.setAttribute('position', '0 1.6 0');
@@ -551,16 +569,18 @@ class Pixels3dAframeHook extends Hook {
       box.setAttribute('color', '#0a0a0a');
       box.setAttribute('position', '0 0 0');
       box.setAttribute('roughness', '0.6');
-      const coneHost = document.createElement('a-entity');
-      coneHost.setAttribute('position', '0 0 0');
-      coneHost.setAttribute(
-        'radar-cone-viz',
-        `length: ${RADAR_SPOT_DISTANCE_M}; halfAngleDeg: ${RADAR_SPOT_HALF_ANGLE_DEG}`
-      );
-      // Kegel unter gleicher tilt-Gruppe wie die Box: Spitze = Boxmitte, Öffnung in -Y = Neigungswinkel.
-      // Kein a-light Spot: sonst würde das Radar andere Meshes (Mast, Boden) mitblau anstrahlen; der Effekt
-      // kommt nur noch aus dem halbtransparenten Kegel-Mesh (radar-cone-viz), nicht aus Scene-Lighting.
-      tilt.appendChild(coneHost);
+      if (renderRadarCones) {
+        const coneHost = document.createElement('a-entity');
+        coneHost.setAttribute('position', '0 0 0');
+        coneHost.setAttribute(
+          'radar-cone-viz',
+          `length: ${RADAR_SPOT_DISTANCE_M}; halfAngleDeg: ${RADAR_SPOT_HALF_ANGLE_DEG}`
+        );
+        // Kegel unter gleicher tilt-Gruppe wie die Box: Spitze = Boxmitte, Öffnung in -Y = Neigungswinkel.
+        // Kein a-light Spot: sonst würde das Radar andere Meshes (Mast, Boden) mitblau anstrahlen; der Effekt
+        // kommt nur noch aus dem halbtransparenten Kegel-Mesh (radar-cone-viz), nicht aus Scene-Lighting.
+        tilt.appendChild(coneHost);
+      }
       tilt.appendChild(box);
       pivot.appendChild(tilt);
       root.appendChild(pivot);
@@ -664,10 +684,11 @@ class Pixels3dAframeHook extends Hook {
   }
 
   handleParams(param: Param["param"]) {
-    if (param.diameter) {
-      panelDiameter = param.diameter;
+    if (param.diameter !== undefined && param.diameter !== null) {
+      panelDiameter = clampPanelDiameter(param.diameter);
       this.updatePanels();
       this.updateRadarVisualization();
+      this.setupRadarGui();
     }
     if (param.height) {
       poleHeight  = param.height;
@@ -813,7 +834,6 @@ class Pixels3dAframeHook extends Hook {
     oldRings?.parentNode?.removeChild(oldRings);
     oldRadar?.parentNode?.removeChild(oldRadar);
     oldMast?.parentNode?.removeChild(oldMast);
-    if (!renderRadar) return;
     sceneEl.appendChild(this.createRadarGroundRings());
     sceneEl.appendChild(this.createRadarMast());
     sceneEl.appendChild(this.createRadarSensors());
