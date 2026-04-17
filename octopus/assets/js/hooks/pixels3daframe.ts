@@ -137,6 +137,8 @@ const RADAR_RING_RADIUS = 0.15;
 const RADAR_BOX = 0.1;
 /** Neigung der Box/Kegel/Spot um lokale X-Achse (nach unten zur Mitte), ein Wert für alle Sensoren */
 let radarTiltDeg = 45;
+/** Toggle: render radar boxes + blue lights at all */
+let renderRadar = true;
 /**
  * Voller Öffnungswinkel des Radar-Spotlights (A-Frame `light.angle`, Grad).
  * Der blaue Kegel (`radar-cone-viz`) nutzt denselben Winkel — Halbwinkel = /2.
@@ -222,10 +224,14 @@ class Pixels3dAframeHook extends Hook {
     sceneEl.appendChild(centralCylinder);
 
     const radarGround = this.createRadarGroundRings();
-    sceneEl.appendChild(radarGround);
+    if (renderRadar) {
+      sceneEl.appendChild(radarGround);
+    }
 
     const radarSensors = this.createRadarSensors();
-    sceneEl.appendChild(radarSensors);
+    if (renderRadar) {
+      sceneEl.appendChild(radarSensors);
+    }
 
     const cameraRig = this.createCameraRig();
     sceneEl.appendChild(cameraRig);
@@ -236,10 +242,18 @@ class Pixels3dAframeHook extends Hook {
 
   setupRadarGui() {
     radarLilGui?.destroy();
-    const params = { radarHeight, radarTiltDeg, radarCount };
+    const params = { radarHeight, radarTiltDeg, radarCount, renderRadar };
     const gui = new GUI({ title: "Sim 3D" });
     radarLilGui = gui;
     const folder = gui.addFolder("Radar");
+    folder
+      .add(params, "renderRadar")
+      .name("Rendern")
+      .onChange((v: boolean) => {
+        renderRadar = !!v;
+        params.renderRadar = renderRadar;
+        this.updateRadarVisualization();
+      });
     folder
       .add(params, "radarCount", 3, 12, 1)
       .name("Anzahl Boxen")
@@ -696,6 +710,7 @@ class Pixels3dAframeHook extends Hook {
     const oldRadar = document.querySelector('#radar-sensors');
     oldRings?.parentNode?.removeChild(oldRings);
     oldRadar?.parentNode?.removeChild(oldRadar);
+    if (!renderRadar) return;
     sceneEl.appendChild(this.createRadarGroundRings());
     sceneEl.appendChild(this.createRadarSensors());
   }
