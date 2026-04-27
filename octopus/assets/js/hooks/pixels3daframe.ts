@@ -208,36 +208,13 @@ function computeAutoRadarTiltDeg(): number {
   const wLen = w.length();
   if (wLen < 1e-6) return T.MathUtils.clamp(radarTiltDeg, 5, 85);
   w.multiplyScalar(1 / wLen);
-  const TopUp = new T.Vector3(0, yTop + 0.05, TzWorld);
-  const wUp = new T.Vector3().subVectors(TopUp, S).normalize();
-  const gamma = T.MathUtils.degToRad(RADAR_SPOT_HALF_ANGLE_DEG);
 
-  let best = T.MathUtils.clamp(radarTiltDeg, 5, 85);
-  let bestErr = Infinity;
-  for (let t = 5; t <= 85; t += 0.04) {
-    const ax = radarConeAxisFromTiltYawDeg(t, 0);
-    const ang = Math.acos(T.MathUtils.clamp(w.dot(ax), -1, 1));
-    const angUp = Math.acos(T.MathUtils.clamp(wUp.dot(ax), -1, 1));
-    if (angUp <= gamma + 0.008) continue;
-    const err = Math.abs(ang - gamma);
-    if (err < bestErr) {
-      bestErr = err;
-      best = t;
-    }
-  }
-  if (bestErr > 0.08) {
-    bestErr = Infinity;
-    for (let t = 5; t <= 85; t += 0.04) {
-      const ax = radarConeAxisFromTiltYawDeg(t, 0);
-      const ang = Math.acos(T.MathUtils.clamp(w.dot(ax), -1, 1));
-      const err = Math.abs(ang - gamma);
-      if (err < bestErr) {
-        bestErr = err;
-        best = t;
-      }
-    }
-  }
-  return best;
+  // Auto-Neigung soll auf die Kegelachse (gelbe Linie) zielen: Achse || w.
+  // Für yaw=0 bleibt alles in der YZ-Ebene. Achse nach Tilt t ist (0, -cos t, sin t).
+  // => tan(t) = w.z / (-w.y)
+  const tRad = Math.atan2(w.z, -w.y);
+  const tDeg = T.MathUtils.radToDeg(tRad);
+  return T.MathUtils.clamp(tDeg, 5, 85);
 }
 
 type Param = {
@@ -365,7 +342,7 @@ class Pixels3dAframeHook extends Hook {
     const radarRadiusMinM = Math.max(RADAR_RADIUS_MIN_M, mastDiameterM / 2);
     folder
       .add(params, "radarTiltAutoAlign")
-      .name("Neigung: Auto (Kante = Kegel)")
+      .name("Neigung: Auto (Mitte = Kante)")
       .onChange((v: boolean) => {
         radarTiltAutoAlign = !!v;
         params.radarTiltAutoAlign = radarTiltAutoAlign;
@@ -428,7 +405,7 @@ class Pixels3dAframeHook extends Hook {
         this.setupRadarGui();
       });
     radarNeigungCtrl = folder
-      .add(params, "radarTiltDeg", 5, 85, 1)
+      .add(params, "radarTiltDeg", 5, 120, 1)
       .name("Neigung (°)")
       .onChange((v: number) => {
         if (radarTiltAutoAlign) return;
@@ -827,9 +804,25 @@ class Pixels3dAframeHook extends Hook {
         // wie die 45°-Tilt-Gruppe (kein extra X-Flip — sonst zeigt der Kegel nicht „mit“ der Box).
         mesh.position.y = -h / 2;
         this.el.setObject3D('mesh', mesh);
+
+        // Zentrumslinie Kegel: von Spitze (0) bis Mitte der Basis (-h), ~2 cm Ø, neon-gelb
+        const axisRadiusM = 0.01;
+        const axisGeo = new T.CylinderGeometry(axisRadiusM, axisRadiusM, h, 16, 1, false);
+        const axisMat = new T.MeshBasicMaterial({
+          color: 0xdfff00,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -1,
+          polygonOffsetUnits: -1,
+        });
+        const axisMesh = new T.Mesh(axisGeo, axisMat);
+        axisMesh.position.y = -h / 2;
+        axisMesh.renderOrder = 1;
+        this.el.setObject3D('coneAxis', axisMesh);
       },
       remove: function (this: { el: any }) {
         this.el.removeObject3D('mesh');
+        this.el.removeObject3D('coneAxis');
       },
     });
     AFRAME.registerComponent('led-panel', {
