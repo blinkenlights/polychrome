@@ -2,6 +2,8 @@ import { Hook, makeHook } from "phoenix_typed_hook";
 import AFRAME from "aframe";
 import { GUI } from "three/addons/libs/lil-gui.module.min.js";
 import { Frame, RGB, rgbPixelsFromFrame } from "./shared/frame";
+import { registerHumanComponents } from "./humanComponents";
+import type { HumanMode } from "./humanWorld";
 
 /** A-Frame ships its own THREE (~r173). Never mix the npm `three` package here — duplicate runtime breaks `setObject3D` / materials. */
 function getThree() {
@@ -181,6 +183,25 @@ let radarLilGui: GUI | null = null;
 /** lil-gui Controller für „Neigung (°)“ — zum Sperren bei Auto-Ausrichtung */
 let radarNeigungCtrl: { disable: (v: boolean) => void } | null = null;
 
+/** Humans-Mock: lokaler Avatar-Controller in `humanComponents.ts`/`humanWorld.ts`. */
+let humanCount = 5;
+let humanSpeed = 1.0;
+let humanPaused = false;
+let humanMode: HumanMode = "wander";
+
+/** Sync `humans-root` schema attributes with the module-level state. */
+function applyHumansAttributes() {
+  const root = document.querySelector("#humans-root") as any;
+  if (!root) return;
+  root.setAttribute("humans-root", {
+    count: humanCount,
+    speed: humanSpeed,
+    paused: humanPaused,
+    mode: humanMode,
+    panelDiameter,
+  });
+}
+
 /** Kegelachse (vom Sensor in den Kegel) wie in `createRadarSensors`: R_y(yaw) · R_x(-tilt) · (0,-1,0). */
 function radarConeAxisFromTiltYawDeg(tiltDeg: number, yawDeg: number) {
   const T = getThree();
@@ -302,6 +323,9 @@ class Pixels3dAframeHook extends Hook {
     const radarSensors = this.createRadarSensors();
     sceneEl.appendChild(radarSensors);
 
+    const humansRoot = this.createHumansRoot();
+    sceneEl.appendChild(humansRoot);
+
     const cameraRig = this.createCameraRig();
     sceneEl.appendChild(cameraRig);
 
@@ -336,6 +360,7 @@ class Pixels3dAframeHook extends Hook {
         params.panelDiameter = panelDiameter;
         this.updatePanels();
         this.updateRadarVisualization();
+        applyHumansAttributes();
       });
     panelsFolder.open();
     const folder = gui.addFolder("Radar");
@@ -416,6 +441,47 @@ class Pixels3dAframeHook extends Hook {
       radarNeigungCtrl.disable(true);
     }
     folder.open();
+
+    const humansParams = {
+      humanCount,
+      humanSpeed,
+      humanPaused,
+      humanMode,
+    };
+    const humansFolder = gui.addFolder("Humans");
+    humansFolder
+      .add(humansParams, "humanCount", 0, 10, 1)
+      .name("Anzahl")
+      .onChange((v: number) => {
+        humanCount = Math.max(0, Math.round(Number(v)));
+        humansParams.humanCount = humanCount;
+        applyHumansAttributes();
+      });
+    humansFolder
+      .add(humansParams, "humanSpeed", 0, 2, 0.05)
+      .name("Geschwindigkeit")
+      .onChange((v: number) => {
+        humanSpeed = Math.max(0, Number(v));
+        humansParams.humanSpeed = humanSpeed;
+        applyHumansAttributes();
+      });
+    humansFolder
+      .add(humansParams, "humanPaused")
+      .name("Pause")
+      .onChange((v: boolean) => {
+        humanPaused = !!v;
+        humansParams.humanPaused = humanPaused;
+        applyHumansAttributes();
+      });
+    humansFolder
+      .add(humansParams, "humanMode", ["wander", "approach"])
+      .name("Modus")
+      .onChange((v: HumanMode) => {
+        humanMode = v === "approach" ? "approach" : "wander";
+        humansParams.humanMode = humanMode;
+        applyHumansAttributes();
+      });
+    humansFolder.open();
   }
 
   destroyed() {
@@ -665,6 +731,19 @@ class Pixels3dAframeHook extends Hook {
     return cyl;
   }
 
+  createHumansRoot() {
+    const root = document.createElement('a-entity');
+    root.setAttribute('id', 'humans-root');
+    root.setAttribute('humans-root', {
+      count: humanCount,
+      speed: humanSpeed,
+      paused: humanPaused,
+      mode: humanMode,
+      panelDiameter,
+    } as any);
+    return root;
+  }
+
   createLight() {
     // Directional Light wie 17 Uhr: warm, schräg von oben (Südwesten)
     const sun = document.createElement('a-entity');
@@ -756,6 +835,7 @@ class Pixels3dAframeHook extends Hook {
       this.updatePanels();
       this.updateRadarVisualization();
       this.setupRadarGui();
+      applyHumansAttributes();
     }
     if (param.height) {
       poleHeight = param.height;
@@ -779,6 +859,7 @@ class Pixels3dAframeHook extends Hook {
   }
 
   registerComponents() {
+    registerHumanComponents();
     AFRAME.registerComponent('radar-cone-viz', {
       schema: {
         length: { type: 'number', default: 8 },
