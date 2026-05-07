@@ -86,18 +86,53 @@ defmodule Octopus.Radar do
 
   Includes sensors whose port does not currently exist; consult `:port`
   with `File.exists?/1` if the caller cares about presence.
+
+  The reported `sensitivity` is the configured DPKTH value at boot
+  (range 1..9, where lower means *more* sensitive); it does not track
+  runtime changes made via `set_sensitivity/2`.
   """
-  @spec devices() :: [%{device_id: pos_integer(), port: String.t(), baud: pos_integer()}]
+  @spec devices() :: [
+          %{
+            device_id: pos_integer(),
+            port: String.t(),
+            baud: pos_integer(),
+            sensitivity: 1..9
+          }
+        ]
   def devices do
     sensor_configs()
     |> Enum.map(fn {device_id, config} ->
       %{
         device_id: device_id,
         port: Keyword.fetch!(config, :port),
-        baud: Keyword.fetch!(config, :baud)
+        baud: Keyword.fetch!(config, :baud),
+        sensitivity: Keyword.fetch!(config, :sensitivity)
       }
     end)
   end
+
+  @doc """
+  Set the long-range detection sensitivity (`AT+DPKTH`) on a sensor.
+
+  `level` is the device's raw scale: `1..9`, where **lower values mean
+  more sensitive** (more phantom targets / longer reach) and higher
+  values mean less sensitive. The default is `4`.
+
+  Internally this re-runs the full init sequence with the new value, so
+  the device's tracker state is reset along with the parameter change.
+  """
+  @spec set_sensitivity(pos_integer(), 1..9) :: :ok | {:error, term()}
+  def set_sensitivity(device_id, level) when is_integer(level) and level in 1..9 do
+    Sensor.set_sensitivity(device_id, level)
+  end
+
+  @doc """
+  Re-run the full init sequence on a sensor, resetting all internal
+  tracker state on the device. Useful when track ids have drifted into
+  high values or when the operator wants a clean slate.
+  """
+  @spec reinitialize(pos_integer()) :: :ok | {:error, term()}
+  def reinitialize(device_id), do: Sensor.reinitialize(device_id)
 
   @doc """
   Return `true` if at least one configured sensor's serial port currently

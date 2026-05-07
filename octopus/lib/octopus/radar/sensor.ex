@@ -71,8 +71,32 @@ defmodule Octopus.Radar.Sensor do
     GenServer.start_link(__MODULE__, opts, name: via(device_id))
   end
 
+  @doc """
+  Set the long-range detection sensitivity (`AT+DPKTH`, 1..9). Triggers
+  a full re-init of the device so the new value is applied cleanly and
+  any in-flight tracker state is reset.
+  """
+  @spec set_sensitivity(pos_integer(), 1..9) :: :ok | {:error, :no_sensor}
+  def set_sensitivity(device_id, level) when is_integer(level) and level in 1..9 do
+    call_sensor(device_id, {:set_sensitivity, level})
+  end
+
+  @doc "Re-run the configured init sequence, resetting on-device tracker state."
+  @spec reinitialize(pos_integer()) :: :ok | {:error, :no_sensor}
+  def reinitialize(device_id) do
+    call_sensor(device_id, :reinitialize)
+  end
+
   defp via(device_id) do
     {:via, Registry, {Octopus.Radar.Registry, device_id}}
+  end
+
+  defp call_sensor(device_id, message) do
+    try do
+      GenServer.call(via(device_id), message)
+    catch
+      :exit, {:noproc, _} -> {:error, :no_sensor}
+    end
   end
 
   ## GenServer callbacks
@@ -98,6 +122,18 @@ defmodule Octopus.Radar.Sensor do
   @impl true
   def handle_continue(:open_port, %State{} = state) do
     {:noreply, try_open(state)}
+  end
+
+  @impl true
+  def handle_call({:set_sensitivity, level}, _from, %State{} = state) do
+    log(state, :info, "Updating sensitivity to DPKTH=#{level} and re-initializing")
+    new_config = Keyword.put(state.config, :sensitivity, level)
+    {:reply, :ok, restart_init(%State{state | config: new_config})}
+  end
+
+  def handle_call(:reinitialize, _from, %State{} = state) do
+    log(state, :info, "Re-initializing on operator request")
+    {:reply, :ok, restart_init(state)}
   end
 
   @impl true
@@ -199,6 +235,28 @@ defmodule Octopus.Radar.Sensor do
 
   defp send_next_command(%State{pending_commands: [cmd | rest]} = state) do
     write_command(cmd, %State{state | pending_commands: rest, current_command: cmd})
+  end
+
+  # Drop any in-flight ack timer + parser buffers, then re-issue the
+  # full init sequence. Bytes that were already in flight from the
+  # device (residual binary frames or text after AT+START) will arrive
+  # while we're back in :configuring; the AT+OK matching simply ignores
+  # anything that isn't a recognized response line, and the ack timeout
+  # retries individual commands if needed, so the sequence always
+  # converges.
+  defp restart_init(%State{} = state) do
+    state = cancel_ack_timer(state)
+
+    %State{
+      state
+      | phase: :configuring,
+        pending_commands: Command.init_sequence(state.config),
+        current_command: nil,
+        buffer: <<>>,
+        ack_buffer: <<>>,
+        last_track_count: nil
+    }
+    |> send_next_command()
   end
 
   defp write_command(cmd, %State{uart: uart} = state) do
