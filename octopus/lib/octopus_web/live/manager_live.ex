@@ -59,6 +59,9 @@ defmodule OctopusWeb.ManagerLive do
               <a href="/proximity" class="btn btn-outline btn-sm">
                 Proximity Charts
               </a>
+              <a href="/radar" class="btn btn-outline btn-sm">
+                Radar
+              </a>
               <a href="/firmware-info" class="btn btn-outline btn-sm">
                 Firmware Info
               </a>
