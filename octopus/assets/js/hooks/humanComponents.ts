@@ -156,19 +156,23 @@ export function registerHumanComponents() {
       head.castShadow = true;
       group.add(head);
 
-      // Heading arrow — thin cylinder rotated to lie along +Z, sticking forward
-      // from the chest. Marker yaw is set on `group.rotation.y`, so the arrow
-      // co-rotates with the body.
+      // Heading arrow — flat triangle laid on the ground, tip pointing in +Z.
+      // Marker yaw lives on `group.rotation.y`, so the arrow co-rotates with
+      // the body. Kept low to the floor so it reads as a footprint indicator
+      // rather than a body-mounted protrusion.
+      const arrowShape = new T.Shape();
+      arrowShape.moveTo(-0.12, -0.14);
+      arrowShape.lineTo(0.12, -0.14);
+      arrowShape.lineTo(0, 0.2);
+      arrowShape.lineTo(-0.12, -0.14);
       const arrowMat = new T.MeshStandardMaterial({
-        color: new T.Color(this.data.color).offsetHSL(0, 0.1, -0.15),
-        roughness: 0.55,
+        color: new T.Color(this.data.color).offsetHSL(0, 0.1, -0.2),
+        roughness: 0.6,
+        side: T.DoubleSide,
       });
-      const arrow = new T.Mesh(
-        new T.CylinderGeometry(0.03, 0.03, 0.4, 10),
-        arrowMat
-      );
+      const arrow = new T.Mesh(new T.ShapeGeometry(arrowShape), arrowMat);
       arrow.rotation.x = Math.PI / 2;
-      arrow.position.set(0, bodyHeight * 0.6, 0.28);
+      arrow.position.set(0, 0.02, 0.05);
       group.add(arrow);
 
       this.group = group;
