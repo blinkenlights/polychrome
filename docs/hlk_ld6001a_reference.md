@@ -1,8 +1,13 @@
 # HLK-LD6001A-60G Human Tracking Radar — Developer Documentation
 
 Version basis:
-- HLK-LD6001A-60G Human Trajectory Radar Sensor Module Manual V1.1 (modified 2024-05-11), and
+- HLK-LD6001A-60G Human Trajectory Radar Sensor Module Manual **V1.2** (revised 2024-11-29), and
 - empirical observations of firmware **NOP_1.07-02** captured during integration. Where the manual disagrees with the running firmware, this document calls out both and recommends the firmware-observed behavior.
+
+Notable V1.2 vendor-manual changes vs. V1.1:
+- the documented default UART baud rate was changed from `921600` to `115200`, matching the factory-shipped firmware behavior;
+- the four boundary configuration commands are now printed without the trailing `D` (i.e. `AT+XPosi`, `AT+XNega`, `AT+YPosi`, `AT+YNega`), matching the firmware spelling;
+- the `AT+RANGE` valid range is documented as `100..500` cm (V1.1 listed `10..500`).
 
 ---
 
@@ -110,7 +115,7 @@ The detection zone is defined by a combination of:
 
 The target must lie within the radial range and within the configured X/Y boundaries. The accepted region is the intersection of the projected circular detection range and the configured X/Y boundary box.
 
-> **Firmware-spelling note.** The vendor manual prints these commands as `AT+XPosiD`, `AT+XNegaD`, `AT+YPosiD`, `AT+YNegaD` (with a trailing `D`). Firmware NOP_1.07-02 only accepts the spellings without the trailing `D` and replies `AT+ERR` to the manual's spellings. See §9.3 and §22.5.
+> **Firmware-spelling note.** Vendor manual V1.2 prints these commands without a trailing `D`, matching the firmware-accepted spellings. Earlier vendor manual V1.1 printed them as `AT+XPosiD`, `AT+XNegaD`, `AT+YPosiD`, `AT+YNegaD` (with a trailing `D`); firmware NOP_1.07-02 rejects those V1.1 spellings with `AT+ERR`. See §9.3 and §22.5.
 
 ---
 
@@ -169,15 +174,15 @@ The module is controlled and read through a **TTL UART**.
 - Commands are terminated by **newline** (`\n`); the module's responses are terminated by **CRLF** (`\r\n`)
 - The module can operate in multiple output modes selected by `AT+DEBUG=X`
 - The full tracking protocol for machine parsing is available in **`AT+DEBUG=3`**
-- The vendor manual states the default serial baud rate is **921600**
-- The vendor host-computer screenshot for `DEBUG=2` shows **115200**
-- **Empirically, firmware NOP_1.07-02 ships configured at `115200` baud** and is silent at 921600 until reconfigured. Do not assume the documented default applies to a given physical unit; probe both speeds.
+- Vendor manual V1.2 states the default serial baud rate is **115200** (V1.1 had documented `921600`; V1.2's Appendix A explicitly lists "the default baud rate is 921600 modified to 115200" as the V1.2 change)
+- The vendor host-computer screenshot for `DEBUG=2` also shows **115200**
+- **Empirically, firmware NOP_1.07-02 ships configured at `115200` baud**, consistent with the V1.2 documented default. Older units or units configured against V1.1 may still be at `921600`; when in doubt, probe both speeds.
 
 ### Recommended implementation stance
 
 For your own integration:
 1. assume the module command interface is UART-based,
-2. probe the actual baud first (try `115200` and `921600`); a brief `AT+READ\n` round-trip is a reliable presence test,
+2. probe the actual baud first (try `115200` — the V1.2 documented default and observed factory default — then fall back to `921600`); a brief `AT+READ\n` round-trip is a reliable presence test,
 3. support reconfiguration via `AT+BAUD=XX`,
 4. treat any documented default as advisory, not authoritative for a specific firmware build.
 
@@ -245,7 +250,7 @@ AT+START\n
 
 This is not explicitly given by the vendor as a required sequence, but it is a sensible derived sequence from the documented command set and defaults.
 
-> The boundary commands are spelled without the trailing `D` that appears in the vendor manual; firmware NOP_1.07-02 returns `AT+ERR` for the manual's spellings. See §9.3 and §22.5.
+> Vendor manual V1.2 spells the boundary commands without a trailing `D` (matching the firmware). Earlier vendor manual V1.1 included a spurious `D` (`AT+XPosiD`, etc.); firmware NOP_1.07-02 returns `AT+ERR` for those V1.1 spellings. See §9.3 and §22.5.
 
 ### 8.3 Command acknowledgement
 
@@ -298,7 +303,7 @@ All commands below are documented with a trailing newline.
 
 | Command | Meaning |
 |---|---|
-| `AT+BAUD=XX\n` | Configure serial baud rate; documented default is `921600`, observed factory default on NOP_1.07-02 is `115200` |
+| `AT+BAUD=XX\n` | Configure serial baud rate; V1.2-documented default is `115200` (V1.1 had documented `921600`); observed factory default on NOP_1.07-02 is `115200` |
 | `AT+HEATIME=XX\n` | Heartbeat interval for protocol output, unit seconds, range `10..999`, default `60` |
 | `AT+DEBUG=X\n` | Output/protocol mode selector |
 | `AT+DPKTH=X\n` | Long-distance detection sensitivity threshold; range `1..9`, default `4`. Higher values lower the sensitivity (fewer phantom targets / shorter effective range); lower values raise it. |
@@ -316,14 +321,14 @@ All commands below are documented with a trailing newline.
 
 | Command | Meaning |
 |---|---|
-| `AT+RANGE=XX\n` | Projected ground detection radius in cm; range `10..500`; default `450` |
+| `AT+RANGE=XX\n` | Projected ground detection radius in cm; range `100..500`; default `450` |
 | `AT+HEIGHTD=XXX\n` | Vertical distance / installation height in cm; range `50..500`; default `300` |
 | `AT+XPosi=XXX\n` | Positive X range in cm; range `20..500`; default `450` |
 | `AT+XNega=-XXX\n` | Negative X range in cm; range `-500..-20`; default `-450` |
 | `AT+YPosi=XXX\n` | Positive Y range in cm; range `20..500`; default `450` |
 | `AT+YNega=-XXX\n` | Negative Y range in cm; range `-500..-20`; default `-450` |
 
-> **Spelling discrepancy.** The vendor manual prints the four boundary commands as `AT+XPosiD`, `AT+XNegaD`, `AT+YPosiD`, `AT+YNegaD` (with a trailing `D`). Firmware NOP_1.07-02 rejects those with `AT+ERR\r\n` and only accepts the names listed above (without the trailing `D`). Use the firmware spellings.
+> **Spelling fixed in V1.2.** Vendor manual V1.2 prints these four boundary commands without the trailing `D`, matching the firmware. The earlier V1.1 manual printed them as `AT+XPosiD`, `AT+XNegaD`, `AT+YPosiD`, `AT+YNegaD` (with a trailing `D`); firmware NOP_1.07-02 rejects those V1.1 spellings with `AT+ERR\r\n`. Always use the spellings listed above (without the trailing `D`).
 
 ### 9.4 Target disappearance timing
 
@@ -1013,13 +1018,14 @@ PersonTrack
 
 The original manual leaves several things implicit or slightly inconsistent. For correctness, these should be handled deliberately.
 
-### 22.1 Baud-rate ambiguity
+### 22.1 Baud-rate ambiguity (resolved in V1.2)
 
-- command table: default baud is `921600`
-- host-tool example: `115200`
+- vendor manual V1.1 command table: default baud is `921600`
+- vendor manual V1.1 host-tool example: `115200`
+- vendor manual **V1.2** command table: default baud is `115200` (Appendix A explicitly lists this as the V1.2 change: "the default baud rate is 921600 modified to 115200")
 - empirical: firmware NOP_1.07-02 ships at `115200` and is silent at `921600`
 
-Best interpretation: treat the documented default as advisory only. Probe both speeds at startup; persist the working speed in your host configuration. `AT+BAUD=XX` lets you change it deliberately if needed.
+V1.2's documented default now agrees with the host-tool screenshot and with the firmware-observed default. Treat any documented default as advisory only; probe both speeds at startup; persist the working speed in your host configuration. `AT+BAUD=XX` lets you change it deliberately if needed.
 
 ### 22.2 Terminology inconsistency
 
@@ -1040,17 +1046,19 @@ The manual explicitly labels configuration commands in **centimeters** but does 
 
 The detailed protocol includes a point-cloud TLV but documents it as always zero-length. Treat this as a reserved section currently unused by documented firmware.
 
-### 22.5 Boundary-command spelling
+### 22.5 Boundary-command spelling (fixed in V1.2)
 
-The manual's "Detection-zone configuration" table prints the four boundary commands with a trailing `D`:
+In vendor manual **V1.1**, the "Detection-zone configuration" table prints the four boundary commands with a trailing `D`:
 
 - `AT+XPosiD`, `AT+XNegaD`, `AT+YPosiD`, `AT+YNegaD`
 
-Firmware NOP_1.07-02 returns `AT+ERR\r\n` for those names and only accepts:
+Firmware NOP_1.07-02 returns `AT+ERR\r\n` for those V1.1 spellings and only accepts:
 
 - `AT+XPosi`, `AT+XNega`, `AT+YPosi`, `AT+YNega`
 
-Use the firmware spellings. The manual's spellings appear to be a typesetting error: only the boundary commands carry the spurious `D`; `AT+RANGE` and `AT+HEIGHTD` (which legitimately ends in `D`) work as printed.
+Vendor manual **V1.2** prints the commands without the trailing `D`, matching the firmware. The V1.1 spellings appear to have been a typesetting error: only the boundary commands carried the spurious `D`; `AT+RANGE` and `AT+HEIGHTD` (which legitimately ends in `D`) worked as printed in both V1.1 and V1.2.
+
+Always use the firmware-accepted (and now V1.2-documented) spellings without the trailing `D`.
 
 ### 22.6 LENGTH-field interpretation
 
@@ -1099,9 +1107,9 @@ The manual shows AT-command responses without explicit line endings. Firmware NO
 
 1. Wire `3V3`, `GND`, `TX`, `RX`.
 2. Ensure a supply that can handle startup/RF peaks.
-3. Open UART. Probe at `115200` first (observed factory default on NOP_1.07-02), fall back to the documented `921600`.
+3. Open UART. Probe at `115200` first (the V1.2-documented default and the observed factory default on NOP_1.07-02), fall back to `921600` (the older V1.1-documented default) if needed.
 4. Send `AT+DEBUG=3\n`.
-5. Configure installation geometry if needed (use `AT+XPosi`/`AT+XNega`/`AT+YPosi`/`AT+YNega`, **without** the trailing `D` shown in the manual).
+5. Configure installation geometry if needed (use `AT+XPosi`/`AT+XNega`/`AT+YPosi`/`AT+YNega`; these match V1.2 and the firmware. The earlier V1.1 manual incorrectly printed them with a trailing `D`).
 6. Send `AT+START\n`.
 7. Read binary stream.
 8. Search for header `01 02 03 04 05 06 07 08`.
