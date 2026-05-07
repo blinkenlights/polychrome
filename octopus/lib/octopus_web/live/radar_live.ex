@@ -83,7 +83,27 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:devices, devices)
      |> assign(:selected_device_id, selected && selected.device_id)
      |> assign(:sensitivity, (selected && selected.sensitivity) || 4)
+     |> assign(:bounds_mode, :static)
+     |> assign(:static_bounds, static_bounds_for(selected))
      |> reset_radar_state()}
+  end
+
+  # Derive the static-mode rectangle from a sensor's `*_cm` config.
+  # Defaults are only used as a safety net when no sensor is configured
+  # at all; in practice the LiveView won't render the canvas in that
+  # case, but we still want the assigns to be well-formed.
+  defp static_bounds_for(nil) do
+    %{min_x: -1.0, max_x: 1.0, min_y: -1.0, max_y: 1.0, range_m: 1.0}
+  end
+
+  defp static_bounds_for(device) do
+    %{
+      min_x: device.x_neg_cm / 100.0,
+      max_x: device.x_pos_cm / 100.0,
+      min_y: device.y_neg_cm / 100.0,
+      max_y: device.y_pos_cm / 100.0,
+      range_m: device.range_cm / 100.0
+    }
   end
 
   @impl true
@@ -96,11 +116,28 @@ defmodule OctopusWeb.RadarLive do
          socket
          |> assign(:selected_device_id, id)
          |> assign(:sensitivity, (device && device.sensitivity) || 4)
+         |> assign(:static_bounds, static_bounds_for(device))
          |> reset_radar_state()}
 
       _ ->
         {:noreply, socket}
     end
+  end
+
+  # Toggle between static (canvas matches the sensor's configured X/Y
+  # rectangle) and auto (grow-only bounds derived from observed
+  # samples). Switching to :auto seeds the bounds from the current
+  # 10 s sample window so the canvas doesn't visually jump.
+  def handle_event("toggle_bounds_mode", params, socket) do
+    new_mode = if params["auto"] == "true", do: :auto, else: :static
+
+    socket =
+      socket
+      |> assign(:bounds_mode, new_mode)
+      |> apply_bounds_for_mode()
+      |> rebuild_view()
+
+    {:noreply, socket}
   end
 
   # The slider's value is the *intuitive* sensitivity (1=least, 9=most),
@@ -167,14 +204,40 @@ defmodule OctopusWeb.RadarLive do
     |> assign(:samples, [])
     |> assign(:tracks_now, %{})
     |> assign(:last_frame_number, nil)
-    |> assign(:min_x, nil)
-    |> assign(:max_x, nil)
-    |> assign(:min_y, nil)
-    |> assign(:max_y, nil)
     |> assign(:min_z, nil)
     |> assign(:max_z, nil)
     |> assign(:view_targets, [])
     |> assign(:ruler, empty_ruler())
+    |> assign(:range_indicator, nil)
+    |> apply_bounds_for_mode()
+    |> rebuild_view()
+  end
+
+  # Set the X/Y bounds appropriately for the current `:bounds_mode`.
+  # In :static mode, snap to the configured rectangle. In :auto mode,
+  # initialize from whatever data we currently hold (so a toggle from
+  # static→auto doesn't immediately collapse to a tiny default range).
+  defp apply_bounds_for_mode(socket) do
+    case socket.assigns.bounds_mode do
+      :static ->
+        sb = socket.assigns.static_bounds
+
+        socket
+        |> assign(:min_x, sb.min_x)
+        |> assign(:max_x, sb.max_x)
+        |> assign(:min_y, sb.min_y)
+        |> assign(:max_y, sb.max_y)
+
+      :auto ->
+        {min_x, max_x, min_y, max_y, _min_z, _max_z} =
+          compute_minmax(socket.assigns.samples)
+
+        socket
+        |> assign(:min_x, min_x)
+        |> assign(:max_x, max_x)
+        |> assign(:min_y, min_y)
+        |> assign(:max_y, max_y)
+    end
   end
 
   defp empty_ruler,
@@ -210,9 +273,7 @@ defmodule OctopusWeb.RadarLive do
       |> Map.new()
 
     a = socket.assigns
-
-    {min_x, max_x} = grow_bounds(new_samples, a.min_x, a.max_x, :x)
-    {min_y, max_y} = grow_bounds(new_samples, a.min_y, a.max_y, :y)
+    {min_x, max_x, min_y, max_y} = update_xy_bounds(a, new_samples)
     {min_z, max_z} = grow_bounds(new_samples, a.min_z, a.max_z, :z)
 
     socket
@@ -226,6 +287,20 @@ defmodule OctopusWeb.RadarLive do
     |> assign(:min_z, min_z)
     |> assign(:max_z, max_z)
     |> rebuild_view()
+  end
+
+  # In :static mode the X/Y bounds are pinned to the configured
+  # rectangle and never change with the data. In :auto mode they grow
+  # monotonically (see `grow_bounds/4`). Z always grows independently
+  # since it isn't on the canvas.
+  defp update_xy_bounds(%{bounds_mode: :static} = a, _new_samples) do
+    {a.min_x, a.max_x, a.min_y, a.max_y}
+  end
+
+  defp update_xy_bounds(%{bounds_mode: :auto} = a, new_samples) do
+    {min_x, max_x} = grow_bounds(new_samples, a.min_x, a.max_x, :x)
+    {min_y, max_y} = grow_bounds(new_samples, a.min_y, a.max_y, :y)
+    {min_x, max_x, min_y, max_y}
   end
 
   # Bounds are monotonically growing: once the visible range expands to
@@ -255,7 +330,8 @@ defmodule OctopusWeb.RadarLive do
   end
 
   # Recompute everything that depends on the current bounds + tracks +
-  # samples. Called after frame ingest and after "Fit bounds".
+  # samples. Called after frame ingest, after "Fit bounds", and after
+  # mode toggles.
   defp rebuild_view(socket) do
     a = socket.assigns
 
@@ -273,11 +349,33 @@ defmodule OctopusWeb.RadarLive do
       })
 
     ruler = build_ruler(min_x, max_x, min_y, max_y)
+    range_indicator = build_range_indicator(a.static_bounds, min_x, max_x, min_y, max_y)
 
     socket
     |> assign(:view_targets, view_targets)
     |> assign(:ruler, ruler)
+    |> assign(:range_indicator, range_indicator)
   end
+
+  # Build the radar's coverage ellipse: an ellipse centered at the
+  # world origin with the configured `range_m` radius. We use an
+  # ellipse rather than a circle because in :auto mode the X and Y
+  # axes can scale non-uniformly, in which case a true circle in world
+  # space is an ellipse on the canvas. In :static mode (typical
+  # symmetric config) `rx == ry` and it draws as a circle.
+  defp build_range_indicator(nil, _min_x, _max_x, _min_y, _max_y), do: nil
+
+  defp build_range_indicator(%{range_m: range_m}, min_x, max_x, min_y, max_y)
+       when is_number(range_m) and range_m > 0 do
+    %{
+      cx: scale(0.0, min_x, max_x, @vb),
+      cy: scale(0.0, min_y, max_y, @vb),
+      rx: range_m / (max_x - min_x) * @vb,
+      ry: range_m / (max_y - min_y) * @vb
+    }
+  end
+
+  defp build_range_indicator(_, _, _, _, _), do: nil
 
   defp compute_minmax([]) do
     # No data yet: provide a symmetric padded box around the origin so the
@@ -358,14 +456,29 @@ defmodule OctopusWeb.RadarLive do
                 <span class="text-xs opacity-60">high</span>
                 <span class="text-sm font-mono w-12 text-right">{10 - @sensitivity}/9</span>
               </form>
-              <button
-                id="radar-fit-bounds"
-                type="button"
-                class="btn btn-outline btn-sm"
-                phx-click="fit_bounds"
-              >
-                Fit bounds
-              </button>
+              <form phx-change="toggle_bounds_mode">
+                <label class="cursor-pointer label gap-2 py-0">
+                  <input type="hidden" name="auto" value="false" />
+                  <input
+                    type="checkbox"
+                    name="auto"
+                    value="true"
+                    class="toggle toggle-sm"
+                    checked={@bounds_mode == :auto}
+                  />
+                  <span class="label-text">Auto-expand bounds</span>
+                </label>
+              </form>
+              <%= if @bounds_mode == :auto do %>
+                <button
+                  id="radar-fit-bounds"
+                  type="button"
+                  class="btn btn-outline btn-sm"
+                  phx-click="fit_bounds"
+                >
+                  Fit bounds
+                </button>
+              <% end %>
               <button
                 id="radar-reinit"
                 type="button"
@@ -395,6 +508,18 @@ defmodule OctopusWeb.RadarLive do
           <% else %>
             <div class="w-full max-w-3xl mx-auto aspect-square mt-4 bg-base-200 rounded">
               <svg viewBox="0 0 1000 1000" class="w-full h-full">
+                <%= if @range_indicator do %>
+                  <ellipse
+                    cx={fmt_f(@range_indicator.cx)}
+                    cy={fmt_f(@range_indicator.cy)}
+                    rx={fmt_f(@range_indicator.rx)}
+                    ry={fmt_f(@range_indicator.ry)}
+                    fill="rgba(37, 99, 235, 0.2)"
+                    stroke="rgba(37, 99, 235, 0.5)"
+                    stroke-width="1"
+                  />
+                <% end %>
+
                 <g stroke="black">
                   <%= if @ruler.x_axis_visible do %>
                     <line

@@ -62,7 +62,7 @@ config :octopus, Octopus.Radar,
     # tracks for one person; lower it if it misses real targets.
     sensitivity: 4,
     # Device geometry in centimeters (manual §9.3)
-    height_cm: 300,
+    height_cm: 320,
     range_cm: 450,
     x_pos_cm: 450,
     x_neg_cm: -450,

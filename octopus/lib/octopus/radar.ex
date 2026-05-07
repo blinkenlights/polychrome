@@ -89,14 +89,22 @@ defmodule Octopus.Radar do
 
   The reported `sensitivity` is the configured DPKTH value at boot
   (range 1..9, where lower means *more* sensitive); it does not track
-  runtime changes made via `set_sensitivity/2`.
+  runtime changes made via `set_sensitivity/2`. The `*_cm` values are
+  the device's geometry parameters as configured (see `AT+XPosi` &c.
+  in the manual / `Octopus.Radar.Command`).
   """
   @spec devices() :: [
           %{
             device_id: pos_integer(),
             port: String.t(),
             baud: pos_integer(),
-            sensitivity: 1..9
+            sensitivity: 1..9,
+            x_pos_cm: integer(),
+            x_neg_cm: integer(),
+            y_pos_cm: integer(),
+            y_neg_cm: integer(),
+            range_cm: pos_integer(),
+            height_cm: pos_integer()
           }
         ]
   def devices do
@@ -106,7 +114,13 @@ defmodule Octopus.Radar do
         device_id: device_id,
         port: Keyword.fetch!(config, :port),
         baud: Keyword.fetch!(config, :baud),
-        sensitivity: Keyword.fetch!(config, :sensitivity)
+        sensitivity: Keyword.fetch!(config, :sensitivity),
+        x_pos_cm: Keyword.fetch!(config, :x_pos_cm),
+        x_neg_cm: Keyword.fetch!(config, :x_neg_cm),
+        y_pos_cm: Keyword.fetch!(config, :y_pos_cm),
+        y_neg_cm: Keyword.fetch!(config, :y_neg_cm),
+        range_cm: Keyword.fetch!(config, :range_cm),
+        height_cm: Keyword.fetch!(config, :height_cm)
       }
     end)
   end
