@@ -70,17 +70,13 @@ defmodule OctopusWeb.RadarLive do
     if connected?(socket), do: Radar.subscribe()
 
     devices = Radar.devices()
-
-    selected =
-      case List.first(devices) do
-        nil -> nil
-        %{device_id: id} -> id
-      end
+    selected = List.first(devices)
 
     {:ok,
      socket
      |> assign(:devices, devices)
-     |> assign(:selected_device_id, selected)
+     |> assign(:selected_device_id, selected && selected.device_id)
+     |> assign(:sensitivity, (selected && selected.sensitivity) || 4)
      |> reset_radar_state()}
   end
 
@@ -88,13 +84,47 @@ defmodule OctopusWeb.RadarLive do
   def handle_event("select_sensor", %{"device_id" => id_str}, socket) do
     case Integer.parse(id_str) do
       {id, ""} ->
+        device = Enum.find(socket.assigns.devices, &(&1.device_id == id))
+
         {:noreply,
          socket
          |> assign(:selected_device_id, id)
+         |> assign(:sensitivity, (device && device.sensitivity) || 4)
          |> reset_radar_state()}
 
       _ ->
         {:noreply, socket}
+    end
+  end
+
+  # The slider's value is the *intuitive* sensitivity (1=least, 9=most),
+  # which is the inverse of the device's DPKTH scale (1=most sensitive,
+  # 9=least). We translate here so the radar layer always sees the raw
+  # device value.
+  def handle_event("set_sensitivity", %{"sensitivity_ui" => ui_str}, socket) do
+    with id when is_integer(id) <- socket.assigns.selected_device_id,
+         {ui, ""} <- Integer.parse(ui_str),
+         true <- ui in 1..9 do
+      sensitivity = 10 - ui
+      _ = Radar.set_sensitivity(id, sensitivity)
+
+      {:noreply,
+       socket
+       |> assign(:sensitivity, sensitivity)
+       |> reset_radar_state()}
+    else
+      _ -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("reinitialize", _params, socket) do
+    case socket.assigns.selected_device_id do
+      nil ->
+        {:noreply, socket}
+
+      id ->
+        _ = Radar.reinitialize(id)
+        {:noreply, reset_radar_state(socket)}
     end
   end
 
@@ -226,6 +256,41 @@ defmodule OctopusWeb.RadarLive do
               </form>
             <% end %>
           </div>
+
+          <%= if @devices != [] do %>
+            <div class="flex items-center flex-wrap gap-4 mt-2">
+              <form
+                phx-change="set_sensitivity"
+                class="flex items-center gap-3 grow min-w-0"
+              >
+                <label for="radar-sensitivity" class="text-sm whitespace-nowrap">
+                  Sensitivity
+                </label>
+                <span class="text-xs opacity-60">low</span>
+                <input
+                  id="radar-sensitivity"
+                  name="sensitivity_ui"
+                  type="range"
+                  min="1"
+                  max="9"
+                  step="1"
+                  value={10 - @sensitivity}
+                  phx-debounce="500"
+                  class="range range-sm grow"
+                />
+                <span class="text-xs opacity-60">high</span>
+                <span class="text-sm font-mono w-12 text-right">{10 - @sensitivity}/9</span>
+              </form>
+              <button
+                id="radar-reinit"
+                type="button"
+                class="btn btn-outline btn-sm"
+                phx-click="reinitialize"
+              >
+                Reinitialize sensor
+              </button>
+            </div>
+          <% end %>
 
           <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 text-sm font-mono mt-2">
             <div>X: {fmt_m(@min_x)} … {fmt_m(@max_x)}</div>
