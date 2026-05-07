@@ -1,6 +1,8 @@
 # HLK-LD6001A-60G Human Tracking Radar — Developer Documentation
 
-Version basis: HLK-LD6001A-60G Human Trajectory Radar Sensor Module Manual V1.1 (modified 2024-05-11)
+Version basis:
+- HLK-LD6001A-60G Human Trajectory Radar Sensor Module Manual V1.1 (modified 2024-05-11), and
+- empirical observations of firmware **NOP_1.07-02** captured during integration. Where the manual disagrees with the running firmware, this document calls out both and recommends the firmware-observed behavior.
 
 ---
 
@@ -101,12 +103,14 @@ This implies that mechanical instability may degrade tracking quality.
 The detection zone is defined by a combination of:
 - a **radial limit** (`AT+RANGE`),
 - rectangular coordinate bounds:
-  - `AT+XPosiD`
-  - `AT+XNegaD`
-  - `AT+YPosiD`
-  - `AT+YNegaD`
+  - `AT+XPosi`
+  - `AT+XNega`
+  - `AT+YPosi`
+  - `AT+YNega`
 
 The target must lie within the radial range and within the configured X/Y boundaries. The accepted region is the intersection of the projected circular detection range and the configured X/Y boundary box.
+
+> **Firmware-spelling note.** The vendor manual prints these commands as `AT+XPosiD`, `AT+XNegaD`, `AT+YPosiD`, `AT+YNegaD` (with a trailing `D`). Firmware NOP_1.07-02 only accepts the spellings without the trailing `D` and replies `AT+ERR` to the manual's spellings. See §9.3 and §22.5.
 
 ---
 
@@ -162,19 +166,20 @@ The module is controlled and read through a **TTL UART**.
 ### Important points
 
 - Commands are ASCII **AT commands**
-- Commands are terminated by **newline** (`\n`)
+- Commands are terminated by **newline** (`\n`); the module's responses are terminated by **CRLF** (`\r\n`)
 - The module can operate in multiple output modes selected by `AT+DEBUG=X`
 - The full tracking protocol for machine parsing is available in **`AT+DEBUG=3`**
-- The default serial baud rate is stated as **921600**
-- The vendor host-computer screenshot for `DEBUG=2` shows **115200**, so do not assume all tools and modes use the same speed without verification
+- The vendor manual states the default serial baud rate is **921600**
+- The vendor host-computer screenshot for `DEBUG=2` shows **115200**
+- **Empirically, firmware NOP_1.07-02 ships configured at `115200` baud** and is silent at 921600 until reconfigured. Do not assume the documented default applies to a given physical unit; probe both speeds.
 
 ### Recommended implementation stance
 
 For your own integration:
 1. assume the module command interface is UART-based,
-2. start with the documented default baud of **921600**,
+2. probe the actual baud first (try `115200` and `921600`); a brief `AT+READ\n` round-trip is a reliable presence test,
 3. support reconfiguration via `AT+BAUD=XX`,
-4. treat any vendor-tool-specific baud as tool behavior, not necessarily the module default in all situations.
+4. treat any documented default as advisory, not authoritative for a specific firmware build.
 
 ---
 
@@ -225,12 +230,13 @@ A robust initialization sequence for deployed systems is:
 AT+STOP\n
 AT+READ\n
 AT+DEBUG=3\n
+AT+DPKTH=4\n
 AT+HEIGHTD=300\n
 AT+RANGE=450\n
-AT+XPosiD=450\n
-AT+XNegaD=-450\n
-AT+YPosiD=450\n
-AT+YNegaD=-450\n
+AT+XPosi=450\n
+AT+XNega=-450\n
+AT+YPosi=450\n
+AT+YNega=-450\n
 AT+Moving=110\n
 AT+Static=100\n
 AT+Exit=5\n
@@ -238,6 +244,8 @@ AT+START\n
 ```
 
 This is not explicitly given by the vendor as a required sequence, but it is a sensible derived sequence from the documented command set and defaults.
+
+> The boundary commands are spelled without the trailing `D` that appears in the vendor manual; firmware NOP_1.07-02 returns `AT+ERR` for the manual's spellings. See §9.3 and §22.5.
 
 ### 8.3 Command acknowledgement
 
@@ -247,11 +255,27 @@ The manual states:
 
 If configuration fails, the manual says the command should be sent again.
 
+#### Observed response format (firmware NOP_1.07-02)
+
+- All responses end with **CRLF (`\r\n`)**, not bare `\n`.
+- Parameter-setting commands echo the stored value:
+  - `AT+DEBUG=3\n` &rarr; `AT+OK=3\r\n`
+  - `AT+XPosi=450\n` &rarr; `AT+OK=450\r\n`
+  - `AT+RANGE=450\n` &rarr; `AT+OK=450\r\n`
+- Pure control commands respond with bare success:
+  - `AT+START\n` &rarr; `AT+OK\r\n`
+  - `AT+STOP\n` &rarr; `AT+OK\r\n`
+- `AT+READ\n` returns multiple `Para: <name>=<value>\r\n` lines followed by `AT+OK\r\n`.
+- Unknown or malformed commands respond `AT+ERR\r\n`.
+- Persistence-store failure responds `Save Para Fail\r\n`.
+
 ### Practical implication
 
 Your host software should:
-- read and parse command responses,
+- read and parse command responses line by line on CRLF,
+- treat `AT+OK` and `AT+OK=...` equivalently for "command accepted",
 - retry writes when `Save Para Fail` is received,
+- treat `AT+ERR` as a hard rejection (typically a misspelling or out-of-range value),
 - avoid assuming that a transmitted setting was stored unless acknowledged.
 
 ---
@@ -274,9 +298,10 @@ All commands below are documented with a trailing newline.
 
 | Command | Meaning |
 |---|---|
-| `AT+BAUD=XX\n` | Configure serial baud rate; documented default is `921600` |
+| `AT+BAUD=XX\n` | Configure serial baud rate; documented default is `921600`, observed factory default on NOP_1.07-02 is `115200` |
 | `AT+HEATIME=XX\n` | Heartbeat interval for protocol output, unit seconds, range `10..999`, default `60` |
 | `AT+DEBUG=X\n` | Output/protocol mode selector |
+| `AT+DPKTH=X\n` | Long-distance detection sensitivity threshold; range `1..9`, default `4`. Higher values lower the sensitivity (fewer phantom targets / shorter effective range); lower values raise it. |
 
 #### `AT+DEBUG=X` values
 
@@ -293,10 +318,12 @@ All commands below are documented with a trailing newline.
 |---|---|
 | `AT+RANGE=XX\n` | Projected ground detection radius in cm; range `10..500`; default `450` |
 | `AT+HEIGHTD=XXX\n` | Vertical distance / installation height in cm; range `50..500`; default `300` |
-| `AT+XPosiD=XXX\n` | Positive X range in cm; range `20..500`; default `450` |
-| `AT+XNegaD=-XXX\n` | Negative X range in cm; range `-500..-20`; default `-450` |
-| `AT+YPosiD=XXX\n` | Positive Y range in cm; range `20..500`; default `450` |
-| `AT+YNegaD=-XXX\n` | Negative Y range in cm; range `-500..-20`; default `-450` |
+| `AT+XPosi=XXX\n` | Positive X range in cm; range `20..500`; default `450` |
+| `AT+XNega=-XXX\n` | Negative X range in cm; range `-500..-20`; default `-450` |
+| `AT+YPosi=XXX\n` | Positive Y range in cm; range `20..500`; default `450` |
+| `AT+YNega=-XXX\n` | Negative Y range in cm; range `-500..-20`; default `-450` |
+
+> **Spelling discrepancy.** The vendor manual prints the four boundary commands as `AT+XPosiD`, `AT+XNegaD`, `AT+YPosiD`, `AT+YNegaD` (with a trailing `D`). Firmware NOP_1.07-02 rejects those with `AT+ERR\r\n` and only accepts the names listed above (without the trailing `D`). Use the firmware spellings.
 
 ### 9.4 Target disappearance timing
 
@@ -413,7 +440,7 @@ A frame consists of:
 | Field | Size | Type | Description |
 |---|---:|---|---|
 | `HEAD` | 8 bytes | fixed bytes | `01 02 03 04 05 06 07 08` |
-| `LENGTH` | 4 bytes | `uint32` | total length of the entire frame |
+| `LENGTH` | 4 bytes | `uint32` | length of the frame **excluding the trailing checksum byte**; equals `on_wire_size - 1` (see note below) |
 | `FRAME` | 4 bytes | `uint32` | frame number |
 | `TLVs` | 4 bytes | `uint32` | value `1` |
 | `POINTLENTH` | 4 bytes | `uint32` | point cloud length; always `0` |
@@ -421,6 +448,20 @@ A frame consists of:
 | `TRACKLENTH` | 4 bytes | `uint32` | tracking payload length |
 | `Personnel[0..n-1]` | `32 * n` bytes | records | per-person records |
 | `Check` | 1 byte | XOR | checksum over frame number and personnel info |
+
+#### LENGTH-field semantics (important)
+
+The vendor manual describes `LENGTH` in prose as "total length of the entire frame", but the fully worked example in §14 proves otherwise. In that example `LENGTH = 0x40 = 64`, while the on-wire byte count of the frame is **65 bytes** (the trailing checksum byte makes the difference).
+
+Treat `LENGTH` as:
+
+```text
+LENGTH        = 32 + TRACKLENTH                  # everything from HEAD up to and including the last personnel byte
+on_wire_size  = LENGTH + 1                       # add the trailing checksum byte
+              = 33 + TRACKLENTH
+```
+
+Implementations must use `LENGTH + 1` when deciding how many bytes to consume from the stream; a parser that uses `LENGTH` directly will under-read by one byte, leaving the checksum in the buffer and desynchronizing on the next frame.
 
 #### Manual spelling note
 
@@ -447,14 +488,22 @@ Each person occupies **32 bytes**:
 
 | Offset within record | Size | Type | Field | Meaning |
 |---:|---:|---|---|---|
-| `0` | 4 | `uint32` | `F` | Reserved |
-| `4` | 4 | `uint32` | `ID` | Person identifier |
+| `0` | 4 | `uint32` | `F` (a.k.a. `Q`) | Reserved; observed always-zero on firmware NOP_1.07-02 |
+| `4` | 4 | `uint32` | `ID` | Target identifier (track-local; see §18) |
 | `8` | 4 | `float32` | `X` | left/right coordinate |
 | `12` | 4 | `float32` | `Y` | front/back coordinate |
 | `16` | 4 | `float32` | `Z` | height |
 | `20` | 4 | `float32` | `Vx` | X velocity |
 | `24` | 4 | `float32` | `Vy` | Y velocity |
 | `28` | 4 | `float32` | `Vz` | Z velocity |
+
+#### Field-order verification
+
+The LD6001A manual labels the offset-0 word `F` and the offset-4 word `ID`. The closely related MS72SF1 datasheet labels the same offsets `Q` and `ID` respectively; both describe offset 0 as a reserved value that is currently always zero.
+
+A third-party JavaScript implementation ([`nitram509/ld6001-ms72sf1-connector`](https://github.com/nitram509/ld6001-ms72sf1-connector)) parses these two fields in the **opposite order** (placing `ID` at offset 0). That ordering disagrees with both vendor datasheets, and live capture from firmware NOP_1.07-02 confirms the documented order is correct: the offset-0 word is consistently zero across frames while the offset-4 word varies and behaves as the track ID.
+
+Implementations should follow the documented order: `reserved` at offset 0, `id` at offset 4.
 
 #### Derived target count
 
@@ -564,7 +613,7 @@ As one continuous byte stream:
 | Bytes | Decode |
 |---|---|
 | `01 02 03 04 05 06 07 08` | fixed frame header |
-| `40 00 00 00` | total frame length = `64` bytes |
+| `40 00 00 00` | `LENGTH = 64` (excludes the trailing checksum byte; on-wire size is **65 bytes**, see §12.2) |
 | `A3 01 00 00` | frame number = `419` |
 | `01 00 00 00` | TLV = `1` |
 | `00 00 00 00` | point-cloud length = `0` |
@@ -644,27 +693,30 @@ A detailed-mode frame has this minimum structure:
 - track length: 4 bytes
 - checksum: 1 byte
 
-That is **33 bytes minimum**, even for zero targets.
+That is **33 bytes on the wire minimum**, even for zero targets, with a `LENGTH` field value of `32` in that minimal case (see §12.2 for the LENGTH semantics).
 
-Because each target record is 32 bytes, valid frame lengths in detailed mode should satisfy:
+Because each target record is 32 bytes, valid frames in detailed mode satisfy:
 
 ```text
-frame_length = 32 + track_length + 1
+LENGTH        = 32 + TRACKLENTH
+on_wire_size  = LENGTH + 1
+              = 33 + TRACKLENTH
 ```
 
 where:
-- the initial 32 bytes are all fields through `TRACKLENTH`,
-- the final `1` byte is checksum.
+- the initial 32 bytes cover all fields through `TRACKLENTH`,
+- the final `1` byte is the checksum (not counted in `LENGTH`).
 
 Equivalently:
 
 ```text
-track_length = frame_length - 33
+TRACKLENTH = LENGTH - 32
 ```
 
 In the sample:
-- `frame_length = 64`
-- `track_length = 32`
+- `LENGTH = 64`
+- `TRACKLENTH = 32`
+- `on_wire_size = 65`
 
 which is consistent.
 
@@ -672,9 +724,10 @@ which is consistent.
 
 Reject or resync on frames where:
 - header is wrong,
-- `length < 33`,
-- `track_length % 32 != 0`,
-- `length != 33 + track_length`,
+- `LENGTH < 32`,
+- `TRACKLENTH % 32 != 0`,
+- `LENGTH != 32 + TRACKLENTH`,
+- fewer than `LENGTH + 1` bytes are available in the buffer,
 - checksum mismatches.
 
 ### 15.3 Resynchronization strategy
@@ -699,7 +752,7 @@ This is important because binary serial streams can become misaligned after:
 | Absolute offset | Size | Type | Field |
 |---:|---:|---|---|
 | `0` | 8 | bytes | header |
-| `8` | 4 | `uint32` | total length |
+| `8` | 4 | `uint32` | `LENGTH` (= `32 + track_length`; excludes checksum byte) |
 | `12` | 4 | `uint32` | frame number |
 | `16` | 4 | `uint32` | TLV1 (= 1) |
 | `20` | 4 | `uint32` | point length (= 0) |
@@ -707,6 +760,8 @@ This is important because binary serial streams can become misaligned after:
 | `28` | 4 | `uint32` | track length |
 | `32` | `track_length` | bytes | target records |
 | `32 + track_length` | 1 | byte | checksum |
+
+The full on-wire frame occupies `LENGTH + 1 = 33 + track_length` bytes.
 
 ### 16.2 Target record layout by relative offset
 
@@ -751,7 +806,8 @@ def parse_ld6001_frame(frame: bytes) -> dict:
         raise ValueError("bad header")
 
     total_length = parse_u32le(frame[8:12])
-    if total_length != len(frame):
+    # LENGTH excludes the trailing checksum byte; on-wire size = total_length + 1
+    if total_length + 1 != len(frame):
         raise ValueError("length mismatch")
 
     frame_no = parse_u32le(frame[12:16])
@@ -768,7 +824,7 @@ def parse_ld6001_frame(frame: bytes) -> dict:
         raise ValueError("unexpected point payload")
     if track_length % 32 != 0:
         raise ValueError("invalid track length")
-    if total_length != 33 + track_length:
+    if total_length != 32 + track_length:
         raise ValueError("inconsistent frame sizing")
 
     track_data = frame[32:32 + track_length]
@@ -824,19 +880,22 @@ def feed(data: bytes):
             return
 
         total_length = int.from_bytes(buffer[8:12], "little")
-        if total_length < 33:
+        # LENGTH excludes the trailing checksum byte (see §12.2);
+        # smallest plausible value is 32 (zero-track frame, on-wire = 33 bytes)
+        if total_length < 32:
             del buffer[0]
             continue
 
-        if len(buffer) < total_length:
+        on_wire_size = total_length + 1
+        if len(buffer) < on_wire_size:
             return
 
-        frame = bytes(buffer[:total_length])
+        frame = bytes(buffer[:on_wire_size])
 
         try:
             decoded = parse_ld6001_frame(frame)
             emit(decoded)
-            del buffer[:total_length]
+            del buffer[:on_wire_size]
         except ValueError:
             del buffer[0]
 ```
@@ -958,8 +1017,9 @@ The original manual leaves several things implicit or slightly inconsistent. For
 
 - command table: default baud is `921600`
 - host-tool example: `115200`
+- empirical: firmware NOP_1.07-02 ships at `115200` and is silent at `921600`
 
-Best interpretation: the documented default command/serial setting is `921600`, while the vendor tool example may reflect a different configuration or a tool-specific setup.
+Best interpretation: treat the documented default as advisory only. Probe both speeds at startup; persist the working speed in your host configuration. `AT+BAUD=XX` lets you change it deliberately if needed.
 
 ### 22.2 Terminology inconsistency
 
@@ -979,6 +1039,26 @@ The manual explicitly labels configuration commands in **centimeters** but does 
 ### 22.4 Point-cloud placeholder
 
 The detailed protocol includes a point-cloud TLV but documents it as always zero-length. Treat this as a reserved section currently unused by documented firmware.
+
+### 22.5 Boundary-command spelling
+
+The manual's "Detection-zone configuration" table prints the four boundary commands with a trailing `D`:
+
+- `AT+XPosiD`, `AT+XNegaD`, `AT+YPosiD`, `AT+YNegaD`
+
+Firmware NOP_1.07-02 returns `AT+ERR\r\n` for those names and only accepts:
+
+- `AT+XPosi`, `AT+XNega`, `AT+YPosi`, `AT+YNega`
+
+Use the firmware spellings. The manual's spellings appear to be a typesetting error: only the boundary commands carry the spurious `D`; `AT+RANGE` and `AT+HEIGHTD` (which legitimately ends in `D`) work as printed.
+
+### 22.6 LENGTH-field interpretation
+
+The vendor manual describes `LENGTH` (offset 8) as "total length of the entire frame" but its own worked example (§14) gives `LENGTH = 0x40 = 64` for a 65-byte on-wire frame. The empirical interpretation is that `LENGTH` excludes the trailing checksum byte (`on_wire_size = LENGTH + 1`). Implementations that follow the prose literally will under-read frames by exactly one byte and desynchronize on the next frame.
+
+### 22.7 Response framing
+
+The manual shows AT-command responses without explicit line endings. Firmware NOP_1.07-02 actually emits `\r\n` (CRLF) terminators and, for parameter-setting commands, echoes the stored value as `AT+OK=<value>\r\n` rather than bare `AT+OK\r\n`. See §8.3.
 
 ---
 
@@ -1010,7 +1090,8 @@ The detailed protocol includes a point-cloud TLV but documents it as always zero
 | Per-target record size | `32` bytes |
 | Target count derivation | `track_length / 32` |
 | Detailed checksum scope | `frame_number + track_data` |
-| Minimum detailed frame size | `33` bytes |
+| LENGTH field semantics | excludes trailing checksum byte; `on_wire_size = LENGTH + 1` |
+| Minimum on-wire detailed frame size | `33` bytes (LENGTH = 32) |
 
 ---
 
@@ -1018,15 +1099,15 @@ The detailed protocol includes a point-cloud TLV but documents it as always zero
 
 1. Wire `3V3`, `GND`, `TX`, `RX`.
 2. Ensure a supply that can handle startup/RF peaks.
-3. Open UART, usually beginning with `921600`.
+3. Open UART. Probe at `115200` first (observed factory default on NOP_1.07-02), fall back to the documented `921600`.
 4. Send `AT+DEBUG=3\n`.
-5. Configure installation geometry if needed.
+5. Configure installation geometry if needed (use `AT+XPosi`/`AT+XNega`/`AT+YPosi`/`AT+YNega`, **without** the trailing `D` shown in the manual).
 6. Send `AT+START\n`.
 7. Read binary stream.
 8. Search for header `01 02 03 04 05 06 07 08`.
-9. Read `length`.
-10. Validate `track_length`, frame size, and checksum.
-11. Decode each 32-byte target record.
+9. Read `LENGTH`.
+10. Wait for `LENGTH + 1` bytes total (the on-wire frame includes the checksum byte that `LENGTH` excludes), then validate `track_length`, the relation `LENGTH == 32 + track_length`, and the XOR checksum.
+11. Decode each 32-byte target record (`reserved` at offset 0, `id` at offset 4).
 12. Publish tracks to the application.
 
 ---
@@ -1037,6 +1118,14 @@ Use this exact frame as a parser test vector:
 
 ```text
 01 02 03 04 05 06 07 08 40 00 00 00 A3 01 00 00 01 00 00 00 00 00 00 00 02 00 00 00 20 00 00 00 00 00 00 00 00 00 00 00 21 28 96 BF CB 85 20 40 9A AB A3 3E 8A BD C1 3D 50 98 99 BD 40 52 C3 3A CC
+```
+
+Sizes:
+
+```text
+on_wire_size      = 65 bytes
+LENGTH (offset 8) = 64    (= on_wire_size - 1; excludes checksum)
+TRACKLENTH        = 32    (= LENGTH - 32; one personnel record)
 ```
 
 Expected decode:
