@@ -56,7 +56,8 @@ defmodule Octopus.Application do
         case System.get_env("TELEGRAM_BOT_SECRET") do
           nil -> []
           telegram_bot_secret -> [{Octopus.TelegramBot, bot_key: telegram_bot_secret}]
-        end
+        end ++
+        if(Octopus.Radar.any_present?(), do: [Octopus.Radar], else: [])
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options

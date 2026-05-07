@@ -64,8 +64,10 @@ config :octopus, dev_routes: true
 # Development mode: require only buttons 1-3 for kiosk mode activation
 config :octopus, kiosk_button_combination_range: 1..3
 
-# Do not include metadata nor timestamps in development logs
-config :logger, :console, format: "[$level] $message\n"
+# Show debug-level logs and include a millisecond timestamp in dev so we can
+# follow high-rate event streams (e.g. radar frames at ~30 Hz).
+config :logger, level: :debug
+config :logger, :console, format: "$time [$level] $message\n"
 
 # Set a higher stacktrace during development. Avoid configuring such
 # in production as building large stacktraces may be expensive.

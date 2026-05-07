@@ -76,7 +76,8 @@ defmodule Octopus.MixProject do
       {:mdns_lite, "~> 0.9.1"},
       {:oscx, "~> 0.1.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:igniter, "~> 0.7", only: [:dev]}
+      {:igniter, "~> 0.7", only: [:dev]},
+      {:circuits_uart, "~> 1.5"}
     ]
   end
 

@@ -16,7 +16,9 @@ alias Octopus.{
 }
 
 IEx.configure(inspect: [limit: :infinity, printable_limit: :infinity])
-Logger.configure(level: :info)
+# Honor the compile-time logger level (`:debug` in dev, see config/dev.exs).
+# Override at runtime in your iex session with `Logger.configure(level: :info)`
+# if a particular session is too chatty.
 
 mario =
   if Code.ensure_loaded?(Octopus) do
