@@ -150,7 +150,7 @@ const textures: any[] = [];
 /** Radar-Sensoren: Abstand zum Zentrum (m) per lil-gui; Kegel-Visualisierung; Höhe per radarHeight */
 let radarHeight = 3.5;
 const RADAR_RADIUS_MIN_M = 0;
-const RADAR_RADIUS_MAX_M = 2;
+const RADAR_RADIUS_MAX_M = 8;
 /** Horizontaler Abstand der Boxen von der Y-Achse (Kreisradius), Default 50 cm */
 let radarRadiusM = 0.5;
 const RADAR_BOX = 0.1;
@@ -477,7 +477,7 @@ class Pixels3dAframeHook extends Hook {
         this.setupRadarGui();
       });
     radarNeigungCtrl = folder
-      .add(params, "radarTiltDeg", 5, 120, 1)
+      .add(params, "radarTiltDeg", 0, 120, 1)
       .name("Neigung (°)")
       .onChange((v: number) => {
         if (radarTiltAutoAlign) return;
@@ -1027,9 +1027,27 @@ class Pixels3dAframeHook extends Hook {
         data: { length: number; halfAngleDeg: number };
       }) {
         const T = getThree();
-        const h = this.data.length;
-        const r = Math.tan(T.MathUtils.degToRad(this.data.halfAngleDeg)) * h;
-        const geo = new T.CylinderGeometry(0, r, h, 32, 1, false);
+        // `length` ist jetzt der Radius (Slant-Länge) vom Sensor: alle Punkte des Kegels
+        // liegen ≤ length vom Apex. Statt flacher Basis schließt eine Sphärenkappe
+        // (Kugel um Apex, Radius = length) den Kegel ab → kein gerades Abschneiden.
+        const L = this.data.length;
+        const theta = T.MathUtils.degToRad(this.data.halfAngleDeg);
+        const h = L * Math.cos(theta);
+        const r = L * Math.sin(theta);
+
+        const radialSegs = 32;
+        const phiSegs = 12;
+
+        const coneGeo = new T.CylinderGeometry(0, r, h, radialSegs, 1, true);
+        const capGeo = new T.SphereGeometry(
+          L,
+          radialSegs,
+          phiSegs,
+          0,
+          Math.PI * 2,
+          0,
+          theta
+        );
         const mat = new T.MeshBasicMaterial({
           color: 0x66aaff,
           transparent: true,
@@ -1037,15 +1055,22 @@ class Pixels3dAframeHook extends Hook {
           depthWrite: false,
           side: T.DoubleSide,
         });
-        const mesh = new T.Mesh(geo, mat);
         // Spitze (Sensor) am Entity-Ursprung = Mitte der Box; Achse entlang -Y = gleiche Achse
         // wie die 45°-Tilt-Gruppe (kein extra X-Flip — sonst zeigt der Kegel nicht „mit“ der Box).
-        mesh.position.y = -h / 2;
-        this.el.setObject3D('mesh', mesh);
+        const group = new T.Group();
+        const coneMesh = new T.Mesh(coneGeo, mat);
+        coneMesh.position.y = -h / 2;
+        group.add(coneMesh);
+        // Sphäre ist um Apex zentriert; 180°-Rotation um X dreht den Pol auf -Y, Rim landet
+        // dadurch automatisch bei y=-h, Radius=r (= Kegel-Rim).
+        const capMesh = new T.Mesh(capGeo, mat);
+        capMesh.rotation.x = Math.PI;
+        group.add(capMesh);
+        this.el.setObject3D('mesh', group);
 
-        // Zentrumslinie Kegel: von Spitze (0) bis Mitte der Basis (-h), ~2 cm Ø, neon-gelb
+        // Zentrumslinie Kegel: von Spitze (0) bis zum Pol der Kappe (-L), ~2 cm Ø, neon-gelb
         const axisRadiusM = 0.01;
-        const axisGeo = new T.CylinderGeometry(axisRadiusM, axisRadiusM, h, 16, 1, false);
+        const axisGeo = new T.CylinderGeometry(axisRadiusM, axisRadiusM, L, 16, 1, false);
         const axisMat = new T.MeshBasicMaterial({
           color: 0xdfff00,
           depthWrite: false,
@@ -1054,7 +1079,7 @@ class Pixels3dAframeHook extends Hook {
           polygonOffsetUnits: -1,
         });
         const axisMesh = new T.Mesh(axisGeo, axisMat);
-        axisMesh.position.y = -h / 2;
+        axisMesh.position.y = -L / 2;
         axisMesh.renderOrder = 1;
         this.el.setObject3D('coneAxis', axisMesh);
       },
