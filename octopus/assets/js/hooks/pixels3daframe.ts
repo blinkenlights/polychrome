@@ -1,5 +1,9 @@
 import { Hook, makeHook } from "phoenix_typed_hook";
 import AFRAME from "aframe";
+// `aframe-orbit-controls` greift auf die Globals `AFRAME` und `THREE` zu, die
+// A-Frame beim Laden auf `window` setzt — Import-Reihenfolge muss daher AFRAME
+// → orbit-controls bleiben.
+import "aframe-orbit-controls";
 import { GUI } from "three/addons/libs/lil-gui.module.min.js";
 import { Frame, RGB, rgbPixelsFromFrame } from "./shared/frame";
 import { registerHumanComponents } from "./humanComponents";
@@ -182,6 +186,49 @@ let radarTiltAutoAlign = false;
 let radarLilGui: GUI | null = null;
 /** lil-gui Controller für „Neigung (°)“ — zum Sperren bei Auto-Ausrichtung */
 let radarNeigungCtrl: { disable: (v: boolean) => void } | null = null;
+
+/**
+ * Orbit-Cam: Kamera kreist per Maus um `cameraTarget` (Linksklick = Rotate,
+ * Rechtsklick = Pan, Mausrad = Zoom). Werte hier sind Defaults; lil-gui
+ * (Kamera-Folder) schreibt direkt in diese Variablen und ruft
+ * `applyCameraAttributes()` auf.
+ */
+let cameraFov = 60;
+let cameraTargetY = 1.5;
+let cameraMinDistance = 0.5;
+let cameraMaxDistance = 60;
+let cameraDamping = 0.1;
+let cameraAutoRotate = false;
+let cameraAutoRotateSpeed = 0.6;
+let cameraEnablePan = true;
+let cameraInitialPos: [number, number, number] = [0, 4, 14];
+
+function applyCameraAttributes() {
+  const cam = document.querySelector("#cameraRig") as any;
+  if (!cam) return;
+  cam.setAttribute("camera", `fov: ${cameraFov}; near: 0.05; far: 2000`);
+  cam.setAttribute("orbit-controls", {
+    target: { x: 0, y: cameraTargetY, z: 0 },
+    enableDamping: true,
+    dampingFactor: cameraDamping,
+    rotateSpeed: 0.25,
+    zoomSpeed: 0.6,
+    panSpeed: 0.6,
+    enablePan: cameraEnablePan,
+    screenSpacePanning: true,
+    minDistance: cameraMinDistance,
+    maxDistance: cameraMaxDistance,
+    minPolarAngle: 1,
+    maxPolarAngle: 89,
+    autoRotate: cameraAutoRotate,
+    autoRotateSpeed: cameraAutoRotateSpeed,
+    initialPosition: {
+      x: cameraInitialPos[0],
+      y: cameraInitialPos[1],
+      z: cameraInitialPos[2],
+    },
+  });
+}
 
 /** Humans-Mock: lokaler Avatar-Controller in `humanComponents.ts`/`humanWorld.ts`. */
 let humanCount = 5;
@@ -482,6 +529,90 @@ class Pixels3dAframeHook extends Hook {
         applyHumansAttributes();
       });
     humansFolder.open();
+
+    const camParams = {
+      cameraFov,
+      cameraTargetY,
+      cameraMinDistance,
+      cameraMaxDistance,
+      cameraDamping,
+      cameraAutoRotate,
+      cameraAutoRotateSpeed,
+      cameraEnablePan,
+      resetView: () => this.resetCameraView(),
+    };
+    const camFolder = gui.addFolder("Kamera");
+    camFolder
+      .add(camParams, "cameraFov", 20, 110, 1)
+      .name("FOV (°)")
+      .onChange((v: number) => {
+        cameraFov = v;
+        applyCameraAttributes();
+      });
+    camFolder
+      .add(camParams, "cameraTargetY", 0, 6, 0.05)
+      .name("Ziel-Höhe (m)")
+      .onChange((v: number) => {
+        cameraTargetY = v;
+        applyCameraAttributes();
+      });
+    camFolder
+      .add(camParams, "cameraMinDistance", 0.1, 5, 0.1)
+      .name("Min Zoom")
+      .onChange((v: number) => {
+        cameraMinDistance = v;
+        applyCameraAttributes();
+      });
+    camFolder
+      .add(camParams, "cameraMaxDistance", 5, 200, 1)
+      .name("Max Zoom")
+      .onChange((v: number) => {
+        cameraMaxDistance = v;
+        applyCameraAttributes();
+      });
+    camFolder
+      .add(camParams, "cameraDamping", 0, 0.4, 0.01)
+      .name("Damping")
+      .onChange((v: number) => {
+        cameraDamping = v;
+        applyCameraAttributes();
+      });
+    camFolder
+      .add(camParams, "cameraEnablePan")
+      .name("Pan (Rechtsklick)")
+      .onChange((v: boolean) => {
+        cameraEnablePan = !!v;
+        applyCameraAttributes();
+      });
+    camFolder
+      .add(camParams, "cameraAutoRotate")
+      .name("Auto-Rotate")
+      .onChange((v: boolean) => {
+        cameraAutoRotate = !!v;
+        applyCameraAttributes();
+      });
+    camFolder
+      .add(camParams, "cameraAutoRotateSpeed", 0, 5, 0.1)
+      .name("Auto-Rotate Speed")
+      .onChange((v: number) => {
+        cameraAutoRotateSpeed = v;
+        applyCameraAttributes();
+      });
+    camFolder.add(camParams, "resetView").name("Ansicht zurücksetzen");
+    camFolder.open();
+  }
+
+  /**
+   * Setzt die Kamera-Position auf den Default zurück. Reicht nicht, einfach
+   * `setAttribute('position', …)` zu rufen — `orbit-controls` hält den
+   * THREE-State intern. Wir entfernen das Component und setzen es neu, dann
+   * greift `initialPosition` wieder.
+   */
+  resetCameraView() {
+    const cam = document.querySelector("#cameraRig") as any;
+    if (!cam) return;
+    cam.removeAttribute("orbit-controls");
+    requestAnimationFrame(() => applyCameraAttributes());
   }
 
   destroyed() {
@@ -490,17 +621,43 @@ class Pixels3dAframeHook extends Hook {
     radarNeigungCtrl = null;
   }
 
+  /**
+   * Orbit-Cam: ein einzelnes Entity trägt sowohl `camera` als auch
+   * `orbit-controls` (das Component verlangt `dependencies: ['camera']` und
+   * greift auf `getObject3D('camera')` desselben Entitys zu — kein Rig).
+   * `look-controls`/`wasd-controls` werden vom Component automatisch
+   * deaktiviert, wenn vorhanden.
+   */
   createCameraRig() {
-    const cameraRig = document.createElement('a-entity');
-    cameraRig.setAttribute('id', 'cameraRig');
-    cameraRig.setAttribute('position', '-2 0 0');
-    cameraRig.setAttribute('rotation', '0 90 0');
-    const camera = document.createElement('a-entity');
-    camera.setAttribute('camera', '');
-    camera.setAttribute('position', '0 1.6 0');
-    camera.setAttribute('look-controls', '');
-    cameraRig.appendChild(camera);
-    return cameraRig;
+    const cam = document.createElement("a-entity");
+    cam.setAttribute("id", "cameraRig");
+    cam.setAttribute("camera", `fov: ${cameraFov}; near: 0.05; far: 2000`);
+    // Wichtig: Entity bleibt am Origin. `orbit-controls` schreibt die
+    // gewünschte Eye-Position in `getObject3D('camera').position` (Local
+    // gegenüber diesem Entity). Eine zusätzliche `position` auf dem Entity
+    // würde die Eye-Position verschieben und Target verfälschen.
+    cam.setAttribute("orbit-controls", {
+      target: { x: 0, y: cameraTargetY, z: 0 },
+      enableDamping: true,
+      dampingFactor: cameraDamping,
+      rotateSpeed: 0.25,
+      zoomSpeed: 0.6,
+      panSpeed: 0.6,
+      enablePan: cameraEnablePan,
+      screenSpacePanning: true,
+      minDistance: cameraMinDistance,
+      maxDistance: cameraMaxDistance,
+      minPolarAngle: 1,
+      maxPolarAngle: 89,
+      autoRotate: cameraAutoRotate,
+      autoRotateSpeed: cameraAutoRotateSpeed,
+      initialPosition: {
+        x: cameraInitialPos[0],
+        y: cameraInitialPos[1],
+        z: cameraInitialPos[2],
+      },
+    } as any);
+    return cam;
   }
 
   createAssets() {
