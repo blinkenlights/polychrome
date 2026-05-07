@@ -63,6 +63,12 @@ defmodule OctopusWeb.RadarLive do
   # when the window is empty or all samples coincide.
   @minmax_pad_m 0.5
 
+  # Ruler tick lengths in viewBox units. Minor ticks are every 10 cm;
+  # major ticks land on full meters and are roughly 3× as long so they
+  # remain visible and the operator can quickly count meters.
+  @minor_tick_len 8
+  @major_tick_len 24
+
   ## LiveView callbacks
 
   @impl true
@@ -128,6 +134,23 @@ defmodule OctopusWeb.RadarLive do
     end
   end
 
+  # "Fit bounds" snaps the (growing) display bounds back down to the
+  # current 10 s sample window. After this, the bounds resume their
+  # grow-only behavior from the freshly-tightened state.
+  def handle_event("fit_bounds", _params, socket) do
+    {min_x, max_x, min_y, max_y, min_z, max_z} = compute_minmax(socket.assigns.samples)
+
+    {:noreply,
+     socket
+     |> assign(:min_x, min_x)
+     |> assign(:max_x, max_x)
+     |> assign(:min_y, min_y)
+     |> assign(:max_y, max_y)
+     |> assign(:min_z, min_z)
+     |> assign(:max_z, max_z)
+     |> rebuild_view()}
+  end
+
   @impl true
   def handle_info({:radar_frame, device_id, %Frame{} = frame}, socket) do
     if device_id == socket.assigns.selected_device_id do
@@ -151,7 +174,11 @@ defmodule OctopusWeb.RadarLive do
     |> assign(:min_z, nil)
     |> assign(:max_z, nil)
     |> assign(:view_targets, [])
+    |> assign(:ruler, empty_ruler())
   end
+
+  defp empty_ruler,
+    do: %{x_axis_visible: false, y_axis_visible: false, origin_x: 0, origin_y: 0, ticks: []}
 
   defp ingest_frame(socket, %Frame{tracks: tracks, frame_number: frame_number}) do
     now = System.monotonic_time(:millisecond)
@@ -182,17 +209,11 @@ defmodule OctopusWeb.RadarLive do
       |> Enum.reject(fn {_id, t} -> t.last_seen < fade_cutoff end)
       |> Map.new()
 
-    {min_x, max_x, min_y, max_y, min_z, max_z} = compute_minmax(samples)
+    a = socket.assigns
 
-    view_targets =
-      build_view_targets(%{
-        tracks_now: tracks_now,
-        samples: samples,
-        min_x: min_x,
-        max_x: max_x,
-        min_y: min_y,
-        max_y: max_y
-      })
+    {min_x, max_x} = grow_bounds(new_samples, a.min_x, a.max_x, :x)
+    {min_y, max_y} = grow_bounds(new_samples, a.min_y, a.max_y, :y)
+    {min_z, max_z} = grow_bounds(new_samples, a.min_z, a.max_z, :z)
 
     socket
     |> assign(:samples, samples)
@@ -204,7 +225,58 @@ defmodule OctopusWeb.RadarLive do
     |> assign(:max_y, max_y)
     |> assign(:min_z, min_z)
     |> assign(:max_z, max_z)
+    |> rebuild_view()
+  end
+
+  # Bounds are monotonically growing: once the visible range expands to
+  # accommodate a sample, it never contracts on its own. Operators can
+  # "Fit bounds" to snap the box back to the current 10 s data window
+  # whenever they want a tighter view. Empty `new_samples` leave the
+  # bounds untouched. The result is pre-padded so the rest of the
+  # pipeline can treat stored bounds as display-ready.
+  defp grow_bounds(new_samples, min_v, max_v, key) do
+    values = Enum.map(new_samples, &Map.fetch!(&1, key))
+
+    case {min_v, max_v, values} do
+      {nil, nil, []} ->
+        {nil, nil}
+
+      {nil, nil, vs} ->
+        {raw_min, raw_max} = Enum.min_max(vs)
+        pad_range(raw_min, raw_max)
+
+      {_min_v, _max_v, []} ->
+        {min_v, max_v}
+
+      {_min_v, _max_v, vs} ->
+        {sample_min, sample_max} = Enum.min_max(vs)
+        pad_range(min(min_v, sample_min), max(max_v, sample_max))
+    end
+  end
+
+  # Recompute everything that depends on the current bounds + tracks +
+  # samples. Called after frame ingest and after "Fit bounds".
+  defp rebuild_view(socket) do
+    a = socket.assigns
+
+    {min_x, max_x} = pad_range(a.min_x, a.max_x)
+    {min_y, max_y} = pad_range(a.min_y, a.max_y)
+
+    view_targets =
+      build_view_targets(%{
+        tracks_now: a.tracks_now,
+        samples: a.samples,
+        min_x: min_x,
+        max_x: max_x,
+        min_y: min_y,
+        max_y: max_y
+      })
+
+    ruler = build_ruler(min_x, max_x, min_y, max_y)
+
+    socket
     |> assign(:view_targets, view_targets)
+    |> assign(:ruler, ruler)
   end
 
   defp compute_minmax([]) do
@@ -222,6 +294,11 @@ defmodule OctopusWeb.RadarLive do
     {min_z, max_z} = pad_range(min_z, max_z)
     {min_x, max_x, min_y, max_y, min_z, max_z}
   end
+
+  # Used at render time to guarantee the canvas has a non-degenerate
+  # range to scale into, even when no data has arrived yet (`nil`,
+  # `nil`) or when all samples coincide.
+  defp pad_range(nil, nil), do: {-@minmax_pad_m, @minmax_pad_m}
 
   defp pad_range(min, max) do
     if max - min < 2 * @minmax_pad_m do
@@ -282,6 +359,14 @@ defmodule OctopusWeb.RadarLive do
                 <span class="text-sm font-mono w-12 text-right">{10 - @sensitivity}/9</span>
               </form>
               <button
+                id="radar-fit-bounds"
+                type="button"
+                class="btn btn-outline btn-sm"
+                phx-click="fit_bounds"
+              >
+                Fit bounds
+              </button>
+              <button
                 id="radar-reinit"
                 type="button"
                 class="btn btn-outline btn-sm"
@@ -310,6 +395,39 @@ defmodule OctopusWeb.RadarLive do
           <% else %>
             <div class="w-full max-w-3xl mx-auto aspect-square mt-4 bg-base-200 rounded">
               <svg viewBox="0 0 1000 1000" class="w-full h-full">
+                <g stroke="black">
+                  <%= if @ruler.x_axis_visible do %>
+                    <line
+                      x1="0"
+                      y1={fmt_f(@ruler.origin_y)}
+                      x2="1000"
+                      y2={fmt_f(@ruler.origin_y)}
+                      stroke-width="1"
+                      stroke-opacity="0.3"
+                    />
+                  <% end %>
+                  <%= if @ruler.y_axis_visible do %>
+                    <line
+                      x1={fmt_f(@ruler.origin_x)}
+                      y1="0"
+                      x2={fmt_f(@ruler.origin_x)}
+                      y2="1000"
+                      stroke-width="1"
+                      stroke-opacity="0.3"
+                    />
+                  <% end %>
+                  <%= for tick <- @ruler.ticks do %>
+                    <line
+                      x1={fmt_f(tick.x1)}
+                      y1={fmt_f(tick.y1)}
+                      x2={fmt_f(tick.x2)}
+                      y2={fmt_f(tick.y2)}
+                      stroke-width={if tick.major?, do: "2", else: "1"}
+                      stroke-opacity={if tick.major?, do: "0.7", else: "0.35"}
+                    />
+                  <% end %>
+                </g>
+
                 <%= for v <- @view_targets do %>
                   <g opacity={fmt_f(v.opacity)}>
                     <%= for seg <- v.trail do %>
@@ -440,6 +558,57 @@ defmodule OctopusWeb.RadarLive do
     |> Enum.filter(&(&1.ts >= trail_cutoff))
     |> Enum.group_by(& &1.id)
     |> Map.new(fn {id, ss} -> {id, Enum.sort_by(ss, & &1.ts)} end)
+  end
+
+  ## Ruler view model
+  #
+  # Two perpendicular axes through the world origin (0, 0), with tick
+  # marks every 10 cm along both. Major ticks (multiples of 1 m) render
+  # `@major_tick_len` long; minor ticks `@minor_tick_len`. The axis
+  # lines themselves are only drawn when 0 actually lies inside the
+  # currently-visible range — otherwise the axis would be off-canvas
+  # anyway and a line stub at the edge looks misleading.
+  defp build_ruler(min_x, max_x, min_y, max_y) do
+    origin_x = scale(0.0, min_x, max_x, @vb)
+    origin_y = scale(0.0, min_y, max_y, @vb)
+
+    %{
+      x_axis_visible: min_y <= 0.0 and max_y >= 0.0,
+      y_axis_visible: min_x <= 0.0 and max_x >= 0.0,
+      origin_x: origin_x,
+      origin_y: origin_y,
+      ticks:
+        axis_ticks(min_x, max_x, origin_y, :horizontal) ++
+          axis_ticks(min_y, max_y, origin_x, :vertical)
+    }
+  end
+
+  # Enumerate every multiple of 10 cm inside `[lo_w, hi_w]` and emit a
+  # short perpendicular tick at that position on the matching axis.
+  # `axis_pos` is the canvas-space coordinate of the *other* axis (so
+  # X-axis ticks all share `axis_pos = origin_y`).
+  defp axis_ticks(lo_w, hi_w, axis_pos, orientation) do
+    lo_dm = ceil(lo_w * 10)
+    hi_dm = floor(hi_w * 10)
+
+    if lo_dm > hi_dm do
+      []
+    else
+      Enum.map(lo_dm..hi_dm//1, fn dm ->
+        major? = rem(dm, 10) == 0
+        len = if major?, do: @major_tick_len, else: @minor_tick_len
+        half = len / 2
+        pos = scale(dm / 10, lo_w, hi_w, @vb)
+
+        case orientation do
+          :horizontal ->
+            %{x1: pos, y1: axis_pos - half, x2: pos, y2: axis_pos + half, major?: major?}
+
+          :vertical ->
+            %{x1: axis_pos - half, y1: pos, x2: axis_pos + half, y2: pos, major?: major?}
+        end
+      end)
+    end
   end
 
   defp scale(value, lo, hi, span) do
