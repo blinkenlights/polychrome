@@ -249,6 +249,161 @@ function applyHumansAttributes() {
   });
 }
 
+/**
+ * Footprint des sphärisch gekappten Radar-Kegels auf der Bodenebene (y = 0).
+ *
+ * Der `radar-cone-viz`-Kegel hat Apex am Sensor, Halbwinkel θ und Slant-Länge L
+ * (= sphärische Kappe statt flacher Boden). Bei tilt > 0 ist der Schnitt mit
+ * der Bodenebene eine Konik (Ellipse/Parabel), zusätzlich durch die Kappe
+ * begrenzt. Wir samplen die Mantel- und Kappenrand-Kurve numerisch und
+ * berechnen daraus die längste Sehne (Ø max) sowie die Querausdehnung
+ * senkrecht dazu (Ø min).
+ *
+ * Annahme: yaw = 0 (alle Sensoren sind identisch parametriert, nur in Yaw
+ * rotiert — der Footprint ist invariant unter Yaw-Rotation der Apex-Lage).
+ */
+type RadarFootprint = {
+  hasGroundHit: boolean;
+  maxDiameterM: number;
+  minDiameterM: number;
+  groundReachMaxM: number;
+  groundReachMinM: number;
+};
+
+function computeRadarConeGroundFootprint(): RadarFootprint {
+  const empty: RadarFootprint = {
+    hasGroundHit: false,
+    maxDiameterM: 0,
+    minDiameterM: 0,
+    groundReachMaxM: 0,
+    groundReachMinM: 0,
+  };
+  const h = radarHeight;
+  const r0 = radarRadiusM;
+  if (h <= 0) return empty;
+
+  const tiltRad = (radarTiltDeg * Math.PI) / 180;
+  const theta = (RADAR_SPOT_HALF_ANGLE_DEG * Math.PI) / 180;
+  const L = RADAR_SPOT_DISTANCE_M;
+  const cosT = Math.cos(tiltRad);
+  const sinT = Math.sin(tiltRad);
+  const cosTh = Math.cos(theta);
+  const sinTh = Math.sin(theta);
+
+  // Apex S = (0, h, r0), Achse d = (0, -cos T, sin T),
+  // Hilfsbasis e1 = (1,0,0), e2 = (0, sin T, cos T).
+  // Strahlrichtung r̂(α, φ) = cos α · d + sin α · (cos φ · e1 + sin φ · e2).
+  const points: Array<[number, number]> = [];
+
+  // (1) Mantel (α = θ): φ über vollen Kreis sampeln, jeden mit Boden schneiden.
+  const phiSteps = 360;
+  for (let i = 0; i < phiSteps; i++) {
+    const phi = (i / phiSteps) * 2 * Math.PI;
+    const cphi = Math.cos(phi);
+    const sphi = Math.sin(phi);
+    const ry = -cosTh * cosT + sinTh * sphi * sinT;
+    if (ry >= -1e-9) continue; // Strahl zeigt nicht nach unten → kein Bodenhit
+    const t = -h / ry;
+    if (t > L) continue; // verlässt Kegel via Kappe vor dem Boden
+    const rx = sinTh * cphi;
+    const rz = cosTh * sinT + sinTh * sphi * cosT;
+    points.push([t * rx, r0 + t * rz]);
+  }
+
+  // (2) Kappenrand schneidet Boden: |P-S| = L, α ∈ (0, θ]. Aus P_y = 0 folgt
+  // sin φ = (cos α · cos T − h/L) / (sin α · sin T) (sofern Nenner ≠ 0).
+  const alphaSteps = 90;
+  for (let j = 1; j <= alphaSteps; j++) {
+    const alpha = (j / alphaSteps) * theta;
+    const cA = Math.cos(alpha);
+    const sA = Math.sin(alpha);
+    const denom = sA * sinT;
+    if (Math.abs(denom) < 1e-9) continue;
+    const sinPhi = (cA * cosT - h / L) / denom;
+    if (sinPhi > 1 + 1e-9 || sinPhi < -1 - 1e-9) continue;
+    const sp = Math.max(-1, Math.min(1, sinPhi));
+    const phi1 = Math.asin(sp);
+    const phi2 = Math.PI - phi1;
+    for (const phi of [phi1, phi2]) {
+      const cphi = Math.cos(phi);
+      const sphi = Math.sin(phi);
+      const rx = sA * cphi;
+      const rz = cA * sinT + sA * sphi * cosT;
+      points.push([L * rx, r0 + L * rz]);
+    }
+  }
+
+  if (points.length < 2) return empty;
+
+  // Ø max: längste paarweise Distanz (O(N²), N ≈ 540 → ok, läuft nur on-change).
+  let maxD2 = 0;
+  let i1 = 0;
+  let i2 = 0;
+  for (let i = 0; i < points.length; i++) {
+    for (let j = i + 1; j < points.length; j++) {
+      const dx = points[i][0] - points[j][0];
+      const dz = points[i][1] - points[j][1];
+      const d2 = dx * dx + dz * dz;
+      if (d2 > maxD2) {
+        maxD2 = d2;
+        i1 = i;
+        i2 = j;
+      }
+    }
+  }
+  const major = Math.sqrt(maxD2);
+
+  // Ø min: Spannweite senkrecht zur Major-Achse.
+  const dx = points[i2][0] - points[i1][0];
+  const dz = points[i2][1] - points[i1][1];
+  const len = Math.sqrt(dx * dx + dz * dz) || 1;
+  const ux = -dz / len;
+  const uz = dx / len;
+  let pMin = Infinity;
+  let pMax = -Infinity;
+  for (const p of points) {
+    const proj = p[0] * ux + p[1] * uz;
+    if (proj < pMin) pMin = proj;
+    if (proj > pMax) pMax = proj;
+  }
+  const minor = pMax - pMin;
+
+  // Reichweite vom Sensorfußpunkt (0, r0) auf dem Boden.
+  let reachMin = Infinity;
+  let reachMax = -Infinity;
+  for (const p of points) {
+    const ddx = p[0];
+    const ddz = p[1] - r0;
+    const d = Math.sqrt(ddx * ddx + ddz * ddz);
+    if (d < reachMin) reachMin = d;
+    if (d > reachMax) reachMax = d;
+  }
+
+  return {
+    hasGroundHit: true,
+    maxDiameterM: major,
+    minDiameterM: minor,
+    groundReachMaxM: reachMax,
+    groundReachMinM: reachMin,
+  };
+}
+
+const radarFootprintInfo = {
+  footprintMaxM: 0,
+  footprintMinM: 0,
+  reachMaxM: 0,
+  reachMinM: 0,
+};
+
+function updateRadarFootprintInfo() {
+  const fp = computeRadarConeGroundFootprint();
+  const round3 = (v: number) => Math.round(v * 1000) / 1000;
+  radarFootprintInfo.footprintMaxM = round3(fp.maxDiameterM);
+  radarFootprintInfo.footprintMinM = round3(fp.minDiameterM);
+  radarFootprintInfo.reachMaxM = round3(fp.groundReachMaxM);
+  radarFootprintInfo.reachMinM = round3(fp.groundReachMinM);
+}
+
 /** Kegelachse (vom Sensor in den Kegel) wie in `createRadarSensors`: R_y(yaw) · R_x(-tilt) · (0,-1,0). */
 function radarConeAxisFromTiltYawDeg(tiltDeg: number, yawDeg: number) {
   const T = getThree();
@@ -488,6 +643,30 @@ class Pixels3dAframeHook extends Hook {
       radarNeigungCtrl.disable(true);
     }
     folder.open();
+
+    updateRadarFootprintInfo();
+    const infoFolder = gui.addFolder("Info (Boden-Footprint)");
+    infoFolder
+      .add(radarFootprintInfo, "footprintMaxM")
+      .name("Ø max (m)")
+      .listen()
+      .disable();
+    infoFolder
+      .add(radarFootprintInfo, "footprintMinM")
+      .name("Ø min (m)")
+      .listen()
+      .disable();
+    infoFolder
+      .add(radarFootprintInfo, "reachMaxM")
+      .name("Reichweite max (m)")
+      .listen()
+      .disable();
+    infoFolder
+      .add(radarFootprintInfo, "reachMinM")
+      .name("Reichweite min (m)")
+      .listen()
+      .disable();
+    infoFolder.open();
 
     const humansParams = {
       humanCount,
@@ -1197,6 +1376,7 @@ class Pixels3dAframeHook extends Hook {
       if (nc.object) nc.object.radarTiltDeg = radarTiltDeg;
       nc.updateDisplay?.();
     }
+    updateRadarFootprintInfo();
   }
 }
 
