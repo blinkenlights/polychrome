@@ -36,6 +36,7 @@ defmodule Octopus.Radar.Command do
     [
       "AT+STOP",
       "AT+DEBUG=3",
+      "AT+DPKTH=#{Keyword.fetch!(config, :sensitivity)}",
       "AT+HEIGHTD=#{Keyword.fetch!(config, :height_cm)}",
       "AT+RANGE=#{Keyword.fetch!(config, :range_cm)}",
       "AT+XPosi=#{Keyword.fetch!(config, :x_pos_cm)}",

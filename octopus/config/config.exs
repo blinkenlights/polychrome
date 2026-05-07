@@ -56,6 +56,11 @@ config :octopus, Octopus.Radar,
     # specific HLK-LD6001A-60G unit only responds at 115_200. Override per
     # sensor in the :sensors list above if a unit has been reflashed.
     baud: 115_200,
+    # Long-distance detection sensitivity (AT+DPKTH, range 1..9, default 4).
+    # The manual is counter-intuitive: a HIGHER number means LOWER sensitivity,
+    # i.e. fewer phantom targets. Raise this if the device reports too many
+    # tracks for one person; lower it if it misses real targets.
+    sensitivity: 4,
     # Device geometry in centimeters (manual §9.3)
     height_cm: 300,
     range_cm: 450,
@@ -63,7 +68,9 @@ config :octopus, Octopus.Radar,
     x_neg_cm: -450,
     y_pos_cm: 450,
     y_neg_cm: -450,
-    # Disappearance timing in 100 ms units (manual §9.4)
+    # Disappearance timing in 100 ms units (manual §9.4). The defaults are
+    # quite permissive — a track stays alive for up to 11 s after the radar
+    # last saw it. If you want ghost tracks dropped faster, lower these.
     moving_decisecs: 110,
     static_decisecs: 100,
     exit_decisecs: 5

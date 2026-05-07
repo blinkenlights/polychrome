@@ -285,6 +285,22 @@ defmodule Octopus.Radar.Sensor do
           if(track_count > 0, do: " (target IDs: #{ids})", else: "")
       )
 
+      # Diagnostic: print the per-record fields at offset 0 and offset 4 so we
+      # can confirm field-order interpretation against actual hardware.
+      # Per both the HLK-LD6001A V1.1 manual §7.2.1 and the MS72SF1 V1.0
+      # datasheet §8.2, offset 0 is "reserved" and offset 4 is the track ID.
+      # If the offset-0 column is always 0 in real captures, the docs (and our
+      # parser) are correct. The nitram509/ld6001-ms72sf1-connector JS parser
+      # has these reversed.
+      if track_count > 0 do
+        rows =
+          Enum.map_join(frame.tracks, ", ", fn t ->
+            "{off0=#{t.reserved}, off4=#{t.id}}"
+          end)
+
+        log(state, :debug, "track field diagnostic: #{rows}")
+      end
+
       %State{state | last_track_count: track_count}
     else
       state
