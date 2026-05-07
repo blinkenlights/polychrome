@@ -5,6 +5,8 @@ defmodule OctopusWeb.Sim3dAframeLive do
   alias Octopus.Protobuf.{FirmwareConfig, RGBFrame}
   alias Octopus.Params.Sim3d, as: Params
   alias Octopus.Installation
+  alias Octopus.Radar
+  alias Octopus.Radar.Frame
 
   @default_config %FirmwareConfig{
     easing_mode: :LINEAR,
@@ -17,6 +19,7 @@ defmodule OctopusWeb.Sim3dAframeLive do
     socket =
       if connected?(socket) do
         Mixer.subscribe()
+        Radar.subscribe()
 
         frame = %RGBFrame{
           data: List.duplicate([0, 0, 0], 80 * 8) |> IO.iodata_to_binary()
@@ -103,6 +106,19 @@ defmodule OctopusWeb.Sim3dAframeLive do
     {:noreply, socket}
   end
 
+  def handle_info({:radar_frame, device_id, %Frame{} = frame}, socket) do
+    payload = %{
+      device_id: device_id,
+      frame_number: frame.frame_number,
+      tracks:
+        Enum.map(frame.tracks, fn t ->
+          %{id: t.id, x: t.x, y: t.y, z: t.z, vx: t.vx, vy: t.vy, vz: t.vz}
+        end)
+    }
+
+    {:noreply, push_radar_frame(socket, payload)}
+  end
+
   defp push_frame(socket, frame) do
     push_event(socket, "frame:#{@id_prefix}-#{socket.id}", %{frame: frame})
   end
@@ -113,5 +129,9 @@ defmodule OctopusWeb.Sim3dAframeLive do
 
   defp push_param(socket, param) do
     push_event(socket, "param:#{@id_prefix}-#{socket.id}", %{param: param})
+  end
+
+  defp push_radar_frame(socket, payload) do
+    push_event(socket, "radar_frame:#{@id_prefix}-#{socket.id}", payload)
   end
 end

@@ -7,6 +7,23 @@
  */
 
 export type HumanMode = "wander" | "approach";
+export type HumanSource = "mock" | "radar";
+
+/**
+ * Externer Track aus dem Radar-Backend (`Octopus.Radar.Track`):
+ *   x = links/rechts (m), y = vorne/hinten (m), z = Höhe (m),
+ *   vx/vy/vz = Geschwindigkeit (m/s).
+ * IDs sind uint32 vom Sensor; werden hier als Number rohweg übernommen.
+ */
+export type RadarTrack = {
+  id: number;
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+};
 
 export type Human = {
   id: string;
@@ -76,6 +93,7 @@ export type HumanWorldOptions = {
   mode?: HumanMode;
   paused?: boolean;
   panelDiameter?: number;
+  source?: HumanSource;
 };
 
 /** Stable, light-touch hash → 0..1, used for deterministic per-id colors. */
@@ -128,21 +146,40 @@ export class HumanWorld {
   private paused: boolean;
   private innerRadiusM: number = INNER_RADIUS_M;
   private outerRadiusM: number = OUTER_RADIUS_M_FALLBACK;
+  private source: HumanSource = "mock";
 
   constructor(opts: HumanWorldOptions = {}) {
     this.targetCount = Math.max(0, Math.floor(opts.count ?? DEFAULT_COUNT));
     this.speedMult = Math.max(0, opts.speedMult ?? DEFAULT_SPEED_MULT);
     this.mode = opts.mode ?? DEFAULT_MODE;
     this.paused = !!opts.paused;
+    this.source = opts.source ?? "mock";
     if (typeof opts.panelDiameter === "number") {
       this.setBounds(opts.panelDiameter);
     }
-    this.maintainPopulation();
+    if (this.source === "mock") this.maintainPopulation();
   }
 
   setCount(n: number) {
     this.targetCount = Math.max(0, Math.floor(n));
-    this.maintainPopulation();
+    if (this.source === "mock") this.maintainPopulation();
+  }
+
+  /**
+   * Wechsel zwischen Mock-Simulation und Radar-Daten. Beim Wechsel wird der
+   * gesamte Population-State verworfen — die Modi haben unterschiedliche
+   * id-Schemata (`human_N` vs. `radar_<uint32>`) und unterschiedliche
+   * Geometrie-Annahmen, also nicht versuchen zu mergen.
+   */
+  setSource(source: HumanSource) {
+    if (this.source === source) return;
+    this.source = source;
+    this.humans.clear();
+    if (source === "mock") this.maintainPopulation();
+  }
+
+  getSource(): HumanSource {
+    return this.source;
   }
 
   setSpeed(mult: number) {
@@ -176,11 +213,69 @@ export class HumanWorld {
   /** Advance the simulation by `dt` seconds. */
   tick(dt: number) {
     if (this.paused || dt <= 0) return;
+    // Im Radar-Modus kommt die Position von außen (siehe `setRadarTracks`);
+    // die Mock-Simulation läuft dann gar nicht.
+    if (this.source === "radar") return;
     const now = Date.now();
     for (const h of this.humans.values()) {
       this.updateHuman(h, dt, now);
     }
     this.maintainPopulation();
+  }
+
+  /**
+   * Externe Tracks vom Radar-Backend einspeisen. Ersetzt die `humans`-Map
+   * komplett bei jedem Frame — Tracks die in dieser Liste fehlen sind raus.
+   * Heading wird aus dem Velocity-Vektor abgeleitet (sofern Bewegung > 5 cm/s,
+   * sonst behält ein bekannter Track sein letztes Heading).
+   *
+   * Koordinaten-Mapping: Radar-`x` → Welt-X, Radar-`y` → Welt-Z.
+   * Annahme: ein zentral montierter Sensor mit Yaw 0; mehrere Sensoren mit
+   * Pose-Mapping kommen später.
+   */
+  setRadarTracks(tracks: RadarTrack[]) {
+    if (this.source !== "radar") return;
+    const now = Date.now();
+    const seen = new Set<string>();
+
+    for (const t of tracks) {
+      const id = `radar_${t.id}`;
+      seen.add(id);
+      const moving = Math.hypot(t.vx, t.vy) > 0.05;
+      const existing = this.humans.get(id);
+      const heading = moving
+        ? Math.atan2(t.vx, t.vy)
+        : existing?.heading ?? 0;
+
+      if (existing) {
+        existing.prevPos.x = existing.pos.x;
+        existing.prevPos.z = existing.pos.z;
+        existing.pos.x = t.x;
+        existing.pos.z = t.y;
+        existing.heading = heading;
+        existing.vel.x = t.vx;
+        existing.vel.z = t.vy;
+      } else {
+        this.humans.set(id, {
+          id,
+          pos: { x: t.x, z: t.y },
+          prevPos: { x: t.x, z: t.y },
+          heading,
+          speed: Math.hypot(t.vx, t.vy),
+          height: HUMAN_HEIGHT_M,
+          color: colorForId(id),
+          mode: "wander",
+          waypoint: { x: t.x, z: t.y },
+          idleUntilMs: 0,
+          spawnedAtMs: now,
+          vel: { x: t.vx, z: t.vy },
+        });
+      }
+    }
+
+    for (const id of this.humans.keys()) {
+      if (!seen.has(id)) this.humans.delete(id);
+    }
   }
 
   private updateHuman(h: Human, dt: number, now: number) {

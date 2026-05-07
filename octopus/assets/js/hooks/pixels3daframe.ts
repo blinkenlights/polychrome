@@ -6,8 +6,8 @@ import AFRAME from "aframe";
 import "aframe-orbit-controls";
 import { GUI } from "three/addons/libs/lil-gui.module.min.js";
 import { Frame, RGB, rgbPixelsFromFrame } from "./shared/frame";
-import { registerHumanComponents } from "./humanComponents";
-import type { HumanMode } from "./humanWorld";
+import { getHumanWorld, registerHumanComponents } from "./humanComponents";
+import type { HumanMode, HumanSource, RadarTrack } from "./humanWorld";
 
 /** A-Frame ships its own THREE (~r173). Never mix the npm `three` package here — duplicate runtime breaks `setObject3D` / materials. */
 function getThree() {
@@ -235,6 +235,8 @@ let humanCount = 5;
 let humanSpeed = 1.0;
 let humanPaused = false;
 let humanMode: HumanMode = "wander";
+/** Datenquelle der Humans: lokales Mock-Modell oder echte Radar-Tracks vom Backend. */
+let humanSource: HumanSource = "mock";
 
 /** Sync `humans-root` schema attributes with the module-level state. */
 function applyHumansAttributes() {
@@ -246,6 +248,7 @@ function applyHumansAttributes() {
     paused: humanPaused,
     mode: humanMode,
     panelDiameter,
+    source: humanSource,
   });
 }
 
@@ -468,6 +471,16 @@ class Pixels3dAframeHook extends Hook {
     this.handleEvent(`param:${id}`, ({ param: param }: Param) => {
       this.handleParams(param)
     });
+    this.handleEvent(
+      `radar_frame:${id}`,
+      (payload: { device_id: number; frame_number: number; tracks: RadarTrack[] }) => {
+        // Im Mock-Modus ignorieren — wir wollen das Modell nicht durcheinanderbringen.
+        if (humanSource !== "radar") return;
+        const world = getHumanWorld();
+        if (!world) return;
+        world.setRadarTracks(Array.isArray(payload?.tracks) ? payload.tracks : []);
+      }
+    );
     const events = ['frame:pixels-*', `frame:${id}`];
     events.forEach((event) => {
       this.handleEvent(event, ({ frame }: { frame: Frame }) => {
@@ -669,6 +682,7 @@ class Pixels3dAframeHook extends Hook {
     infoFolder.open();
 
     const humansParams = {
+      humanSource,
       humanCount,
       humanSpeed,
       humanPaused,
@@ -676,8 +690,16 @@ class Pixels3dAframeHook extends Hook {
     };
     const humansFolder = gui.addFolder("Humans");
     humansFolder
+      .add(humansParams, "humanSource", { Mock: "mock", "Radar (live)": "radar" })
+      .name("Quelle")
+      .onChange((v: string) => {
+        humanSource = v === "radar" ? "radar" : "mock";
+        humansParams.humanSource = humanSource;
+        applyHumansAttributes();
+      });
+    humansFolder
       .add(humansParams, "humanCount", 0, 10, 1)
-      .name("Anzahl")
+      .name("Anzahl (nur Mock)")
       .onChange((v: number) => {
         humanCount = Math.max(0, Math.round(Number(v)));
         humansParams.humanCount = humanCount;
@@ -685,7 +707,7 @@ class Pixels3dAframeHook extends Hook {
       });
     humansFolder
       .add(humansParams, "humanSpeed", 0, 2, 0.05)
-      .name("Geschwindigkeit")
+      .name("Geschwindigkeit (nur Mock)")
       .onChange((v: number) => {
         humanSpeed = Math.max(0, Number(v));
         humansParams.humanSpeed = humanSpeed;
@@ -693,7 +715,7 @@ class Pixels3dAframeHook extends Hook {
       });
     humansFolder
       .add(humansParams, "humanPaused")
-      .name("Pause")
+      .name("Pause (nur Mock)")
       .onChange((v: boolean) => {
         humanPaused = !!v;
         humansParams.humanPaused = humanPaused;
@@ -701,7 +723,7 @@ class Pixels3dAframeHook extends Hook {
       });
     humansFolder
       .add(humansParams, "humanMode", ["wander", "approach"])
-      .name("Modus")
+      .name("Modus (nur Mock)")
       .onChange((v: HumanMode) => {
         humanMode = v === "approach" ? "approach" : "wander";
         humansParams.humanMode = humanMode;
@@ -1076,6 +1098,7 @@ class Pixels3dAframeHook extends Hook {
       paused: humanPaused,
       mode: humanMode,
       panelDiameter,
+      source: humanSource,
     } as any);
     return root;
   }

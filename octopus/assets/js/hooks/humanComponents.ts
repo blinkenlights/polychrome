@@ -12,7 +12,7 @@
  */
 
 import AFRAME from "aframe";
-import { HumanWorld, Human, colorForId } from "./humanWorld";
+import { HumanWorld, Human, HumanSource, colorForId } from "./humanWorld";
 
 function getThree() {
   return (AFRAME as any).THREE;
@@ -37,6 +37,7 @@ export function registerHumanComponents() {
       paused: { type: "boolean", default: false },
       mode: { type: "string", default: "wander" },
       panelDiameter: { type: "number", default: 18 },
+      source: { type: "string", default: "mock" },
     },
     init: function (this: any) {
       this.knownIds = new Set<string>();
@@ -46,6 +47,7 @@ export function registerHumanComponents() {
         paused: boolean;
         mode: string;
         panelDiameter: number;
+        source: string;
       };
       const world = new HumanWorld({
         count: data.count,
@@ -53,6 +55,7 @@ export function registerHumanComponents() {
         paused: data.paused,
         mode: data.mode === "approach" ? "approach" : "wander",
         panelDiameter: data.panelDiameter,
+        source: parseSource(data.source),
       });
       humanWorldSingleton = world;
     },
@@ -63,9 +66,11 @@ export function registerHumanComponents() {
         paused: boolean;
         mode: string;
         panelDiameter: number;
+        source: string;
       };
       const w = humanWorldSingleton;
       if (!w) return;
+      w.setSource(parseSource(data.source));
       w.setBounds(data.panelDiameter);
       w.setCount(data.count);
       w.setSpeed(data.speed);
@@ -227,6 +232,10 @@ export function registerHumanComponents() {
       this.el.removeObject3D("mesh");
     },
   });
+}
+
+function parseSource(s: string): HumanSource {
+  return s === "radar" ? "radar" : "mock";
 }
 
 function buildMarkerData(human: Human): string {
