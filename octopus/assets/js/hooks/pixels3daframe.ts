@@ -1,5 +1,9 @@
 import { Hook, makeHook } from "phoenix_typed_hook";
 import AFRAME from "aframe";
+// `aframe-orbit-controls` greift auf die Globals `AFRAME` und `THREE` zu, die
+// A-Frame beim Laden auf `window` setzt — Import-Reihenfolge muss daher AFRAME
+// → orbit-controls bleiben.
+import "aframe-orbit-controls";
 import { GUI } from "three/addons/libs/lil-gui.module.min.js";
 import { Frame, RGB, rgbPixelsFromFrame } from "./shared/frame";
 import { registerHumanComponents } from "./humanComponents";
@@ -146,7 +150,7 @@ const textures: any[] = [];
 /** Radar-Sensoren: Abstand zum Zentrum (m) per lil-gui; Kegel-Visualisierung; Höhe per radarHeight */
 let radarHeight = 3.5;
 const RADAR_RADIUS_MIN_M = 0;
-const RADAR_RADIUS_MAX_M = 2;
+const RADAR_RADIUS_MAX_M = 8;
 /** Horizontaler Abstand der Boxen von der Y-Achse (Kreisradius), Default 50 cm */
 let radarRadiusM = 0.5;
 const RADAR_BOX = 0.1;
@@ -183,6 +187,49 @@ let radarLilGui: GUI | null = null;
 /** lil-gui Controller für „Neigung (°)“ — zum Sperren bei Auto-Ausrichtung */
 let radarNeigungCtrl: { disable: (v: boolean) => void } | null = null;
 
+/**
+ * Orbit-Cam: Kamera kreist per Maus um `cameraTarget` (Linksklick = Rotate,
+ * Rechtsklick = Pan, Mausrad = Zoom). Werte hier sind Defaults; lil-gui
+ * (Kamera-Folder) schreibt direkt in diese Variablen und ruft
+ * `applyCameraAttributes()` auf.
+ */
+let cameraFov = 60;
+let cameraTargetY = 1.5;
+let cameraMinDistance = 0.5;
+let cameraMaxDistance = 60;
+let cameraDamping = 0.1;
+let cameraAutoRotate = false;
+let cameraAutoRotateSpeed = 0.6;
+let cameraEnablePan = true;
+let cameraInitialPos: [number, number, number] = [0, 4, 14];
+
+function applyCameraAttributes() {
+  const cam = document.querySelector("#cameraRig") as any;
+  if (!cam) return;
+  cam.setAttribute("camera", `fov: ${cameraFov}; near: 0.05; far: 2000`);
+  cam.setAttribute("orbit-controls", {
+    target: { x: 0, y: cameraTargetY, z: 0 },
+    enableDamping: true,
+    dampingFactor: cameraDamping,
+    rotateSpeed: 0.25,
+    zoomSpeed: 0.6,
+    panSpeed: 0.6,
+    enablePan: cameraEnablePan,
+    screenSpacePanning: true,
+    minDistance: cameraMinDistance,
+    maxDistance: cameraMaxDistance,
+    minPolarAngle: 1,
+    maxPolarAngle: 89,
+    autoRotate: cameraAutoRotate,
+    autoRotateSpeed: cameraAutoRotateSpeed,
+    initialPosition: {
+      x: cameraInitialPos[0],
+      y: cameraInitialPos[1],
+      z: cameraInitialPos[2],
+    },
+  });
+}
+
 /** Humans-Mock: lokaler Avatar-Controller in `humanComponents.ts`/`humanWorld.ts`. */
 let humanCount = 5;
 let humanSpeed = 1.0;
@@ -200,6 +247,161 @@ function applyHumansAttributes() {
     mode: humanMode,
     panelDiameter,
   });
+}
+
+/**
+ * Footprint des sphärisch gekappten Radar-Kegels auf der Bodenebene (y = 0).
+ *
+ * Der `radar-cone-viz`-Kegel hat Apex am Sensor, Halbwinkel θ und Slant-Länge L
+ * (= sphärische Kappe statt flacher Boden). Bei tilt > 0 ist der Schnitt mit
+ * der Bodenebene eine Konik (Ellipse/Parabel), zusätzlich durch die Kappe
+ * begrenzt. Wir samplen die Mantel- und Kappenrand-Kurve numerisch und
+ * berechnen daraus die längste Sehne (Ø max) sowie die Querausdehnung
+ * senkrecht dazu (Ø min).
+ *
+ * Annahme: yaw = 0 (alle Sensoren sind identisch parametriert, nur in Yaw
+ * rotiert — der Footprint ist invariant unter Yaw-Rotation der Apex-Lage).
+ */
+type RadarFootprint = {
+  hasGroundHit: boolean;
+  maxDiameterM: number;
+  minDiameterM: number;
+  groundReachMaxM: number;
+  groundReachMinM: number;
+};
+
+function computeRadarConeGroundFootprint(): RadarFootprint {
+  const empty: RadarFootprint = {
+    hasGroundHit: false,
+    maxDiameterM: 0,
+    minDiameterM: 0,
+    groundReachMaxM: 0,
+    groundReachMinM: 0,
+  };
+  const h = radarHeight;
+  const r0 = radarRadiusM;
+  if (h <= 0) return empty;
+
+  const tiltRad = (radarTiltDeg * Math.PI) / 180;
+  const theta = (RADAR_SPOT_HALF_ANGLE_DEG * Math.PI) / 180;
+  const L = RADAR_SPOT_DISTANCE_M;
+  const cosT = Math.cos(tiltRad);
+  const sinT = Math.sin(tiltRad);
+  const cosTh = Math.cos(theta);
+  const sinTh = Math.sin(theta);
+
+  // Apex S = (0, h, r0), Achse d = (0, -cos T, sin T),
+  // Hilfsbasis e1 = (1,0,0), e2 = (0, sin T, cos T).
+  // Strahlrichtung r̂(α, φ) = cos α · d + sin α · (cos φ · e1 + sin φ · e2).
+  const points: Array<[number, number]> = [];
+
+  // (1) Mantel (α = θ): φ über vollen Kreis sampeln, jeden mit Boden schneiden.
+  const phiSteps = 360;
+  for (let i = 0; i < phiSteps; i++) {
+    const phi = (i / phiSteps) * 2 * Math.PI;
+    const cphi = Math.cos(phi);
+    const sphi = Math.sin(phi);
+    const ry = -cosTh * cosT + sinTh * sphi * sinT;
+    if (ry >= -1e-9) continue; // Strahl zeigt nicht nach unten → kein Bodenhit
+    const t = -h / ry;
+    if (t > L) continue; // verlässt Kegel via Kappe vor dem Boden
+    const rx = sinTh * cphi;
+    const rz = cosTh * sinT + sinTh * sphi * cosT;
+    points.push([t * rx, r0 + t * rz]);
+  }
+
+  // (2) Kappenrand schneidet Boden: |P-S| = L, α ∈ (0, θ]. Aus P_y = 0 folgt
+  // sin φ = (cos α · cos T − h/L) / (sin α · sin T) (sofern Nenner ≠ 0).
+  const alphaSteps = 90;
+  for (let j = 1; j <= alphaSteps; j++) {
+    const alpha = (j / alphaSteps) * theta;
+    const cA = Math.cos(alpha);
+    const sA = Math.sin(alpha);
+    const denom = sA * sinT;
+    if (Math.abs(denom) < 1e-9) continue;
+    const sinPhi = (cA * cosT - h / L) / denom;
+    if (sinPhi > 1 + 1e-9 || sinPhi < -1 - 1e-9) continue;
+    const sp = Math.max(-1, Math.min(1, sinPhi));
+    const phi1 = Math.asin(sp);
+    const phi2 = Math.PI - phi1;
+    for (const phi of [phi1, phi2]) {
+      const cphi = Math.cos(phi);
+      const sphi = Math.sin(phi);
+      const rx = sA * cphi;
+      const rz = cA * sinT + sA * sphi * cosT;
+      points.push([L * rx, r0 + L * rz]);
+    }
+  }
+
+  if (points.length < 2) return empty;
+
+  // Ø max: längste paarweise Distanz (O(N²), N ≈ 540 → ok, läuft nur on-change).
+  let maxD2 = 0;
+  let i1 = 0;
+  let i2 = 0;
+  for (let i = 0; i < points.length; i++) {
+    for (let j = i + 1; j < points.length; j++) {
+      const dx = points[i][0] - points[j][0];
+      const dz = points[i][1] - points[j][1];
+      const d2 = dx * dx + dz * dz;
+      if (d2 > maxD2) {
+        maxD2 = d2;
+        i1 = i;
+        i2 = j;
+      }
+    }
+  }
+  const major = Math.sqrt(maxD2);
+
+  // Ø min: Spannweite senkrecht zur Major-Achse.
+  const dx = points[i2][0] - points[i1][0];
+  const dz = points[i2][1] - points[i1][1];
+  const len = Math.sqrt(dx * dx + dz * dz) || 1;
+  const ux = -dz / len;
+  const uz = dx / len;
+  let pMin = Infinity;
+  let pMax = -Infinity;
+  for (const p of points) {
+    const proj = p[0] * ux + p[1] * uz;
+    if (proj < pMin) pMin = proj;
+    if (proj > pMax) pMax = proj;
+  }
+  const minor = pMax - pMin;
+
+  // Reichweite vom Sensorfußpunkt (0, r0) auf dem Boden.
+  let reachMin = Infinity;
+  let reachMax = -Infinity;
+  for (const p of points) {
+    const ddx = p[0];
+    const ddz = p[1] - r0;
+    const d = Math.sqrt(ddx * ddx + ddz * ddz);
+    if (d < reachMin) reachMin = d;
+    if (d > reachMax) reachMax = d;
+  }
+
+  return {
+    hasGroundHit: true,
+    maxDiameterM: major,
+    minDiameterM: minor,
+    groundReachMaxM: reachMax,
+    groundReachMinM: reachMin,
+  };
+}
+
+const radarFootprintInfo = {
+  footprintMaxM: 0,
+  footprintMinM: 0,
+  reachMaxM: 0,
+  reachMinM: 0,
+};
+
+function updateRadarFootprintInfo() {
+  const fp = computeRadarConeGroundFootprint();
+  const round3 = (v: number) => Math.round(v * 1000) / 1000;
+  radarFootprintInfo.footprintMaxM = round3(fp.maxDiameterM);
+  radarFootprintInfo.footprintMinM = round3(fp.minDiameterM);
+  radarFootprintInfo.reachMaxM = round3(fp.groundReachMaxM);
+  radarFootprintInfo.reachMinM = round3(fp.groundReachMinM);
 }
 
 /** Kegelachse (vom Sensor in den Kegel) wie in `createRadarSensors`: R_y(yaw) · R_x(-tilt) · (0,-1,0). */
@@ -430,7 +632,7 @@ class Pixels3dAframeHook extends Hook {
         this.setupRadarGui();
       });
     radarNeigungCtrl = folder
-      .add(params, "radarTiltDeg", 5, 120, 1)
+      .add(params, "radarTiltDeg", 0, 120, 1)
       .name("Neigung (°)")
       .onChange((v: number) => {
         if (radarTiltAutoAlign) return;
@@ -441,6 +643,30 @@ class Pixels3dAframeHook extends Hook {
       radarNeigungCtrl.disable(true);
     }
     folder.open();
+
+    updateRadarFootprintInfo();
+    const infoFolder = gui.addFolder("Info (Boden-Footprint)");
+    infoFolder
+      .add(radarFootprintInfo, "footprintMaxM")
+      .name("Ø max (m)")
+      .listen()
+      .disable();
+    infoFolder
+      .add(radarFootprintInfo, "footprintMinM")
+      .name("Ø min (m)")
+      .listen()
+      .disable();
+    infoFolder
+      .add(radarFootprintInfo, "reachMaxM")
+      .name("Reichweite max (m)")
+      .listen()
+      .disable();
+    infoFolder
+      .add(radarFootprintInfo, "reachMinM")
+      .name("Reichweite min (m)")
+      .listen()
+      .disable();
+    infoFolder.open();
 
     const humansParams = {
       humanCount,
@@ -482,6 +708,90 @@ class Pixels3dAframeHook extends Hook {
         applyHumansAttributes();
       });
     humansFolder.open();
+
+    const camParams = {
+      cameraFov,
+      cameraTargetY,
+      cameraMinDistance,
+      cameraMaxDistance,
+      cameraDamping,
+      cameraAutoRotate,
+      cameraAutoRotateSpeed,
+      cameraEnablePan,
+      resetView: () => this.resetCameraView(),
+    };
+    const camFolder = gui.addFolder("Kamera");
+    camFolder
+      .add(camParams, "cameraFov", 20, 110, 1)
+      .name("FOV (°)")
+      .onChange((v: number) => {
+        cameraFov = v;
+        applyCameraAttributes();
+      });
+    camFolder
+      .add(camParams, "cameraTargetY", 0, 6, 0.05)
+      .name("Ziel-Höhe (m)")
+      .onChange((v: number) => {
+        cameraTargetY = v;
+        applyCameraAttributes();
+      });
+    camFolder
+      .add(camParams, "cameraMinDistance", 0.1, 5, 0.1)
+      .name("Min Zoom")
+      .onChange((v: number) => {
+        cameraMinDistance = v;
+        applyCameraAttributes();
+      });
+    camFolder
+      .add(camParams, "cameraMaxDistance", 5, 200, 1)
+      .name("Max Zoom")
+      .onChange((v: number) => {
+        cameraMaxDistance = v;
+        applyCameraAttributes();
+      });
+    camFolder
+      .add(camParams, "cameraDamping", 0, 0.4, 0.01)
+      .name("Damping")
+      .onChange((v: number) => {
+        cameraDamping = v;
+        applyCameraAttributes();
+      });
+    camFolder
+      .add(camParams, "cameraEnablePan")
+      .name("Pan (Rechtsklick)")
+      .onChange((v: boolean) => {
+        cameraEnablePan = !!v;
+        applyCameraAttributes();
+      });
+    camFolder
+      .add(camParams, "cameraAutoRotate")
+      .name("Auto-Rotate")
+      .onChange((v: boolean) => {
+        cameraAutoRotate = !!v;
+        applyCameraAttributes();
+      });
+    camFolder
+      .add(camParams, "cameraAutoRotateSpeed", 0, 5, 0.1)
+      .name("Auto-Rotate Speed")
+      .onChange((v: number) => {
+        cameraAutoRotateSpeed = v;
+        applyCameraAttributes();
+      });
+    camFolder.add(camParams, "resetView").name("Ansicht zurücksetzen");
+    camFolder.open();
+  }
+
+  /**
+   * Setzt die Kamera-Position auf den Default zurück. Reicht nicht, einfach
+   * `setAttribute('position', …)` zu rufen — `orbit-controls` hält den
+   * THREE-State intern. Wir entfernen das Component und setzen es neu, dann
+   * greift `initialPosition` wieder.
+   */
+  resetCameraView() {
+    const cam = document.querySelector("#cameraRig") as any;
+    if (!cam) return;
+    cam.removeAttribute("orbit-controls");
+    requestAnimationFrame(() => applyCameraAttributes());
   }
 
   destroyed() {
@@ -490,17 +800,43 @@ class Pixels3dAframeHook extends Hook {
     radarNeigungCtrl = null;
   }
 
+  /**
+   * Orbit-Cam: ein einzelnes Entity trägt sowohl `camera` als auch
+   * `orbit-controls` (das Component verlangt `dependencies: ['camera']` und
+   * greift auf `getObject3D('camera')` desselben Entitys zu — kein Rig).
+   * `look-controls`/`wasd-controls` werden vom Component automatisch
+   * deaktiviert, wenn vorhanden.
+   */
   createCameraRig() {
-    const cameraRig = document.createElement('a-entity');
-    cameraRig.setAttribute('id', 'cameraRig');
-    cameraRig.setAttribute('position', '-2 0 0');
-    cameraRig.setAttribute('rotation', '0 90 0');
-    const camera = document.createElement('a-entity');
-    camera.setAttribute('camera', '');
-    camera.setAttribute('position', '0 1.6 0');
-    camera.setAttribute('look-controls', '');
-    cameraRig.appendChild(camera);
-    return cameraRig;
+    const cam = document.createElement("a-entity");
+    cam.setAttribute("id", "cameraRig");
+    cam.setAttribute("camera", `fov: ${cameraFov}; near: 0.05; far: 2000`);
+    // Wichtig: Entity bleibt am Origin. `orbit-controls` schreibt die
+    // gewünschte Eye-Position in `getObject3D('camera').position` (Local
+    // gegenüber diesem Entity). Eine zusätzliche `position` auf dem Entity
+    // würde die Eye-Position verschieben und Target verfälschen.
+    cam.setAttribute("orbit-controls", {
+      target: { x: 0, y: cameraTargetY, z: 0 },
+      enableDamping: true,
+      dampingFactor: cameraDamping,
+      rotateSpeed: 0.25,
+      zoomSpeed: 0.6,
+      panSpeed: 0.6,
+      enablePan: cameraEnablePan,
+      screenSpacePanning: true,
+      minDistance: cameraMinDistance,
+      maxDistance: cameraMaxDistance,
+      minPolarAngle: 1,
+      maxPolarAngle: 89,
+      autoRotate: cameraAutoRotate,
+      autoRotateSpeed: cameraAutoRotateSpeed,
+      initialPosition: {
+        x: cameraInitialPos[0],
+        y: cameraInitialPos[1],
+        z: cameraInitialPos[2],
+      },
+    } as any);
+    return cam;
   }
 
   createAssets() {
@@ -870,9 +1206,27 @@ class Pixels3dAframeHook extends Hook {
         data: { length: number; halfAngleDeg: number };
       }) {
         const T = getThree();
-        const h = this.data.length;
-        const r = Math.tan(T.MathUtils.degToRad(this.data.halfAngleDeg)) * h;
-        const geo = new T.CylinderGeometry(0, r, h, 32, 1, false);
+        // `length` ist jetzt der Radius (Slant-Länge) vom Sensor: alle Punkte des Kegels
+        // liegen ≤ length vom Apex. Statt flacher Basis schließt eine Sphärenkappe
+        // (Kugel um Apex, Radius = length) den Kegel ab → kein gerades Abschneiden.
+        const L = this.data.length;
+        const theta = T.MathUtils.degToRad(this.data.halfAngleDeg);
+        const h = L * Math.cos(theta);
+        const r = L * Math.sin(theta);
+
+        const radialSegs = 32;
+        const phiSegs = 12;
+
+        const coneGeo = new T.CylinderGeometry(0, r, h, radialSegs, 1, true);
+        const capGeo = new T.SphereGeometry(
+          L,
+          radialSegs,
+          phiSegs,
+          0,
+          Math.PI * 2,
+          0,
+          theta
+        );
         const mat = new T.MeshBasicMaterial({
           color: 0x66aaff,
           transparent: true,
@@ -880,15 +1234,22 @@ class Pixels3dAframeHook extends Hook {
           depthWrite: false,
           side: T.DoubleSide,
         });
-        const mesh = new T.Mesh(geo, mat);
         // Spitze (Sensor) am Entity-Ursprung = Mitte der Box; Achse entlang -Y = gleiche Achse
         // wie die 45°-Tilt-Gruppe (kein extra X-Flip — sonst zeigt der Kegel nicht „mit“ der Box).
-        mesh.position.y = -h / 2;
-        this.el.setObject3D('mesh', mesh);
+        const group = new T.Group();
+        const coneMesh = new T.Mesh(coneGeo, mat);
+        coneMesh.position.y = -h / 2;
+        group.add(coneMesh);
+        // Sphäre ist um Apex zentriert; 180°-Rotation um X dreht den Pol auf -Y, Rim landet
+        // dadurch automatisch bei y=-h, Radius=r (= Kegel-Rim).
+        const capMesh = new T.Mesh(capGeo, mat);
+        capMesh.rotation.x = Math.PI;
+        group.add(capMesh);
+        this.el.setObject3D('mesh', group);
 
-        // Zentrumslinie Kegel: von Spitze (0) bis Mitte der Basis (-h), ~2 cm Ø, neon-gelb
+        // Zentrumslinie Kegel: von Spitze (0) bis zum Pol der Kappe (-L), ~2 cm Ø, neon-gelb
         const axisRadiusM = 0.01;
-        const axisGeo = new T.CylinderGeometry(axisRadiusM, axisRadiusM, h, 16, 1, false);
+        const axisGeo = new T.CylinderGeometry(axisRadiusM, axisRadiusM, L, 16, 1, false);
         const axisMat = new T.MeshBasicMaterial({
           color: 0xdfff00,
           depthWrite: false,
@@ -897,7 +1258,7 @@ class Pixels3dAframeHook extends Hook {
           polygonOffsetUnits: -1,
         });
         const axisMesh = new T.Mesh(axisGeo, axisMat);
-        axisMesh.position.y = -h / 2;
+        axisMesh.position.y = -L / 2;
         axisMesh.renderOrder = 1;
         this.el.setObject3D('coneAxis', axisMesh);
       },
@@ -1015,6 +1376,7 @@ class Pixels3dAframeHook extends Hook {
       if (nc.object) nc.object.radarTiltDeg = radarTiltDeg;
       nc.updateDisplay?.();
     }
+    updateRadarFootprintInfo();
   }
 }
 
