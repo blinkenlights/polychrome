@@ -182,6 +182,18 @@ const MAST_DIAMETER_MAX_M = 0.5;
 const BEAM_HEIGHT_M = 0.06;
 const BEAM_WIDTH_M = 0.1;
 
+/** Anlehn-Kegelstumpf auf der Plattform um den Mast: unten breit, oben schmal. Per GUI editierbar. */
+let leanPostBottomR = 0.5;
+let leanPostTopR = 0.1;
+let leanPostHeight = 1.2;
+const LEAN_POST_BASE_Y_M = 0.5;
+const LEAN_POST_BOTTOM_R_MIN_M = 0.1;
+const LEAN_POST_BOTTOM_R_MAX_M = 2.5;
+const LEAN_POST_TOP_R_MIN_M = 0.02;
+const LEAN_POST_TOP_R_MAX_M = 2.5;
+const LEAN_POST_HEIGHT_MIN_M = 0.2;
+const LEAN_POST_HEIGHT_MAX_M = 3.0;
+
 function clampRadarCount(v: number): number {
   const snapped = Math.round(Number(v) / RADAR_COUNT_STEP) * RADAR_COUNT_STEP;
   return Math.min(RADAR_COUNT_MAX, Math.max(RADAR_COUNT_MIN, snapped));
@@ -534,6 +546,9 @@ class Pixels3dAframeHook extends Hook {
     const centralCylinder = this.createCentralCylinder();
     sceneEl.appendChild(centralCylinder);
 
+    const leanPost = this.createLeanPost();
+    sceneEl.appendChild(leanPost);
+
     this.applyRadarMastConstraints();
 
     const radarGround = this.createRadarGroundRings();
@@ -663,6 +678,43 @@ class Pixels3dAframeHook extends Hook {
       radarNeigungCtrl.disable(true);
     }
     folder.open();
+
+    const leanParams = { leanPostBottomR, leanPostTopR, leanPostHeight };
+    const leanFolder = gui.addFolder("Rückenlehne");
+    leanFolder
+      .add(leanParams, "leanPostBottomR", LEAN_POST_BOTTOM_R_MIN_M, LEAN_POST_BOTTOM_R_MAX_M, 0.01)
+      .name("Radius unten (m)")
+      .onChange((v: number) => {
+        leanPostBottomR = Math.min(
+          LEAN_POST_BOTTOM_R_MAX_M,
+          Math.max(LEAN_POST_BOTTOM_R_MIN_M, Number(v))
+        );
+        leanParams.leanPostBottomR = leanPostBottomR;
+        this.updateLeanPost();
+      });
+    leanFolder
+      .add(leanParams, "leanPostTopR", LEAN_POST_TOP_R_MIN_M, LEAN_POST_TOP_R_MAX_M, 0.01)
+      .name("Radius oben (m)")
+      .onChange((v: number) => {
+        leanPostTopR = Math.min(
+          LEAN_POST_TOP_R_MAX_M,
+          Math.max(LEAN_POST_TOP_R_MIN_M, Number(v))
+        );
+        leanParams.leanPostTopR = leanPostTopR;
+        this.updateLeanPost();
+      });
+    leanFolder
+      .add(leanParams, "leanPostHeight", LEAN_POST_HEIGHT_MIN_M, LEAN_POST_HEIGHT_MAX_M, 0.01)
+      .name("Höhe (m)")
+      .onChange((v: number) => {
+        leanPostHeight = Math.min(
+          LEAN_POST_HEIGHT_MAX_M,
+          Math.max(LEAN_POST_HEIGHT_MIN_M, Number(v))
+        );
+        leanParams.leanPostHeight = leanPostHeight;
+        this.updateLeanPost();
+      });
+    leanFolder.open();
 
     updateRadarFootprintInfo();
     const infoFolder = gui.addFolder("Info (Boden-Footprint)");
@@ -1115,6 +1167,34 @@ class Pixels3dAframeHook extends Hook {
     cyl.setAttribute('position', '0 0.25 0');
     cyl.setAttribute('color', '#8B4513');
     return cyl;
+  }
+
+  /**
+   * Anlehn-Kegelstumpf um den Mast: `a-cylinder` exponiert nur einen Radius,
+   * deshalb `geometry: cone` mit `radiusBottom` ≠ `radiusTop`. Sitzt mittig
+   * auf der Plattform (Top y=0.5), Mast wächst durch das hohle Innere weiter
+   * nach oben.
+   */
+  createLeanPost() {
+    const post = document.createElement('a-entity');
+    post.setAttribute('id', 'lean-post');
+    post.setAttribute(
+      'geometry',
+      `primitive: cone; radiusBottom: ${leanPostBottomR}; radiusTop: ${leanPostTopR}; height: ${leanPostHeight}; segmentsRadial: 48; openEnded: false`
+    );
+    post.setAttribute('material', 'color: #8B4513; roughness: 0.7');
+    post.setAttribute(
+      'position',
+      `0 ${LEAN_POST_BASE_Y_M + leanPostHeight / 2} 0`
+    );
+    return post;
+  }
+
+  updateLeanPost() {
+    const old = document.querySelector('#lean-post');
+    const sceneEl = document.querySelector('a-scene');
+    old?.parentNode?.removeChild(old);
+    if (sceneEl) sceneEl.appendChild(this.createLeanPost());
   }
 
   createHumansRoot() {
