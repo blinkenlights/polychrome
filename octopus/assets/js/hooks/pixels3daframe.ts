@@ -151,8 +151,8 @@ const textures: any[] = [];
 let radarHeight = 3.5;
 const RADAR_RADIUS_MIN_M = 0;
 const RADAR_RADIUS_MAX_M = 8;
-/** Horizontaler Abstand der Boxen von der Y-Achse (Kreisradius), Default 50 cm */
-let radarRadiusM = 0.5;
+/** Horizontaler Abstand der Boxen von der Y-Achse (Kreisradius), Default 1.5 m */
+let radarRadiusM = 1.5;
 const RADAR_BOX = 0.1;
 /** Neigung der Box/Kegel/Spot um lokale X-Achse (nach unten zur Mitte), ein Wert für alle Sensoren */
 let radarTiltDeg = 45;
@@ -166,18 +166,25 @@ const RADAR_SPOT_ANGLE_DEG = 120;
 const RADAR_SPOT_HALF_ANGLE_DEG = RADAR_SPOT_ANGLE_DEG / 2;
 /** Three.js SpotLight: Intensität fällt auf 0 bei dieser Entfernung (m) */
 const RADAR_SPOT_DISTANCE_M = 8;
-const RADAR_COUNT_MIN = 1;
+/**
+ * Anzahl Sensoren: muss gerade sein, weil sie paarweise an den Enden je eines
+ * Dachbalkens hängen (2 Balken → 4 Sensoren, … 6 Balken → 12 Sensoren).
+ */
+const RADAR_COUNT_MIN = 4;
 const RADAR_COUNT_MAX = 12;
-let radarCount = 8;
+const RADAR_COUNT_STEP = 2;
+let radarCount = 6;
 /** Zentraler Mast (unter den Radarboxen): Durchmesser per GUI 5–50 cm, Default 15 cm */
 let mastDiameterM = 0.15;
 const MAST_DIAMETER_MIN_M = 0.05;
 const MAST_DIAMETER_MAX_M = 0.5;
-/** Scheibe auf dem Mast: fest 3 cm (kein GUI) */
-const MAST_PLATE_THICKNESS_M = 0.03;
+/** Dachbalken-Stern statt Platte: Querschnitt (m) und kleine zentrale Nabe gegen Beam-Crossings. */
+const BEAM_HEIGHT_M = 0.06;
+const BEAM_WIDTH_M = 0.1;
 
 function clampRadarCount(v: number): number {
-  return Math.min(RADAR_COUNT_MAX, Math.max(RADAR_COUNT_MIN, Math.round(Number(v))));
+  const snapped = Math.round(Number(v) / RADAR_COUNT_STEP) * RADAR_COUNT_STEP;
+  return Math.min(RADAR_COUNT_MAX, Math.max(RADAR_COUNT_MIN, snapped));
 }
 
 /** Wenn true: Neigung so, dass die Oberkante der LED-Front (Panel 0) auf dem Kegelmantel liegt; Neigung-Slider gesperrt. */
@@ -605,8 +612,8 @@ class Pixels3dAframeHook extends Hook {
         this.updateRadarVisualization();
       });
     folder
-      .add(params, "radarCount", RADAR_COUNT_MIN, RADAR_COUNT_MAX, 1)
-      .name("Anzahl Boxen")
+      .add(params, "radarCount", RADAR_COUNT_MIN, RADAR_COUNT_MAX, RADAR_COUNT_STEP)
+      .name("Anzahl Sensoren (= 2·Balken)")
       .onChange((v: number) => {
         radarCount = clampRadarCount(v);
         params.radarCount = radarCount;
@@ -998,8 +1005,11 @@ class Pixels3dAframeHook extends Hook {
   }
 
   /**
-   * Mast + horizontale Platte (#8B4513): Unterkante Podest (0.5 m), oberste Fläche bündig unter
-   * Radarbox-Unterkante. Platte: Durchmesser = Kreis der Boxen (2·radarRadiusM), Höhe fest 3 cm.
+   * Mast + Dachbalken-Stern (#8B4513): Unterkante Podest (0.5 m), Oberseite der Balken bündig
+   * unter Radarbox-Unterkante. Anzahl Balken = `radarCount / 2`, jeder Balken verbindet zwei
+   * gegenüberliegende Sensoren (Beam k bei Yaw `(k/n)·360°` hat lokale Z-Achse auf den
+   * Sensoren k und k+n/2). Beam-Länge = `2·radarRadiusM + RADAR_BOX`, damit die Sensorboxen
+   * bündig an den Balkenenden sitzen. Kleine zentrale Nabe verdeckt die Beam-Kreuzung.
    */
   createRadarMast() {
     const PEDESTAL_TOP_Y = 0.5;
@@ -1009,8 +1019,9 @@ class Pixels3dAframeHook extends Hook {
     holder.setAttribute("id", "radar-mast");
     if (totalSpan <= 1e-6) return holder;
 
-    const plateH = Math.min(MAST_PLATE_THICKNESS_M, totalSpan);
-    const mastBodyH = totalSpan - plateH;
+    const beamH = Math.min(BEAM_HEIGHT_M, totalSpan);
+    const mastBodyH = totalSpan - beamH;
+    const beamY = PEDESTAL_TOP_Y + mastBodyH + beamH / 2;
 
     if (mastBodyH > 1e-6) {
       const cyl = document.createElement("a-cylinder");
@@ -1024,15 +1035,32 @@ class Pixels3dAframeHook extends Hook {
       );
       holder.appendChild(cyl);
     }
-    if (plateH > 1e-6) {
-      const plate = document.createElement("a-cylinder");
-      plate.setAttribute("radius", radarRadiusM.toString());
-      plate.setAttribute("height", plateH.toString());
-      plate.setAttribute("color", "#8B4513");
-      plate.setAttribute("roughness", "0.65");
-      const plateY = PEDESTAL_TOP_Y + mastBodyH + plateH / 2;
-      plate.setAttribute("position", `0 ${plateY} 0`);
-      holder.appendChild(plate);
+
+    if (beamH > 1e-6) {
+      const sensorCount = clampRadarCount(radarCount);
+      const numBeams = sensorCount / 2;
+      const beamLen = 2 * radarRadiusM + RADAR_BOX;
+      const T = getThree();
+      for (let k = 0; k < numBeams; k++) {
+        const yawDeg = T.MathUtils.radToDeg((k / sensorCount) * Math.PI * 2);
+        const beam = document.createElement("a-box");
+        beam.setAttribute("width", BEAM_WIDTH_M.toString());
+        beam.setAttribute("height", beamH.toString());
+        beam.setAttribute("depth", beamLen.toString());
+        beam.setAttribute("color", "#8B4513");
+        beam.setAttribute("roughness", "0.65");
+        beam.setAttribute("position", `0 ${beamY} 0`);
+        beam.setAttribute("rotation", `0 ${yawDeg} 0`);
+        holder.appendChild(beam);
+      }
+      const hubR = Math.max(mastDiameterM / 2, BEAM_WIDTH_M * 0.9);
+      const hub = document.createElement("a-cylinder");
+      hub.setAttribute("radius", hubR.toString());
+      hub.setAttribute("height", beamH.toString());
+      hub.setAttribute("color", "#7a3d11");
+      hub.setAttribute("roughness", "0.7");
+      hub.setAttribute("position", `0 ${beamY} 0`);
+      holder.appendChild(hub);
     }
     return holder;
   }
