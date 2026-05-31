@@ -14,10 +14,15 @@ defmodule Octopus.Radar do
       config :octopus, Octopus.Radar,
         enabled: true,
         sensors: [
-          [port: "/dev/ttyUSB0"],   # device_id 1
-          [port: "/dev/ttyUSB1"]    # device_id 2
+          [port: "/dev/ttyUSB0", enabled: true, angle_deg: 0, distance_cm: 0, rotation_deg: 0],
+          [port: "/dev/ttyUSB1", enabled: false]
         ],
         defaults: [
+          type: :ld6001a,
+          enabled: true,
+          angle_deg: 0,
+          distance_cm: 0,
+          rotation_deg: 0,
           baud: 115_200,
           height_cm: 300, range_cm: 450,
           x_pos_cm: 450, x_neg_cm: -450,
@@ -27,7 +32,10 @@ defmodule Octopus.Radar do
 
   * `:enabled` — master switch; when `false`, no supervisor or serial I/O.
     Overridable via `RADAR_ENABLED` (`true`/`1`/`yes` vs anything else).
-  * `:sensors` — list of per-device keyword options (`:port` required).
+  * `:sensors` — list of per-device keyword options (`:port` required). Each
+    entry may override `:defaults`, including `:type`, `:enabled`, and pose
+    correction keys (`:angle_deg`, `:distance_cm`, `:rotation_deg`). Only
+    enabled sensors with a present port and known type start a GenServer.
 
   The integer **`device_id` is the 1-based position** of an entry in the
   `:sensors` list and is used both to register the sensor process and as
@@ -67,6 +75,14 @@ defmodule Octopus.Radar do
   alias Octopus.Radar.Sensor
 
   @topic "radar:hlk6001"
+  @supported_types [:ld6001a]
+  @default_pose [
+    type: :ld6001a,
+    enabled: true,
+    angle_deg: 0,
+    distance_cm: 0,
+    rotation_deg: 0
+  ]
 
   ## Public API
 
@@ -102,9 +118,14 @@ defmodule Octopus.Radar do
   @spec devices() :: [
           %{
             device_id: pos_integer(),
+            type: atom(),
+            enabled: boolean(),
             port: String.t(),
             baud: pos_integer(),
             sensitivity: 1..9,
+            angle_deg: number(),
+            distance_cm: number(),
+            rotation_deg: number(),
             x_pos_cm: integer(),
             x_neg_cm: integer(),
             y_pos_cm: integer(),
@@ -118,9 +139,14 @@ defmodule Octopus.Radar do
     |> Enum.map(fn {device_id, config} ->
       %{
         device_id: device_id,
+        type: Keyword.fetch!(config, :type),
+        enabled: Keyword.fetch!(config, :enabled),
         port: Keyword.fetch!(config, :port),
         baud: Keyword.fetch!(config, :baud),
         sensitivity: Keyword.fetch!(config, :sensitivity),
+        angle_deg: Keyword.fetch!(config, :angle_deg),
+        distance_cm: Keyword.fetch!(config, :distance_cm),
+        rotation_deg: Keyword.fetch!(config, :rotation_deg),
         x_pos_cm: Keyword.fetch!(config, :x_pos_cm),
         x_neg_cm: Keyword.fetch!(config, :x_neg_cm),
         y_pos_cm: Keyword.fetch!(config, :y_pos_cm),
@@ -172,7 +198,9 @@ defmodule Octopus.Radar do
   @spec any_present?() :: boolean()
   def any_present? do
     sensor_configs()
-    |> Enum.any?(fn {_id, config} -> File.exists?(Keyword.fetch!(config, :port)) end)
+    |> Enum.any?(fn {_id, config} ->
+      Keyword.fetch!(config, :enabled) and File.exists?(Keyword.fetch!(config, :port))
+    end)
   end
 
   ## Supervisor
@@ -196,22 +224,43 @@ defmodule Octopus.Radar do
     sensor_configs()
     |> Enum.flat_map(fn {device_id, config} ->
       port = Keyword.fetch!(config, :port)
+      enabled? = Keyword.fetch!(config, :enabled)
 
-      if File.exists?(port) do
+      cond do
+        not enabled? ->
+          Logger.info("[radar #{device_id} #{port}] Sensor disabled in config — skipping")
+          []
+
+        not File.exists?(port) ->
+          Logger.info(
+            "[radar #{device_id} #{port}] Configured port not present at boot — skipping sensor"
+          )
+
+          []
+
+        true ->
+          child_for_type(device_id, config)
+      end
+    end)
+  end
+
+  defp child_for_type(device_id, config) do
+    case Keyword.fetch!(config, :type) do
+      :ld6001a ->
         [
           Supervisor.child_spec(
             {Sensor, Keyword.put(config, :device_id, device_id)},
             id: {Sensor, device_id}
           )
         ]
-      else
-        Logger.info(
-          "[radar #{device_id} #{port}] Configured port not present at boot — skipping sensor"
+
+      type ->
+        Logger.warning(
+          "[radar #{device_id} #{Keyword.fetch!(config, :port)}] Unknown sensor type #{inspect(type)} — skipping"
         )
 
         []
-      end
-    end)
+    end
   end
 
   defp log_boot_configuration do
@@ -224,7 +273,15 @@ defmodule Octopus.Radar do
       _ ->
         summary =
           configs
-          |> Enum.map(fn {id, cfg} -> "##{id} #{Keyword.fetch!(cfg, :port)}" end)
+          |> Enum.map(fn {id, cfg} ->
+            status =
+              if Keyword.fetch!(cfg, :enabled), do: "enabled", else: "disabled"
+
+            pose =
+              "pose=#{Keyword.fetch!(cfg, :angle_deg)}°/#{Keyword.fetch!(cfg, :distance_cm)}cm/r#{Keyword.fetch!(cfg, :rotation_deg)}°"
+
+            "##{id} #{Keyword.fetch!(cfg, :port)} (#{status}, #{pose})"
+          end)
           |> Enum.join("; ")
 
         Logger.info("[radar] Enabled — #{length(configs)} sensor(s): #{summary}")
@@ -245,13 +302,53 @@ defmodule Octopus.Radar do
 
   defp do_sensor_configs do
     radar_env = Application.get_env(:octopus, __MODULE__, [])
-    defaults = Keyword.get(radar_env, :defaults, [])
+    defaults = Keyword.merge(@default_pose, Keyword.get(radar_env, :defaults, []))
     sensors = Keyword.get(radar_env, :sensors, [])
 
     sensors
     |> Enum.with_index(1)
     |> Enum.map(fn {sensor_opts, index} ->
-      {index, Keyword.merge(defaults, sensor_opts)}
+      config =
+        defaults
+        |> Keyword.merge(sensor_opts)
+        |> normalize_sensor_config(index)
+
+      {index, config}
     end)
+  end
+
+  defp normalize_sensor_config(config, device_id) do
+    type = Keyword.fetch!(config, :type)
+    enabled = Keyword.fetch!(config, :enabled)
+    angle_deg = Keyword.fetch!(config, :angle_deg)
+    distance_cm = Keyword.fetch!(config, :distance_cm)
+    rotation_deg = Keyword.fetch!(config, :rotation_deg)
+
+    unless type in @supported_types do
+      raise ArgumentError,
+            "radar sensor ##{device_id}: unsupported type #{inspect(type)}, expected one of #{inspect(@supported_types)}"
+    end
+
+    unless is_boolean(enabled) do
+      raise ArgumentError,
+            "radar sensor ##{device_id}: :enabled must be a boolean, got #{inspect(enabled)}"
+    end
+
+    unless is_number(angle_deg) and angle_deg >= 0 and angle_deg <= 360 do
+      raise ArgumentError,
+            "radar sensor ##{device_id}: :angle_deg must be in 0..360, got #{inspect(angle_deg)}"
+    end
+
+    unless is_number(distance_cm) and distance_cm >= 0 do
+      raise ArgumentError,
+            "radar sensor ##{device_id}: :distance_cm must be >= 0, got #{inspect(distance_cm)}"
+    end
+
+    unless is_number(rotation_deg) do
+      raise ArgumentError,
+            "radar sensor ##{device_id}: :rotation_deg must be a number, got #{inspect(rotation_deg)}"
+    end
+
+    config
   end
 end

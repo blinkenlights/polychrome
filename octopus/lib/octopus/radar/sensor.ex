@@ -28,7 +28,7 @@ defmodule Octopus.Radar.Sensor do
 
   alias Circuits.UART
   alias Octopus.Radar
-  alias Octopus.Radar.{Ack, Command, Frame, Protocol}
+  alias Octopus.Radar.{Ack, Command, Frame, Protocol, Transform}
 
   @reopen_interval :timer.seconds(5)
   @ack_timeout :timer.seconds(2)
@@ -410,7 +410,8 @@ defmodule Octopus.Radar.Sensor do
     %State{state | buffer: leftover}
   end
 
-  defp publish_frame(%Frame{} = frame, %State{device_id: device_id} = state) do
+  defp publish_frame(%Frame{} = frame, %State{device_id: device_id, config: config} = state) do
+    frame = Transform.transform_frame(frame, config)
     envelope = {:radar_frame, device_id, frame}
     Phoenix.PubSub.broadcast(Octopus.PubSub, Radar.topic(), envelope)
     Phoenix.PubSub.broadcast(Octopus.PubSub, Radar.topic(device_id), envelope)

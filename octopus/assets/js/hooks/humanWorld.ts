@@ -230,8 +230,8 @@ export class HumanWorld {
    * sonst behält ein bekannter Track sein letztes Heading).
    *
    * Koordinaten-Mapping: Radar-`x` → Welt-X, Radar-`y` → Welt-Z.
-   * Annahme: ein zentral montierter Sensor mit Yaw 0; mehrere Sensoren mit
-   * Pose-Mapping kommen später.
+   * Pose-Korrektur (Mount-Offset + Rotation) passiert serverseitig in
+   * Octopus.Radar.Transform vor dem PubSub-Broadcast.
    */
   setRadarTracks(tracks: RadarTrack[]) {
     if (this.source !== "radar") return;
