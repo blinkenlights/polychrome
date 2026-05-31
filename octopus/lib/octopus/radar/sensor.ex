@@ -17,8 +17,8 @@ defmodule Octopus.Radar.Sensor do
       every 5 seconds so a hot-unplug/replug recovers without crashing the
       whole supervision tree.
     * `:configuring` – send the §8.2 init sequence; bytes received in this
-      phase are treated as ASCII ack lines, classified `AT+OK` / `Save Para
-      Fail` per §8.3.
+      phase are scanned for `AT+OK` / `Save Para Fail` acks amid any binary
+      noise per §8.3.
     * `:running` – feed every received chunk into `Octopus.Radar.Protocol`,
       publish each parsed frame.
   """
@@ -28,10 +28,16 @@ defmodule Octopus.Radar.Sensor do
 
   alias Circuits.UART
   alias Octopus.Radar
-  alias Octopus.Radar.{Command, Frame, Protocol}
+  alias Octopus.Radar.{Ack, Command, Frame, Protocol}
 
   @reopen_interval :timer.seconds(5)
   @ack_timeout :timer.seconds(2)
+  @open_stagger_ms 200
+  @post_open_settle_ms 300
+  @max_ack_retries 5
+  @escalate_delay_ms 500
+  @stop_command "AT+STOP\n"
+  @reset_command "AT+RESET\n"
 
   defmodule State do
     @moduledoc false
@@ -47,7 +53,8 @@ defmodule Octopus.Radar.Sensor do
       :buffer,
       :ack_buffer,
       :last_track_count,
-      :ack_timer
+      :ack_timer,
+      ack_retries: 0
     ]
   end
 
@@ -103,8 +110,10 @@ defmodule Octopus.Radar.Sensor do
 
   @impl true
   def init(opts) do
+    device_id = Keyword.fetch!(opts, :device_id)
+
     state = %State{
-      device_id: Keyword.fetch!(opts, :device_id),
+      device_id: device_id,
       port_name: Keyword.fetch!(opts, :port),
       baud: Keyword.fetch!(opts, :baud),
       config: opts,
@@ -116,7 +125,16 @@ defmodule Octopus.Radar.Sensor do
     }
 
     {:ok, uart} = UART.start_link()
-    {:ok, %State{state | uart: uart}, {:continue, :open_port}}
+    state = %State{state | uart: uart}
+
+    stagger_ms = (device_id - 1) * @open_stagger_ms
+
+    if stagger_ms > 0 do
+      Process.send_after(self(), :open_port, stagger_ms)
+      {:ok, state}
+    else
+      {:ok, state, {:continue, :open_port}}
+    end
   end
 
   @impl true
@@ -137,13 +155,38 @@ defmodule Octopus.Radar.Sensor do
   end
 
   @impl true
+  def handle_info(:open_port, %State{} = state) do
+    {:noreply, try_open(state)}
+  end
+
+  def handle_info(:start_init, %State{} = state) do
+    {:noreply, state |> Map.put(:phase, :configuring) |> send_next_command()}
+  end
+
   def handle_info(:reopen_port, %State{} = state) do
     {:noreply, try_open(state)}
   end
 
+  def handle_info(:escalate_reopen, %State{} = state) do
+    {:noreply, schedule_reopen(close_port(state))}
+  end
+
   def handle_info(:ack_timeout, %State{phase: :configuring} = state) do
-    log(state, :warning, "AT command timed out, resending: #{inspect(state.current_command)}")
-    {:noreply, write_command(state.current_command, %State{state | ack_timer: nil})}
+    ack_retries = state.ack_retries + 1
+    state = %State{state | ack_timer: nil, ack_retries: ack_retries}
+
+    if ack_retries >= @max_ack_retries do
+      log(
+        state,
+        :warning,
+        "AT command stuck after #{ack_retries} retries (#{inspect(state.current_command)}) — escalating"
+      )
+
+      {:noreply, escalate_init_failure(state)}
+    else
+      log(state, :warning, "AT command timed out, resending: #{inspect(state.current_command)}")
+      {:noreply, resend_command(state)}
+    end
   end
 
   def handle_info(:ack_timeout, %State{} = state) do
@@ -178,7 +221,7 @@ defmodule Octopus.Radar.Sensor do
 
   @impl true
   def terminate(_reason, %State{} = state) do
-    _ = close_port(state)
+    _ = graceful_close(state)
     :ok
   end
 
@@ -196,16 +239,18 @@ defmodule Octopus.Radar.Sensor do
          ) do
       :ok ->
         log(state, :info, "Opened serial port at #{baud} baud")
+        Process.send_after(self(), :start_init, @post_open_settle_ms)
 
         %State{
           state
-          | phase: :configuring,
+          | phase: :opening,
             pending_commands: Command.init_sequence(state.config),
             buffer: <<>>,
             ack_buffer: <<>>,
-            last_track_count: nil
+            ack_retries: 0,
+            last_track_count: nil,
+            current_command: nil
         }
-        |> send_next_command()
 
       {:error, reason} ->
         log(state, :warning, "Failed to open serial port (#{inspect(reason)}) — retrying in 5s")
@@ -215,16 +260,55 @@ defmodule Octopus.Radar.Sensor do
 
   defp schedule_reopen(%State{} = state) do
     Process.send_after(self(), :reopen_port, @reopen_interval)
-    %State{state | phase: :opening, pending_commands: [], current_command: nil}
+
+    %State{
+      state
+      | phase: :opening,
+        pending_commands: [],
+        current_command: nil,
+        ack_retries: 0
+    }
   end
 
   defp close_port(%State{uart: uart} = state) when is_pid(uart) do
     _ = UART.close(uart)
     cancel_ack_timer(state)
-    %State{state | phase: :opening, buffer: <<>>, ack_buffer: <<>>, current_command: nil}
+
+    %State{
+      state
+      | phase: :opening,
+        buffer: <<>>,
+        ack_buffer: <<>>,
+        current_command: nil,
+        ack_retries: 0
+    }
   end
 
   defp close_port(state), do: state
+
+  defp graceful_close(%State{uart: uart, phase: phase} = state)
+       when is_pid(uart) and phase in [:configuring, :running] do
+    _ = UART.write(uart, @stop_command)
+    Process.sleep(100)
+    close_port(state)
+  end
+
+  defp graceful_close(state), do: close_port(state)
+
+  defp escalate_init_failure(%State{uart: uart} = state) when is_pid(uart) do
+    _ = UART.write(uart, @reset_command)
+    Process.send_after(self(), :escalate_reopen, @escalate_delay_ms)
+
+    %State{
+      state
+      | phase: :opening,
+        pending_commands: [],
+        current_command: nil,
+        ack_retries: 0
+    }
+  end
+
+  defp escalate_init_failure(state), do: schedule_reopen(close_port(state))
 
   ## Phase: configuring
 
@@ -237,13 +321,10 @@ defmodule Octopus.Radar.Sensor do
     write_command(cmd, %State{state | pending_commands: rest, current_command: cmd})
   end
 
-  # Drop any in-flight ack timer + parser buffers, then re-issue the
-  # full init sequence. Bytes that were already in flight from the
-  # device (residual binary frames or text after AT+START) will arrive
-  # while we're back in :configuring; the AT+OK matching simply ignores
-  # anything that isn't a recognized response line, and the ack timeout
-  # retries individual commands if needed, so the sequence always
-  # converges.
+  # Drop any in-flight ack timer + parser buffers, then re-issue the full
+  # init sequence. Residual binary frames may still arrive during
+  # :configuring; Ack.feed/2 scans the mixed stream for AT+OK without
+  # requiring a quiet line.
   defp restart_init(%State{} = state) do
     state = cancel_ack_timer(state)
 
@@ -254,6 +335,7 @@ defmodule Octopus.Radar.Sensor do
         current_command: nil,
         buffer: <<>>,
         ack_buffer: <<>>,
+        ack_retries: 0,
         last_track_count: nil
     }
     |> send_next_command()
@@ -265,40 +347,42 @@ defmodule Octopus.Radar.Sensor do
     arm_ack_timer(%State{state | current_command: cmd, ack_buffer: <<>>})
   end
 
-  defp handle_ack_bytes(data, %State{ack_buffer: ack_buffer} = state) do
-    # The radar ack stream is text; split on newline (handles \r\n by
-    # stripping \r before classifying).
-    chunks = String.split(ack_buffer <> data, "\n")
-    {leftover, complete_lines} = List.pop_at(chunks, -1)
-
-    Enum.reduce(complete_lines, %State{state | ack_buffer: leftover || <<>>}, fn line, acc ->
-      apply_ack_line(String.trim(line), acc)
-    end)
+  defp resend_command(%State{uart: uart, current_command: cmd} = state) do
+    log(state, :info, "→ #{String.trim_trailing(cmd)}")
+    :ok = UART.write(uart, cmd)
+    arm_ack_timer(state)
   end
 
-  defp apply_ack_line("", state), do: state
+  defp handle_ack_bytes(data, %State{ack_buffer: ack_buffer} = state) do
+    case Ack.feed(ack_buffer, data) do
+      {:pending, buf} ->
+        %State{state | ack_buffer: buf}
 
-  defp apply_ack_line(line, %State{} = state) do
-    case Command.classify_response(line) do
-      :ok ->
+      {:ok, buf} ->
         log(state, :info, "← AT+OK")
 
-        state
-        |> cancel_ack_timer()
-        |> send_next_command()
+        %State{} = state =
+          state
+          |> cancel_ack_timer()
+          |> reset_ack_retries()
+          |> then(fn %State{} = s -> %State{s | ack_buffer: buf} end)
 
-      :retry ->
+        send_next_command(state)
+
+      {:retry, buf} ->
         log(state, :warning, "← Save Para Fail — resending: #{inspect(state.current_command)}")
 
-        state
-        |> cancel_ack_timer()
-        |> then(&write_command(state.current_command, &1))
+        %State{} = state =
+          state
+          |> cancel_ack_timer()
+          |> reset_ack_retries()
+          |> then(fn %State{} = s -> %State{s | ack_buffer: buf} end)
 
-      :other ->
-        log(state, :debug, "← #{inspect(line)}")
-        state
+        write_command(state.current_command, state)
     end
   end
+
+  defp reset_ack_retries(%State{} = state), do: %State{state | ack_retries: 0}
 
   defp arm_ack_timer(%State{} = state) do
     state = cancel_ack_timer(state)
