@@ -73,7 +73,7 @@ defmodule OctopusWeb.RadarLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    if connected?(socket), do: Radar.subscribe()
+    if connected?(socket) and Radar.enabled?(), do: Radar.subscribe()
 
     devices = Radar.devices()
     selected = List.first(devices)
@@ -81,6 +81,7 @@ defmodule OctopusWeb.RadarLive do
 
     {:ok,
      socket
+     |> assign(:radar_enabled, Radar.enabled?())
      |> assign(:devices, devices)
      |> assign(:selected_device_id, selected_id)
      |> assign(:sensitivity, (selected && selected.sensitivity) || 4)
@@ -487,9 +488,14 @@ defmodule OctopusWeb.RadarLive do
         <div class="card-body">
           <div class="flex items-center justify-between flex-wrap gap-4">
             <h1 class="card-title text-2xl">Radar</h1>
-            <%= if @devices == [] do %>
-              <span class="text-sm opacity-70">No radar sensors configured</span>
-            <% else %>
+            <%= cond do %>
+              <% not @radar_enabled -> %>
+                <span class="text-sm opacity-70">
+                  Radar disabled in config (<code>enabled: false</code> or <code>RADAR_ENABLED</code>)
+                </span>
+              <% @devices == [] -> %>
+                <span class="text-sm opacity-70">No radar sensors configured</span>
+              <% true -> %>
               <form phx-change="select_sensor">
                 <select id="radar-sensor" name="device_id" class="select select-bordered">
                   <%= for d <- @devices do %>
@@ -505,7 +511,7 @@ defmodule OctopusWeb.RadarLive do
             <% end %>
           </div>
 
-          <%= if @devices != [] do %>
+          <%= if @radar_enabled and @devices != [] do %>
             <div class="flex items-center flex-wrap gap-4 mt-2">
               <%= if @selected_device_id != :all do %>
                 <form
@@ -577,14 +583,22 @@ defmodule OctopusWeb.RadarLive do
             <div>Frame #: {@last_frame_number || "—"}</div>
           </div>
 
-          <%= if @devices == [] do %>
+          <%= if not @radar_enabled do %>
             <div class="alert alert-info mt-4">
               <span>
-                Configure at least one sensor under <code>:octopus, Octopus.Radar</code>
-                in <code>config/config.exs</code>.
+                Enable radar in <code>config/radar.exs</code> (<code>enabled: true</code>) or set
+                <code>RADAR_ENABLED=true</code>, then restart the application.
               </span>
             </div>
           <% else %>
+            <%= if @devices == [] do %>
+              <div class="alert alert-info mt-4">
+                <span>
+                  Add at least one sensor under <code>:sensors</code> in
+                  <code>config/radar.exs</code> or <code>config/radar.local.exs</code>.
+                </span>
+              </div>
+            <% else %>
             <div class="w-full max-w-3xl mx-auto aspect-square mt-4 bg-base-200 rounded">
               <svg viewBox="0 0 1000 1000" class="w-full h-full">
                 <%= for r <- @range_indicators do %>
@@ -683,6 +697,7 @@ defmodule OctopusWeb.RadarLive do
                 <% end %>
               </svg>
             </div>
+            <% end %>
           <% end %>
         </div>
       </div>

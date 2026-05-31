@@ -1,0 +1,26 @@
+import Config
+
+# Copy to radar.local.exs (gitignored) for machine-specific overrides.
+# Loaded after radar.exs in config/runtime.exs.
+
+# Disable radar entirely on this host:
+# config :octopus, Octopus.Radar, enabled: false
+
+# Mac dev example (CH340 / CP210x). Circuits.UART uses tty.* :
+# ls /dev/tty.usbserial-* /dev/cu.usbserial-*
+#
+# config :octopus, Octopus.Radar,
+#   sensors: [
+#     [port: "/dev/tty.usbserial-0001"]
+#   ],
+#   defaults: [
+#     height_cm: 300
+#   ]
+
+# Raspberry Pi example:
+#
+# config :octopus, Octopus.Radar,
+#   sensors: [
+#     [port: "/dev/ttyUSB0"],
+#     [port: "/dev/ttyUSB1"]
+#   ]

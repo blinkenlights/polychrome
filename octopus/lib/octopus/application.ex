@@ -5,6 +5,8 @@ defmodule Octopus.Application do
 
   use Application
 
+  require Logger
+
   alias Octopus.{Font, Sprite, Image, WebP}
 
   @impl true
@@ -57,12 +59,21 @@ defmodule Octopus.Application do
           nil -> []
           telegram_bot_secret -> [{Octopus.TelegramBot, bot_key: telegram_bot_secret}]
         end ++
-        if(Octopus.Radar.any_present?(), do: [Octopus.Radar], else: [])
+        radar_children()
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Octopus.Supervisor]
     Supervisor.start_link(children, opts)
+  end
+
+  defp radar_children do
+    if Octopus.Radar.enabled?() do
+      [Octopus.Radar]
+    else
+      Logger.info("[radar] Feature disabled (enabled: false)")
+      []
+    end
   end
 
   # Tell Phoenix to update the endpoint configuration

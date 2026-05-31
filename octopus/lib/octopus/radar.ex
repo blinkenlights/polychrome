@@ -8,20 +8,26 @@ defmodule Octopus.Radar do
 
   ## Configuration
 
-  Configured under the `:octopus, Octopus.Radar` key in `config/config.exs`:
+  Loaded at runtime from `config/radar.exs` (via `config/runtime.exs`), with
+  optional per-machine overrides in gitignored `config/radar.local.exs`.
 
       config :octopus, Octopus.Radar,
+        enabled: true,
         sensors: [
-          [port: "/dev/tty.usbserial-0001"],   # device_id 1
-          [port: "/dev/tty.usbserial-0002"]    # device_id 2
+          [port: "/dev/ttyUSB0"],   # device_id 1
+          [port: "/dev/ttyUSB1"]    # device_id 2
         ],
         defaults: [
-          baud: 921_600,
+          baud: 115_200,
           height_cm: 300, range_cm: 450,
           x_pos_cm: 450, x_neg_cm: -450,
           y_pos_cm: 450, y_neg_cm: -450,
           moving_decisecs: 110, static_decisecs: 100, exit_decisecs: 5
         ]
+
+  * `:enabled` — master switch; when `false`, no supervisor or serial I/O.
+    Overridable via `RADAR_ENABLED` (`true`/`1`/`yes` vs anything else).
+  * `:sensors` — list of per-device keyword options (`:port` required).
 
   The integer **`device_id` is the 1-based position** of an entry in the
   `:sensors` list and is used both to register the sensor process and as
@@ -149,9 +155,19 @@ defmodule Octopus.Radar do
   def reinitialize(device_id), do: Sensor.reinitialize(device_id)
 
   @doc """
+  Return `true` if the radar layer is enabled in application config.
+
+  See `config/radar.exs` and optional `RADAR_ENABLED` / `config/radar.local.exs`.
+  """
+  @spec enabled?() :: boolean()
+  def enabled? do
+    Application.get_env(:octopus, __MODULE__, [])
+    |> Keyword.get(:enabled, true)
+  end
+
+  @doc """
   Return `true` if at least one configured sensor's serial port currently
-  exists. Used by `Octopus.Application` to decide whether to add the
-  radar supervisor to the supervision tree.
+  exists on disk.
   """
   @spec any_present?() :: boolean()
   def any_present? do
@@ -167,6 +183,8 @@ defmodule Octopus.Radar do
 
   @impl true
   def init(:ok) do
+    log_boot_configuration()
+
     children =
       [{Registry, keys: :unique, name: Octopus.Radar.Registry}] ++
         sensor_children()
@@ -187,8 +205,8 @@ defmodule Octopus.Radar do
           )
         ]
       else
-        Logger.warning(
-          "[radar #{device_id} #{port}] Configured port not present at boot — skipping"
+        Logger.info(
+          "[radar #{device_id} #{port}] Configured port not present at boot — skipping sensor"
         )
 
         []
@@ -196,11 +214,36 @@ defmodule Octopus.Radar do
     end)
   end
 
+  defp log_boot_configuration do
+    configs = sensor_configs()
+
+    case configs do
+      [] ->
+        Logger.info("[radar] Enabled — no sensors configured")
+
+      _ ->
+        summary =
+          configs
+          |> Enum.map(fn {id, cfg} -> "##{id} #{Keyword.fetch!(cfg, :port)}" end)
+          |> Enum.join("; ")
+
+        Logger.info("[radar] Enabled — #{length(configs)} sensor(s): #{summary}")
+    end
+  end
+
   ## Configuration helpers
 
   @doc false
   @spec sensor_configs() :: [{pos_integer(), keyword()}]
   def sensor_configs do
+    if enabled?() do
+      do_sensor_configs()
+    else
+      []
+    end
+  end
+
+  defp do_sensor_configs do
     radar_env = Application.get_env(:octopus, __MODULE__, [])
     defaults = Keyword.get(radar_env, :defaults, [])
     sensors = Keyword.get(radar_env, :sensors, [])

@@ -208,7 +208,7 @@ defmodule Octopus.Radar.Sensor do
         |> send_next_command()
 
       {:error, reason} ->
-        log(state, :warning, "Could not open serial port: #{inspect(reason)} — retrying in 5s")
+        log(state, :warning, "Failed to open serial port (#{inspect(reason)}) — retrying in 5s")
         schedule_reopen(state)
     end
   end

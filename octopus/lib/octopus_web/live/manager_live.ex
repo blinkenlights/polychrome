@@ -7,6 +7,7 @@ defmodule OctopusWeb.ManagerLive do
   alias Octopus.PlaylistScheduler.Playlist
   alias Octopus.PlaylistScheduler.Playlist.Animation
   alias Octopus.KioskModeManager
+  alias Octopus.Radar
   alias OctopusWeb.PixelsLive
 
   def mount(_params, _session, socket) do
@@ -59,9 +60,11 @@ defmodule OctopusWeb.ManagerLive do
               <a href="/proximity" class="btn btn-outline btn-sm">
                 Proximity Charts
               </a>
-              <a href="/radar" class="btn btn-outline btn-sm">
-                Radar
-              </a>
+              <%= if Radar.enabled?() do %>
+                <a href="/radar" class="btn btn-outline btn-sm">
+                  Radar
+                </a>
+              <% end %>
               <a href="/firmware-info" class="btn btn-outline btn-sm">
                 Firmware Info
               </a>

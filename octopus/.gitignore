@@ -49,3 +49,5 @@ priv/native
 /octopus_*.db*
 
 whackamole_highscore
+
+/config/radar.local.exs

@@ -35,46 +35,7 @@ config :octopus, :osc_server_port, 8000
 # Network addresses are now configured in Installation modules
 # See lib/octopus/installation/*.ex files
 
-# =============================================================================
-# RADAR SENSOR CONFIGURATION
-# =============================================================================
-#
-# HLK-LD6001A-60G human-tracking radar modules connected over a USB-to-UART
-# adapter. Each entry in :sensors is one physical device. The list position
-# determines the integer device_id (1, 2, ...) used in PubSub messages and in
-# Octopus.Radar.subscribe/1 / topic/1.
-#
-# Only :port is required per sensor. Any omitted key falls back to :defaults.
-# Setting :sensors to [] (or removing the entry) disables the radar layer.
-config :octopus, Octopus.Radar,
-  sensors: [
-    [port: "/dev/tty.usbserial-0001"]
-  ],
-  defaults: [
-    # 115_200 matches our hardware. Manual §22.1 lists 921_600 as a documented
-    # default, but the same manual's host-tool example uses 115_200, and our
-    # specific HLK-LD6001A-60G unit only responds at 115_200. Override per
-    # sensor in the :sensors list above if a unit has been reflashed.
-    baud: 115_200,
-    # Long-distance detection sensitivity (AT+DPKTH, range 1..9, default 4).
-    # The manual is counter-intuitive: a HIGHER number means LOWER sensitivity,
-    # i.e. fewer phantom targets. Raise this if the device reports too many
-    # tracks for one person; lower it if it misses real targets.
-    sensitivity: 4,
-    # Device geometry in centimeters (manual §9.3)
-    height_cm: 320,
-    range_cm: 450,
-    x_pos_cm: 450,
-    x_neg_cm: -450,
-    y_pos_cm: 450,
-    y_neg_cm: -450,
-    # Disappearance timing in 100 ms units (manual §9.4). The defaults are
-    # quite permissive — a track stays alive for up to 11 s after the radar
-    # last saw it. If you want ghost tracks dropped faster, lower these.
-    moving_decisecs: 110,
-    static_decisecs: 100,
-    exit_decisecs: 5
-  ]
+# Radar (HLK-LD6001A): see config/radar.exs (loaded at runtime via runtime.exs)
 
 # Installation configuration (compile-time setting)
 config :octopus, :installation, Octopus.Installation.Nation2025

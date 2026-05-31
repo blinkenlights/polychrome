@@ -69,8 +69,8 @@ RUN mix assets.deploy
 # Compile the release
 RUN mix compile
 
-# Changes to config/runtime.exs don't require recompiling the code
-COPY config/runtime.exs config/
+# Changes to config/runtime.exs / radar.exs don't require recompiling the code
+COPY config/runtime.exs config/radar.exs config/
 
 COPY rel rel
 RUN mix release

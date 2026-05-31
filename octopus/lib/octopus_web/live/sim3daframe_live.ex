@@ -19,7 +19,7 @@ defmodule OctopusWeb.Sim3dAframeLive do
     socket =
       if connected?(socket) do
         Mixer.subscribe()
-        Radar.subscribe()
+        if Radar.enabled?(), do: Radar.subscribe()
 
         frame = %RGBFrame{
           data: List.duplicate([0, 0, 0], 80 * 8) |> IO.iodata_to_binary()

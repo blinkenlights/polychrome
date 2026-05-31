@@ -1,5 +1,19 @@
 import Config
 
+# Radar (HLK-LD6001A): config/radar.exs + optional gitignored radar.local.exs.
+# runtime.exs cannot use import_config/1; evaluate those files instead.
+if config_env() == :test do
+  config :octopus, Octopus.Radar, enabled: false, sensors: []
+else
+  Code.eval_file(Path.join(__DIR__, "radar.exs"))
+
+  radar_local = Path.join(__DIR__, "radar.local.exs")
+
+  if File.exists?(radar_local) do
+    Code.eval_file(radar_local)
+  end
+end
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration
