@@ -81,3 +81,14 @@ config :swoosh, :api_client, false
 
 # Set environment for broadcaster
 config :octopus, :env, :dev
+
+# HLK-LD6001A-60G on Mac (CH340 / CP210x USB-TTL).
+# Circuits.UART uses tty.* ; for one-off tests use cu.* (e.g. ~/.venvs/radar + pyserial).
+# ls /dev/tty.usbserial-* /dev/cu.usbserial-*
+config :octopus, Octopus.Radar,
+  sensors: [
+    [port: "/dev/tty.usbserial-0001"]
+  ],
+  defaults: [
+    height_cm: 300
+  ]

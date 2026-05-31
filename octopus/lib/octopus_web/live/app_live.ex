@@ -4,23 +4,29 @@ defmodule OctopusWeb.AppLive do
   alias Octopus.AppSupervisor
 
   def mount(%{"id" => app_id}, _session, socket) do
-    if connected?(socket) do
-      AppSupervisor.subscribe()
+    case AppSupervisor.lookup_app(app_id) do
+      {_pid, module} ->
+        if connected?(socket) do
+          AppSupervisor.subscribe()
+        end
+
+        socket =
+          socket
+          |> assign(
+            app_id: app_id,
+            module: module,
+            name: apply(module, :name, [])
+          )
+          |> assign_playlist_config()
+
+        {:ok, socket}
+
+      nil ->
+        {:ok,
+         socket
+         |> put_flash(:error, "App #{app_id} is not running")
+         |> redirect(to: ~p"/")}
     end
-
-    {_pid, module} = AppSupervisor.lookup_app(app_id)
-    name = apply(module, :name, [])
-
-    socket =
-      socket
-      |> assign(
-        app_id: app_id,
-        module: module,
-        name: name
-      )
-      |> assign_playlist_config()
-
-    {:ok, socket}
   end
 
   def render(assigns) do
