@@ -151,10 +151,16 @@ const textures: any[] = [];
 let radarHeight = 3.5;
 const RADAR_RADIUS_MIN_M = 0;
 const RADAR_RADIUS_MAX_M = 8;
-/** Horizontaler Abstand der Boxen von der Y-Achse (Kreisradius), Default 1.5 m */
+/** Horizontaler Abstand der Chips von der Y-Achse (Kreisradius), Default 1.5 m */
 let radarRadiusM = 1.5;
-const RADAR_BOX = 0.1;
-/** Neigung der Box/Kegel/Spot um lokale X-Achse (nach unten zur Mitte), ein Wert für alle Sensoren */
+/** Radar-Chip am Lattenende (ersetzt die schwarze Box): 5×5 cm Grundfläche, 1 cm dick, grün, sitzt an der Unterseite der Latte. */
+const RADAR_CHIP_W_M = 0.05;
+const RADAR_CHIP_D_M = 0.05;
+const RADAR_CHIP_H_M = 0.01;
+const RADAR_CHIP_COLOR = "#22c55e";
+/** Oberkante des zentralen Podests (Plattform); Mast/Latten beginnen hier. */
+const PEDESTAL_TOP_Y_M = 0.5;
+/** Neigung der Latten (und damit der Chips/Kegel): die Latten kippen vom Mast aus nach oben, ein Wert für alle. */
 let radarTiltDeg = 45;
 /** Toggle: semi-transparent blue cone meshes (`radar-cone-viz`) on each sensor */
 let renderRadarCones = true;
@@ -167,8 +173,8 @@ const RADAR_SPOT_HALF_ANGLE_DEG = RADAR_SPOT_ANGLE_DEG / 2;
 /** Three.js SpotLight: Intensität fällt auf 0 bei dieser Entfernung (m) */
 const RADAR_SPOT_DISTANCE_M = 8;
 /**
- * Anzahl Sensoren: muss gerade sein, weil sie paarweise an den Enden je eines
- * Dachbalkens hängen (2 Balken → 4 Sensoren, … 6 Balken → 12 Sensoren).
+ * Anzahl Sensoren: je Sensor eine schräg nach oben laufende Dachlatte (Speiche)
+ * vom Mast aus. Bleibt in 2er-Schritten gerade, damit der Stern symmetrisch ist.
  */
 const RADAR_COUNT_MIN = 4;
 const RADAR_COUNT_MAX = 12;
@@ -300,11 +306,12 @@ function computeRadarConeGroundFootprint(): RadarFootprint {
     groundReachMaxM: 0,
     groundReachMinM: 0,
   };
-  const h = radarHeight;
+  const { armTiltDeg, chipHeight } = computeRadarArmGeometry();
+  const h = chipHeight;
   const r0 = radarRadiusM;
   if (h <= 0) return empty;
 
-  const tiltRad = (radarTiltDeg * Math.PI) / 180;
+  const tiltRad = (armTiltDeg * Math.PI) / 180;
   const theta = (RADAR_SPOT_HALF_ANGLE_DEG * Math.PI) / 180;
   const L = RADAR_SPOT_DISTANCE_M;
   const cosT = Math.cos(tiltRad);
@@ -446,20 +453,64 @@ function computeAutoRadarTiltDeg(): number {
   const T = getThree();
   const yTop = poleHeight + PANEL_SIZE;
   const zFace = PANEL_DEPTH / 2 + 0.1;
-  const TzWorld = panelDiameter / 2 - zFace;
-  const S = new T.Vector3(0, radarHeight, radarRadiusM);
-  const Top = new T.Vector3(0, yTop, TzWorld);
-  const w = new T.Vector3().subVectors(Top, S);
-  const wLen = w.length();
-  if (wLen < 1e-6) return T.MathUtils.clamp(radarTiltDeg, 5, 85);
-  w.multiplyScalar(1 / wLen);
+  const Tz = panelDiameter / 2 - zFace;
+  const H = radarHeight;
+  const r = radarRadiusM;
 
-  // Auto-Neigung soll auf die Kegelachse (gelbe Linie) zielen: Achse || w.
-  // Für yaw=0 bleibt alles in der YZ-Ebene. Achse nach Tilt t ist (0, -cos t, sin t).
-  // => tan(t) = w.z / (-w.y)
-  const tRad = Math.atan2(w.z, -w.y);
-  const tDeg = T.MathUtils.radToDeg(tRad);
-  return T.MathUtils.clamp(tDeg, 5, 85);
+  // Apex wandert mit der Neigung: S(t) = (0, H + r·tan t, r), Achse a(t) = (0, -cos t, sin t).
+  // Gesucht: a(t) || (Top - S(t)) in der YZ-Ebene. Kreuzprodukt-x = 0 liefert
+  //   f(t) = -cos t·(Tz - r) - sin t·(yTop - H) + r·sin t·tan t = 0.
+  const f = (deg: number) => {
+    const t = (deg * Math.PI) / 180;
+    const c = Math.cos(t);
+    const s = Math.sin(t);
+    return -c * (Tz - r) - s * (yTop - H) + r * s * (s / c);
+  };
+
+  let lo = 5;
+  let hi = RADAR_ARM_TILT_MAX_DEG;
+  let flo = f(lo);
+  const fhi = f(hi);
+  if (flo === 0) return lo;
+  if (fhi === 0) return hi;
+  if (flo * fhi > 0) {
+    // Kein Vorzeichenwechsel im Bereich → den Rand mit kleinerem Restfehler nehmen.
+    return Math.abs(flo) < Math.abs(fhi) ? lo : hi;
+  }
+  for (let i = 0; i < 50; i++) {
+    const mid = (lo + hi) / 2;
+    const fm = f(mid);
+    if (flo * fm <= 0) {
+      hi = mid;
+    } else {
+      lo = mid;
+      flo = fm;
+    }
+  }
+  return T.MathUtils.clamp((lo + hi) / 2, 5, RADAR_ARM_TILT_MAX_DEG);
+}
+
+/** Max. Latten-Neigung; verhindert, dass `armLen`/`chipHeight` bei tilt→90° divergieren. */
+const RADAR_ARM_TILT_MAX_DEG = 85;
+
+/**
+ * Geometrie der nach oben kippenden Dachlatten: die Anbringung am Mast ist fix
+ * bei `radarHeight` (= Masthöhe). Jede Latte läuft von dort schräg nach oben zum
+ * freien Außenende; bei Neigung > 0 liegt der Chip dort also höher als der Mast.
+ * `chipHeight = radarHeight + radarRadiusM·tan(tilt)`, `armLen = radarRadiusM/cos(tilt)`.
+ */
+function computeRadarArmGeometry(): {
+  innerY: number;
+  armTiltDeg: number;
+  armLen: number;
+  chipHeight: number;
+} {
+  const innerY = radarHeight;
+  const armTiltDeg = Math.max(0, Math.min(RADAR_ARM_TILT_MAX_DEG, radarTiltDeg));
+  const tiltRad = (armTiltDeg * Math.PI) / 180;
+  const armLen = radarRadiusM / Math.cos(tiltRad);
+  const chipHeight = innerY + radarRadiusM * Math.tan(tiltRad);
+  return { innerY, armTiltDeg, armLen, chipHeight };
 }
 
 type Param = {
@@ -1057,102 +1108,99 @@ class Pixels3dAframeHook extends Hook {
   }
 
   /**
-   * Mast + Dachbalken-Stern (#8B4513): Unterkante Podest (0.5 m), Oberseite der Balken bündig
-   * unter Radarbox-Unterkante. Anzahl Balken = `radarCount / 2`, jeder Balken verbindet zwei
-   * gegenüberliegende Sensoren (Beam k bei Yaw `(k/n)·360°` hat lokale Z-Achse auf den
-   * Sensoren k und k+n/2). Beam-Länge = `2·radarRadiusM + RADAR_BOX`, damit die Sensorboxen
-   * bündig an den Balkenenden sitzen. Kleine zentrale Nabe verdeckt die Beam-Kreuzung.
+   * Zentraler Mast (#8B4513) vom Podest (0.5 m) bis zur Nabe (`innerY`), wo die
+   * nach oben kippenden Dachlatten zusammenlaufen. Die Latten selbst (eine pro
+   * Sensor) sowie die Chips werden in `createRadarSensors` gebaut, weil sie pro
+   * Sensor dieselbe Neigung teilen.
    */
   createRadarMast() {
-    const PEDESTAL_TOP_Y = 0.5;
-    const boxBottomY = radarHeight - RADAR_BOX / 2;
-    const totalSpan = Math.max(0, boxBottomY - PEDESTAL_TOP_Y);
     const holder = document.createElement("a-entity");
     holder.setAttribute("id", "radar-mast");
-    if (totalSpan <= 1e-6) return holder;
+    const { innerY } = computeRadarArmGeometry();
 
-    const beamH = Math.min(BEAM_HEIGHT_M, totalSpan);
-    const mastBodyH = totalSpan - beamH;
-    const beamY = PEDESTAL_TOP_Y + mastBodyH + beamH / 2;
-
+    const mastBodyH = Math.max(0, innerY - PEDESTAL_TOP_Y_M);
     if (mastBodyH > 1e-6) {
       const cyl = document.createElement("a-cylinder");
       cyl.setAttribute("radius", (mastDiameterM / 2).toString());
       cyl.setAttribute("height", mastBodyH.toString());
       cyl.setAttribute("color", "#8B4513");
       cyl.setAttribute("roughness", "0.65");
-      cyl.setAttribute(
-        "position",
-        `0 ${PEDESTAL_TOP_Y + mastBodyH / 2} 0`
-      );
+      cyl.setAttribute("position", `0 ${PEDESTAL_TOP_Y_M + mastBodyH / 2} 0`);
       holder.appendChild(cyl);
     }
 
-    if (beamH > 1e-6) {
-      const sensorCount = clampRadarCount(radarCount);
-      const numBeams = sensorCount / 2;
-      const beamLen = 2 * radarRadiusM + RADAR_BOX;
-      const T = getThree();
-      for (let k = 0; k < numBeams; k++) {
-        const yawDeg = T.MathUtils.radToDeg((k / sensorCount) * Math.PI * 2);
-        const beam = document.createElement("a-box");
-        beam.setAttribute("width", BEAM_WIDTH_M.toString());
-        beam.setAttribute("height", beamH.toString());
-        beam.setAttribute("depth", beamLen.toString());
-        beam.setAttribute("color", "#8B4513");
-        beam.setAttribute("roughness", "0.65");
-        beam.setAttribute("position", `0 ${beamY} 0`);
-        beam.setAttribute("rotation", `0 ${yawDeg} 0`);
-        holder.appendChild(beam);
-      }
-      const hubR = Math.max(mastDiameterM / 2, BEAM_WIDTH_M * 0.9);
-      const hub = document.createElement("a-cylinder");
-      hub.setAttribute("radius", hubR.toString());
-      hub.setAttribute("height", beamH.toString());
-      hub.setAttribute("color", "#7a3d11");
-      hub.setAttribute("roughness", "0.7");
-      hub.setAttribute("position", `0 ${beamY} 0`);
-      holder.appendChild(hub);
-    }
+    // Zentrale Nabe, in der die Latten zusammenlaufen.
+    const hubR = Math.max(mastDiameterM / 2, BEAM_WIDTH_M * 0.9);
+    const hub = document.createElement("a-cylinder");
+    hub.setAttribute("radius", hubR.toString());
+    hub.setAttribute("height", (BEAM_HEIGHT_M * 1.5).toString());
+    hub.setAttribute("color", "#7a3d11");
+    hub.setAttribute("roughness", "0.7");
+    hub.setAttribute("position", `0 ${innerY} 0`);
+    holder.appendChild(hub);
     return holder;
   }
 
+  /**
+   * Pro Sensor eine Dachlatte, die vom Mast (Nabe, `innerY`) schräg nach oben zum
+   * Außenende kippt. Am Außenende sitzt an der Unterseite (zum Boden zeigend) der
+   * grüne Radar-Chip; der Kegel geht von der Chip-Unterseite entlang der Latten-
+   * Unterseiten-Normalen (nach unten/außen) ab. Pivot (Yaw) → tilt (Latten-
+   * Neigung) → Latte/Chip/Kegel teilen sich dieselbe Transform.
+   */
   createRadarSensors() {
     const root = document.createElement('a-entity');
     root.setAttribute('id', 'radar-sensors');
     const n = clampRadarCount(radarCount);
     const T = getThree();
+    const { innerY, armTiltDeg, armLen } = computeRadarArmGeometry();
+    const chipY = -(BEAM_HEIGHT_M / 2 + RADAR_CHIP_H_M / 2);
+    const chipZ = armLen - RADAR_CHIP_D_M / 2;
     for (let i = 0; i < n; i++) {
       const angle = (i / n) * Math.PI * 2;
-      const x = radarRadiusM * Math.sin(angle);
-      const z = radarRadiusM * Math.cos(angle);
       // +Z radial nach außen (ohne +180 — sonst zeigen Sensoren zur Mitte)
       const yawDeg = T.MathUtils.radToDeg(angle);
       const pivot = document.createElement('a-entity');
-      pivot.setAttribute('position', `${x} ${radarHeight} ${z}`);
+      pivot.setAttribute('position', `0 ${innerY} 0`);
       pivot.setAttribute('rotation', `0 ${yawDeg} 0`);
       const tilt = document.createElement('a-entity');
-      tilt.setAttribute('rotation', `${-radarTiltDeg} 0 0`);
-      const box = document.createElement('a-box');
-      box.setAttribute('width', RADAR_BOX.toString());
-      box.setAttribute('height', RADAR_BOX.toString());
-      box.setAttribute('depth', RADAR_BOX.toString());
-      box.setAttribute('color', '#0a0a0a');
-      box.setAttribute('position', '0 0 0');
-      box.setAttribute('roughness', '0.6');
+      // -armTiltDeg um X: das +Z-Ende (außen) geht hoch, die Unterseiten-Normale
+      // zeigt nach unten/außen (= Kegelachse), Chip an dieser Unterseite.
+      tilt.setAttribute('rotation', `${-armTiltDeg} 0 0`);
+
+      // Dachlatte: liegt entlang +Z, Innenende an der Nabe, Außenende beim Chip.
+      const arm = document.createElement('a-box');
+      arm.setAttribute('width', BEAM_WIDTH_M.toString());
+      arm.setAttribute('height', BEAM_HEIGHT_M.toString());
+      arm.setAttribute('depth', armLen.toString());
+      arm.setAttribute('color', '#8B4513');
+      arm.setAttribute('roughness', '0.65');
+      arm.setAttribute('position', `0 0 ${armLen / 2}`);
+      tilt.appendChild(arm);
+
+      // Grüner Chip an der Unterseite des Lattenendes (zum Boden zeigend).
+      const chip = document.createElement('a-box');
+      chip.setAttribute('width', RADAR_CHIP_W_M.toString());
+      chip.setAttribute('height', RADAR_CHIP_H_M.toString());
+      chip.setAttribute('depth', RADAR_CHIP_D_M.toString());
+      chip.setAttribute('color', RADAR_CHIP_COLOR);
+      chip.setAttribute('roughness', '0.4');
+      chip.setAttribute('position', `0 ${chipY} ${chipZ}`);
+      tilt.appendChild(chip);
+
       if (renderRadarCones) {
         const coneHost = document.createElement('a-entity');
-        coneHost.setAttribute('position', '0 0 0');
+        // Apex an der Chip-Unterseite; Öffnung in -Y = Latten-Neigung.
+        coneHost.setAttribute('position', `0 ${chipY - RADAR_CHIP_H_M / 2} ${chipZ}`);
         coneHost.setAttribute(
           'radar-cone-viz',
           `length: ${RADAR_SPOT_DISTANCE_M}; halfAngleDeg: ${RADAR_SPOT_HALF_ANGLE_DEG}`
         );
-        // Kegel unter gleicher tilt-Gruppe wie die Box: Spitze = Boxmitte, Öffnung in -Y = Neigungswinkel.
         // Kein a-light Spot: sonst würde das Radar andere Meshes (Mast, Boden) mitblau anstrahlen; der Effekt
         // kommt nur noch aus dem halbtransparenten Kegel-Mesh (radar-cone-viz), nicht aus Scene-Lighting.
         tilt.appendChild(coneHost);
       }
-      tilt.appendChild(box);
+
       pivot.appendChild(tilt);
       root.appendChild(pivot);
     }
