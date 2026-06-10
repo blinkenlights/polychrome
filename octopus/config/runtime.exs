@@ -7,9 +7,14 @@ if config_env() == :test do
 else
   Code.eval_file(Path.join(__DIR__, "radar.exs"))
 
-  radar_local = Path.join(__DIR__, "radar.local.exs")
+  # Check for host-specific radar overrides in order:
+  #   1. <release_dir>/radar.local.exs  — dev (config/) and custom release builds
+  #   2. /data/radar.local.exs          — Docker deployments (persistent data volume)
+  radar_local =
+    [Path.join(__DIR__, "radar.local.exs"), "/data/radar.local.exs"]
+    |> Enum.find(&File.exists?/1)
 
-  if File.exists?(radar_local) do
+  if radar_local do
     Code.eval_file(radar_local)
   end
 end
@@ -61,9 +66,13 @@ if config_env() == :prod do
   host = System.get_env("PHX_HOST") || "example.com"
   port = String.to_integer(System.get_env("PORT") || "4000")
 
+  # When running behind a TLS-terminating reverse proxy (Caddy, Fly, etc.) set
+  # PHX_URL_PORT=443 and PHX_URL_SCHEME=https so Phoenix generates correct URLs.
+  url_port = String.to_integer(System.get_env("PHX_URL_PORT") || "80")
+  url_scheme = System.get_env("PHX_URL_SCHEME") || "http"
+
   config :octopus, OctopusWeb.Endpoint,
-    # url: [host: host, port: 443, scheme: "https"],
-    url: [host: host, port: 80, scheme: "http"],
+    url: [host: host, port: url_port, scheme: url_scheme],
     http: [
       # Enable IPv6 and bind on all interfaces.
       # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.

@@ -5,15 +5,27 @@ defmodule Octopus.MixProject do
     [
       app: :octopus,
       version: "0.1.0",
-      elixir: "~> 1.19",
+      elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       compilers: [:yecc, :leex] ++ Mix.compilers(),
       listeners: [Phoenix.CodeReloader],
       aliases: aliases(),
       deps: deps(),
-      usage_rules: usage_rules()
+      usage_rules: usage_rules(),
+      releases: [
+        octopus: [
+          steps: [:assemble, &copy_radar_config/1]
+        ]
+      ]
     ]
+  end
+
+  defp copy_radar_config(release) do
+    source = Path.join([__DIR__, "config", "radar.exs"])
+    dest = Path.join([release.path, "releases", release.version, "radar.exs"])
+    File.cp!(source, dest)
+    release
   end
 
   defp usage_rules do

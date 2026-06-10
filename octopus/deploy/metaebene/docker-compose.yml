@@ -1,0 +1,30 @@
+# Octopus — metaebene.org production deployment
+#
+# Contract with metaebene-host Caddy:
+#   container_name: polychrome   (matches sites/polychrome.caddy)
+#   internal port:  4000
+#   network:        metaebene_edge (external, managed by metaebene-host)
+#
+# Do NOT publish ports 80 or 443 — Caddy handles TLS termination.
+
+services:
+  polychrome:
+    image: polychrome:latest
+    container_name: polychrome
+    expose:
+      - "4000"
+    networks:
+      - metaebene_edge
+    env_file: .env
+    volumes:
+      - polychrome_data:/data
+    restart: unless-stopped
+
+volumes:
+  polychrome_data:
+    external: true
+
+networks:
+  metaebene_edge:
+    external: true
+    name: metaebene_edge

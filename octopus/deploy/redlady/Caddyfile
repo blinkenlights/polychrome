@@ -1,0 +1,4 @@
+redlady.crested-frog.ts.net {
+	tls /certs/redlady.crested-frog.ts.net.crt /certs/redlady.crested-frog.ts.net.key
+	reverse_proxy localhost:4000
+}

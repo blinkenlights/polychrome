@@ -18,11 +18,17 @@ release:
 	mix release --overwrite
 
 deploy-fly:
-	fly deploy
+	fly deploy --config deploy/fly/fly.toml
 
 deploy-oldie:
 	rsync -rlv --delete --filter=':- .gitignore' --exclude='_build' --exclude='deps' --exclude='priv/native' --exclude='native/target' --exclude='native/octopus_webp/target' . ${oldie_hostname}:/opt/octopus
 	ssh ${oldie_hostname} "sudo systemctl restart octopus.service"
+
+deploy-metaebene:
+	./deploy/metaebene/deploy.sh
+
+deploy-redlady:
+	./deploy/redlady/deploy.sh
 
 remote-logs:
 	ssh ${oldie_hostname} "sudo journalctl -u octopus.service -f"

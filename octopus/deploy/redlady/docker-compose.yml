@@ -1,0 +1,31 @@
+# Octopus — redlady (Raspberry Pi) deployment
+#
+# Both services use network_mode: host so that:
+#   - UDP broadcast to ESP32 panels works (no Docker NAT)
+#   - Caddy can reach the app at localhost:4000
+#
+# TLS is provided by Caddy using Tailscale certificates.
+# See README.md for one-time setup steps.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    network_mode: host
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /var/lib/tailscale/certs:/certs:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+  polychrome:
+    image: polychrome:latest
+    network_mode: host
+    env_file: .env
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:

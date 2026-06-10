@@ -51,3 +51,7 @@ priv/native
 whackamole_highscore
 
 /config/radar.local.exs
+
+# Per-deployment secrets and host-specific config — never commit these
+/deploy/*/.env
+/deploy/*/data/radar.local.exs

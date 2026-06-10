@@ -1,0 +1,16 @@
+import Config
+
+# Copy to radar.local.exs (same directory) for host-specific radar configuration.
+# Picked up automatically at runtime from /data/radar.local.exs.
+# See config/radar.local.exs.example for full documentation.
+
+# Disable radar entirely on this host:
+# config :octopus, Octopus.Radar, enabled: false
+
+# Raspberry Pi — one or two sensors on USB-to-UART adapters:
+#
+# config :octopus, Octopus.Radar,
+#   sensors: [
+#     [port: "/dev/ttyUSB0", angle_deg: 0, distance_cm: 0, rotation_deg: 0],
+#     [port: "/dev/ttyUSB1", angle_deg: 120, distance_cm: 150, rotation_deg: 120]
+#   ]

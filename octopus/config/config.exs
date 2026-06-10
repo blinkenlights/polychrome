@@ -37,8 +37,11 @@ config :octopus, :osc_server_port, 8000
 
 # Radar (HLK-LD6001A): see config/radar.exs (loaded at runtime via runtime.exs)
 
-# Installation configuration (compile-time setting)
-config :octopus, :installation, Octopus.Installation.Nation2025
+# Installation configuration (compile-time setting).
+# Override at build time via the INSTALLATION_MODULE env var (see Dockerfile ARG).
+config :octopus, :installation,
+  System.get_env("INSTALLATION_MODULE", "Octopus.Installation.Nation2025")
+  |> then(&Module.concat([&1]))
 
 # Configures the endpoint
 config :octopus, OctopusWeb.Endpoint,
