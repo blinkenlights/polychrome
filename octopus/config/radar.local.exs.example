@@ -11,10 +11,19 @@ import Config
 #
 # config :octopus, Octopus.Radar,
 #   sensors: [
-#     [port: "/dev/tty.usbserial-0001"]
+#     [port: "/dev/tty.usbserial-0001", angle_deg: 0, distance_cm: 0, rotation_deg: 0]
 #   ],
 #   defaults: [
 #     height_cm: 300
+#   ]
+
+# Example: three sensors around an installation center (pose values are illustrative):
+#
+# config :octopus, Octopus.Radar,
+#   sensors: [
+#     [port: "/dev/ttyUSB0", angle_deg: 0, distance_cm: 0, rotation_deg: 0],
+#     [port: "/dev/ttyUSB1", angle_deg: 120, distance_cm: 150, rotation_deg: 120],
+#     [port: "/dev/ttyUSB2", enabled: false]
 #   ]
 
 # Raspberry Pi example:

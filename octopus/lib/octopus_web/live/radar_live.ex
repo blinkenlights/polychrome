@@ -75,7 +75,9 @@ defmodule OctopusWeb.RadarLive do
   def mount(_params, _session, socket) do
     if connected?(socket) and Radar.enabled?(), do: Radar.subscribe()
 
-    devices = Radar.devices()
+    devices =
+      Radar.devices()
+      |> Enum.filter(& &1.enabled)
     selected = List.first(devices)
     selected_id = selected && selected.device_id
 

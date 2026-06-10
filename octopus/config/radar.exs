@@ -28,6 +28,13 @@ config :octopus, Octopus.Radar,
     [port: "/dev/tty.usbmodemBD6545ABCD5"]
   ],
   defaults: [
+    type: :ld6001a,
+    enabled: true,
+    # Pose correction: map sensor-local x/y into the installation global frame.
+    # Origin is the installation center; 0° = +X (right), 90° = +Y (front).
+    angle_deg: 0,
+    distance_cm: 0,
+    rotation_deg: 0,
     # 115_200 matches our hardware. Manual §22.1 lists 921_600 as a documented
     # default, but the same manual's host-tool example uses 115_200, and our
     # specific HLK-LD6001A-60G unit only responds at 115_200. Override per
