@@ -165,6 +165,12 @@ let radarTiltDeg = 45;
 /** Toggle: semi-transparent blue cone meshes (`radar-cone-viz`) on each sensor */
 let renderRadarCones = true;
 /**
+ * Toggle: Sensor-Blickrichtung (blauer Kegel + gelbe Achse) unabhängig von der
+ * Lattenneigung. Wenn true, zeigt der Kegel senkrecht nach unten (−Y), egal wie
+ * stark die Dachlatte gekippt ist (Gegenrotation gegen die `tilt`-Gruppe).
+ */
+let radarConeStraightDown = false;
+/**
  * Voller Öffnungswinkel des Radar-Spotlights (A-Frame `light.angle`, Grad).
  * Der blaue Kegel (`radar-cone-viz`) nutzt denselben Winkel — Halbwinkel = /2.
  */
@@ -311,7 +317,9 @@ function computeRadarConeGroundFootprint(): RadarFootprint {
   const r0 = radarRadiusM;
   if (h <= 0) return empty;
 
-  const tiltRad = (armTiltDeg * Math.PI) / 180;
+  // Kegelachse ist senkrecht (tilt=0), wenn der Sensor entkoppelt nach unten zeigt.
+  const coneTiltDeg = radarConeStraightDown ? 0 : armTiltDeg;
+  const tiltRad = (coneTiltDeg * Math.PI) / 180;
   const theta = (RADAR_SPOT_HALF_ANGLE_DEG * Math.PI) / 180;
   const L = RADAR_SPOT_DISTANCE_M;
   const cosT = Math.cos(tiltRad);
@@ -422,7 +430,20 @@ const radarFootprintInfo = {
   footprintMinM: 0,
   reachMaxM: 0,
   reachMinM: 0,
+  beamTopMaxM: 0,
 };
+
+/**
+ * Höchster Punkt der Dachlatten: obere Außenkante am freien Lattenende. Die
+ * Mittellinie endet bei `chipHeight`; durch die Lattendicke liegt die Oberkante
+ * senkrecht zur Lattenachse um BEAM_HEIGHT_M/2 höher, vertikal projiziert
+ * ·cos(tilt).
+ */
+function computeBeamTopMaxHeight(): number {
+  const { armTiltDeg, chipHeight } = computeRadarArmGeometry();
+  const tiltRad = (armTiltDeg * Math.PI) / 180;
+  return chipHeight + (BEAM_HEIGHT_M / 2) * Math.cos(tiltRad);
+}
 
 function updateRadarFootprintInfo() {
   const fp = computeRadarConeGroundFootprint();
@@ -431,6 +452,7 @@ function updateRadarFootprintInfo() {
   radarFootprintInfo.footprintMinM = round3(fp.minDiameterM);
   radarFootprintInfo.reachMaxM = round3(fp.groundReachMaxM);
   radarFootprintInfo.reachMinM = round3(fp.groundReachMinM);
+  radarFootprintInfo.beamTopMaxM = round3(computeBeamTopMaxHeight());
 }
 
 /** Kegelachse (vom Sensor in den Kegel) wie in `createRadarSensors`: R_y(yaw) · R_x(-tilt) · (0,-1,0). */
@@ -635,6 +657,7 @@ class Pixels3dAframeHook extends Hook {
       radarRadiusM,
       mastDiameterM,
       renderRadarCones,
+      radarConeStraightDown,
       radarTiltAutoAlign,
     };
     const gui = new GUI({ title: "Sim 3D" });
@@ -675,6 +698,14 @@ class Pixels3dAframeHook extends Hook {
       .onChange((v: boolean) => {
         renderRadarCones = !!v;
         params.renderRadarCones = renderRadarCones;
+        this.updateRadarVisualization();
+      });
+    folder
+      .add(params, "radarConeStraightDown")
+      .name("Sensor senkrecht n. unten")
+      .onChange((v: boolean) => {
+        radarConeStraightDown = !!v;
+        params.radarConeStraightDown = radarConeStraightDown;
         this.updateRadarVisualization();
       });
     folder
@@ -787,6 +818,11 @@ class Pixels3dAframeHook extends Hook {
     infoFolder
       .add(radarFootprintInfo, "reachMinM")
       .name("Reichweite min (m)")
+      .listen()
+      .disable();
+    infoFolder
+      .add(radarFootprintInfo, "beamTopMaxM")
+      .name("Latten-Oberkante max (m)")
       .listen()
       .disable();
     infoFolder.open();
@@ -1192,6 +1228,11 @@ class Pixels3dAframeHook extends Hook {
         const coneHost = document.createElement('a-entity');
         // Apex an der Chip-Unterseite; Öffnung in -Y = Latten-Neigung.
         coneHost.setAttribute('position', `0 ${chipY - RADAR_CHIP_H_M / 2} ${chipZ}`);
+        // Bei „senkrecht nach unten" Gegenrotation gegen die tilt-Gruppe
+        // (+armTiltDeg um X), sodass die Kegelachse weltweit auf −Y zeigt.
+        if (radarConeStraightDown) {
+          coneHost.setAttribute('rotation', `${armTiltDeg} 0 0`);
+        }
         coneHost.setAttribute(
           'radar-cone-viz',
           `length: ${RADAR_SPOT_DISTANCE_M}; halfAngleDeg: ${RADAR_SPOT_HALF_ANGLE_DEG}`
