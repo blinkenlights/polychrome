@@ -151,7 +151,7 @@ const textures: any[] = [];
 let radarHeight = 3.5;
 const RADAR_RADIUS_MIN_M = 0;
 const RADAR_RADIUS_MAX_M = 8;
-/** Horizontaler Abstand der Chips von der Y-Achse (Kreisradius), Default 1.5 m */
+/** Lattenlänge (m): bei 0° Neigung = horizontaler Abstand der Chips von der Y-Achse, Default 1.5 m */
 let radarRadiusM = 1.5;
 /** Radar-Chip am Lattenende (ersetzt die schwarze Box): 5×5 cm Grundfläche, 1 cm dick, grün, sitzt an der Unterseite der Latte. */
 const RADAR_CHIP_W_M = 0.05;
@@ -160,6 +160,10 @@ const RADAR_CHIP_H_M = 0.01;
 const RADAR_CHIP_COLOR = "#22c55e";
 /** Oberkante des zentralen Podests (Plattform); Mast/Latten beginnen hier. */
 const PEDESTAL_TOP_Y_M = 0.5;
+/** Zentrale Plattform („Sofa/Platte"): Radius per GUI 0.5–3 m, Default 2.5 m. */
+let platformRadiusM = 2.5;
+const PLATFORM_RADIUS_MIN_M = 0.5;
+const PLATFORM_RADIUS_MAX_M = 3;
 /** Neigung der Latten (und damit der Chips/Kegel): die Latten kippen vom Mast aus nach oben, ein Wert für alle. */
 let radarTiltDeg = 45;
 /** Toggle: semi-transparent blue cone meshes (`radar-cone-viz`) on each sensor */
@@ -312,9 +316,9 @@ function computeRadarConeGroundFootprint(): RadarFootprint {
     groundReachMaxM: 0,
     groundReachMinM: 0,
   };
-  const { armTiltDeg, chipHeight } = computeRadarArmGeometry();
+  const { armTiltDeg, chipHeight, horizontalRadius } = computeRadarArmGeometry();
   const h = chipHeight;
-  const r0 = radarRadiusM;
+  const r0 = horizontalRadius;
   if (h <= 0) return empty;
 
   // Kegelachse ist senkrecht (tilt=0), wenn der Sensor entkoppelt nach unten zeigt.
@@ -477,16 +481,16 @@ function computeAutoRadarTiltDeg(): number {
   const zFace = PANEL_DEPTH / 2 + 0.1;
   const Tz = panelDiameter / 2 - zFace;
   const H = radarHeight;
-  const r = radarRadiusM;
+  const L = radarRadiusM;
 
-  // Apex wandert mit der Neigung: S(t) = (0, H + r·tan t, r), Achse a(t) = (0, -cos t, sin t).
-  // Gesucht: a(t) || (Top - S(t)) in der YZ-Ebene. Kreuzprodukt-x = 0 liefert
-  //   f(t) = -cos t·(Tz - r) - sin t·(yTop - H) + r·sin t·tan t = 0.
+  // `radarRadiusM` = Lattenlänge: Apex S(t) = (L·cos t, H + L·sin t) in (z,y),
+  // Achse a(t) = (sin t, -cos t). Gesucht a(t) || (Top - S(t)); Kreuzprodukt-x = 0
+  // liefert f(t) = sin t·(yTop - H) + cos t·Tz - L = 0.
   const f = (deg: number) => {
     const t = (deg * Math.PI) / 180;
     const c = Math.cos(t);
     const s = Math.sin(t);
-    return -c * (Tz - r) - s * (yTop - H) + r * s * (s / c);
+    return s * (yTop - H) + c * Tz - L;
   };
 
   let lo = 5;
@@ -517,22 +521,27 @@ const RADAR_ARM_TILT_MAX_DEG = 85;
 
 /**
  * Geometrie der nach oben kippenden Dachlatten: die Anbringung am Mast ist fix
- * bei `radarHeight` (= Masthöhe). Jede Latte läuft von dort schräg nach oben zum
- * freien Außenende; bei Neigung > 0 liegt der Chip dort also höher als der Mast.
- * `chipHeight = radarHeight + radarRadiusM·tan(tilt)`, `armLen = radarRadiusM/cos(tilt)`.
+ * bei `radarHeight` (= Masthöhe). `radarRadiusM` ist die **Lattenlänge** selbst
+ * (nicht der horizontale Abstand): bei 0° Neigung deckt sich beides, bei
+ * Neigung t verkürzt sich der horizontale Abstand auf `L·cos(t)` und das
+ * Außenende steigt auf `innerY + L·sin(t)`.
+ * `armLen = radarRadiusM`, `horizontalRadius = L·cos(tilt)`,
+ * `chipHeight = innerY + L·sin(tilt)`.
  */
 function computeRadarArmGeometry(): {
   innerY: number;
   armTiltDeg: number;
   armLen: number;
+  horizontalRadius: number;
   chipHeight: number;
 } {
   const innerY = radarHeight;
   const armTiltDeg = Math.max(0, Math.min(RADAR_ARM_TILT_MAX_DEG, radarTiltDeg));
   const tiltRad = (armTiltDeg * Math.PI) / 180;
-  const armLen = radarRadiusM / Math.cos(tiltRad);
-  const chipHeight = innerY + radarRadiusM * Math.tan(tiltRad);
-  return { innerY, armTiltDeg, armLen, chipHeight };
+  const armLen = radarRadiusM;
+  const horizontalRadius = radarRadiusM * Math.cos(tiltRad);
+  const chipHeight = innerY + radarRadiusM * Math.sin(tiltRad);
+  return { innerY, armTiltDeg, armLen, horizontalRadius, chipHeight };
 }
 
 type Param = {
@@ -718,7 +727,7 @@ class Pixels3dAframeHook extends Hook {
       });
     folder
       .add(params, "radarRadiusM", radarRadiusMinM, RADAR_RADIUS_MAX_M, 0.01)
-      .name("Abstand zum Zentrum (m)")
+      .name("Latten-Länge (m)")
       .onChange((v: number) => {
         radarRadiusM = Math.min(
           RADAR_RADIUS_MAX_M,
@@ -760,6 +769,21 @@ class Pixels3dAframeHook extends Hook {
       radarNeigungCtrl.disable(true);
     }
     folder.open();
+
+    const platformParams = { platformRadiusM };
+    const platformFolder = gui.addFolder("Plattform");
+    platformFolder
+      .add(platformParams, "platformRadiusM", PLATFORM_RADIUS_MIN_M, PLATFORM_RADIUS_MAX_M, 0.05)
+      .name("Radius (m)")
+      .onChange((v: number) => {
+        platformRadiusM = Math.min(
+          PLATFORM_RADIUS_MAX_M,
+          Math.max(PLATFORM_RADIUS_MIN_M, Number(v))
+        );
+        platformParams.platformRadiusM = platformRadiusM;
+        this.updateCentralCylinder();
+      });
+    platformFolder.open();
 
     const leanParams = { leanPostBottomR, leanPostTopR, leanPostHeight };
     const leanFolder = gui.addFolder("Rückenlehne");
@@ -1108,8 +1132,9 @@ class Pixels3dAframeHook extends Hook {
     const inner = document.createElement('a-ring');
     inner.setAttribute('position', '0 0.02 0');
     inner.setAttribute('rotation', '-90 0 0');
-    const rInner = Math.max(0, radarRadiusM - 0.01);
-    const rOuter = radarRadiusM + 0.01;
+    const { horizontalRadius } = computeRadarArmGeometry();
+    const rInner = Math.max(0, horizontalRadius - 0.01);
+    const rOuter = horizontalRadius + 0.01;
     inner.setAttribute('radius-inner', rInner.toString());
     inner.setAttribute('radius-outer', rOuter.toString());
     inner.setAttribute(
@@ -1251,11 +1276,18 @@ class Pixels3dAframeHook extends Hook {
   createCentralCylinder() {
     const cyl = document.createElement('a-cylinder');
     cyl.setAttribute('id', 'central-platform');
-    cyl.setAttribute('radius', '2.5');
+    cyl.setAttribute('radius', platformRadiusM.toString());
     cyl.setAttribute('height', '0.5');
     cyl.setAttribute('position', '0 0.25 0');
     cyl.setAttribute('color', '#8B4513');
     return cyl;
+  }
+
+  updateCentralCylinder() {
+    const old = document.querySelector('#central-platform');
+    const sceneEl = document.querySelector('a-scene');
+    old?.parentNode?.removeChild(old);
+    if (sceneEl) sceneEl.appendChild(this.createCentralCylinder());
   }
 
   /**
