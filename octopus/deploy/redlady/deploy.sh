@@ -58,9 +58,8 @@ rsync -av "${SCRIPT_DIR}/docker-compose.yml" "${REMOTE_USER}@${REMOTE_HOST}:${RE
 rsync -av "${SCRIPT_DIR}/Caddyfile" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/deploy/redlady/"
 rsync -av "${ENV_FILE}" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/deploy/redlady/.env"
 
-# Sync radar.local.exs if present (gitignored, host-specific sensor config).
-# Place it at deploy/redlady/data/radar.local.exs locally and it will be
-# deployed to /data/radar.local.exs inside the container.
+# Sync radar.local.exs if present (redlady-specific sensor config, tracked in git).
+# Deployed to /data/radar.local.exs inside the container via the ./data bind mount.
 RADAR_LOCAL="${SCRIPT_DIR}/data/radar.local.exs"
 if [ -f "${RADAR_LOCAL}" ]; then
     echo "Syncing radar.local.exs..."
@@ -81,7 +80,8 @@ ssh "${REMOTE_USER}@${REMOTE_HOST}" "
     docker compose stop polychrome 2>/dev/null || true
 
     echo 'Ensuring data directory has correct permissions...'
-    sudo chown -R nobody:nogroup ${REMOTE_DIR}/deploy/redlady/data
+    docker run --rm -v ${REMOTE_DIR}/deploy/redlady/data:/data --user root polychrome:latest \
+        sh -c 'chown -R nobody:nogroup /data'
 
     echo 'Starting services (migrations run automatically on startup)...'
     docker compose up -d

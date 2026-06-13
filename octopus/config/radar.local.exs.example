@@ -2,9 +2,55 @@ import Config
 
 # Copy to radar.local.exs (gitignored) for machine-specific overrides.
 # Loaded after radar.exs in config/runtime.exs.
+#
+# Only :port is required per sensor. Any omitted key falls back to :defaults
+# in config/radar.exs (or a :defaults block you add here).
 
 # Disable radar entirely on this host:
 # config :octopus, Octopus.Radar, enabled: false
+
+# All available per-sensor keys (only :port is required):
+#
+# config :octopus, Octopus.Radar,
+#   sensors: [
+#     [
+#       port: "/dev/ttyUSB0",
+#       type: :ld6001a,
+#       enabled: true,
+#       baud: 115_200,
+#       angle_deg: 0,
+#       distance_cm: 0,
+#       rotation_deg: 0,
+#       sensitivity: 4,
+#       height_cm: 320,
+#       range_cm: 450,
+#       x_pos_cm: 450,
+#       x_neg_cm: -450,
+#       y_pos_cm: 450,
+#       y_neg_cm: -450,
+#       moving_decisecs: 110,
+#       static_decisecs: 100,
+#       exit_decisecs: 5
+#     ]
+#   ]
+#
+#   port:            serial device path (required)
+#   type:            :ld6001a — only supported driver today
+#   enabled:         skip this sensor at boot when false
+#   baud:            serial speed; our units use 115_200 (manual default is 921_600)
+#   angle_deg:       sensor position around installation center, 0..360°
+#   distance_cm:     sensor distance from center, >= 0
+#   rotation_deg:    sensor heading offset; 0° = +X (right), 90° = +Y (front)
+#   sensitivity:     AT+DPKTH, 1..9 — higher number = lower sensitivity (fewer phantoms)
+#   height_cm:       mounting height (manual §9.3)
+#   range_cm:        max detection range
+#   x_pos_cm:        +X extent of detection volume
+#   x_neg_cm:        -X extent of detection volume
+#   y_pos_cm:        +Y extent of detection volume
+#   y_neg_cm:        -Y extent of detection volume
+#   moving_decisecs: moving-target persistence, units of 100 ms (manual §9.4)
+#   static_decisecs: static-target persistence, units of 100 ms
+#   exit_decisecs:   exit-zone persistence, units of 100 ms
 
 # Mac dev example (CH340 / CP210x). Circuits.UART uses tty.* :
 # ls /dev/tty.usbserial-* /dev/cu.usbserial-*

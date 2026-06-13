@@ -105,7 +105,7 @@ container by adding a `devices` section to `docker-compose.yml`:
       - /dev/ttyUSB1:/dev/ttyUSB1
 ```
 
-Then configure the sensor ports in `config/radar.local.exs` (gitignored):
+Then configure the sensor ports in `deploy/redlady/data/radar.local.exs`:
 
 ```elixir
 import Config
