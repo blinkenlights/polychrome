@@ -22,9 +22,19 @@ defmodule Octopus.MixProject do
   end
 
   defp copy_radar_config(release) do
-    source = Path.join([__DIR__, "config", "radar.exs"])
-    dest = Path.join([release.path, "releases", release.version, "radar.exs"])
-    File.cp!(source, dest)
+    releases_dir = Path.join([release.path, "releases", release.version])
+
+    File.cp!(
+      Path.join([__DIR__, "config", "radar.exs"]),
+      Path.join([releases_dir, "radar.exs"])
+    )
+
+    local_source = Path.join([__DIR__, "config", "radar.local.exs"])
+
+    if File.exists?(local_source) do
+      File.cp!(local_source, Path.join([releases_dir, "radar.local.exs"]))
+    end
+
     release
   end
 

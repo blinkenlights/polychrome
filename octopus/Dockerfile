@@ -77,6 +77,11 @@ RUN mix compile
 # Changes to config/runtime.exs / radar.exs don't require recompiling the code
 COPY config/runtime.exs config/radar.exs config/
 
+# Bake in the deployment-specific radar config (tracked in git).
+# The copy_radar_config/1 release step will include it in releases/<version>/
+# alongside radar.exs, so runtime.exs finds it at Path.join(__DIR__, "radar.local.exs").
+COPY deploy/redlady/data/radar.local.exs config/
+
 COPY rel rel
 RUN mix release
 

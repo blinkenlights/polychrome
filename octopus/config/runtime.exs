@@ -8,8 +8,9 @@ else
   Code.eval_file(Path.join(__DIR__, "radar.exs"))
 
   # Check for host-specific radar overrides in order:
-  #   1. <release_dir>/radar.local.exs  — dev (config/) and custom release builds
-  #   2. /data/radar.local.exs          — Docker deployments (persistent data volume)
+  #   1. <release_dir>/radar.local.exs  — dev (config/) or baked into Docker image via
+  #                                        the copy_radar_config/1 release step in mix.exs
+  #   2. /data/radar.local.exs          — runtime override via bind-mounted data volume
   radar_local =
     [Path.join(__DIR__, "radar.local.exs"), "/data/radar.local.exs"]
     |> Enum.find(&File.exists?/1)

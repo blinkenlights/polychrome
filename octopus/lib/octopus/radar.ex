@@ -347,8 +347,10 @@ defmodule Octopus.Radar do
     has_sensors = Keyword.has_key?(radar_env, :sensors)
 
     if has_layout and has_sensors do
-      raise ArgumentError,
-            "radar config: :layout and :sensors are mutually exclusive; use one or the other"
+      Logger.debug(
+        "[radar] Both :layout and :sensors are set — :layout takes precedence " <>
+          "(the base radar.exs :sensors list is the dev fallback and is ignored)"
+      )
     end
 
     if has_layout do

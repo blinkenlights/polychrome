@@ -44,6 +44,9 @@ defmodule OctopusWeb.RadarLive do
   @r_min 18
   @r_max 72
 
+  # Half-side of the sensor square in the layout diagram (SVG units = cm).
+  @layout_sensor_half 28
+
   # Velocity (m/s) → viewBox-unit scale for the velocity arrow. A 2 m/s
   # vector renders at ~80 viewBox units; faster vectors are clipped.
   @velocity_scale 40
@@ -89,6 +92,8 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:sensitivity, (selected && selected.sensitivity) || 4)
      |> assign(:bounds_mode, :static)
      |> assign(:static_bounds, compute_static_bounds(selected_id, devices))
+     |> assign(:layout_sensors, build_layout_sensors(devices))
+     |> assign(:layout_vb_range, layout_vb_range(devices))
      |> reset_radar_state()}
   end
 
@@ -601,103 +606,202 @@ defmodule OctopusWeb.RadarLive do
                 </span>
               </div>
             <% else %>
-            <div class="w-full max-w-3xl mx-auto aspect-square mt-4 bg-base-200 rounded">
-              <svg viewBox="0 0 1000 1000" class="w-full h-full">
-                <%= for r <- @range_indicators do %>
-                  <ellipse
-                    cx={fmt_f(r.cx)}
-                    cy={fmt_f(r.cy)}
-                    rx={fmt_f(r.rx)}
-                    ry={fmt_f(r.ry)}
-                    fill="rgba(37, 99, 235, 0.2)"
-                    stroke="rgba(37, 99, 235, 0.5)"
-                    stroke-width="1"
-                  />
-                <% end %>
-
-                <g stroke="black">
-                  <%= if @ruler.x_axis_visible do %>
-                    <line
-                      x1="0"
-                      y1={fmt_f(@ruler.origin_y)}
-                      x2="1000"
-                      y2={fmt_f(@ruler.origin_y)}
+            <div class="flex gap-4 mt-4 items-start">
+              <div class="flex-1 min-w-0 aspect-square bg-base-200 rounded">
+                <svg viewBox="0 0 1000 1000" class="w-full h-full">
+                  <%= for r <- @range_indicators do %>
+                    <ellipse
+                      cx={fmt_f(r.cx)}
+                      cy={fmt_f(r.cy)}
+                      rx={fmt_f(r.rx)}
+                      ry={fmt_f(r.ry)}
+                      fill="rgba(37, 99, 235, 0.2)"
+                      stroke="rgba(37, 99, 235, 0.5)"
                       stroke-width="1"
-                      stroke-opacity="0.3"
                     />
                   <% end %>
-                  <%= if @ruler.y_axis_visible do %>
-                    <line
-                      x1={fmt_f(@ruler.origin_x)}
-                      y1="0"
-                      x2={fmt_f(@ruler.origin_x)}
-                      y2="1000"
-                      stroke-width="1"
-                      stroke-opacity="0.3"
-                    />
-                  <% end %>
-                  <%= for tick <- @ruler.ticks do %>
-                    <line
-                      x1={fmt_f(tick.x1)}
-                      y1={fmt_f(tick.y1)}
-                      x2={fmt_f(tick.x2)}
-                      y2={fmt_f(tick.y2)}
-                      stroke-width={if tick.major?, do: "2", else: "1"}
-                      stroke-opacity={if tick.major?, do: "0.7", else: "0.35"}
-                    />
-                  <% end %>
-                </g>
 
-                <%= for v <- @view_targets do %>
-                  <g opacity={fmt_f(v.opacity)}>
-                    <%= for seg <- v.trail do %>
+                  <g stroke="black">
+                    <%= if @ruler.x_axis_visible do %>
                       <line
-                        x1={fmt_f(seg.x1)}
-                        y1={fmt_f(seg.y1)}
-                        x2={fmt_f(seg.x2)}
-                        y2={fmt_f(seg.y2)}
-                        stroke={seg.color}
+                        x1="0"
+                        y1={fmt_f(@ruler.origin_y)}
+                        x2="1000"
+                        y2={fmt_f(@ruler.origin_y)}
+                        stroke-width="1"
+                        stroke-opacity="0.3"
+                      />
+                    <% end %>
+                    <%= if @ruler.y_axis_visible do %>
+                      <line
+                        x1={fmt_f(@ruler.origin_x)}
+                        y1="0"
+                        x2={fmt_f(@ruler.origin_x)}
+                        y2="1000"
+                        stroke-width="1"
+                        stroke-opacity="0.3"
+                      />
+                    <% end %>
+                    <%= for tick <- @ruler.ticks do %>
+                      <line
+                        x1={fmt_f(tick.x1)}
+                        y1={fmt_f(tick.y1)}
+                        x2={fmt_f(tick.x2)}
+                        y2={fmt_f(tick.y2)}
+                        stroke-width={if tick.major?, do: "2", else: "1"}
+                        stroke-opacity={if tick.major?, do: "0.7", else: "0.35"}
+                      />
+                    <% end %>
+                  </g>
+
+                  <%= for v <- @view_targets do %>
+                    <g opacity={fmt_f(v.opacity)}>
+                      <%= for seg <- v.trail do %>
+                        <line
+                          x1={fmt_f(seg.x1)}
+                          y1={fmt_f(seg.y1)}
+                          x2={fmt_f(seg.x2)}
+                          y2={fmt_f(seg.y2)}
+                          stroke={seg.color}
+                          stroke-width="3"
+                          stroke-linecap="round"
+                        />
+                      <% end %>
+                      <line
+                        x1={fmt_f(v.cx)}
+                        y1={fmt_f(v.cy)}
+                        x2={fmt_f(v.arrow_x)}
+                        y2={fmt_f(v.arrow_y)}
+                        stroke={v.color}
                         stroke-width="3"
                         stroke-linecap="round"
                       />
-                    <% end %>
+                      <circle
+                        cx={fmt_f(v.arrow_x)}
+                        cy={fmt_f(v.arrow_y)}
+                        r="4"
+                        fill={v.color}
+                      />
+                      <circle
+                        cx={fmt_f(v.cx)}
+                        cy={fmt_f(v.cy)}
+                        r={fmt_f(v.radius)}
+                        fill={v.color}
+                        stroke="black"
+                        stroke-width="2"
+                      />
+                      <text
+                        x={fmt_f(v.cx)}
+                        y={fmt_f(v.cy)}
+                        text-anchor="middle"
+                        dominant-baseline="central"
+                        font-size="20"
+                        font-weight="bold"
+                        fill="black"
+                      >
+                        {v.label}
+                      </text>
+                    </g>
+                  <% end %>
+                </svg>
+              </div>
+
+              <div class="w-44 shrink-0 flex flex-col gap-1">
+                <p class="text-xs text-center opacity-60">Sensor layout</p>
+                <div class="aspect-square bg-base-200 rounded">
+                  <svg
+                    viewBox={"-#{@layout_vb_range} -#{@layout_vb_range} #{@layout_vb_range * 2} #{@layout_vb_range * 2}"}
+                    class="w-full h-full"
+                  >
+                    <%!-- Faint grid axes (positive quadrant highlights global +X/+Y) --%>
                     <line
-                      x1={fmt_f(v.cx)}
-                      y1={fmt_f(v.cy)}
-                      x2={fmt_f(v.arrow_x)}
-                      y2={fmt_f(v.arrow_y)}
-                      stroke={v.color}
-                      stroke-width="3"
-                      stroke-linecap="round"
+                      x1={-@layout_vb_range}
+                      y1="0"
+                      x2={@layout_vb_range}
+                      y2="0"
+                      stroke="#888"
+                      stroke-width="0.8"
+                      stroke-opacity="0.3"
                     />
-                    <circle
-                      cx={fmt_f(v.arrow_x)}
-                      cy={fmt_f(v.arrow_y)}
-                      r="4"
-                      fill={v.color}
+                    <line
+                      x1="0"
+                      y1={-@layout_vb_range}
+                      x2="0"
+                      y2={@layout_vb_range}
+                      stroke="#888"
+                      stroke-width="0.8"
+                      stroke-opacity="0.3"
                     />
-                    <circle
-                      cx={fmt_f(v.cx)}
-                      cy={fmt_f(v.cy)}
-                      r={fmt_f(v.radius)}
-                      fill={v.color}
-                      stroke="black"
-                      stroke-width="2"
-                    />
+                    <%!-- Axis labels — +Y is up so its SVG coord is negative --%>
                     <text
-                      x={fmt_f(v.cx)}
-                      y={fmt_f(v.cy)}
-                      text-anchor="middle"
-                      dominant-baseline="central"
-                      font-size="20"
-                      font-weight="bold"
-                      fill="black"
+                      x={@layout_vb_range - 4}
+                      y="14"
+                      text-anchor="end"
+                      font-size="14"
+                      fill="#888"
                     >
-                      {v.label}
+                      +X
                     </text>
-                  </g>
-                <% end %>
-              </svg>
+                    <text
+                      x="6"
+                      y={-@layout_vb_range + 16}
+                      text-anchor="start"
+                      font-size="14"
+                      fill="#888"
+                    >
+                      +Y
+                    </text>
+                    <%!-- Center marker --%>
+                    <line x1="-8" y1="0" x2="8" y2="0" stroke="#aaa" stroke-width="1.5" />
+                    <line x1="0" y1="-8" x2="0" y2="8" stroke="#aaa" stroke-width="1.5" />
+                    <circle cx="0" cy="0" r="4" fill="#aaa" />
+                    <%!-- Sensors --%>
+                    <%= for s <- @layout_sensors do %>
+                      <%!-- Dashed beam line from center to mount position --%>
+                      <line
+                        x1="0"
+                        y1="0"
+                        x2={fmt_f(s.cx)}
+                        y2={fmt_f(s.cy)}
+                        stroke="#888"
+                        stroke-width="1"
+                        stroke-dasharray="5,4"
+                        stroke-opacity="0.55"
+                      />
+                      <%!-- Sensor square group: translated to mount, then rotated by -(angle+rotation) --%>
+                      <g transform={"translate(#{fmt_f(s.cx)},#{fmt_f(s.cy)}) rotate(#{fmt_f(s.group_rotation)})"}>
+                        <rect
+                          x={s.rect_x}
+                          y={s.rect_y}
+                          width={s.rect_size}
+                          height={s.rect_size}
+                          rx="3"
+                          fill="rgba(37,99,235,0.25)"
+                          stroke="#2563eb"
+                          stroke-width="2"
+                        />
+                        <%!-- Orientation dot at the sensor-local +x, +y corner.
+                             In local SVG (y-down), +x is right and the radar's +y
+                             is up, i.e. negative SVG-y, so the dot sits top-right. --%>
+                        <circle cx={s.dot_cx} cy={s.dot_cy} r="5" fill="#2563eb" />
+                        <%!-- Label counter-rotated so it stays upright regardless of sensor orientation --%>
+                        <text
+                          x="0"
+                          y="0"
+                          text-anchor="middle"
+                          dominant-baseline="central"
+                          font-size="20"
+                          font-weight="bold"
+                          fill="#e0e7ff"
+                          transform={"rotate(#{fmt_f(s.text_rotation)})"}
+                        >
+                          {s.label}
+                        </text>
+                      </g>
+                    <% end %>
+                  </svg>
+                </div>
+              </div>
             </div>
             <% end %>
           <% end %>
@@ -880,6 +984,50 @@ defmodule OctopusWeb.RadarLive do
     age_fraction = min(1.0, age_ms / @trail_ms)
     lightness = @trail_l_near + age_fraction * (@trail_l_far - @trail_l_near)
     "hsl(#{hue}, #{@body_saturation}%, #{round(lightness)}%)"
+  end
+
+  ## Layout diagram
+
+  # Build the static sensor placement diagram shown beside the live track view.
+  # Each sensor becomes a square in a top-down SVG where 1 unit = 1 cm.
+  # All positions and rotations are pre-computed so the template is free of math.
+  #
+  # Coordinate conventions:
+  #   * World: +X right, +Y up  (radar convention)
+  #   * SVG:   +X right, +Y down — Y is negated when placing sensors
+  #   * group_rotation = -(angle_deg + rotation_deg): SVG rotates CW for positive
+  #     angles (y-down), so negating converts from CCW world convention to SVG.
+  #   * The orientation dot lives at the sensor-local (+x, +y) corner, which in
+  #     the SVG-local frame of the rotated group is (half, -half) — right and up.
+  defp build_layout_sensors(devices) do
+    half = @layout_sensor_half
+
+    Enum.map(devices, fn device ->
+      angle_rad = device.angle_deg * :math.pi() / 180.0
+      eff_rotation = device.angle_deg + device.rotation_deg
+      svg_cx = device.distance_cm * :math.cos(angle_rad)
+      svg_cy = -(device.distance_cm * :math.sin(angle_rad))
+
+      %{
+        label: device_letter(device.device_id),
+        cx: svg_cx,
+        cy: svg_cy,
+        group_rotation: -eff_rotation,
+        text_rotation: eff_rotation,
+        rect_x: -half,
+        rect_y: -half,
+        rect_size: half * 2,
+        dot_cx: half,
+        dot_cy: -half
+      }
+    end)
+  end
+
+  defp layout_vb_range([]), do: 120
+
+  defp layout_vb_range(devices) do
+    max_dist = devices |> Enum.map(& &1.distance_cm) |> Enum.max()
+    trunc(max_dist) + @layout_sensor_half + 24
   end
 
   ## Formatting helpers
