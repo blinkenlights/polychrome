@@ -5,7 +5,6 @@ defmodule Octopus.Apps.SpaceInvaders do
   alias Octopus.Protobuf.AudioFrame
   alias Octopus.Events.Event.Input, as: InputEvent
 
-  require Logger
 
   @frame_rate 60
   @frame_time_ms trunc(1000 / @frame_rate)

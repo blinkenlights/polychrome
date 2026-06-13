@@ -1,6 +1,5 @@
 defmodule Octopus.Animator do
   use GenServer
-  require Logger
   alias Octopus.Canvas
 
   # todo

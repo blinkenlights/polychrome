@@ -1,6 +1,5 @@
 defmodule Octopus.Mixer do
   use GenServer
-  require Logger
 
   alias Octopus.{Broadcaster, Protobuf, Canvas, AppManager, AppSupervisor, Installation}
 

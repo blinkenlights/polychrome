@@ -1,6 +1,5 @@
 defmodule Octopus.Apps.SpritesGrouped do
   use Octopus.App, category: :animation
-  require Logger
 
   alias Octopus.{Sprite, Canvas, Transitions}
 

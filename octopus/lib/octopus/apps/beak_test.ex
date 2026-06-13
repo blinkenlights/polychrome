@@ -1,6 +1,5 @@
 defmodule Octopus.Apps.BeakTest do
   use Octopus.App, category: :test
-  require Logger
 
   alias Octopus.Protobuf.{SynthFrame, SynthAdsrConfig, SynthConfig}
   alias Octopus.Canvas

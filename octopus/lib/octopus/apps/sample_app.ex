@@ -1,6 +1,5 @@
 defmodule Octopus.Apps.SampleApp do
   use Octopus.App, category: :test
-  require Logger
 
   alias Octopus.Canvas
   alias Octopus.Events.Event.Input, as: InputEvent

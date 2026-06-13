@@ -1,6 +1,5 @@
 defmodule Octopus.Apps.Lemmings do
   use Octopus.App, category: :animation
-  require Logger
 
   alias Octopus.{Sprite, Canvas}
   alias Octopus.Events.Event.Input, as: InputEvent

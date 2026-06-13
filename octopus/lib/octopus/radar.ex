@@ -271,14 +271,13 @@ defmodule Octopus.Radar do
           Logger.info("[radar #{device_id} #{port}] Sensor disabled in config — skipping")
           []
 
-        not File.exists?(port) ->
-          Logger.info(
-            "[radar #{device_id} #{port}] Configured port not present at boot — skipping sensor"
-          )
-
-          []
-
         true ->
+          if not File.exists?(port) do
+            Logger.info(
+              "[radar #{device_id} #{port}] Configured port not present at boot — starting sensor (will retry until available)"
+            )
+          end
+
           child_for_type(device_id, config)
       end
     end)

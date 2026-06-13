@@ -1,6 +1,5 @@
 defmodule Octopus.Apps.FontTester do
   use Octopus.App, category: :test
-  require Logger
 
   alias Octopus.Canvas
   alias Octopus.Font

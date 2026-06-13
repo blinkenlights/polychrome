@@ -1,6 +1,5 @@
 defmodule Octopus.Apps.SpritesTester do
   use Octopus.App, category: :test
-  require Logger
 
   alias Octopus.Sprite
   alias Octopus.Events.Event.Input, as: InputEvent

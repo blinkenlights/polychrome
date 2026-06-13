@@ -1,6 +1,5 @@
 defmodule Octopus.Apps.Senso do
   use Octopus.App, category: :game
-  require Logger
 
   alias Octopus.Canvas
   alias Octopus.Events.Event.Input, as: InputEvent

@@ -1,6 +1,5 @@
 defmodule Octopus.Apps.Blocks do
   use Octopus.App, category: :game
-  require Logger
 
   alias Octopus.Apps.Blocks
   alias Octopus.Events.Event.Input, as: InputEvent

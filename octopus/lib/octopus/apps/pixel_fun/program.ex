@@ -1,5 +1,4 @@
 defmodule Octopus.Apps.PixelFun.Program do
-  require Logger
   alias Octopus.PerlinNoise
 
   import Bitwise

@@ -1,6 +1,5 @@
 defmodule Octopus.GameScheduler do
   use GenServer
-  require Logger
 
   alias Octopus.{AppSupervisor, AppManager}
 

@@ -1,6 +1,5 @@
 defmodule Octopus.Apps.Whackamole.Game do
   use Octopus.Params, prefix: :whackamole
-  require Logger
   alias Octopus.{Canvas, Font, Animator, Transitions, Sprite, InputAdapter}
   alias Octopus.Apps.Whackamole.Mole
   alias Octopus.Installation

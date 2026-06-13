@@ -12,7 +12,6 @@ defmodule Octopus.Sunlight.BrightnessCalculator do
   during dawn and dusk periods.
   """
 
-  require Logger
 
   # Default curve parameters
   # Duration of dawn transition in minutes

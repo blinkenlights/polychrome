@@ -1,5 +1,4 @@
 defmodule Octopus.Apps.BomberPerson.Maps do
-  require Logger
 
   @moduledoc """
   Provides bomber person maps.

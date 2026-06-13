@@ -1,6 +1,5 @@
 defmodule Octopus.Apps.AnimatorTest do
   use Octopus.App, category: :test
-  require Logger
 
   alias Octopus.Canvas
   alias Octopus.{Animator, Font, Transitions}

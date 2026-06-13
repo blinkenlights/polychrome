@@ -1,6 +1,5 @@
 defmodule Octopus.Apps.ProximityDemo do
   use Octopus.App, category: :test
-  require Logger
 
   alias Octopus.Installation
   alias Octopus.Canvas

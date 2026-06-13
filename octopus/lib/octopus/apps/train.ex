@@ -1,6 +1,5 @@
 defmodule Octopus.Apps.Train do
   use Octopus.App, category: :animation
-  require Logger
 
   alias Octopus.{Canvas, Image}
   alias Octopus.Installation

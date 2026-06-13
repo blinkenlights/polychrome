@@ -1,6 +1,5 @@
 defmodule Octopus.Apps.BomberPerson do
   use Octopus.App, category: :game
-  require Logger
 
   alias Octopus.Apps.BomberPerson.Maps
   alias Octopus.{Canvas, Util, Font}

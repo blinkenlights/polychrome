@@ -2,7 +2,6 @@ defmodule Octopus.Apps.PixelFun do
   use Octopus.App, category: :interactive
   use Octopus.Params, prefix: :pixelfun
 
-  require Logger
   alias Octopus.Canvas
   alias Octopus.Events.Event.Audio, as: AudioEvent
   alias Octopus.Events.Event.Input, as: InputEvent

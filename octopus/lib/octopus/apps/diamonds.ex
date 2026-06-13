@@ -1,6 +1,5 @@
 defmodule Octopus.Apps.Diamonds do
   use Octopus.App, category: :interactive
-  require Logger
 
   alias Octopus.Canvas
   alias Octopus.WebP

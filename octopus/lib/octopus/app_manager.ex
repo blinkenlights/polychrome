@@ -10,7 +10,6 @@ defmodule Octopus.AppManager do
   """
 
   use GenServer
-  require Logger
 
   alias Octopus.AppSupervisor
   alias Octopus.Events.Event.Lifecycle

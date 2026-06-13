@@ -3,7 +3,6 @@ defmodule Octopus.Apps.Ocean do
 
   alias Octopus.Events.Event.Input, as: InputEvent
   alias Octopus.{Canvas, WebP}
-  require Logger
 
   @fps 30
 

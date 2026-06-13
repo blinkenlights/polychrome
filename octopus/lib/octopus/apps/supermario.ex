@@ -1,6 +1,5 @@
 defmodule Octopus.Apps.Supermario do
   use Octopus.App, category: :game
-  require Logger
 
   alias Octopus.Apps.Supermario.Game
   alias Octopus.Events.Event.Input, as: InputEvent

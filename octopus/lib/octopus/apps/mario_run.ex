@@ -154,23 +154,25 @@ defmodule Octopus.Apps.MarioRun do
     Process.send_after(self(), :random_look, delay)
   end
 
-  # Character moves when running
-  defp update_position(%State{loop: :run, char_x: char_x}), do: char_x + 1
-
   # Character stops moving during look animations
   defp update_position(%State{loop: loop, char_x: char_x}) when loop != :run, do: char_x
 
-  # Character moves when no pending look animation
-  defp update_position(%State{pending_loop: nil, char_x: char_x}), do: char_x + 1
+  # Character moves when running with no pending look animation
+  defp update_position(%State{loop: :run, pending_loop: nil, char_x: char_x}), do: char_x + 1
 
   # Character stops moving when on panel with pending look animation
-  defp update_position(%State{char_x: char_x, panel_stride: panel_stride, pending_loop: _pending})
+  defp update_position(%State{
+         loop: :run,
+         char_x: char_x,
+         panel_stride: panel_stride,
+         pending_loop: _pending
+       })
        when rem(char_x, panel_stride) == 0 do
     char_x
   end
 
   # Character continues moving toward panel when pending look animation
-  defp update_position(%State{char_x: char_x, pending_loop: _pending}), do: char_x + 1
+  defp update_position(%State{loop: :run, char_x: char_x, pending_loop: _pending}), do: char_x + 1
 
   # Activate pending loop when character reaches a panel
   defp handle_loop_transition(
