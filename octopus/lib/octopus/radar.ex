@@ -9,20 +9,23 @@ defmodule Octopus.Radar do
   ## Configuration
 
   Loaded at runtime from `config/radar.exs` (via `config/runtime.exs`), with
-  optional per-machine overrides in gitignored `config/radar.local.exs`.
+  optional per-machine overrides in `config/radar.local.exs` (dev, gitignored)
+  or `/data/radar.local.exs` (Docker deployments).
+
+  Two configuration styles are supported: **manual** and **layout**.
+
+  ### Manual style
 
       config :octopus, Octopus.Radar,
         enabled: true,
         sensors: [
-          [port: "/dev/ttyUSB0", enabled: true, angle_deg: 0, distance_cm: 0, rotation_deg: 0],
-          [port: "/dev/ttyUSB1", enabled: false]
+          [port: "/dev/ttyUSB0", enabled: true, angle_deg: 0, distance_cm: 150, rotation_deg: 0],
+          [port: "/dev/ttyUSB1", angle_deg: 60, distance_cm: 150, rotation_deg: 180]
         ],
         defaults: [
           type: :ld6001a,
           enabled: true,
-          angle_deg: 0,
-          distance_cm: 0,
-          rotation_deg: 0,
+          rotation_deg: 180,
           baud: 115_200,
           height_cm: 300, range_cm: 450,
           x_pos_cm: 450, x_neg_cm: -450,
@@ -30,16 +33,53 @@ defmodule Octopus.Radar do
           moving_decisecs: 110, static_decisecs: 100, exit_decisecs: 5
         ]
 
+  ### Layout style
+
+  For uniform radial installations (sensors evenly spaced around a central
+  mast) use `:layout` + `:ports` instead of `:sensors`. The layout generates
+  `angle_deg` automatically; all other sensor parameters come from the
+  non-geometry keys inside the `:layout` block or from a `:defaults` block.
+
+      config :octopus, Octopus.Radar,
+        layout: [
+          type: :radial,           # only supported layout type
+          count: 6,                # number of sensors
+          start_angle_deg: 0,      # bearing of first sensor
+          distance_cm: 150,        # mount distance from center (shared)
+          rotation_deg: 180,       # 0 = outward, 180 = inward (shared)
+          height_cm: 300,
+          sensitivity: 4
+        ],
+        ports: [
+          "/dev/ttyUSB0",          # paired with first auto-generated angle
+          "/dev/ttyUSB1",
+          [port: "/dev/ttyUSB2", rotation_deg: 182]  # per-port override
+        ]
+
+  A `:ports` entry may be a plain string or a keyword list with `:port` plus
+  any per-sensor overrides that take precedence over layout/defaults values.
+
+  `:layout` and `:sensors` are mutually exclusive; an error is raised if both
+  are present.
+
+  ### Pose parameters
+
+  `rotation_deg` is **relative to the outward beam direction** (`angle_deg`).
+  The effective global rotation applied to local coordinates is
+  `angle_deg + rotation_deg`. Common values:
+
+    * `0` — sensor's local +X aligned with the beam pointing away from center
+    * `180` — sensor facing inward toward center
+
+  This allows a single `rotation_deg` default to cover all sensors in a
+  uniform array, with small per-sensor corrections for physical misalignment.
+
   * `:enabled` — master switch; when `false`, no supervisor or serial I/O.
     Overridable via `RADAR_ENABLED` (`true`/`1`/`yes` vs anything else).
-  * `:sensors` — list of per-device keyword options (`:port` required). Each
-    entry may override `:defaults`, including `:type`, `:enabled`, and pose
-    correction keys (`:angle_deg`, `:distance_cm`, `:rotation_deg`). Only
-    enabled sensors with a present port and known type start a GenServer.
 
   The integer **`device_id` is the 1-based position** of an entry in the
-  `:sensors` list and is used both to register the sensor process and as
-  the tag in PubSub messages.
+  `:sensors` (or `:ports`) list and is used both to register the sensor
+  process and as the tag in PubSub messages.
 
   ## PubSub
 
@@ -302,6 +342,23 @@ defmodule Octopus.Radar do
 
   defp do_sensor_configs do
     radar_env = Application.get_env(:octopus, __MODULE__, [])
+
+    has_layout = Keyword.has_key?(radar_env, :layout)
+    has_sensors = Keyword.has_key?(radar_env, :sensors)
+
+    if has_layout and has_sensors do
+      raise ArgumentError,
+            "radar config: :layout and :sensors are mutually exclusive; use one or the other"
+    end
+
+    if has_layout do
+      layout_sensor_configs(radar_env)
+    else
+      manual_sensor_configs(radar_env)
+    end
+  end
+
+  defp manual_sensor_configs(radar_env) do
     defaults = Keyword.merge(@default_pose, Keyword.get(radar_env, :defaults, []))
     sensors = Keyword.get(radar_env, :sensors, [])
 
@@ -316,6 +373,70 @@ defmodule Octopus.Radar do
       {index, config}
     end)
   end
+
+  # Keys in a :layout block that describe the geometry and are NOT passed
+  # through as per-sensor defaults.
+  @layout_geometry_keys [:type, :count, :start_angle_deg]
+
+  defp layout_sensor_configs(radar_env) do
+    layout = Keyword.fetch!(radar_env, :layout)
+    ports = Keyword.get(radar_env, :ports, [])
+
+    layout_type = Keyword.get(layout, :type) ||
+      raise ArgumentError, "radar layout: :type is required (e.g. type: :radial)"
+
+    sensor_pose_list = expand_layout(layout_type, layout)
+
+    unless length(sensor_pose_list) == length(ports) do
+      raise ArgumentError,
+            "radar layout: :ports has #{length(ports)} entries but layout generates " <>
+              "#{length(sensor_pose_list)} sensors (count: #{Keyword.get(layout, :count)})"
+    end
+
+    defaults = Keyword.merge(@default_pose, Keyword.get(radar_env, :defaults, []))
+    layout_defaults = Keyword.drop(layout, @layout_geometry_keys)
+    merged_defaults = Keyword.merge(defaults, layout_defaults)
+
+    sensor_pose_list
+    |> Enum.zip(ports)
+    |> Enum.with_index(1)
+    |> Enum.map(fn {{pose_opts, port_entry}, index} ->
+      port_opts = normalize_port_entry(port_entry)
+
+      config =
+        merged_defaults
+        |> Keyword.merge(pose_opts)
+        |> Keyword.merge(port_opts)
+        |> normalize_sensor_config(index)
+
+      {index, config}
+    end)
+  end
+
+  defp expand_layout(:radial, layout) do
+    count = Keyword.get(layout, :count) ||
+      raise ArgumentError, "radar layout type :radial requires :count"
+
+    unless is_integer(count) and count > 0 do
+      raise ArgumentError,
+            "radar layout: :count must be a positive integer, got #{inspect(count)}"
+    end
+
+    start_angle = Keyword.get(layout, :start_angle_deg, 0)
+    step = 360.0 / count
+
+    Enum.map(0..(count - 1), fn i ->
+      [angle_deg: start_angle + i * step]
+    end)
+  end
+
+  defp expand_layout(type, _layout) do
+    raise ArgumentError,
+          "radar layout: unsupported :type #{inspect(type)}; supported: [:radial]"
+  end
+
+  defp normalize_port_entry(port) when is_binary(port), do: [port: port]
+  defp normalize_port_entry(opts) when is_list(opts), do: opts
 
   defp normalize_sensor_config(config, device_id) do
     type = Keyword.fetch!(config, :type)

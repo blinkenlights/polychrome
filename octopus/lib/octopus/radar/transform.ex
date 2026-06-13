@@ -9,10 +9,19 @@ defmodule Octopus.Radar.Transform do
 
     * `:angle_deg` — bearing of the sensor mount from center (0° = +X, CCW)
     * `:distance_cm` — distance from center to sensor mount
-    * `:rotation_deg` — sensor yaw relative to global axes (CCW)
+    * `:rotation_deg` — sensor yaw **relative to the outward beam direction**
+      (CCW; 0 = local frame aligned with the beam pointing away from center,
+      180 = sensor facing inward toward center)
 
-  The transform is a 2D rigid body map (SE(2)): rotate local x/y and vx/vy,
-  then translate by the mount offset. `z` and `vz` are unchanged.
+  The effective global rotation applied is `angle_deg + rotation_deg`.
+  This allows `:rotation_deg` to be set once as a shared default for all
+  sensors in a uniformly-mounted array (e.g. `rotation_deg: 180` for all
+  inward-facing sensors), with small per-sensor corrections when a unit is
+  physically misaligned relative to its beam.
+
+  The transform is a 2D rigid body map (SE(2)): rotate local x/y and vx/vy
+  by `angle_deg + rotation_deg`, then translate by the mount offset.
+  `z` and `vz` are unchanged.
   """
 
   alias Octopus.Radar.{Frame, Track}
@@ -51,7 +60,7 @@ defmodule Octopus.Radar.Transform do
     rotation_deg = Keyword.fetch!(config, :rotation_deg)
 
     angle_rad = deg_to_rad(angle_deg)
-    rotation_rad = deg_to_rad(rotation_deg)
+    rotation_rad = deg_to_rad(angle_deg + rotation_deg)
 
     distance_m = distance_cm / 100.0
     tx = distance_m * :math.cos(angle_rad)

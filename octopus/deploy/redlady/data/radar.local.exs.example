@@ -36,9 +36,14 @@ import Config
 #   type:            :ld6001a — only supported driver today
 #   enabled:         skip this sensor at boot when false
 #   baud:            serial speed; our units use 115_200 (manual default is 921_600)
-#   angle_deg:       sensor position around installation center, 0..360°
-#   distance_cm:     sensor distance from center, >= 0
-#   rotation_deg:    sensor heading offset; 0° = +X (right), 90° = +Y (front)
+#   angle_deg:       bearing of sensor mount from installation center, 0..360° (CCW)
+#   distance_cm:     distance from center to sensor mount, >= 0
+#   rotation_deg:    sensor yaw RELATIVE TO THE OUTWARD BEAM DIRECTION (angle_deg):
+#                      0   = sensor local frame aligned with beam pointing away from center
+#                      180 = sensor facing inward toward center
+#                    Effective global rotation = angle_deg + rotation_deg.
+#                    Set once in layout or :defaults; use small per-sensor values
+#                    to correct individual physical misalignment.
 #   sensitivity:     AT+DPKTH, 1..9 — higher number = lower sensitivity (fewer phantoms)
 #   height_cm:       mounting height (manual §9.3)
 #   range_cm:        max detection range
@@ -50,10 +55,36 @@ import Config
 #   static_decisecs: static-target persistence, units of 100 ms
 #   exit_decisecs:   exit-zone persistence, units of 100 ms
 
-# Raspberry Pi — two sensors on USB-to-UART adapters:
+# Radial layout — 6 sensors at 60° intervals (this installation's default):
+# (Sensor angles generated automatically: 0°, 60°, 120°, 180°, 240°, 300°)
+#
+# config :octopus, Octopus.Radar,
+#   layout: [
+#     type: :radial,
+#     count: 6,
+#     start_angle_deg: 0,
+#     distance_cm: 150,
+#     rotation_deg: 180,   # 180 = inward; 0 = outward — adjust to match mount direction
+#     height_cm: 450,
+#     sensitivity: 4,
+#     range_cm: 450,
+#     x_pos_cm: 450, x_neg_cm: -450,
+#     y_pos_cm: 450, y_neg_cm: -450,
+#     moving_decisecs: 110, static_decisecs: 100, exit_decisecs: 5
+#   ],
+#   ports: [
+#     "/dev/serial/by-id/...",
+#     "/dev/serial/by-id/...",
+#     "/dev/serial/by-id/...",
+#     "/dev/serial/by-id/...",
+#     "/dev/serial/by-id/...",
+#     "/dev/serial/by-id/..."
+#   ]
+
+# Manual style — individual sensors (use when geometry is not uniform):
 #
 # config :octopus, Octopus.Radar,
 #   sensors: [
-#     [port: "/dev/ttyUSB0", angle_deg: 0, distance_cm: 0, rotation_deg: 0],
-#     [port: "/dev/ttyUSB1", angle_deg: 120, distance_cm: 150, rotation_deg: 120]
+#     [port: "/dev/ttyUSB0", angle_deg: 0, distance_cm: 150, rotation_deg: 180],
+#     [port: "/dev/ttyUSB1", angle_deg: 60, distance_cm: 150, rotation_deg: 180]
 #   ]

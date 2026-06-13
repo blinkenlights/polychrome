@@ -46,12 +46,16 @@ defmodule Octopus.Radar.TransformTest do
       assert_in_delta result.y, 0.0, 1.0e-6
     end
 
-    test "pure translation along +Y" do
+    test "sensor on +Y beam (90°) translates and rotates local frame by 90°" do
+      # rotation_deg: 0 with angle_deg: 90 → effective rotation = 90°.
+      # Mount at (0, 0.5 m). Local (0, 1) with 90° rotation:
+      #   x_global = 0 + 0*cos90 - 1*sin90 = -1.0
+      #   y_global = 0.5 + 0*sin90 + 1*cos90 = 0.5
       config = Keyword.merge(@base_config, distance_cm: 50, angle_deg: 90)
       result = Transform.transform_track(track(x: 0.0, y: 1.0), config)
 
-      assert_in_delta result.x, 0.0, 1.0e-6
-      assert_in_delta result.y, 1.5, 1.0e-6
+      assert_in_delta result.x, -1.0, 1.0e-6
+      assert_in_delta result.y, 0.5, 1.0e-6
     end
 
     test "pure 90° CCW rotation" do
@@ -85,6 +89,40 @@ defmodule Octopus.Radar.TransformTest do
 
       assert_in_delta result.x, 0.0, 1.0e-6
       assert_in_delta result.y, 0.0, 1.0e-6
+    end
+
+    test "rotation_deg is relative to beam — sensor on 90° beam with rotation_deg 0 rotates local by 90°" do
+      # Sensor at angle 90°, no distance offset, rotation_deg 0 (aligned with beam outward).
+      # Effective rotation = 90° + 0° = 90° CCW.
+      # Local +X should map to global +Y.
+      config = Keyword.merge(@base_config, angle_deg: 90, distance_cm: 0, rotation_deg: 0)
+      result = Transform.transform_track(track(x: 1.0, y: 0.0, vx: 1.0, vy: 0.0), config)
+
+      assert_in_delta result.x, 0.0, 1.0e-6
+      assert_in_delta result.y, 1.0, 1.0e-6
+      assert_in_delta result.vx, 0.0, 1.0e-6
+      assert_in_delta result.vy, 1.0, 1.0e-6
+    end
+
+    test "inward-facing sensor on 90° beam (rotation_deg 180) maps local +X to global origin" do
+      # Sensor mounted 100 cm along the 90° beam (at global (0, 1.0 m)), facing inward.
+      # Effective rotation = 90° + 180° = 270°.
+      # An object 1 m in front of the sensor (local (1, 0)) should land at the center (0, 0).
+      config = Keyword.merge(@base_config, angle_deg: 90, distance_cm: 100, rotation_deg: 180)
+      result = Transform.transform_track(track(x: 1.0, y: 0.0), config)
+
+      assert_in_delta result.x, 0.0, 1.0e-6
+      assert_in_delta result.y, 0.0, 1.0e-6
+    end
+
+    test "rotation_deg correction shifts beam-relative orientation by that many degrees" do
+      # Sensor on 0° beam, rotation_deg 5 means 5° CCW from outward direction.
+      # Effective rotation = 0° + 5° = 5°. Local +X should tilt 5° toward +Y.
+      config = Keyword.merge(@base_config, angle_deg: 0, distance_cm: 0, rotation_deg: 5)
+      result = Transform.transform_track(track(x: 1.0, y: 0.0), config)
+
+      assert_in_delta result.x, :math.cos(5 * :math.pi() / 180), 1.0e-6
+      assert_in_delta result.y, :math.sin(5 * :math.pi() / 180), 1.0e-6
     end
   end
 

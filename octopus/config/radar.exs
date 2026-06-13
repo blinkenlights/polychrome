@@ -30,8 +30,12 @@ config :octopus, Octopus.Radar,
   defaults: [
     type: :ld6001a,
     enabled: true,
-    # Pose correction: map sensor-local x/y into the installation global frame.
+    # Pose: maps sensor-local x/y into the installation global frame.
     # Origin is the installation center; 0° = +X (right), 90° = +Y (front).
+    # rotation_deg is relative to the outward beam direction (angle_deg):
+    #   0   = sensor local frame aligned with beam pointing away from center
+    #   180 = sensor facing inward toward center
+    # Effective global rotation applied = angle_deg + rotation_deg.
     angle_deg: 0,
     distance_cm: 0,
     rotation_deg: 0,

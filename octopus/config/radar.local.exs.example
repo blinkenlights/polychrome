@@ -38,9 +38,14 @@ import Config
 #   type:            :ld6001a — only supported driver today
 #   enabled:         skip this sensor at boot when false
 #   baud:            serial speed; our units use 115_200 (manual default is 921_600)
-#   angle_deg:       sensor position around installation center, 0..360°
-#   distance_cm:     sensor distance from center, >= 0
-#   rotation_deg:    sensor heading offset; 0° = +X (right), 90° = +Y (front)
+#   angle_deg:       bearing of sensor mount from installation center, 0..360° (CCW)
+#   distance_cm:     distance from center to sensor mount, >= 0
+#   rotation_deg:    sensor yaw RELATIVE TO THE OUTWARD BEAM DIRECTION (angle_deg):
+#                      0   = sensor local frame aligned with beam pointing away from center
+#                      180 = sensor facing inward toward center
+#                    Effective global rotation = angle_deg + rotation_deg.
+#                    Set once in :defaults for all sensors; use small per-sensor
+#                    values to correct individual physical misalignment.
 #   sensitivity:     AT+DPKTH, 1..9 — higher number = lower sensitivity (fewer phantoms)
 #   height_cm:       mounting height (manual §9.3)
 #   range_cm:        max detection range
@@ -72,10 +77,32 @@ import Config
 #     [port: "/dev/ttyUSB2", enabled: false]
 #   ]
 
-# Raspberry Pi example:
+# Raspberry Pi — manual style, two sensors:
 #
 # config :octopus, Octopus.Radar,
 #   sensors: [
 #     [port: "/dev/ttyUSB0"],
 #     [port: "/dev/ttyUSB1"]
+#   ]
+
+# Radial layout style — 6 sensors evenly spaced at 60° intervals around a mast:
+# (Sensor angles generated automatically: 0°, 60°, 120°, 180°, 240°, 300°)
+#
+# config :octopus, Octopus.Radar,
+#   layout: [
+#     type: :radial,
+#     count: 6,
+#     start_angle_deg: 0,
+#     distance_cm: 150,
+#     rotation_deg: 180,   # all sensors face inward toward center
+#     height_cm: 300,
+#     sensitivity: 4
+#   ],
+#   ports: [
+#     "/dev/ttyUSB0",
+#     "/dev/ttyUSB1",
+#     "/dev/ttyUSB2",
+#     "/dev/ttyUSB3",
+#     "/dev/ttyUSB4",
+#     [port: "/dev/ttyUSB5", rotation_deg: 182]  # per-port override for slight misalignment
 #   ]
