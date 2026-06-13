@@ -22,8 +22,25 @@ services:
     image: polychrome:latest
     network_mode: host
     env_file: .env
+    # dialout group is required to open /dev/ttyACM* devices.
+    group_add:
+      - dialout
+    # Expose all USB-to-serial adapters to the container.
+    # ttyACM numbering is stable for fixed hardware (assigned by USB port order).
+    devices:
+      - /dev/ttyACM0
+      - /dev/ttyACM1
+      - /dev/ttyACM2
+      - /dev/ttyACM3
+      - /dev/ttyACM4
+      - /dev/ttyACM5
+      - /dev/ttyACM6
+      - /dev/ttyACM7
     volumes:
       - ./data:/data
+      # Bind-mount the udev symlink tree so /dev/serial/by-id/… paths resolve
+      # to the device files above.
+      - /dev/serial:/dev/serial:ro
     restart: unless-stopped
 
 volumes:
