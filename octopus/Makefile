@@ -30,6 +30,16 @@ deploy-metaebene:
 deploy-redlady:
 	./deploy/redlady/deploy.sh
 
+build-polychrome-image:
+	docker build -t polychrome:latest -f Dockerfile .
+	docker save polychrome:latest | gzip > /tmp/polychrome-latest.tar.gz
+
+deploy-metaebene-skip-build:
+	./deploy/metaebene/deploy.sh --skip-build
+
+deploy-redlady-skip-build:
+	./deploy/redlady/deploy.sh --skip-build
+
 remote-logs:
 	ssh ${oldie_hostname} "sudo journalctl -u octopus.service -f"
 

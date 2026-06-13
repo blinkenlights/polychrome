@@ -112,7 +112,7 @@ defmodule Octopus.Radar.Protocol do
         {:error, :truncated_frame}
 
       true ->
-        <<track_data::binary-size(track_length), checksum>> = rest
+        <<track_data::binary-size(^track_length), checksum>> = rest
         calc = xor_bytes(frame_number_bytes <> track_data)
 
         if calc == checksum do
@@ -201,7 +201,7 @@ defmodule Octopus.Radar.Protocol do
         :need_more
 
       true ->
-        <<frame_bin::binary-size(on_wire_size), rest::binary>> = buffer
+        <<frame_bin::binary-size(^on_wire_size), rest::binary>> = buffer
         {:frame, frame_bin, rest}
     end
   end

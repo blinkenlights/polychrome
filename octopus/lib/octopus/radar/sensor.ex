@@ -103,6 +103,7 @@ defmodule Octopus.Radar.Sensor do
       GenServer.call(via(device_id), message)
     catch
       :exit, {:noproc, _} -> {:error, :no_sensor}
+      :exit, _ -> {:error, :unavailable}
     end
   end
 
@@ -144,9 +145,16 @@ defmodule Octopus.Radar.Sensor do
 
   @impl true
   def handle_call({:set_sensitivity, level}, _from, %State{} = state) do
-    log(state, :info, "Updating sensitivity to DPKTH=#{level} and re-initializing")
     new_config = Keyword.put(state.config, :sensitivity, level)
-    {:reply, :ok, restart_init(%State{state | config: new_config})}
+    state = %State{state | config: new_config}
+
+    if port_open?(state) do
+      log(state, :info, "Updating sensitivity to DPKTH=#{level} and re-initializing")
+      {:reply, :ok, restart_init(state)}
+    else
+      log(state, :info, "Updating sensitivity to DPKTH=#{level} — will apply when port opens")
+      {:reply, :ok, state}
+    end
   end
 
   def handle_call(:reinitialize, _from, %State{} = state) do
@@ -325,6 +333,22 @@ defmodule Octopus.Radar.Sensor do
   # init sequence. Residual binary frames may still arrive during
   # :configuring; Ack.feed/2 scans the mixed stream for AT+OK without
   # requiring a quiet line.
+  defp port_open?(%State{phase: phase}), do: phase in [:configuring, :running]
+
+  defp restart_init(%State{phase: :opening} = state) do
+    log(state, :info, "Re-init deferred until serial port is available")
+
+    cancel_ack_timer(%State{
+      state
+      | pending_commands: [],
+        current_command: nil,
+        buffer: <<>>,
+        ack_buffer: <<>>,
+        ack_retries: 0,
+        last_track_count: nil
+    })
+  end
+
   defp restart_init(%State{} = state) do
     state = cancel_ack_timer(state)
 
@@ -343,14 +367,28 @@ defmodule Octopus.Radar.Sensor do
 
   defp write_command(cmd, %State{uart: uart} = state) do
     log(state, :info, "→ #{String.trim_trailing(cmd)}")
-    :ok = UART.write(uart, cmd)
-    arm_ack_timer(%State{state | current_command: cmd, ack_buffer: <<>>})
+
+    case UART.write(uart, cmd) do
+      :ok ->
+        arm_ack_timer(%State{state | current_command: cmd, ack_buffer: <<>>})
+
+      {:error, reason} ->
+        log(state, :warning, "UART write failed (#{inspect(reason)}) — reopening")
+        schedule_reopen(close_port(state))
+    end
   end
 
   defp resend_command(%State{uart: uart, current_command: cmd} = state) do
     log(state, :info, "→ #{String.trim_trailing(cmd)}")
-    :ok = UART.write(uart, cmd)
-    arm_ack_timer(state)
+
+    case UART.write(uart, cmd) do
+      :ok ->
+        arm_ack_timer(state)
+
+      {:error, reason} ->
+        log(state, :warning, "UART write failed (#{inspect(reason)}) — reopening")
+        schedule_reopen(close_port(state))
+    end
   end
 
   defp handle_ack_bytes(data, %State{ack_buffer: ack_buffer} = state) do
