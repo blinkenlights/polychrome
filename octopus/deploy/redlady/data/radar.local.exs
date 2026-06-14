@@ -30,7 +30,8 @@ config :octopus, Octopus.Radar,
     count: 6,
     start_angle_deg: 0,
     distance_cm: 150,
-    rotation_deg: 0,     # TODO: set to 180 if sensors face inward toward center
+    # TODO: set to 180 if sensors face inward toward center
+    rotation_deg: 90,
     baud: 115_200,
     sensitivity: 4,
     height_cm: 450,
