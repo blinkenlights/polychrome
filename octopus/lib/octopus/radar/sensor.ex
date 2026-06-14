@@ -94,6 +94,13 @@ defmodule Octopus.Radar.Sensor do
     call_sensor(device_id, :reinitialize)
   end
 
+  @doc "Return the sensor's current phase (`:opening`, `:configuring`, or `:running`)."
+  @spec get_phase(pos_integer()) ::
+          {:ok, :opening | :configuring | :running} | {:error, :no_sensor | :unavailable}
+  def get_phase(device_id) do
+    call_sensor(device_id, :get_phase)
+  end
+
   defp via(device_id) do
     {:via, Registry, {Octopus.Radar.Registry, device_id}}
   end
@@ -160,6 +167,18 @@ defmodule Octopus.Radar.Sensor do
   def handle_call(:reinitialize, _from, %State{} = state) do
     log(state, :info, "Re-initializing on operator request")
     {:reply, :ok, restart_init(state)}
+  end
+
+  # The port just opened successfully: pending_commands is populated but
+  # :start_init hasn't fired yet (300 ms settle). From the outside this is
+  # indistinguishable from :configuring — the device IS reachable and init
+  # is imminent — so report :configuring rather than :opening.
+  def handle_call(:get_phase, _from, %State{phase: :opening, pending_commands: [_ | _]} = state) do
+    {:reply, {:ok, :configuring}, state}
+  end
+
+  def handle_call(:get_phase, _from, %State{phase: phase} = state) do
+    {:reply, {:ok, phase}, state}
   end
 
   @impl true

@@ -112,7 +112,7 @@ defmodule Octopus.Radar do
   use Supervisor
   require Logger
 
-  alias Octopus.Radar.Sensor
+  alias Octopus.Radar.{Runtime, Sensor}
 
   @topic "radar:hlk6001"
   @supported_types [:ld6001a]
@@ -232,6 +232,95 @@ defmodule Octopus.Radar do
   end
 
   @doc """
+  Return the live status of a single sensor.
+
+    * `:inactive`     — toggled off at runtime by the operator (process stopped)
+    * `:unavailable`  — active but port cannot be opened; retrying every 5 s
+    * `:initializing` — port open, AT init command sequence in progress
+    * `:working`      — fully initialised and publishing frames
+
+  Config-disabled sensors (`enabled: false`) are excluded from the UI
+  entirely and never queried here. The sensor GenServer is looked up via
+  the Registry; the call returns immediately.
+  """
+  @spec sensor_status(pos_integer()) :: :inactive | :unavailable | :initializing | :working
+  def sensor_status(device_id) do
+    if enabled?() and Runtime.enabled?(device_id) do
+      case Sensor.get_phase(device_id) do
+        {:ok, :running} -> :working
+        {:ok, :configuring} -> :initializing
+        {:ok, :opening} -> :unavailable
+        {:error, _} -> :unavailable
+      end
+    else
+      :inactive
+    end
+  end
+
+  @doc """
+  Enable a sensor at runtime, starting its process if not already running.
+
+  This overrides an `enabled: false` config entry for the current runtime
+  session. The change is not persisted across restarts.
+  """
+  @spec enable_sensor(pos_integer()) :: :ok | {:error, term()}
+  def enable_sensor(device_id) do
+    Runtime.set(device_id, true)
+
+    case sensor_configs() |> Enum.find(fn {id, _} -> id == device_id end) do
+      nil ->
+        {:error, :not_configured}
+
+      {_, config} ->
+        child_spec =
+          Supervisor.child_spec(
+            {Sensor, Keyword.put(config, :device_id, device_id)},
+            id: {Sensor, device_id}
+          )
+
+        case Supervisor.start_child(__MODULE__, child_spec) do
+          {:ok, _} ->
+            :ok
+
+          {:error, {:already_started, _}} ->
+            :ok
+
+          {:error, :already_present} ->
+            case Supervisor.restart_child(__MODULE__, {Sensor, device_id}) do
+              {:ok, _} -> :ok
+              error -> error
+            end
+
+          error ->
+            error
+        end
+    end
+  end
+
+  @doc """
+  Disable a sensor at runtime, stopping and removing its process.
+
+  This is the inverse of `enable_sensor/1`. The change is not persisted
+  across restarts.
+  """
+  @spec disable_sensor(pos_integer()) :: :ok | {:error, term()}
+  def disable_sensor(device_id) do
+    Runtime.set(device_id, false)
+
+    case Supervisor.terminate_child(__MODULE__, {Sensor, device_id}) do
+      :ok ->
+        Supervisor.delete_child(__MODULE__, {Sensor, device_id})
+        :ok
+
+      {:error, :not_found} ->
+        :ok
+
+      error ->
+        error
+    end
+  end
+
+  @doc """
   Return `true` if at least one configured sensor's serial port currently
   exists on disk.
   """
@@ -253,9 +342,18 @@ defmodule Octopus.Radar do
   def init(:ok) do
     log_boot_configuration()
 
+    # Only config-enabled sensors participate in the runtime active/inactive
+    # toggle. Config-disabled sensors never appear in the UI and are not tracked.
+    initial_runtime =
+      sensor_configs()
+      |> Enum.filter(fn {_, cfg} -> Keyword.fetch!(cfg, :enabled) end)
+      |> Map.new(fn {id, _} -> {id, true} end)
+
     children =
-      [{Registry, keys: :unique, name: Octopus.Radar.Registry}] ++
-        sensor_children()
+      [
+        {Registry, keys: :unique, name: Octopus.Radar.Registry},
+        {Runtime, initial_runtime}
+      ] ++ sensor_children()
 
     Supervisor.init(children, strategy: :one_for_one)
   end

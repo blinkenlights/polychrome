@@ -76,18 +76,20 @@ defmodule OctopusWeb.RadarLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    if connected?(socket) and Radar.enabled?(), do: Radar.subscribe()
+    if connected?(socket) and Radar.enabled?() do
+      Radar.subscribe()
+      Process.send_after(self(), :refresh_sensor_statuses, 2_000)
+    end
 
-    devices =
-      Radar.devices()
-      |> Enum.filter(& &1.enabled)
-    selected = List.first(devices)
-    selected_id = selected && selected.device_id
+    devices = Radar.devices() |> Enum.filter(& &1.enabled)
+    selected_id = if length(devices) == 1, do: hd(devices).device_id, else: :all
+    selected = Enum.find(devices, &(&1.device_id == selected_id))
 
     {:ok,
      socket
      |> assign(:radar_enabled, Radar.enabled?())
      |> assign(:devices, devices)
+     |> assign(:sensor_statuses, build_sensor_statuses(devices))
      |> assign(:selected_device_id, selected_id)
      |> assign(:sensitivity, (selected && selected.sensitivity) || 4)
      |> assign(:bounds_mode, :static)
@@ -208,6 +210,43 @@ defmodule OctopusWeb.RadarLive do
     end
   end
 
+  def handle_event("toggle_sensor", %{"device_id" => id_str}, socket) do
+    case Integer.parse(id_str) do
+      {id, ""} ->
+        status = Map.get(socket.assigns.sensor_statuses, id, :unavailable)
+
+        # :inactive means the operator stopped it → reactivate; any other
+        # state means it's currently running → deactivate.
+        if status == :inactive do
+          Radar.enable_sensor(id)
+        else
+          Radar.disable_sensor(id)
+        end
+
+        # Refresh statuses immediately after toggling.
+        devices = socket.assigns.devices
+        statuses = build_sensor_statuses(devices)
+
+        # If the currently selected sensor was just deactivated, fall back to :all.
+        selected =
+          if status != :inactive and socket.assigns.selected_device_id == id do
+            :all
+          else
+            socket.assigns.selected_device_id
+          end
+
+        {:noreply,
+         socket
+         |> assign(:sensor_statuses, statuses)
+         |> assign(:selected_device_id, selected)
+         |> assign(:static_bounds, compute_static_bounds(selected, devices))
+         |> reset_radar_state()}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
   def handle_event("reinitialize", _params, socket) do
     case socket.assigns.selected_device_id do
       nil ->
@@ -238,6 +277,13 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:min_z, min_z)
      |> assign(:max_z, max_z)
      |> rebuild_view()}
+  end
+
+  def handle_info(:refresh_sensor_statuses, socket) do
+    Process.send_after(self(), :refresh_sensor_statuses, 2_000)
+
+    {:noreply,
+     assign(socket, :sensor_statuses, build_sensor_statuses(socket.assigns.devices))}
   end
 
   @impl true
@@ -503,18 +549,36 @@ defmodule OctopusWeb.RadarLive do
               <% @devices == [] -> %>
                 <span class="text-sm opacity-70">No radar sensors configured</span>
               <% true -> %>
-              <form phx-change="select_sensor">
-                <select id="radar-sensor" name="device_id" class="select select-bordered">
+                <div class="flex items-center gap-3 flex-wrap">
+                  <%!-- Status / active-inactive buttons — one per config-enabled sensor --%>
                   <%= for d <- @devices do %>
-                    <option value={d.device_id} selected={d.device_id == @selected_device_id}>
-                      Sensor {device_letter(d.device_id)} — {d.port}
-                    </option>
+                    <button
+                      type="button"
+                      phx-click="toggle_sensor"
+                      phx-value-device_id={d.device_id}
+                      title={"Sensor #{device_letter(d.device_id)} (#{d.port}) — #{sensor_status_label(@sensor_statuses[d.device_id])} — click to toggle"}
+                      class={[
+                        "btn btn-sm font-mono min-w-[2.5rem]",
+                        sensor_status_class(@sensor_statuses[d.device_id])
+                      ]}
+                    >
+                      {device_letter(d.device_id)}
+                    </button>
                   <% end %>
-                  <option value="all" selected={@selected_device_id == :all}>
-                    All sensors
-                  </option>
-                </select>
-              </form>
+                  <%!-- Sensor selector dropdown --%>
+                  <form phx-change="select_sensor">
+                    <select id="radar-sensor" name="device_id" class="select select-bordered select-sm min-w-40">
+                      <%= for d <- @devices do %>
+                        <option value={d.device_id} selected={d.device_id == @selected_device_id}>
+                          Sensor {device_letter(d.device_id)} — {d.port}
+                        </option>
+                      <% end %>
+                      <option value="all" selected={@selected_device_id == :all}>
+                        All sensors
+                      </option>
+                    </select>
+                  </form>
+                </div>
             <% end %>
           </div>
 
@@ -582,12 +646,11 @@ defmodule OctopusWeb.RadarLive do
             </div>
           <% end %>
 
-          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 text-sm font-mono mt-2">
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm font-mono mt-2">
             <div>X: {fmt_m(@min_x)} … {fmt_m(@max_x)}</div>
             <div>Y: {fmt_m(@min_y)} … {fmt_m(@max_y)}</div>
             <div>Z: {fmt_m(@min_z)} … {fmt_m(@max_z)}</div>
             <div>Tracks: {map_size(@tracks_now)}</div>
-            <div>Frame #: {@last_frame_number || "—"}</div>
           </div>
 
           <%= if not @radar_enabled do %>
@@ -1029,6 +1092,32 @@ defmodule OctopusWeb.RadarLive do
     max_dist = devices |> Enum.map(& &1.distance_cm) |> Enum.max()
     trunc(max_dist) + @layout_sensor_half + 24
   end
+
+  ## Sensor status helpers
+
+  defp build_sensor_statuses(devices) do
+    Map.new(devices, fn d -> {d.device_id, Radar.sensor_status(d.device_id)} end)
+  end
+
+  defp sensor_status_class(:inactive),
+    do: "bg-white text-gray-600 border border-gray-300 hover:bg-gray-50"
+
+  defp sensor_status_class(:unavailable),
+    do: "bg-red-500 text-white border-red-600 hover:bg-red-600"
+
+  defp sensor_status_class(:initializing),
+    do: "bg-amber-400 text-white border-amber-500 hover:bg-amber-500"
+
+  defp sensor_status_class(:working),
+    do: "bg-green-500 text-white border-green-600 hover:bg-green-600"
+
+  defp sensor_status_class(_), do: sensor_status_class(:unavailable)
+
+  defp sensor_status_label(:inactive), do: "Inactive"
+  defp sensor_status_label(:unavailable), do: "Unavailable"
+  defp sensor_status_label(:initializing), do: "Initializing"
+  defp sensor_status_label(:working), do: "Working"
+  defp sensor_status_label(_), do: "Unknown"
 
   ## Formatting helpers
 
