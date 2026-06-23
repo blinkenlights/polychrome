@@ -193,7 +193,8 @@ defmodule Octopus.Radar.Sensor do
   end
 
   def handle_info(:start_init, %State{} = state) do
-    log(state, :info, "Port settled — observing for live stream (#{@probe_window_ms} ms)")
+    log(state, :info, "Port settled — observing for existing stream (#{@probe_window_ms} ms)")
+    Radar.broadcast_status(state.device_id, :probing)
     timer = Process.send_after(self(), :probe_window_expired, @probe_window_ms)
 
     {:noreply,
@@ -201,7 +202,7 @@ defmodule Octopus.Radar.Sensor do
   end
 
   def handle_info(:probe_window_expired, %State{phase: :probing} = state) do
-    log(state, :info, "No live stream in observation window — probing sensor")
+    log(state, :info, "No streaming frames in verification window — probing sensor")
     state = cancel_watchdog(state)
     state = %State{state | phase: :stale}
     Radar.broadcast_status(state.device_id, :stale)
@@ -320,7 +321,6 @@ defmodule Octopus.Radar.Sensor do
   defp handle_probing_bytes(data, %State{buffer: buffer} = state) do
     case Protocol.feed(buffer, data) do
       {[_ | _], _, leftover} ->
-        log(state, :info, "Live stream detected during observation — attaching without re-init")
         state |> cancel_watchdog() |> enter_running_from_stream(leftover)
 
       {[], _, leftover} ->
@@ -420,17 +420,21 @@ defmodule Octopus.Radar.Sensor do
   ## Phase: configuring
 
   defp send_next_command(%State{pending_commands: []} = state) do
-    log(state, :info, "Initialization complete — entering :running phase")
-    timer = Process.send_after(self(), :frame_watchdog, @frame_timeout_ms)
-    Radar.broadcast_status(state.device_id, :working)
+    # Init sequence is fully acked — but acks only prove the sensor received
+    # the commands. It may not actually start streaming (hardware quirk).
+    # Re-enter :probing to wait for real frames before declaring :working.
+    # If no frames arrive within the window we fall back to :stale and
+    # re-init, avoiding the false :working → :stale flicker.
+    log(state, :info, "Init sequence acked — verifying sensor is streaming (#{@probe_window_ms} ms)")
+    Radar.broadcast_status(state.device_id, :probing)
+    timer = Process.send_after(self(), :probe_window_expired, @probe_window_ms)
 
     %State{
       state
-      | phase: :running,
+      | phase: :probing,
         current_command: nil,
         ack_buffer: <<>>,
         buffer: <<>>,
-        last_frame_at: System.monotonic_time(:millisecond),
         watchdog_timer: timer
     }
   end
@@ -489,7 +493,7 @@ defmodule Octopus.Radar.Sensor do
   end
 
   defp enter_running_from_stream(%State{} = state, buffer) do
-    log(state, :info, "Initialization complete — entering :running phase (live stream attach)")
+    log(state, :info, "Streaming confirmed — entering :running phase")
     Radar.broadcast_status(state.device_id, :working)
     timer = Process.send_after(self(), :frame_watchdog, @frame_timeout_ms)
 
