@@ -82,4 +82,13 @@ config :swoosh, :api_client, false
 # Set environment for broadcaster
 config :octopus, :env, :dev
 
+# Dev-only mock radar feed: simulates people walking the ring and broadcasts
+# them on the real radar PubSub topic, so the 3D sim (Humans -> "Radar (live)")
+# and the Collective app see the same crowd. Auto-disabled at boot if a real
+# sensor port is present (see Octopus.Application.radar_mock_children/0).
+# Overridable via RADAR_MOCK env (true/1/yes to force on).
+config :octopus, :radar_mock,
+  enabled: System.get_env("RADAR_MOCK", "true") in ~w(true 1 yes),
+  movement: 1.0
+
 # Radar: copy config/radar.local.exs.example to config/radar.local.exs
