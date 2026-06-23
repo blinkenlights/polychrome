@@ -177,7 +177,8 @@ defmodule Octopus.Apps.Collective do
     → a pale yellow shooting star on the opposite panel. Not on new track IDs /
     spawns already inside.
     • Storm Sensitivity — scales bolt probability for a given speed (higher = more).
-    • Background — Deep Dark (black) or Still Stars (static field).
+    • Background — Deep Dark (black) or Still Stars (starfield + wandering moon
+      that cycles new→full→new, plus 1–2 blinking satellites).
     • Mock Movement — dev only: speed multiplier for the simulated crowd.
     • Spawn person at 20 m — dev only (mock radar): one new arrival walks in.
     """

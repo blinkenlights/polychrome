@@ -24,14 +24,24 @@ defmodule Octopus.Apps.Collective.Animations.Storm do
   # Installation ring radius (m): aframe panelDiameter 18 → 9 m radius.
   @entry_radius 9.0
 
-  @meteor_ttl 0.85
-  @meteor_trail_len 8
+  @meteor_ttl 1.6
+  @meteor_trail_len 12
 
   @bolt_core {210, 225, 255}
   @bolt_glow {60, 80, 150}
   @meteor_head {255, 255, 0}
   @meteor_tail {255, 150, 0}
   @sky_color {6, 10, 26}
+
+  # Moon: wanders horizontally and cycles new → full → new.
+  @moon_radius 2.4
+  @moon_wander_speed 0.9
+  @moon_phase_period 38.0
+  @moon_lit {235, 232, 205}
+  @moon_dark {26, 30, 48}
+
+  # Satellites: small fast blinking dots near the top.
+  @sat_lit {200, 220, 255}
 
   @panel_width 8
 
@@ -44,6 +54,8 @@ defmodule Octopus.Apps.Collective.Animations.Storm do
       bolts: [],
       meteors: [],
       stars: [],
+      moon: nil,
+      sats: nil,
       prev_radius: %{},
       outside_ids: MapSet.new(),
       radar_seeded: false
@@ -62,6 +74,9 @@ defmodule Octopus.Apps.Collective.Animations.Storm do
       else
         state.stars
       end
+
+    moon = step_moon(state.moon || build_moon(width, height), dt, width)
+    sats = step_sats(state.sats || build_sats(width, height), dt, width)
 
     {entries, prev_radius, outside_ids, radar_seeded} =
       if state.radar_seeded do
@@ -87,9 +102,12 @@ defmodule Octopus.Apps.Collective.Animations.Storm do
       |> Enum.map(fn b -> %{b | age: b.age + dt} end)
       |> Enum.reject(fn b -> b.age >= @bolt_ttl end)
 
+    bg = Map.get(ctx, :background, :deep_dark)
+
     canvas =
       canvas
-      |> paint_background(Map.get(ctx, :background, :deep_dark), stars)
+      |> paint_background(bg, stars)
+      |> draw_sky_bodies(bg, moon, sats, width)
       |> draw_meteors(meteors)
       |> draw_bolts(bolts)
 
@@ -99,6 +117,8 @@ defmodule Octopus.Apps.Collective.Animations.Storm do
        | bolts: bolts,
          meteors: meteors,
          stars: stars,
+         moon: moon,
+         sats: sats,
          prev_radius: prev_radius,
          outside_ids: outside_ids,
          radar_seeded: radar_seeded
@@ -178,8 +198,8 @@ defmodule Octopus.Apps.Collective.Animations.Storm do
     %{
       x: start_x,
       y: start_y,
-      vx: 6.5 + :rand.uniform() * 1.0,
-      vy: 7.5 + :rand.uniform() * 1.0,
+      vx: 3.2 + :rand.uniform() * 0.6,
+      vy: 3.8 + :rand.uniform() * 0.6,
       age: 0.0,
       trail: [{trunc(start_x), 0}],
       x_min: x0,
@@ -226,15 +246,21 @@ defmodule Octopus.Apps.Collective.Animations.Storm do
     end)
   end
 
-  # Bright, defined head: full-colour core with a tight bloom on the leading edge
-  # (moving toward +x / +y, i.e. down-right), no wide halo.
+  # Bigger, defined head: a 2x2 full-colour core plus a bloom on the leading
+  # edge (moving toward +x / +y, i.e. down-right).
   defp draw_head(canvas, {x, y}, color, life) do
-    glow = scale(@meteor_head, 0.35 * life)
+    core = color
+    glow = scale(@meteor_head, 0.4 * life)
 
     canvas
-    |> put_pixel({x, y}, color)
-    |> put_pixel({x + 1, y}, glow)
-    |> put_pixel({x, y + 1}, glow)
+    |> put_pixel({x, y}, core)
+    |> put_pixel({x + 1, y}, core)
+    |> put_pixel({x, y + 1}, core)
+    |> put_pixel({x + 1, y + 1}, core)
+    |> put_pixel({x + 2, y + 1}, glow)
+    |> put_pixel({x + 1, y + 2}, glow)
+    |> put_pixel({x - 1, y}, scale(color, 0.5))
+    |> put_pixel({x, y - 1}, scale(color, 0.5))
   end
 
   # --- background ----------------------------------------------------------
@@ -245,6 +271,101 @@ defmodule Octopus.Apps.Collective.Animations.Storm do
     canvas = Canvas.fill(canvas, @sky_color)
     Enum.reduce(stars, canvas, fn s, c -> Canvas.put_pixel(c, {s.x, s.y}, s.color) end)
   end
+
+  # --- moon + satellites ---------------------------------------------------
+
+  defp build_moon(width, height) do
+    %{
+      x: :rand.uniform() * width,
+      y: 1.5 + :rand.uniform() * max(height - 4, 1),
+      phase: :rand.uniform()
+    }
+  end
+
+  defp step_moon(moon, dt, width) do
+    %{
+      moon
+      | x: :math.fmod(moon.x + @moon_wander_speed * dt + width, width),
+        phase: :math.fmod(moon.phase + dt / @moon_phase_period, 1.0)
+    }
+  end
+
+  defp build_sats(width, height) do
+    for _ <- 1..:rand.uniform(2) do
+      dir = if :rand.uniform() < 0.5, do: -1.0, else: 1.0
+
+      %{
+        x: :rand.uniform() * width,
+        y: :rand.uniform(max(div(height, 2), 1)) - 1,
+        vx: dir * (4.5 + :rand.uniform() * 3.0),
+        blink: :rand.uniform() * 6.28,
+        blink_rate: 2.0 + :rand.uniform() * 2.0
+      }
+    end
+  end
+
+  defp step_sats(sats, dt, width) do
+    Enum.map(sats, fn s ->
+      %{
+        s
+        | x: :math.fmod(s.x + s.vx * dt + width, width),
+          blink: s.blink + s.blink_rate * dt
+      }
+    end)
+  end
+
+  defp draw_sky_bodies(canvas, :still_stars, moon, sats, width) do
+    canvas
+    |> draw_moon(moon, width)
+    |> draw_sats(sats, width)
+  end
+
+  defp draw_sky_bodies(canvas, _bg, _moon, _sats, _width), do: canvas
+
+  defp draw_moon(canvas, moon, width) do
+    r = @moon_radius
+    cosa = :math.cos(2.0 * :math.pi() * moon.phase)
+    waxing = moon.phase <= 0.5
+    ri = ceil(r)
+
+    for dy <- -ri..ri, dx <- -ri..ri, reduce: canvas do
+      canvas ->
+        if dx * dx + dy * dy <= r * r do
+          limb = :math.sqrt(max(r * r - dy * dy, 0.0))
+          xt = cosa * limb
+          lit = if waxing, do: dx >= xt, else: dx <= -xt
+
+          color =
+            if lit do
+              edge = 1.0 - (dx * dx + dy * dy) / (r * r) * 0.35
+              scale(@moon_lit, clamp01(edge))
+            else
+              @moon_dark
+            end
+
+          px = round(:math.fmod(moon.x + dx + width, width))
+          put_pixel(canvas, {px, round(moon.y) + dy}, color)
+        else
+          canvas
+        end
+    end
+  end
+
+  defp draw_sats(canvas, sats, width) do
+    Enum.reduce(sats, canvas, fn s, canvas ->
+      b = 0.55 + 0.45 * :math.sin(s.blink)
+      color = scale(@sat_lit, clamp01(b))
+      x = round(s.x)
+      tail = round(:math.fmod(s.x - sign(s.vx) + width, width))
+
+      canvas
+      |> put_pixel({x, round(s.y)}, color)
+      |> put_pixel({tail, round(s.y)}, scale(color, 0.3))
+    end)
+  end
+
+  defp sign(v) when v < 0, do: -1.0
+  defp sign(_), do: 1.0
 
   defp build_stars(width, height) do
     count = max(div(width * height, 22), 12)
