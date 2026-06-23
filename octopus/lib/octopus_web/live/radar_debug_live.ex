@@ -21,15 +21,26 @@ defmodule OctopusWeb.RadarDebugLive do
   100 ms-accurate position. Vertical grid lines appear every 10 units
   (= 1 second). The LEFT edge of the bar is always "now" (beside the
   sensor button); the right edge is 60 seconds ago.
+
+  ## Halt / dump
+
+  The Halt button freezes the display at the current moment and emits a
+  compact JSON log entry tagged `RADAR-DUMP[<halt-id>]` containing the full
+  stored history (up to one hour) for all sensors. The halt-id
+  (`halt-YYYYMMDDTHHMMSSZ`) can be used to grep the logs or reference the
+  snapshot in conversation. Clicking Resume re-fetches live history and
+  resumes real-time updates.
   """
 
   use OctopusWeb, :live_view
 
+  require Logger
+
   alias Octopus.Radar
 
-  @window_ms 60_000
+  @display_window_ms 60_000
   @unit_ms 100
-  @vb_width div(@window_ms, @unit_ms)
+  @vb_width div(@display_window_ms, @unit_ms)
   @vb_height 32
   @units_per_second div(1_000, @unit_ms)
   @tick_ms 1_000
@@ -48,7 +59,7 @@ defmodule OctopusWeb.RadarDebugLive do
   def mount(_params, _session, socket) do
     devices = if Radar.enabled?(), do: Radar.devices(), else: []
     statuses = build_sensor_statuses(devices)
-    histories = if Radar.enabled?(), do: Radar.get_history(), else: %{}
+    histories = if Radar.enabled?(), do: trim_histories(Radar.get_history(), @display_window_ms), else: %{}
 
     if connected?(socket) do
       if Radar.enabled?() do
@@ -65,17 +76,44 @@ defmodule OctopusWeb.RadarDebugLive do
        statuses: statuses,
        histories: histories,
        now_ms: System.system_time(:millisecond),
+       halted: false,
+       halt_id: nil,
        vb_width: @vb_width,
        vb_height: @vb_height,
-       window_ms: @window_ms,
+       window_ms: @display_window_ms,
        units_per_second: @units_per_second
      )}
   end
 
   @impl true
+  def handle_event("toggle_halt", _, %{assigns: %{halted: false}} = socket) do
+    halt_id = generate_halt_id()
+    emit_dump(halt_id)
+    {:noreply, assign(socket, halted: true, halt_id: halt_id)}
+  end
+
+  def handle_event("toggle_halt", _, %{assigns: %{halted: true}} = socket) do
+    now = System.system_time(:millisecond)
+
+    histories =
+      if Radar.enabled?() do
+        trim_histories(Radar.get_history(), @display_window_ms)
+      else
+        %{}
+      end
+
+    statuses = build_sensor_statuses(socket.assigns.devices)
+    {:noreply, assign(socket, halted: false, halt_id: nil, histories: histories, statuses: statuses, now_ms: now)}
+  end
+
+  @impl true
+  def handle_info({:radar_sensor_status, _device_id, _new_status}, %{assigns: %{halted: true}} = socket) do
+    {:noreply, socket}
+  end
+
   def handle_info({:radar_sensor_status, device_id, new_status}, socket) do
     now = System.system_time(:millisecond)
-    cutoff = now - @window_ms
+    cutoff = now - @display_window_ms
 
     histories =
       Map.update(socket.assigns.histories, device_id, [{now, new_status}], fn entries ->
@@ -86,9 +124,13 @@ defmodule OctopusWeb.RadarDebugLive do
     {:noreply, assign(socket, histories: histories, statuses: statuses, now_ms: now)}
   end
 
+  def handle_info(:tick, %{assigns: %{halted: true}} = socket) do
+    {:noreply, socket}
+  end
+
   def handle_info(:tick, socket) do
     now = System.system_time(:millisecond)
-    cutoff = now - @window_ms
+    cutoff = now - @display_window_ms
 
     histories =
       Map.new(socket.assigns.histories, fn {device_id, entries} ->
@@ -109,7 +151,25 @@ defmodule OctopusWeb.RadarDebugLive do
       <div class="flex items-center gap-4 mb-4">
         <h1 class="text-xl font-bold">Radar Debug</h1>
         <a href="/radar" class="btn btn-outline btn-sm">← Radar</a>
+        <button
+          type="button"
+          phx-click="toggle_halt"
+          class={[
+            "btn btn-sm ml-auto",
+            if(@halted, do: "btn-success", else: "btn-warning")
+          ]}
+        >
+          <%= if @halted do %>▶ Resume<% else %>⏸ Halt<% end %>
+        </button>
       </div>
+
+      <%= if @halted do %>
+        <div class="flex items-center gap-2 mb-3 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
+          <span class="font-semibold">Frozen snapshot</span>
+          <span class="font-mono">{@halt_id}</span>
+          <span class="text-amber-600">— full history dumped to log</span>
+        </div>
+      <% end %>
 
       <%= if not @radar_enabled do %>
         <p class="text-gray-500">Radar is not enabled.</p>
@@ -123,7 +183,10 @@ defmodule OctopusWeb.RadarDebugLive do
               </span>
             <% end %>
           </div>
-          <span class="ml-auto">now ← &nbsp;&nbsp; 60 s ago →</span>
+          <span class="ml-auto">
+            now ← &nbsp;&nbsp; 60 s ago →
+            <%= if @halted do %><span class="text-amber-600 font-semibold ml-2">(frozen)</span><% end %>
+          </span>
         </div>
 
         <div class="flex flex-col gap-1">
@@ -166,14 +229,14 @@ defmodule OctopusWeb.RadarDebugLive do
                       fill={status_color(status)}
                     />
                   <% end %>
-                  <%= for s <- 1..59 do %>
+                  <%= for {x, major} <- ruler_lines(@now_ms, @units_per_second, @vb_width) do %>
                     <line
-                      x1={s * @units_per_second}
+                      x1={x}
                       y1="0"
-                      x2={s * @units_per_second}
+                      x2={x}
                       y2={@vb_height}
-                      stroke="rgba(0,0,0,0.18)"
-                      stroke-width="0.6"
+                      stroke={if major, do: "rgba(0,0,0,0.45)", else: "rgba(0,0,0,0.15)"}
+                      stroke-width={if major, do: "1.8", else: "0.5"}
                     />
                   <% end %>
                 </svg>
@@ -208,6 +271,26 @@ defmodule OctopusWeb.RadarDebugLive do
   end
 
   ## Private helpers
+
+  defp generate_halt_id do
+    now = DateTime.utc_now()
+    Calendar.strftime(now, "halt-%Y%m%dT%H%M%SZ")
+  end
+
+  defp emit_dump(halt_id) do
+    history = if Radar.enabled?(), do: Radar.get_history(), else: %{}
+
+    sensors =
+      Map.new(history, fn {device_id, entries} ->
+        letter = device_letter(device_id)
+        # Oldest first for readability in the dump
+        pairs = entries |> Enum.reverse() |> Enum.map(fn {t, s} -> [t, Atom.to_string(s)] end)
+        {letter, pairs}
+      end)
+
+    payload = Jason.encode!(%{"captured_at" => DateTime.to_iso8601(DateTime.utc_now()), "sensors" => sensors})
+    Logger.info("RADAR-DUMP[#{halt_id}] #{payload}")
+  end
 
   # Converts a newest-first history list into [{x, width, status}] SVG segments
   # where each unit = @unit_ms ms, x=0 is NOW (left edge), x=@vb_width is 60s ago (right edge).
@@ -252,6 +335,34 @@ defmodule OctopusWeb.RadarDebugLive do
       end
 
     Enum.reverse(rev_segs)
+  end
+
+  # Returns [{x, major?}] for all wall-clock-aligned 1-second divider lines
+  # that fall within the SVG viewport. x is a float in SVG units. Lines where
+  # the underlying wall-clock second is divisible by 10 are marked :major and
+  # rendered thicker. Because x is derived from `now_ms` every tick, the lines
+  # shift leftward continuously, making elapsed time visible even when no state
+  # transition has occurred.
+  defp ruler_lines(now_ms, units_per_second, vb_width) do
+    units_per_ms = units_per_second / 1_000.0
+    # Distance from "now" (x=0) to the most recent whole second, in SVG units
+    sec_offset = rem(now_ms, 1_000) * units_per_ms
+    # Which step index i corresponds to a 10s wall-clock boundary:
+    # boundary at i steps back == second (floor(now/1000) - i), major when divisible by 10.
+    sec_index = rem(div(now_ms, 1_000), 10)
+
+    for i <- 0..61,
+        x = sec_offset + i * units_per_second,
+        x > 0.0,
+        x < vb_width do
+      {x, rem(i, 10) == sec_index}
+    end
+  end
+
+  defp trim_histories(history, window_ms) do
+    now = System.system_time(:millisecond)
+    cutoff = now - window_ms
+    Map.new(history, fn {id, entries} -> {id, trim_entries(entries, cutoff)} end)
   end
 
   defp trim_entries(entries, cutoff) do

@@ -1,6 +1,6 @@
 defmodule Octopus.Radar.StatusHistory do
   @moduledoc """
-  Persistent history of sensor status transitions for the last 60 seconds.
+  Persistent history of sensor status transitions for the last hour.
 
   Subscribes to the per-sensor status PubSub topics as soon as the
   supervisor starts it and records every `{wall_clock_ms, status}` event
@@ -11,7 +11,7 @@ defmodule Octopus.Radar.StatusHistory do
   The ring buffer for each device is kept newest-first and is trimmed to
   `@window_ms` on every write, but always keeps at least one entry that
   predates the window start so the bar can be drawn from the beginning of
-  the 60-second window.
+  the window.
 
   Consumers call `get_all/0` or `get_history/1` to seed their local state.
   Subsequent updates arrive via the same per-sensor status PubSub topic
@@ -22,7 +22,7 @@ defmodule Octopus.Radar.StatusHistory do
 
   alias Octopus.Radar
 
-  @window_ms 60_000
+  @window_ms :timer.hours(1)
 
   ## Client API
 

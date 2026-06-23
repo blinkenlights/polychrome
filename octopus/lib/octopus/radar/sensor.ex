@@ -41,7 +41,6 @@ defmodule Octopus.Radar.Sensor do
   alias Octopus.Radar.{Ack, Command, Frame, Protocol, Transform}
 
   @reopen_interval :timer.seconds(5)
-  @escalate_reopen_interval :timer.seconds(15)
   @ack_timeout :timer.seconds(2)
   @open_stagger_ms 200
   @post_open_settle_ms 300
@@ -204,17 +203,14 @@ defmodule Octopus.Radar.Sensor do
   end
 
   def handle_info(:escalate_reopen, %State{} = state) do
+    # Close the port and reopen shortly — this drains OS+hardware UART buffers
+    # and gives the device a fresh handshake which can break streaming devices
+    # out of their unresponsive state.
     state = close_port(state)
-    Process.send_after(self(), :reopen_port, @escalate_reopen_interval)
+    Process.send_after(self(), :reopen_port, @reopen_interval)
     {:noreply, state}
   end
 
-  def handle_info(:probe_after_reset, %State{} = state) do
-    log(state, :info, "Post-reset settle complete — probing sensor")
-    state = %State{state | phase: :stale, ack_buffer: <<>>, ack_retries: 0}
-    Radar.broadcast_status(state.device_id, :stale)
-    {:noreply, send_probe(state)}
-  end
   def handle_info(:ack_timeout, %State{phase: :configuring} = state) do
     ack_retries = state.ack_retries + 1
     state = %State{state | ack_timer: nil, ack_retries: ack_retries}
@@ -373,19 +369,18 @@ defmodule Octopus.Radar.Sensor do
   defp graceful_close(state), do: close_port(state)
 
   defp escalate_init_failure(%State{uart: uart} = state) when is_pid(uart) do
+    # Best-effort stop/reset (ignored if the device is streaming), then close
+    # the port entirely. Closing the OS file descriptor drains both the kernel
+    # UART queue and the adapter hardware buffer, giving the device a fresh
+    # handshake on reopen — the only software-level way to break a streaming
+    # device out of its unresponsive state without a physical power cycle.
     _ = UART.write(uart, @reset_command)
-    # Keep the port open; stay in :opening phase so incoming data is dropped
-    # while we wait for the device to respond to AT+RESET. After the wait we
-    # re-enter :stale and probe — if the device is streaming we'll attach
-    # directly, if it is idle we'll get AT+OK and proceed with full init.
-    Process.send_after(self(), :probe_after_reset, @escalate_reopen_interval)
 
     state
     |> cancel_ack_timer()
     |> cancel_watchdog()
-    |> then(fn %State{} = s ->
-      %State{s | phase: :opening, pending_commands: [], current_command: nil, ack_retries: 0}
-    end)
+    |> close_port()
+    |> tap(fn _ -> Process.send_after(self(), :reopen_port, @reopen_interval) end)
   end
 
   defp escalate_init_failure(state), do: schedule_reopen(close_port(state))
