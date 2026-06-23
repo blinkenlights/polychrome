@@ -28,6 +28,7 @@ defmodule OctopusWeb.Router do
       live "/firmware-info", FirmwareInfoLive
       live "/proximity", ProximityLive
       live "/radar", RadarLive
+      live "/radar/debug", RadarDebugLive
     end
   end
 

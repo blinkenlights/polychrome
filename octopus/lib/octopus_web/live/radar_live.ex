@@ -76,12 +76,14 @@ defmodule OctopusWeb.RadarLive do
 
   @impl true
   def mount(_params, _session, socket) do
+    devices = Radar.devices() |> Enum.filter(& &1.enabled)
+
     if connected?(socket) and Radar.enabled?() do
       Radar.subscribe()
+      Enum.each(devices, &Radar.subscribe_status(&1.device_id))
       Process.send_after(self(), :refresh_sensor_statuses, 2_000)
     end
 
-    devices = Radar.devices() |> Enum.filter(& &1.enabled)
     selected_id = if length(devices) == 1, do: hd(devices).device_id, else: :all
     selected = Enum.find(devices, &(&1.device_id == selected_id))
 
@@ -284,6 +286,11 @@ defmodule OctopusWeb.RadarLive do
 
     {:noreply,
      assign(socket, :sensor_statuses, build_sensor_statuses(socket.assigns.devices))}
+  end
+
+  def handle_info({:radar_sensor_status, device_id, new_status}, socket) do
+    statuses = Map.put(socket.assigns.sensor_statuses, device_id, new_status)
+    {:noreply, assign(socket, :sensor_statuses, statuses)}
   end
 
   @impl true
@@ -1111,12 +1118,16 @@ defmodule OctopusWeb.RadarLive do
   defp sensor_status_class(:working),
     do: "bg-green-500 text-white border-green-600 hover:bg-green-600"
 
+  defp sensor_status_class(:stale),
+    do: "bg-orange-500 text-white border-orange-600 hover:bg-orange-600"
+
   defp sensor_status_class(_), do: sensor_status_class(:unavailable)
 
   defp sensor_status_label(:inactive), do: "Inactive"
   defp sensor_status_label(:unavailable), do: "Unavailable"
   defp sensor_status_label(:initializing), do: "Initializing"
   defp sensor_status_label(:working), do: "Working"
+  defp sensor_status_label(:stale), do: "No Data"
   defp sensor_status_label(_), do: "Unknown"
 
   ## Formatting helpers

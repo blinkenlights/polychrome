@@ -64,6 +64,9 @@ defmodule OctopusWeb.ManagerLive do
                 <a href="/radar" class="btn btn-outline btn-sm">
                   Radar
                 </a>
+                <a href="/radar/debug" class="btn btn-outline btn-sm">
+                  Radar Debug
+                </a>
               <% end %>
               <a href="/firmware-info" class="btn btn-outline btn-sm">
                 Firmware Info

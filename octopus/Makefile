@@ -30,6 +30,9 @@ deploy-metaebene:
 deploy-redlady:
 	./deploy/redlady/deploy.sh
 
+monitor-redlady:
+	ssh tim@redlady.crested-frog.ts.net "cd /home/tim/polychrome/deploy/redlady && docker compose logs -f"
+
 build-polychrome-image:
 	docker build -t polychrome:latest -f Dockerfile .
 	docker save polychrome:latest | gzip > /tmp/polychrome-latest.tar.gz

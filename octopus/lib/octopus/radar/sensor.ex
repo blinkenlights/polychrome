@@ -16,9 +16,19 @@ defmodule Octopus.Radar.Sensor do
     * `:opening` – open the UART port. On `:enoent`/`:eaccess`/etc. retry
       every 5 seconds so a hot-unplug/replug recovers without crashing the
       whole supervision tree.
+    * `:stale` – port is open but the sensor has not yet been confirmed
+      responsive. This is the entry state after the port opens (replacing an
+      immediate jump to `:configuring`) and also the state the sensor falls
+      back to when:
+        - no frames arrive within `@frame_timeout_ms` while `:running`
+        - the AT init sequence stops responding while `:configuring`
+      In this phase, a minimal `AT` probe is sent repeatedly; on `AT+OK` the
+      sensor advances to `:configuring`. After `@max_ack_retries` failures
+      the port is closed and reopened (back to `:opening`).
     * `:configuring` – send the §8.2 init sequence; bytes received in this
       phase are scanned for `AT+OK` / `Save Para Fail` acks amid any binary
-      noise per §8.3.
+      noise per §8.3. If the sensor stops responding here it falls back to
+      `:stale` to probe again before retrying the full sequence.
     * `:running` – feed every received chunk into `Octopus.Radar.Protocol`,
       publish each parsed frame.
   """
@@ -31,13 +41,15 @@ defmodule Octopus.Radar.Sensor do
   alias Octopus.Radar.{Ack, Command, Frame, Protocol, Transform}
 
   @reopen_interval :timer.seconds(5)
+  @escalate_reopen_interval :timer.seconds(15)
   @ack_timeout :timer.seconds(2)
   @open_stagger_ms 200
   @post_open_settle_ms 300
   @max_ack_retries 5
-  @escalate_delay_ms 500
   @stop_command "AT+STOP\n"
   @reset_command "AT+RESET\n"
+  @frame_timeout_ms 3_000
+  @probe_command "AT+STOP\n"
 
   defmodule State do
     @moduledoc false
@@ -54,6 +66,8 @@ defmodule Octopus.Radar.Sensor do
       :ack_buffer,
       :last_track_count,
       :ack_timer,
+      :last_frame_at,
+      :watchdog_timer,
       ack_retries: 0
     ]
   end
@@ -94,9 +108,9 @@ defmodule Octopus.Radar.Sensor do
     call_sensor(device_id, :reinitialize)
   end
 
-  @doc "Return the sensor's current phase (`:opening`, `:configuring`, or `:running`)."
+  @doc "Return the sensor's current phase (`:opening`, `:configuring`, `:running`, or `:stale`)."
   @spec get_phase(pos_integer()) ::
-          {:ok, :opening | :configuring | :running} | {:error, :no_sensor | :unavailable}
+          {:ok, :opening | :configuring | :running | :stale} | {:error, :no_sensor | :unavailable}
   def get_phase(device_id) do
     call_sensor(device_id, :get_phase)
   end
@@ -169,14 +183,6 @@ defmodule Octopus.Radar.Sensor do
     {:reply, :ok, restart_init(state)}
   end
 
-  # The port just opened successfully: pending_commands is populated but
-  # :start_init hasn't fired yet (300 ms settle). From the outside this is
-  # indistinguishable from :configuring — the device IS reachable and init
-  # is imminent — so report :configuring rather than :opening.
-  def handle_call(:get_phase, _from, %State{phase: :opening, pending_commands: [_ | _]} = state) do
-    {:reply, {:ok, :configuring}, state}
-  end
-
   def handle_call(:get_phase, _from, %State{phase: phase} = state) do
     {:reply, {:ok, phase}, state}
   end
@@ -187,7 +193,10 @@ defmodule Octopus.Radar.Sensor do
   end
 
   def handle_info(:start_init, %State{} = state) do
-    {:noreply, state |> Map.put(:phase, :configuring) |> send_next_command()}
+    log(state, :info, "Port settled — probing sensor before initialization")
+    state = %State{state | phase: :stale}
+    Radar.broadcast_status(state.device_id, :stale)
+    {:noreply, send_probe(state)}
   end
 
   def handle_info(:reopen_port, %State{} = state) do
@@ -195,9 +204,17 @@ defmodule Octopus.Radar.Sensor do
   end
 
   def handle_info(:escalate_reopen, %State{} = state) do
-    {:noreply, schedule_reopen(close_port(state))}
+    state = close_port(state)
+    Process.send_after(self(), :reopen_port, @escalate_reopen_interval)
+    {:noreply, state}
   end
 
+  def handle_info(:probe_after_reset, %State{} = state) do
+    log(state, :info, "Post-reset settle complete — probing sensor")
+    state = %State{state | phase: :stale, ack_buffer: <<>>, ack_retries: 0}
+    Radar.broadcast_status(state.device_id, :stale)
+    {:noreply, send_probe(state)}
+  end
   def handle_info(:ack_timeout, %State{phase: :configuring} = state) do
     ack_retries = state.ack_retries + 1
     state = %State{state | ack_timer: nil, ack_retries: ack_retries}
@@ -206,12 +223,27 @@ defmodule Octopus.Radar.Sensor do
       log(
         state,
         :warning,
-        "AT command stuck after #{ack_retries} retries (#{inspect(state.current_command)}) — escalating"
+        "AT command stuck after #{ack_retries} retries (#{inspect(state.current_command)}) — falling back to stale, probing"
       )
 
-      {:noreply, escalate_init_failure(state)}
+      state = %State{state | phase: :stale}
+      Radar.broadcast_status(state.device_id, :stale)
+      {:noreply, send_probe(state)}
     else
       log(state, :warning, "AT command timed out, resending: #{inspect(state.current_command)}")
+      {:noreply, resend_command(state)}
+    end
+  end
+
+  def handle_info(:ack_timeout, %State{phase: :stale} = state) do
+    ack_retries = state.ack_retries + 1
+    state = %State{state | ack_timer: nil, ack_retries: ack_retries}
+
+    if ack_retries >= @max_ack_retries do
+      log(state, :warning, "Probe timed out after #{ack_retries} retries — escalating reopen")
+      {:noreply, escalate_init_failure(state)}
+    else
+      log(state, :warning, "Probe timed out, resending")
       {:noreply, resend_command(state)}
     end
   end
@@ -220,12 +252,28 @@ defmodule Octopus.Radar.Sensor do
     {:noreply, %State{state | ack_timer: nil}}
   end
 
+  def handle_info(:frame_watchdog, %State{phase: :running} = state) do
+    log(state, :warning, "No frames received for #{@frame_timeout_ms} ms — sensor stale, probing")
+    state = %State{state | phase: :stale, watchdog_timer: nil}
+    Radar.broadcast_status(state.device_id, :stale)
+    {:noreply, send_probe(state)}
+  end
+
+  def handle_info(:frame_watchdog, %State{} = state) do
+    {:noreply, %State{state | watchdog_timer: nil}}
+  end
+
   def handle_info({:circuits_uart, _port, {:error, reason}}, %State{} = state) do
     log(state, :warning, "UART error: #{inspect(reason)} — reopening")
     {:noreply, schedule_reopen(close_port(state))}
   end
 
   def handle_info({:circuits_uart, _port, data}, %State{phase: :configuring} = state)
+      when is_binary(data) do
+    {:noreply, handle_ack_bytes(data, state)}
+  end
+
+  def handle_info({:circuits_uart, _port, data}, %State{phase: :stale} = state)
       when is_binary(data) do
     {:noreply, handle_ack_bytes(data, state)}
   end
@@ -271,7 +319,7 @@ defmodule Octopus.Radar.Sensor do
         %State{
           state
           | phase: :opening,
-            pending_commands: Command.init_sequence(state.config),
+            pending_commands: [],
             buffer: <<>>,
             ack_buffer: <<>>,
             ack_retries: 0,
@@ -287,6 +335,7 @@ defmodule Octopus.Radar.Sensor do
 
   defp schedule_reopen(%State{} = state) do
     Process.send_after(self(), :reopen_port, @reopen_interval)
+    Radar.broadcast_status(state.device_id, :unavailable)
 
     %State{
       state
@@ -299,7 +348,8 @@ defmodule Octopus.Radar.Sensor do
 
   defp close_port(%State{uart: uart} = state) when is_pid(uart) do
     _ = UART.close(uart)
-    cancel_ack_timer(state)
+    state = cancel_ack_timer(state)
+    state = cancel_watchdog(state)
 
     %State{
       state
@@ -314,7 +364,7 @@ defmodule Octopus.Radar.Sensor do
   defp close_port(state), do: state
 
   defp graceful_close(%State{uart: uart, phase: phase} = state)
-       when is_pid(uart) and phase in [:configuring, :running] do
+       when is_pid(uart) and phase in [:configuring, :running, :stale] do
     _ = UART.write(uart, @stop_command)
     Process.sleep(100)
     close_port(state)
@@ -324,15 +374,18 @@ defmodule Octopus.Radar.Sensor do
 
   defp escalate_init_failure(%State{uart: uart} = state) when is_pid(uart) do
     _ = UART.write(uart, @reset_command)
-    Process.send_after(self(), :escalate_reopen, @escalate_delay_ms)
+    # Keep the port open; stay in :opening phase so incoming data is dropped
+    # while we wait for the device to respond to AT+RESET. After the wait we
+    # re-enter :stale and probe — if the device is streaming we'll attach
+    # directly, if it is idle we'll get AT+OK and proceed with full init.
+    Process.send_after(self(), :probe_after_reset, @escalate_reopen_interval)
 
-    %State{
-      state
-      | phase: :opening,
-        pending_commands: [],
-        current_command: nil,
-        ack_retries: 0
-    }
+    state
+    |> cancel_ack_timer()
+    |> cancel_watchdog()
+    |> then(fn %State{} = s ->
+      %State{s | phase: :opening, pending_commands: [], current_command: nil, ack_retries: 0}
+    end)
   end
 
   defp escalate_init_failure(state), do: schedule_reopen(close_port(state))
@@ -341,7 +394,18 @@ defmodule Octopus.Radar.Sensor do
 
   defp send_next_command(%State{pending_commands: []} = state) do
     log(state, :info, "Initialization complete — entering :running phase")
-    %State{state | phase: :running, current_command: nil, ack_buffer: <<>>, buffer: <<>>}
+    timer = Process.send_after(self(), :frame_watchdog, @frame_timeout_ms)
+    Radar.broadcast_status(state.device_id, :working)
+
+    %State{
+      state
+      | phase: :running,
+        current_command: nil,
+        ack_buffer: <<>>,
+        buffer: <<>>,
+        last_frame_at: System.monotonic_time(:millisecond),
+        watchdog_timer: timer
+    }
   end
 
   defp send_next_command(%State{pending_commands: [cmd | rest]} = state) do
@@ -352,7 +416,7 @@ defmodule Octopus.Radar.Sensor do
   # init sequence. Residual binary frames may still arrive during
   # :configuring; Ack.feed/2 scans the mixed stream for AT+OK without
   # requiring a quiet line.
-  defp port_open?(%State{phase: phase}), do: phase in [:configuring, :running]
+  defp port_open?(%State{phase: phase}), do: phase in [:configuring, :running, :stale]
 
   defp restart_init(%State{phase: :opening} = state) do
     log(state, :info, "Re-init deferred until serial port is available")
@@ -364,12 +428,25 @@ defmodule Octopus.Radar.Sensor do
         buffer: <<>>,
         ack_buffer: <<>>,
         ack_retries: 0,
-        last_track_count: nil
+        last_track_count: nil,
+        watchdog_timer: nil
     })
   end
 
   defp restart_init(%State{} = state) do
     state = cancel_ack_timer(state)
+    state = cancel_watchdog(state)
+
+    log(state, :info, "Re-probing sensor before initialization")
+    state = %State{state | phase: :stale, pending_commands: [], current_command: nil,
+                           buffer: <<>>, ack_buffer: <<>>, ack_retries: 0, last_track_count: nil}
+    Radar.broadcast_status(state.device_id, :stale)
+    send_probe(state)
+  end
+
+  defp enter_configuring(%State{} = state) do
+    log(state, :info, "Sensor responsive — starting initialization sequence")
+    Radar.broadcast_status(state.device_id, :initializing)
 
     %State{
       state
@@ -382,6 +459,23 @@ defmodule Octopus.Radar.Sensor do
         last_track_count: nil
     }
     |> send_next_command()
+  end
+
+  defp enter_running_from_stream(%State{} = state, buffer) do
+    log(state, :info, "Initialization complete — entering :running phase (live stream attach)")
+    Radar.broadcast_status(state.device_id, :working)
+    timer = Process.send_after(self(), :frame_watchdog, @frame_timeout_ms)
+
+    %State{
+      state
+      | phase: :running,
+        ack_buffer: <<>>,
+        buffer: buffer,
+        last_frame_at: System.monotonic_time(:millisecond),
+        watchdog_timer: timer,
+        current_command: nil,
+        pending_commands: []
+    }
   end
 
   defp write_command(cmd, %State{uart: uart} = state) do
@@ -407,6 +501,39 @@ defmodule Octopus.Radar.Sensor do
       {:error, reason} ->
         log(state, :warning, "UART write failed (#{inspect(reason)}) — reopening")
         schedule_reopen(close_port(state))
+    end
+  end
+
+  defp handle_ack_bytes(data, %State{phase: :stale, ack_buffer: ack_buffer} = state) do
+    case Ack.feed(ack_buffer, data) do
+      {:pending, buf} ->
+        # Only attach if we can parse at least one complete frame — a lone header
+        # fragment in residual adapter-buffer data should not count as live streaming.
+        case Protocol.feed(<<>>, buf) do
+          {[_ | _], _, _} ->
+            log(state, :info, "Device already streaming — attaching to live stream without re-init")
+            state |> cancel_ack_timer() |> reset_ack_retries() |> enter_running_from_stream(buf)
+
+          _ ->
+            %State{state | ack_buffer: buf}
+        end
+
+      {:ok, _buf} ->
+        log(state, :info, "← AT+OK — sensor responsive, starting initialization")
+
+        state
+        |> cancel_ack_timer()
+        |> reset_ack_retries()
+        |> enter_configuring()
+
+      {:retry, buf} ->
+        log(state, :info, "← Save Para Fail during probe — treating as responsive, starting initialization")
+
+        state
+        |> cancel_ack_timer()
+        |> reset_ack_retries()
+        |> then(fn %State{} = s -> %State{s | ack_buffer: buf} end)
+        |> enter_configuring()
     end
   end
 
@@ -454,6 +581,17 @@ defmodule Octopus.Radar.Sensor do
     %State{state | ack_timer: nil}
   end
 
+  defp cancel_watchdog(%State{watchdog_timer: nil} = state), do: state
+
+  defp cancel_watchdog(%State{watchdog_timer: ref} = state) do
+    _ = Process.cancel_timer(ref)
+    %State{state | watchdog_timer: nil}
+  end
+
+  defp send_probe(%State{} = state) do
+    write_command(@probe_command, %State{state | ack_buffer: <<>>, ack_retries: 0})
+  end
+
   ## Phase: running
 
   defp handle_data_bytes(data, %State{buffer: buffer} = state) do
@@ -472,6 +610,10 @@ defmodule Octopus.Radar.Sensor do
     envelope = {:radar_frame, device_id, frame}
     Phoenix.PubSub.broadcast(Octopus.PubSub, Radar.topic(), envelope)
     Phoenix.PubSub.broadcast(Octopus.PubSub, Radar.topic(device_id), envelope)
+
+    state = cancel_watchdog(state)
+    timer = Process.send_after(self(), :frame_watchdog, @frame_timeout_ms)
+    state = %State{state | last_frame_at: System.monotonic_time(:millisecond), watchdog_timer: timer}
 
     track_count = length(frame.tracks)
 

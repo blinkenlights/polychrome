@@ -238,16 +238,22 @@ defmodule Octopus.Radar do
     * `:unavailable`  — active but port cannot be opened; retrying every 5 s
     * `:initializing` — port open, AT init command sequence in progress
     * `:working`      — fully initialised and publishing frames
+    * `:stale`        — port open but no frames received recently; device may
+                        be disconnected at the UART/sensor level (distinct from
+                        `:unavailable` which means the USB-serial port itself
+                        cannot be opened)
 
   Config-disabled sensors (`enabled: false`) are excluded from the UI
   entirely and never queried here. The sensor GenServer is looked up via
   the Registry; the call returns immediately.
   """
-  @spec sensor_status(pos_integer()) :: :inactive | :unavailable | :initializing | :working
+  @spec sensor_status(pos_integer()) ::
+          :inactive | :unavailable | :initializing | :working | :stale
   def sensor_status(device_id) do
     if enabled?() and Runtime.enabled?(device_id) do
       case Sensor.get_phase(device_id) do
         {:ok, :running} -> :working
+        {:ok, :stale} -> :stale
         {:ok, :configuring} -> :initializing
         {:ok, :opening} -> :unavailable
         {:error, _} -> :unavailable
@@ -256,6 +262,34 @@ defmodule Octopus.Radar do
       :inactive
     end
   end
+
+  @doc "PubSub topic for status-change broadcasts of a single sensor."
+  @spec status_topic(pos_integer()) :: String.t()
+  def status_topic(device_id) when is_integer(device_id) and device_id >= 1,
+    do: "#{topic(device_id)}:status"
+
+  @doc "Subscribe to status-change broadcasts for a single sensor."
+  @spec subscribe_status(pos_integer()) :: :ok | {:error, term()}
+  def subscribe_status(device_id),
+    do: Phoenix.PubSub.subscribe(Octopus.PubSub, status_topic(device_id))
+
+  @doc "Broadcast a sensor status change. Called internally by `Octopus.Radar.Sensor`."
+  @spec broadcast_status(pos_integer(), atom()) :: :ok | {:error, term()}
+  def broadcast_status(device_id, status) do
+    Phoenix.PubSub.broadcast(
+      Octopus.PubSub,
+      status_topic(device_id),
+      {:radar_sensor_status, device_id, status}
+    )
+  end
+
+  @doc "Return the full 60-second status history for all sensors: `%{device_id => [{ms, status}]}`."
+  @spec get_history() :: %{pos_integer() => [{integer(), atom()}]}
+  defdelegate get_history(), to: Octopus.Radar.StatusHistory, as: :get_all
+
+  @doc "Return the 60-second status history for one sensor: `[{ms, status}]`, newest-first."
+  @spec get_history(pos_integer()) :: [{integer(), atom()}]
+  defdelegate get_history(device_id), to: Octopus.Radar.StatusHistory
 
   @doc """
   Enable a sensor at runtime, starting its process if not already running.
@@ -307,17 +341,21 @@ defmodule Octopus.Radar do
   def disable_sensor(device_id) do
     Runtime.set(device_id, false)
 
-    case Supervisor.terminate_child(__MODULE__, {Sensor, device_id}) do
-      :ok ->
-        Supervisor.delete_child(__MODULE__, {Sensor, device_id})
-        :ok
+    result =
+      case Supervisor.terminate_child(__MODULE__, {Sensor, device_id}) do
+        :ok ->
+          Supervisor.delete_child(__MODULE__, {Sensor, device_id})
+          :ok
 
-      {:error, :not_found} ->
-        :ok
+        {:error, :not_found} ->
+          :ok
 
-      error ->
-        error
-    end
+        error ->
+          error
+      end
+
+    if result == :ok, do: broadcast_status(device_id, :inactive)
+    result
   end
 
   @doc """
@@ -352,7 +390,8 @@ defmodule Octopus.Radar do
     children =
       [
         {Registry, keys: :unique, name: Octopus.Radar.Registry},
-        {Runtime, initial_runtime}
+        {Runtime, initial_runtime},
+        Octopus.Radar.StatusHistory
       ] ++ sensor_children()
 
     Supervisor.init(children, strategy: :one_for_one)
