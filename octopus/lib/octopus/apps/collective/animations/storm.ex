@@ -41,7 +41,7 @@ defmodule Octopus.Apps.Collective.Animations.Storm do
   @sky_color {6, 10, 26}
 
   @impl true
-  def name, do: "Bewegungs-Sturm"
+  def name, do: "Tempest"
 
   @impl true
   def init(display_info) do

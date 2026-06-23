@@ -13,8 +13,8 @@ Die App konsumiert den **Radar-PubSub-Feed** (`Octopus.Radar.subscribe()`,
   Person-Format spiegelt `Octopus.Radar.Track` (`x, y, vx, vy` in Metern / m/s,
   Ursprung = Ring-Zentrum). Verhalten (portiert aus `humanWorld.ts`): **autonome
   Population 1-20** (Leute kommen/gehen, Zielzahl re-rollt alle paar Sekunden),
-  **wander + idle** (laufen, kurz stehen, neues Ziel) und **Gruppen** (ab und zu
-  versammelt sich ein Cluster an einem Punkt und steht eine Weile zusammen still).
+  **wander + idle** on the ring (r ≥ 2 m), **Stehgruppen 2–5** on the ring, and
+  **Center chill 2–5** in the 2 m installation disk (walk in, micro-shuffle, return).
 - `Octopus.Apps.Collective.MockRadar` — GenServer, der die MockCrowd tickt und als
   `%Frame{}` aufs echte Radar-Topic broadcastet. Dadurch sehen **dieselbe Crowd**:
   die 3D-Sim (`/sim3daframe`, Humans → „Radar (live)"), die Collective-Animationen,
@@ -36,12 +36,17 @@ Jede Animation implementiert das `Octopus.Apps.Collective.Animation`-Behaviour
 (`name/0`, `init/1`, `render/4`) und liegt unter
 `octopus/lib/octopus/apps/collective/animations/`.
 
-### In Arbeit
+### Fertig
 
-- **Bewegungs-Sturm** (`Kollektiv`) — Gesamtbewegungsenergie aller Personen wird
-  summiert. Alle stehen: Stille, kaum Licht, Sterne. Alle laufen: Sturm, Blitze,
-  chaotische Energieausbrüche über alle Panels. Die Crowd kontrolliert das Wetter
-  des Raums. *Keine Einzel-Zuordnung nötig — guter erster Pipeline-Test.*
+- **Tempest** (`Kollektiv`, vormals „Bewegungs-Sturm") — Bewegung der Personen löst
+  Blitze an ihrer Ring-Position aus (Wahrscheinlichkeit ∝ Geschwindigkeit). Stehen =
+  ruhig, laufen = Blitze. Personen näher als 3 m zur Mitte (`@center_dead_zone`)
+  lösen nichts aus. Config: `Background` (Deep Dark / Still Stars) und
+  `Storm Sensitivity`.
+- **Crowd Breath** (`Kollektiv`) — Wasser-Welle; Form global, Farbe lokal am Ring
+  (r ≥ 2 m). Layout **Canopy**: untere Hälfte = Ring-Wasser (Palette), obere Hälfte
+  = komplementärer Himmel (Palette +180° Hue), getrieben von Leuten im 2 m Center.
+  Config: Liveliness, Palette, Hue Shift, Layout (Wave / Canopy).
 
 ### Backlog
 
@@ -69,9 +74,6 @@ Jede Animation implementiert das `Octopus.Apps.Collective.Animation`-Behaviour
 
 #### Kollektiv
 
-- **Crowd breath / Atemsystem** — Der Ring atmet; Pulsfrequenz/Amplitude hängen
-  von der Gesamtdichte ab. Viele = schneller intensiver Puls, wenige =
-  langsames meditatives Atmen. Funktioniert auch mit simpler Radarauswertung.
 - **Schwarm-Schwerpunkt** — Geometrischer Mittelpunkt (Centroid) aller Personen
   wird mit besonderem Licht markiert. Stehen alle auf einer Seite, kippt die
   Animation. Gleichmäßige Verteilung = Harmonie, Ungleichgewicht = Spannung.

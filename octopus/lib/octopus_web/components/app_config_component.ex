@@ -4,13 +4,22 @@ defmodule OctopusWeb.AppConfigComponent do
   alias Octopus.AppSupervisor
 
   def mount(socket) do
-    {:ok, socket}
+    {:ok, assign(socket, config_info: nil)}
   end
 
   def update(%{app_module: module} = assigns, socket) do
     config_schema = apply(module, :config_schema, [])
     config = AppSupervisor.config(assigns.app_id)
-    {:ok, socket |> assign(assigns) |> assign(config_schema: config_schema, config: config)}
+
+    {:ok,
+     socket
+     |> assign(assigns)
+     |> assign(
+       config_schema: config_schema,
+       config_schema_map: Map.new(config_schema),
+       config: config,
+       config_info: config_info(module, config)
+     )}
   end
 
   def update(assigns, socket) do
@@ -21,7 +30,7 @@ defmodule OctopusWeb.AppConfigComponent do
     ~H"""
     <div>
       <form class="space-y-4" phx-change="change" phx-target={@myself}>
-        <div :for={{key, {name, type, opts}} <- @config_schema} class="form-control">
+        <div :for={{key, {name, type, opts}} <- visible_entries(@config_schema, @config)} class="form-control">
           <label class="label" for={"#{@app_id}-#{key}"}>
             <span class="label-text font-semibold">{name}</span>
           </label>
@@ -36,32 +45,98 @@ defmodule OctopusWeb.AppConfigComponent do
           />
         </div>
       </form>
+      <p
+        :if={@config_info}
+        class="text-xs leading-snug opacity-70 mt-3 whitespace-pre-line"
+      >
+        {@config_info}
+      </p>
     </div>
     """
   end
 
   def handle_event("change", params, socket) do
-    config =
+    changed_keys = target_keys(params)
+
+    parsed =
       params
       |> Map.drop(["_target"])
       |> Enum.reject(fn {key, _value} -> String.starts_with?(key, "_unused_") end)
       |> Enum.map(fn {key, value} -> {String.to_existing_atom(key), value} end)
       |> Enum.map(fn {key, value} ->
-        {key, parse_option(key, value, socket.assigns.config_schema)}
+        {key, parse_option(key, value, socket.assigns.config_schema_map)}
       end)
       |> Map.new()
 
-    boolean_off_values =
-      socket.assigns.config_schema
-      |> Enum.filter(fn {_key, {_name, type, _opts}} -> type == :boolean end)
-      |> Enum.map(fn {key, {_name, _type, _opts}} -> {key, false} end)
+    config =
+      changed_keys
+      |> Enum.flat_map(fn key ->
+        cond do
+          Map.has_key?(parsed, key) ->
+            [{key, Map.fetch!(parsed, key)}]
+
+          boolean_field?(socket.assigns.config_schema_map, key) ->
+            [{key, false}]
+
+          true ->
+            []
+        end
+      end)
       |> Map.new()
 
-    config = Map.merge(boolean_off_values, config)
+    new_config = Map.merge(socket.assigns.config, config)
 
-    AppSupervisor.update_config(socket.assigns.app_id, config)
+    AppSupervisor.update_config(socket.assigns.app_id, new_config)
 
-    {:noreply, socket}
+    {:noreply,
+     assign(socket,
+       config: new_config,
+       config_info: config_info(socket.assigns.app_module, new_config)
+     )}
+  end
+
+  defp target_keys(%{"_target" => target}) when is_list(target) do
+    Enum.map(target, &String.to_existing_atom/1)
+  end
+
+  defp target_keys(%{"_target" => target}) when is_binary(target) do
+    [String.to_existing_atom(target)]
+  end
+
+  defp target_keys(params) do
+    params
+    |> Map.drop(["_target"])
+    |> Map.keys()
+    |> Enum.map(&String.to_existing_atom/1)
+  end
+
+  defp boolean_field?(schema, key) do
+    case Map.get(schema, key) do
+      {_name, :boolean, _opts} -> true
+      _ -> false
+    end
+  end
+
+  # Optional per-app explanation rendered below the form. Apps may implement
+  # `config_info/1` (current config => string) to describe how the active
+  # settings are interpreted; everyone else simply shows no text.
+  defp config_info(module, config) do
+    if function_exported?(module, :config_info, 1) do
+      module.config_info(config)
+    end
+  end
+
+  # Fields whose opts carry `visible_when: {dep_key, allowed_values}` are only
+  # shown when the current config value of `dep_key` is in `allowed_values`.
+  # Iterating the schema as given preserves its order (use a keyword list for a
+  # defined order; a map renders in its enumeration order as before).
+  defp visible_entries(config_schema, config) do
+    Enum.filter(config_schema, fn {_key, {_name, _type, opts}} ->
+      case Map.get(opts, :visible_when) do
+        nil -> true
+        {dep_key, allowed} -> Map.get(config, dep_key) in allowed
+      end
+    end)
   end
 
   defp parse_option(key, value, config_schema) do
@@ -160,15 +235,30 @@ defmodule OctopusWeb.AppConfigComponent do
   end
 
   defp config_input(%{type: :select} = assigns) do
+    index =
+      assigns.opts.options
+      |> Enum.find_index(fn {_name, val} -> val == assigns.value end)
+      |> case do
+        nil -> 0
+        i -> i
+      end
+
+    assigns = assign(assigns, :selected_index, index)
+
     ~H"""
     <select
       name={@key}
       id={"#{@app_id}-#{@key}"}
       phx-debounce={@debounce}
       class="select select-bordered w-full"
+      value={@selected_index}
       {@rest}
     >
-      <option :for={{{name, _value}, i} <- Enum.with_index(@opts.options)} value={i}>
+      <option
+        :for={{{name, _value}, i} <- Enum.with_index(@opts.options)}
+        value={i}
+        selected={i == @selected_index}
+      >
         {name}
       </option>
     </select>
