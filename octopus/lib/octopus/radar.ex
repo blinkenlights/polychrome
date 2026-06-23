@@ -144,6 +144,93 @@ defmodule Octopus.Radar do
   def subscribe(device_id), do: Phoenix.PubSub.subscribe(Octopus.PubSub, topic(device_id))
 
   @doc """
+  Return a list of configured USB adapters, each with its display name,
+  sysfs USB path, and the device_ids of the sensors it carries.
+
+  Returns `[]` when no `:adapters` key is present in the config (i.e. when
+  using the plain `:ports` style).
+  """
+  @spec adapters() :: [
+          %{name: String.t(), usb_path: String.t(), device_ids: [pos_integer()]}
+        ]
+  def adapters do
+    if not enabled?() do
+      []
+    else
+      radar_env = Application.get_env(:octopus, __MODULE__, [])
+
+      Keyword.get(radar_env, :adapters, [])
+      |> Enum.reduce({[], 1}, fn adapter_opts, {acc, id_start} ->
+        ports = Keyword.fetch!(adapter_opts, :ports)
+        count = length(ports)
+        device_ids = Enum.to_list(id_start..(id_start + count - 1))
+
+        entry = %{
+          name: Keyword.fetch!(adapter_opts, :name),
+          usb_path: Keyword.fetch!(adapter_opts, :usb_path),
+          device_ids: device_ids
+        }
+
+        {acc ++ [entry], id_start + count}
+      end)
+      |> elem(0)
+    end
+  end
+
+  @doc """
+  Trigger a USB-level power cycle for the named adapter by toggling the
+  kernel's `authorized` sysfs attribute.
+
+  Broadcasts `:resetting` for all sensors on the adapter, waits 500 ms so
+  the UI shows the black indicator, then deauthorizes the USB device for
+  1 second before reauthorizing it.  The sensors recover automatically via
+  the normal `try_open → :probing → :running` flow.
+
+  Requires the container/process to have `SYS_ADMIN` capability and access
+  to `/sys/bus/usb/devices/`.  Returns `{:error, :not_found}` if the adapter
+  name is not configured, or `{:error, :no_adapters_configured}` when the
+  config uses plain `:ports` rather than `:adapters`.
+  """
+  @spec reset_adapter(String.t()) :: :ok | {:error, atom()}
+  def reset_adapter(adapter_name) do
+    require Logger
+
+    case Enum.find(adapters(), fn a -> a.name == adapter_name end) do
+      nil ->
+        {:error, :not_found}
+
+      adapter ->
+        Enum.each(adapter.device_ids, &broadcast_status(&1, :resetting))
+
+        sysfs_base = "/sys/bus/usb/devices/#{adapter.usb_path}"
+
+        Task.start(fn ->
+          Process.sleep(500)
+
+          case File.write("#{sysfs_base}/authorized", "0") do
+            :ok ->
+              Logger.info("[radar] USB adapter #{adapter_name} (#{adapter.usb_path}) deauthorized — power cycling")
+              Process.sleep(1_000)
+
+              case File.write("#{sysfs_base}/authorized", "1") do
+                :ok ->
+                  Logger.info("[radar] USB adapter #{adapter_name} (#{adapter.usb_path}) reauthorized")
+
+                {:error, reason} ->
+                  Logger.error("[radar] Failed to reauthorize USB adapter #{adapter_name}: #{inspect(reason)}")
+              end
+
+            {:error, reason} ->
+              Logger.error("[radar] Failed to deauthorize USB adapter #{adapter_name} at #{sysfs_base}: #{inspect(reason)}")
+              Enum.each(adapter.device_ids, &broadcast_status(&1, :unavailable))
+          end
+        end)
+
+        :ok
+    end
+  end
+
+  @doc """
   Return a list describing each configured sensor in `device_id` order.
 
   Includes sensors whose port does not currently exist; consult `:port`
@@ -518,7 +605,17 @@ defmodule Octopus.Radar do
 
   defp layout_sensor_configs(radar_env) do
     layout = Keyword.fetch!(radar_env, :layout)
-    ports = Keyword.get(radar_env, :ports, [])
+
+    # :adapters is the structured alternative to a flat :ports list.
+    # Flatten adapter port entries to get the same [{port_entry}] shape.
+    ports =
+      case Keyword.get(radar_env, :adapters) do
+        nil ->
+          Keyword.get(radar_env, :ports, [])
+
+        adapters ->
+          Enum.flat_map(adapters, fn a -> Keyword.fetch!(a, :ports) end)
+      end
 
     layout_type = Keyword.get(layout, :type) ||
       raise ArgumentError, "radar layout: :type is required (e.g. type: :radial)"

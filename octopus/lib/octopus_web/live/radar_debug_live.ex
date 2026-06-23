@@ -50,7 +50,8 @@ defmodule OctopusWeb.RadarDebugLive do
     stale: "#f97316",
     initializing: "#fbbf24",
     unavailable: "#ef4444",
-    inactive: "#d1d5db"
+    inactive: "#d1d5db",
+    resetting: "#111827"
   }
 
   ## LiveView callbacks
@@ -75,6 +76,7 @@ defmodule OctopusWeb.RadarDebugLive do
        devices: devices,
        statuses: statuses,
        histories: histories,
+       adapters: Radar.adapters(),
        now_ms: System.system_time(:millisecond),
        halted: false,
        halt_id: nil,
@@ -104,6 +106,12 @@ defmodule OctopusWeb.RadarDebugLive do
 
     statuses = build_sensor_statuses(socket.assigns.devices)
     {:noreply, assign(socket, halted: false, halt_id: nil, histories: histories, statuses: statuses, now_ms: now)}
+  end
+
+  @impl true
+  def handle_event("reset_adapter", %{"adapter" => name}, socket) do
+    Radar.reset_adapter(name)
+    {:noreply, socket}
   end
 
   @impl true
@@ -151,6 +159,21 @@ defmodule OctopusWeb.RadarDebugLive do
       <div class="flex items-center gap-4 mb-4">
         <h1 class="text-xl font-bold">Radar Debug</h1>
         <a href="/radar" class="btn btn-outline btn-sm">← Radar</a>
+        <%= if @adapters != [] do %>
+          <div class="flex items-center gap-2 ml-2">
+            <%= for adapter <- @adapters do %>
+              <button
+                type="button"
+                phx-click="reset_adapter"
+                phx-value-adapter={adapter.name}
+                class="btn btn-sm btn-outline font-mono"
+                title={"USB reset adapter "#{adapter.name}" (#{adapter.usb_path}) — power-cycles sensors #{Enum.map_join(adapter.device_ids, ", ", &device_letter/1)}"}
+              >
+                ↺ USB "<%= adapter.name %>"
+              </button>
+            <% end %>
+          </div>
+        <% end %>
         <button
           type="button"
           phx-click="toggle_halt"
@@ -385,6 +408,7 @@ defmodule OctopusWeb.RadarDebugLive do
   defp status_label(:initializing), do: "Initializing"
   defp status_label(:working), do: "Working"
   defp status_label(:stale), do: "No Data"
+  defp status_label(:resetting), do: "Resetting"
   defp status_label(_), do: "Unknown"
 
   defp status_legend do
@@ -393,6 +417,7 @@ defmodule OctopusWeb.RadarDebugLive do
       {:stale, @status_colors.stale},
       {:initializing, @status_colors.initializing},
       {:unavailable, @status_colors.unavailable},
+      {:resetting, @status_colors.resetting},
       {:inactive, @status_colors.inactive}
     ]
   end
@@ -411,6 +436,9 @@ defmodule OctopusWeb.RadarDebugLive do
 
   defp sensor_status_class(:stale),
     do: "bg-orange-500 text-white border-orange-600"
+
+  defp sensor_status_class(:resetting),
+    do: "bg-gray-900 text-white border-gray-800"
 
   defp sensor_status_class(_), do: sensor_status_class(:unavailable)
 end

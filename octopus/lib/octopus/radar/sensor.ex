@@ -44,6 +44,7 @@ defmodule Octopus.Radar.Sensor do
   @ack_timeout :timer.seconds(2)
   @open_stagger_ms 200
   @post_open_settle_ms 300
+  @probe_window_ms :timer.seconds(2)
   @max_ack_retries 5
   @stop_command "AT+STOP\n"
   @reset_command "AT+RESET\n"
@@ -192,10 +193,23 @@ defmodule Octopus.Radar.Sensor do
   end
 
   def handle_info(:start_init, %State{} = state) do
-    log(state, :info, "Port settled — probing sensor before initialization")
+    log(state, :info, "Port settled — observing for live stream (#{@probe_window_ms} ms)")
+    timer = Process.send_after(self(), :probe_window_expired, @probe_window_ms)
+
+    {:noreply,
+     %State{state | phase: :probing, buffer: <<>>, ack_buffer: <<>>, watchdog_timer: timer}}
+  end
+
+  def handle_info(:probe_window_expired, %State{phase: :probing} = state) do
+    log(state, :info, "No live stream in observation window — probing sensor")
+    state = cancel_watchdog(state)
     state = %State{state | phase: :stale}
     Radar.broadcast_status(state.device_id, :stale)
     {:noreply, send_probe(state)}
+  end
+
+  def handle_info(:probe_window_expired, %State{} = state) do
+    {:noreply, state}
   end
 
   def handle_info(:reopen_port, %State{} = state) do
@@ -264,6 +278,11 @@ defmodule Octopus.Radar.Sensor do
     {:noreply, schedule_reopen(close_port(state))}
   end
 
+  def handle_info({:circuits_uart, _port, data}, %State{phase: :probing} = state)
+      when is_binary(data) do
+    {:noreply, handle_probing_bytes(data, state)}
+  end
+
   def handle_info({:circuits_uart, _port, data}, %State{phase: :configuring} = state)
       when is_binary(data) do
     {:noreply, handle_ack_bytes(data, state)}
@@ -294,6 +313,19 @@ defmodule Octopus.Radar.Sensor do
   def terminate(_reason, %State{} = state) do
     _ = graceful_close(state)
     :ok
+  end
+
+  ## Phase: probing (passive observation — no AT commands sent)
+
+  defp handle_probing_bytes(data, %State{buffer: buffer} = state) do
+    case Protocol.feed(buffer, data) do
+      {[_ | _], _, leftover} ->
+        log(state, :info, "Live stream detected during observation — attaching without re-init")
+        state |> cancel_watchdog() |> enter_running_from_stream(leftover)
+
+      {[], _, leftover} ->
+        %State{state | buffer: leftover}
+    end
   end
 
   ## Phase: opening
@@ -360,7 +392,7 @@ defmodule Octopus.Radar.Sensor do
   defp close_port(state), do: state
 
   defp graceful_close(%State{uart: uart, phase: phase} = state)
-       when is_pid(uart) and phase in [:configuring, :running, :stale] do
+       when is_pid(uart) and phase in [:probing, :configuring, :running, :stale] do
     _ = UART.write(uart, @stop_command)
     Process.sleep(100)
     close_port(state)
@@ -411,7 +443,7 @@ defmodule Octopus.Radar.Sensor do
   # init sequence. Residual binary frames may still arrive during
   # :configuring; Ack.feed/2 scans the mixed stream for AT+OK without
   # requiring a quiet line.
-  defp port_open?(%State{phase: phase}), do: phase in [:configuring, :running, :stale]
+  defp port_open?(%State{phase: phase}), do: phase in [:probing, :configuring, :running, :stale]
 
   defp restart_init(%State{phase: :opening} = state) do
     log(state, :info, "Re-init deferred until serial port is available")
@@ -473,8 +505,8 @@ defmodule Octopus.Radar.Sensor do
     }
   end
 
-  defp write_command(cmd, %State{uart: uart} = state) do
-    log(state, :info, "→ #{String.trim_trailing(cmd)}")
+  defp write_command(cmd, %State{uart: uart, phase: phase} = state) do
+    log(state, if(phase == :configuring, do: :debug, else: :info), "→ #{String.trim_trailing(cmd)}")
 
     case UART.write(uart, cmd) do
       :ok ->
@@ -486,8 +518,8 @@ defmodule Octopus.Radar.Sensor do
     end
   end
 
-  defp resend_command(%State{uart: uart, current_command: cmd} = state) do
-    log(state, :info, "→ #{String.trim_trailing(cmd)}")
+  defp resend_command(%State{uart: uart, current_command: cmd, phase: phase} = state) do
+    log(state, if(phase == :configuring, do: :debug, else: :info), "→ #{String.trim_trailing(cmd)}")
 
     case UART.write(uart, cmd) do
       :ok ->
@@ -538,7 +570,7 @@ defmodule Octopus.Radar.Sensor do
         %State{state | ack_buffer: buf}
 
       {:ok, buf} ->
-        log(state, :info, "← AT+OK")
+        log(state, :debug, "← AT+OK")
 
         %State{} = state =
           state

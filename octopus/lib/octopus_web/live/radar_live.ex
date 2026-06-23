@@ -1121,6 +1121,9 @@ defmodule OctopusWeb.RadarLive do
   defp sensor_status_class(:stale),
     do: "bg-orange-500 text-white border-orange-600 hover:bg-orange-600"
 
+  defp sensor_status_class(:resetting),
+    do: "bg-gray-900 text-white border-gray-800 hover:bg-gray-800"
+
   defp sensor_status_class(_), do: sensor_status_class(:unavailable)
 
   defp sensor_status_label(:inactive), do: "Inactive"
@@ -1128,6 +1131,7 @@ defmodule OctopusWeb.RadarLive do
   defp sensor_status_label(:initializing), do: "Initializing"
   defp sensor_status_label(:working), do: "Working"
   defp sensor_status_label(:stale), do: "No Data"
+  defp sensor_status_label(:resetting), do: "Resetting"
   defp sensor_status_label(_), do: "Unknown"
 
   ## Formatting helpers

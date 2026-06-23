@@ -29,12 +29,20 @@ services:
     # container create time — USB may be unplugged on start or hot-plugged later.
     device_cgroup_rules:
       - 'c 166:* rmw'
+    # SYS_ADMIN is required to write to /sys/bus/usb/devices/*/authorized,
+    # which is how Radar.reset_adapter/1 power-cycles a USB adapter without
+    # a physical unplug. Remove if USB reset is not needed.
+    cap_add:
+      - SYS_ADMIN
     volumes:
       - ./data:/data
       # Live host /dev so udev-created ttyACM nodes appear after hot-plug.
       - /dev:/dev
       # Stable /dev/serial/by-id/… paths (read-only; targets live under /dev).
       - /dev/serial:/dev/serial:ro
+      # Expose host sysfs so USB adapter authorized files can be written.
+      - /sys/bus/usb:/sys/bus/usb
+      - /sys/devices:/sys/devices
     restart: unless-stopped
 
 volumes:
