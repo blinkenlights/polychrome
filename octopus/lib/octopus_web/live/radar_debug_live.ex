@@ -84,6 +84,7 @@ defmodule OctopusWeb.RadarDebugLive do
        histories: histories,
        adapters: Radar.adapters(),
        snapshots: [],
+       dump_json: generate_dump_json(generate_dump_id()),
        now_ms: System.system_time(:millisecond),
        vb_width: @vb_width,
        vb_height: @vb_height,
@@ -109,7 +110,8 @@ defmodule OctopusWeb.RadarDebugLive do
       now_ms: now,
       captured_label: Calendar.strftime(DateTime.utc_now(), "%Y-%m-%d %H:%M:%S UTC"),
       histories: histories,
-      statuses: socket.assigns.statuses
+      statuses: socket.assigns.statuses,
+      dump_json: generate_dump_json("#{snap_id}-dump", histories)
     }
 
     {:noreply, assign(socket, snapshots: socket.assigns.snapshots ++ [snapshot])}
@@ -120,12 +122,23 @@ defmodule OctopusWeb.RadarDebugLive do
     {:noreply, assign(socket, snapshots: snapshots)}
   end
 
-  def handle_event("copy_dump", params, socket) do
-    snap_id = Map.get(params, "snap_id")
-    dump_id = if snap_id, do: "#{snap_id}-dump", else: generate_dump_id()
-    json = generate_dump_json(dump_id)
+  def handle_event("copy_dump", %{"snap_id" => snap_id}, socket) do
+    dump_id = "#{snap_id}-dump"
+
+    json =
+      case Enum.find(socket.assigns.snapshots, &(&1.id == snap_id)) do
+        nil -> generate_dump_json(dump_id)
+        snapshot -> snapshot.dump_json
+      end
+
     Logger.info("RADAR-DUMP[#{dump_id}] #{json}")
-    {:noreply, push_event(socket, "copy_to_clipboard", %{text: json})}
+    {:noreply, socket}
+  end
+
+  def handle_event("copy_dump", _params, socket) do
+    dump_id = generate_dump_id()
+    Logger.info("RADAR-DUMP[#{dump_id}] #{generate_dump_json(dump_id)}")
+    {:noreply, socket}
   end
 
   def handle_event("toggle_sensor", %{"device_id" => id_str}, socket) do
@@ -175,7 +188,12 @@ defmodule OctopusWeb.RadarDebugLive do
         {device_id, trim_entries(entries, cutoff)}
       end)
 
-    {:noreply, assign(socket, histories: histories, now_ms: now)}
+    {:noreply,
+     assign(socket,
+       histories: histories,
+       now_ms: now,
+       dump_json: generate_dump_json(generate_dump_id())
+     )}
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}
@@ -186,7 +204,6 @@ defmodule OctopusWeb.RadarDebugLive do
   def render(assigns) do
     ~H"""
     <div class="p-4">
-      <div id="clipboard-hook" phx-hook="ClipboardCopy" style="display:none"></div>
       <div class="flex items-center gap-4 mb-4 flex-wrap">
         <h1 class="text-xl font-bold">Radar Debug</h1>
         <a href="/radar" class="btn btn-outline btn-sm">← Radar</a>
@@ -206,7 +223,7 @@ defmodule OctopusWeb.RadarDebugLive do
           </div>
         <% end %>
         <div class="ml-auto flex items-center gap-2">
-          <button type="button" phx-click="copy_dump" class="btn btn-sm btn-outline" title="Generate full 1-hour JSON dump, log it, and copy to clipboard">
+          <button type="button" id="copy-dump-main" phx-hook="CopyDump" data-dump={@dump_json} class="btn btn-sm btn-outline" title="Generate full 1-hour JSON dump, log it, and copy to clipboard">
             📋 Copy Dump
           </button>
           <button type="button" phx-click="take_snapshot" class="btn btn-sm btn-warning">
@@ -371,8 +388,10 @@ defmodule OctopusWeb.RadarDebugLive do
         <span class="text-xs text-gray-400"><%= @snapshot.captured_label %></span>
         <button
           type="button"
-          phx-click="copy_dump"
-          phx-value-snap_id={@snapshot.id}
+          id={"copy-dump-#{@snapshot.id}"}
+          phx-hook="CopyDump"
+          data-dump={@snapshot.dump_json}
+          data-snap-id={@snapshot.id}
           class="btn btn-xs btn-outline"
           title="Generate full 1-hour JSON dump for this snapshot, log it, and copy to clipboard"
         >
@@ -421,7 +440,10 @@ defmodule OctopusWeb.RadarDebugLive do
 
   defp generate_dump_json(dump_id) do
     history = if Radar.enabled?(), do: Radar.get_history(), else: %{}
+    generate_dump_json(dump_id, history)
+  end
 
+  defp generate_dump_json(dump_id, history) do
     sensors =
       Map.new(history, fn {device_id, entries} ->
         letter = device_letter(device_id)
