@@ -114,6 +114,8 @@ defmodule Octopus.Apps.Collective do
         {"Animation", :select,
          %{default: 0, options: [{"Tempest", :storm}, {"Crowd Breath", :breath}]}},
       movement: {"Mock Movement", :float, %{min: 0.0, max: 2.0, default: 1.0}},
+      spawn_person:
+        {"Spawn person at 20 m", :button, %{mock_only: true}},
       background:
         {"Background", :select,
          %{
@@ -169,14 +171,15 @@ defmodule Octopus.Apps.Collective do
   # Rendered under the config form and refreshed whenever the config changes.
   def config_info(%{animation: :storm}) do
     """
-    Tempest — per-person lightning.
-    Reads each tracked person's POSITION and VELOCITY. Their angle around the ring
-    (from x/y) maps to a column on the strip; the faster they move, the more likely
-    a bolt strikes at that column. Standing still = calm, walking = bolts. People
-    within ~3 m of the centre are ignored (dead zone).
+    Tempest — per-person lightning + entry meteors.
+    Reads POSITION and VELOCITY. Fast movement → bolts at that column. Someone
+    crossing inward into the 18 m-diameter ring (9 m radius, = aframe panel ring)
+    → a pale yellow shooting star on the opposite panel. Not on new track IDs /
+    spawns already inside.
     • Storm Sensitivity — scales bolt probability for a given speed (higher = more).
     • Background — Deep Dark (black) or Still Stars (static field).
     • Mock Movement — dev only: speed multiplier for the simulated crowd.
+    • Spawn person at 20 m — dev only (mock radar): one new arrival walks in.
     """
   end
 
@@ -195,10 +198,13 @@ defmodule Octopus.Apps.Collective do
     • Breath Palette — calm→hot on the ring only (Canopy sky is fixed bright yellow→white).
     • Breath Hue Shift — rotates the palette around the colour wheel (0 = as preset).
     • Mock Movement — dev only: speed multiplier (drives Activity + per-person heat).
+    • Spawn person at 20 m — dev only (mock radar): one new arrival walks in.
     """
   end
 
   def config_info(_config), do: nil
+
+  def handle_config_action(:spawn_person), do: MockRadar.spawn_person()
 
   def get_config(state) do
     %{

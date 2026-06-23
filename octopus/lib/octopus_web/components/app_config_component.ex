@@ -2,6 +2,7 @@ defmodule OctopusWeb.AppConfigComponent do
   use OctopusWeb, :live_component
 
   alias Octopus.AppSupervisor
+  alias Octopus.Apps.Collective.MockRadar
 
   def mount(socket) do
     {:ok, assign(socket, config_info: nil)}
@@ -31,7 +32,7 @@ defmodule OctopusWeb.AppConfigComponent do
     <div>
       <form class="space-y-4" phx-change="change" phx-target={@myself}>
         <div :for={{key, {name, type, opts}} <- visible_entries(@config_schema, @config)} class="form-control">
-          <label class="label" for={"#{@app_id}-#{key}"}>
+          <label :if={type != :button} class="label" for={"#{@app_id}-#{key}"}>
             <span class="label-text font-semibold">{name}</span>
           </label>
           <.config_input
@@ -42,6 +43,7 @@ defmodule OctopusWeb.AppConfigComponent do
             type={type}
             opts={opts}
             value={@config[key]}
+            target={@myself}
           />
         </div>
       </form>
@@ -53,6 +55,17 @@ defmodule OctopusWeb.AppConfigComponent do
       </p>
     </div>
     """
+  end
+
+  def handle_event("config_action", %{"key" => key}, socket) do
+    key = String.to_existing_atom(key)
+    module = socket.assigns.app_module
+
+    if function_exported?(module, :handle_config_action, 1) do
+      module.handle_config_action(key)
+    end
+
+    {:noreply, socket}
   end
 
   def handle_event("change", params, socket) do
@@ -132,10 +145,19 @@ defmodule OctopusWeb.AppConfigComponent do
   # defined order; a map renders in its enumeration order as before).
   defp visible_entries(config_schema, config) do
     Enum.filter(config_schema, fn {_key, {_name, _type, opts}} ->
-      case Map.get(opts, :visible_when) do
-        nil -> true
-        {dep_key, allowed} -> Map.get(config, dep_key) in allowed
-      end
+      mock_ok =
+        case Map.get(opts, :mock_only) do
+          true -> MockRadar.running?()
+          _ -> true
+        end
+
+      visible =
+        case Map.get(opts, :visible_when) do
+          nil -> true
+          {dep_key, allowed} -> Map.get(config, dep_key) in allowed
+        end
+
+      mock_ok and visible
     end)
   end
 
@@ -170,6 +192,7 @@ defmodule OctopusWeb.AppConfigComponent do
   attr(:opts, :map, required: true)
   attr(:debounce, :integer, default: 0)
   attr(:value, :any, required: true)
+  attr(:target, :any, default: nil)
   attr(:rest, :global)
 
   defp config_input(%{type: :float} = assigns) do
@@ -262,6 +285,22 @@ defmodule OctopusWeb.AppConfigComponent do
         {name}
       </option>
     </select>
+    """
+  end
+
+  defp config_input(%{type: :button} = assigns) do
+    ~H"""
+    <button
+      type="button"
+      id={"#{@app_id}-#{@key}"}
+      phx-click="config_action"
+      phx-value-key={@key}
+      phx-target={@target}
+      class="btn btn-primary btn-sm w-full"
+      {@rest}
+    >
+      {@name}
+    </button>
     """
   end
 end

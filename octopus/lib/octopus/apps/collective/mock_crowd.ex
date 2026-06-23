@@ -12,16 +12,23 @@ defmodule Octopus.Apps.Collective.MockCrowd do
     * **Center chill (2–5)** — periodically a small group walks into the 2 m
       center disk (installation chill zone), stands/micro-shuffles, then returns
       to the ring.
+    * **Approach spawns** — all new arrivals start at 20 m and walk in.
 
   `movement` scales all speeds (0.0 = frozen).
   """
 
   @ring_inner 2.0
   @center_radius 2.0
+  # Panel ring radius = aframe panelDiameter / 2 (18 m diameter → 9 m radius).
   @outer_radius 9.0
+  @spawn_radius 20.0
 
   @speed_min 0.25
   @speed_max 0.55
+
+  # Approachers walk briskly from the 20 m spawn to the ring (else it takes ~30 s).
+  @approach_speed_min 1.6
+  @approach_speed_max 2.6
 
   @linger_speed 0.08
   @linger_radius 0.45
@@ -80,7 +87,7 @@ defmodule Octopus.Apps.Collective.MockCrowd do
       center_next_at: rand_uniform(@center_cooldown_min_ms, @center_cooldown_max_ms)
     }
 
-    Enum.reduce(1..target, crowd, fn _, c -> spawn_person(c) end)
+    Enum.reduce(1..target, crowd, fn _, c -> spawn_one(c) end)
   end
 
   @spec update(t(), float(), float()) :: t()
@@ -119,39 +126,69 @@ defmodule Octopus.Apps.Collective.MockCrowd do
     count = length(crowd.people)
 
     cond do
-      count < crowd.target_count -> spawn_person(crowd)
+      count < crowd.target_count -> spawn_one(crowd)
       count > crowd.target_count -> remove_one(crowd)
       true -> crowd
     end
   end
 
-  defp spawn_person(crowd) do
+  @doc """
+  Spawns one person at #{@spawn_radius} m walking toward the ring. Additive:
+  bumps the target count so maintain_population won't immediately cull it.
+  """
+  @spec spawn_person(t()) :: t()
+  def spawn_person(crowd) do
+    target = clamp_int(crowd.target_count + 1, @count_min, @count_max)
+    spawn_approaching(%{crowd | target_count: target})
+  end
+
+  # Autonomous population spawns on the ring (no boundary crossing). Only the
+  # explicit Spawn button creates 20 m approachers, so debug meteors are on demand.
+  defp spawn_one(crowd) do
     {x, y} = random_point_in_ring()
+    person = new_person(crowd, x, y) |> pick_wander_waypoint()
+    %{crowd | people: [person | crowd.people], next_id: crowd.next_id + 1}
+  end
+
+  defp spawn_approaching(crowd) do
+    {x, y} = random_point_at_spawn_radius()
+    {wx, wy} = random_point_in_ring()
 
     person =
-      %{
-        id: crowd.next_id,
-        x: x,
-        y: y,
-        vx: 0.0,
-        vy: 0.0,
-        base_speed: rand_uniform(@speed_min, @speed_max),
-        wx: 0.0,
-        wy: 0.0,
-        idle_until: rand_uniform(0.0, 3000.0),
-        gather: false,
-        center: false,
-        linger_at: 0.0
-      }
-      |> pick_wander_waypoint()
+      new_person(crowd, x, y)
+      |> Map.merge(%{
+        approaching: true,
+        wx: wx,
+        wy: wy,
+        idle_until: 0.0,
+        base_speed: rand_uniform(@approach_speed_min, @approach_speed_max)
+      })
 
     %{crowd | people: [person | crowd.people], next_id: crowd.next_id + 1}
+  end
+
+  defp new_person(crowd, x, y) do
+    %{
+      id: crowd.next_id,
+      x: x,
+      y: y,
+      vx: 0.0,
+      vy: 0.0,
+      base_speed: rand_uniform(@speed_min, @speed_max),
+      wx: 0.0,
+      wy: 0.0,
+      idle_until: rand_uniform(0.0, 3000.0),
+      gather: false,
+      center: false,
+      approaching: false,
+      linger_at: 0.0
+    }
   end
 
   defp remove_one(crowd) do
     victim =
       Enum.find(crowd.people, fn p ->
-        not p.gather and not Map.get(p, :center, false)
+        not p.gather and not Map.get(p, :center, false) and not Map.get(p, :approaching, false)
       end) || List.first(crowd.people)
 
     %{crowd | people: List.delete(crowd.people, victim)}
@@ -307,6 +344,12 @@ defmodule Octopus.Apps.Collective.MockCrowd do
     %{crowd | people: Enum.map(crowd.people, &move_person(&1, crowd, dt, movement, time))}
   end
 
+  defp move_person(%{approaching: true} = person, _crowd, dt, movement, _time) do
+    person
+    |> walk_toward(dt, movement)
+    |> maybe_release_approaching()
+  end
+
   defp move_person(%{idle_until: until} = person, _crowd, _dt, _movement, time) when until > time do
     %{person | vx: 0.0, vy: 0.0}
   end
@@ -341,6 +384,18 @@ defmodule Octopus.Apps.Collective.MockCrowd do
       %{person | x: nx, y: ny, vx: (nx - person.x) / max(dt, 0.001), vy: (ny - person.y) / max(dt, 0.001)}
     end
   end
+
+  defp maybe_release_approaching(%{approaching: true} = person) do
+    r = :math.sqrt(person.x * person.x + person.y * person.y)
+
+    if at_waypoint?(person) or r <= @outer_radius do
+      %{person | approaching: false} |> pick_wander_waypoint()
+    else
+      person
+    end
+  end
+
+  defp maybe_release_approaching(person), do: person
 
   defp at_waypoint?(person) do
     dx = person.wx - person.x
@@ -410,6 +465,11 @@ defmodule Octopus.Apps.Collective.MockCrowd do
     r = :math.sqrt(rand_uniform(@ring_inner * @ring_inner, @outer_radius * @outer_radius))
     a = :rand.uniform() * 2.0 * :math.pi()
     {:math.cos(a) * r, :math.sin(a) * r}
+  end
+
+  defp random_point_at_spawn_radius do
+    a = :rand.uniform() * 2.0 * :math.pi()
+    {:math.cos(a) * @spawn_radius, :math.sin(a) * @spawn_radius}
   end
 
   # Uniform disk inside the 2 m center chill zone (keep a small margin from origin).

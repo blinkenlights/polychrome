@@ -45,6 +45,13 @@ defmodule Octopus.Apps.Collective.MockRadar do
     :ok
   end
 
+  @doc "Spawns one person at 20 m (no-op if the mock is not running)."
+  @spec spawn_person() :: :ok
+  def spawn_person do
+    if pid = Process.whereis(__MODULE__), do: GenServer.cast(pid, :spawn_person)
+    :ok
+  end
+
   # --- GenServer -----------------------------------------------------------
 
   @impl true
@@ -67,6 +74,10 @@ defmodule Octopus.Apps.Collective.MockRadar do
   @impl true
   def handle_cast({:set_movement, movement}, state) do
     {:noreply, %{state | movement: max(movement, 0.0)}}
+  end
+
+  def handle_cast(:spawn_person, state) do
+    {:noreply, %{state | crowd: MockCrowd.spawn_person(state.crowd)}}
   end
 
   @impl true

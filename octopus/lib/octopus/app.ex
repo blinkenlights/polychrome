@@ -234,6 +234,7 @@ defmodule Octopus.App do
   @spec default_config(config_schema()) :: map
   def default_config(config_schema) do
     config_schema
+    |> Enum.reject(fn {_key, {_name, type, _opts}} -> type == :button end)
     |> Enum.map(fn
       {key, {_name, :select, %{default: default, options: options}}} ->
         {_name, value} = Enum.at(options, default)

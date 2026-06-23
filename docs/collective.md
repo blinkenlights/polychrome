@@ -15,6 +15,7 @@ Die App konsumiert den **Radar-PubSub-Feed** (`Octopus.Radar.subscribe()`,
   Population 1-20** (Leute kommen/gehen, Zielzahl re-rollt alle paar Sekunden),
   **wander + idle** on the ring (r ≥ 2 m), **Stehgruppen 2–5** on the ring, and
   **Center chill 2–5** in the 2 m installation disk (walk in, micro-shuffle, return).
+  New arrivals spawn at **20 m** and walk in (for Tempest entry meteors in dev).
 - `Octopus.Apps.Collective.MockRadar` — GenServer, der die MockCrowd tickt und als
   `%Frame{}` aufs echte Radar-Topic broadcastet. Dadurch sehen **dieselbe Crowd**:
   die 3D-Sim (`/sim3daframe`, Humans → „Radar (live)"), die Collective-Animationen,
@@ -41,8 +42,10 @@ Jede Animation implementiert das `Octopus.Apps.Collective.Animation`-Behaviour
 - **Tempest** (`Kollektiv`, vormals „Bewegungs-Sturm") — Bewegung der Personen löst
   Blitze an ihrer Ring-Position aus (Wahrscheinlichkeit ∝ Geschwindigkeit). Stehen =
   ruhig, laufen = Blitze. Personen näher als 3 m zur Mitte (`@center_dead_zone`)
-  lösen nichts aus. Config: `Background` (Deep Dark / Still Stars) und
-  `Storm Sensitivity`.
+  lösen keine Blitze aus. **Eintritt in den 18-m-Durchmesser-Ring** (9 m Radius,
+  = aframe `panelDiameter`; von außen nach innen) → blass-gelbe Sternschnuppe auf
+  dem gegenüberliegenden Panel. Config:
+  `Background` (Deep Dark / Still Stars) und `Storm Sensitivity`.
 - **Crowd Breath** (`Kollektiv`) — Wasser-Welle; Form global, Farbe lokal am Ring
   (r ≥ 2 m). Layout **Canopy**: untere Hälfte = Ring-Wasser (Palette), obere Hälfte
   = komplementärer Himmel (Palette +180° Hue), getrieben von Leuten im 2 m Center.
