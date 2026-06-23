@@ -119,8 +119,14 @@ defmodule Octopus.MixProject do
         "tailwind.install --if-missing",
         "esbuild.install --if-missing"
       ],
-      "assets.build": ["tailwind default", "esbuild default"],
-      "assets.deploy": ["tailwind default --minify", "esbuild default --minify", "phx.digest"]
+      "assets.build": ["tailwind default", "esbuild default", "esbuild sim3d", "esbuild sim3daframe"],
+      "assets.deploy": [
+        "tailwind default --minify",
+        "esbuild default --minify",
+        "esbuild sim3d --minify",
+        "esbuild sim3daframe --minify",
+        "phx.digest"
+      ]
     ]
   end
 end

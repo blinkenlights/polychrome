@@ -19,8 +19,6 @@ defmodule OctopusWeb.Router do
 
     live_session :default, on_mount: OctopusWeb.PresenceLive do
       live "/sim", PixelsLive
-      live "/sim3d", Sim3dLive
-      live "/sim3daframe", Sim3dAframeLive
       live "/app/:id", AppLive
       live "/", ManagerLive
       live "/playlist/:id", PlaylistLive
@@ -29,6 +27,16 @@ defmodule OctopusWeb.Router do
       live "/proximity", ProximityLive
       live "/radar", RadarLive
       live "/radar/debug", RadarDebugLive
+    end
+
+    live_session :sim3d, on_mount: OctopusWeb.PresenceLive,
+                 root_layout: {OctopusWeb.Layouts, :root_sim3d} do
+      live "/sim3d", Sim3dLive
+    end
+
+    live_session :sim3daframe, on_mount: OctopusWeb.PresenceLive,
+                 root_layout: {OctopusWeb.Layouts, :root_aframe} do
+      live "/sim3daframe", Sim3dAframeLive
     end
   end
 
