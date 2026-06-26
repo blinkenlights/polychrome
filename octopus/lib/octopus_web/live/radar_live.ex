@@ -204,11 +204,15 @@ defmodule OctopusWeb.RadarLive do
   end
 
   def handle_event("set_sensitivity", %{"sensitivity_ui" => ui_str}, socket) do
-    with id when is_integer(id) <- socket.assigns.selected_device_id,
-         {ui, ""} <- Integer.parse(ui_str),
+    with {ui, ""} <- Integer.parse(ui_str),
          true <- ui in 1..9 do
       sensitivity = 10 - ui
-      _ = Radar.set_sensitivity(id, sensitivity)
+
+      case socket.assigns.selected_device_id do
+        :all -> Enum.each(socket.assigns.devices, &Radar.set_sensitivity(&1.device_id, sensitivity))
+        id when is_integer(id) -> Radar.set_sensitivity(id, sensitivity)
+        _ -> :ok
+      end
 
       {:noreply,
        socket
@@ -751,12 +755,12 @@ defmodule OctopusWeb.RadarLive do
                   <span class="text-sm font-mono w-12 text-right">{@entropy}%</span>
                 </form>
               <% end %>
-              <%= if @selected_device_id != :all do %>
+              <%= if @mock_mode == :off do %>
                 <form phx-change="set_sensitivity" class="flex items-center gap-3 grow min-w-0">
                   <label for="radar-sensitivity" class="text-sm whitespace-nowrap">
                     Sensitivity
                   </label>
-                  <span class="text-xs opacity-60">low</span>
+                  <span class="text-xs opacity-60 whitespace-nowrap">lower</span>
                   <input
                     id="radar-sensitivity"
                     name="sensitivity_ui"
@@ -768,8 +772,7 @@ defmodule OctopusWeb.RadarLive do
                     phx-debounce="500"
                     class="range range-sm grow"
                   />
-                  <span class="text-xs opacity-60">high</span>
-                  <span class="text-sm font-mono w-12 text-right">{10 - @sensitivity}/9</span>
+                  <span class="text-xs opacity-60 whitespace-nowrap">higher</span>
                 </form>
               <% end %>
               <button
