@@ -378,6 +378,14 @@ defmodule Octopus.Radar do
   @spec get_history(pos_integer()) :: [{integer(), atom()}]
   defdelegate get_history(device_id), to: Octopus.Radar.StatusHistory
 
+  @doc "Return in-memory operational statistics for all sensors. See `Octopus.Radar.Stats`."
+  @spec get_stats() :: %{pos_integer() => map()}
+  defdelegate get_stats(), to: Octopus.Radar.Stats, as: :get_all
+
+  @doc "Reset all sensor statistics counters."
+  @spec reset_stats() :: :ok
+  defdelegate reset_stats(), to: Octopus.Radar.Stats, as: :reset
+
   @doc """
   Enable a sensor at runtime, starting its process if not already running.
 
@@ -478,7 +486,8 @@ defmodule Octopus.Radar do
       [
         {Registry, keys: :unique, name: Octopus.Radar.Registry},
         {Runtime, initial_runtime},
-        Octopus.Radar.StatusHistory
+        Octopus.Radar.StatusHistory,
+        Octopus.Radar.Stats
       ] ++ sensor_children()
 
     Supervisor.init(children, strategy: :one_for_one)

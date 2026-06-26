@@ -67,6 +67,7 @@ defmodule OctopusWeb.RadarDebugLive do
     devices = if Radar.enabled?(), do: Radar.devices(), else: []
     statuses = build_sensor_statuses(devices)
     histories = if Radar.enabled?(), do: trim_histories(Radar.get_history(), @display_window_ms), else: %{}
+    stats = if Radar.enabled?(), do: Radar.get_stats(), else: %{}
 
     if connected?(socket) do
       if Radar.enabled?() do
@@ -82,6 +83,7 @@ defmodule OctopusWeb.RadarDebugLive do
        devices: devices,
        statuses: statuses,
        histories: histories,
+       stats: stats,
        adapters: Radar.adapters(),
        snapshots: [],
        dump_json: generate_dump_json(generate_dump_id()),
@@ -176,7 +178,7 @@ defmodule OctopusWeb.RadarDebugLive do
       end)
 
     statuses = Map.put(socket.assigns.statuses, device_id, new_status)
-    {:noreply, assign(socket, histories: histories, statuses: statuses, now_ms: now)}
+    {:noreply, assign(socket, histories: histories, statuses: statuses, stats: Radar.get_stats(), now_ms: now)}
   end
 
   def handle_info(:tick, socket) do
@@ -191,6 +193,7 @@ defmodule OctopusWeb.RadarDebugLive do
     {:noreply,
      assign(socket,
        histories: histories,
+       stats: if(socket.assigns.radar_enabled, do: Radar.get_stats(), else: socket.assigns.stats),
        now_ms: now,
        dump_json: generate_dump_json(generate_dump_id())
      )}
@@ -235,6 +238,8 @@ defmodule OctopusWeb.RadarDebugLive do
       <%= if not @radar_enabled do %>
         <p class="text-gray-500">Radar is not enabled.</p>
       <% else %>
+        <.stats_panel devices={@devices} stats={@stats} />
+
         <div class="flex items-center gap-2 mb-3 text-xs text-gray-500">
           <div class="flex gap-3">
             <%= for {status, color} <- status_legend() do %>
@@ -276,6 +281,76 @@ defmodule OctopusWeb.RadarDebugLive do
             window_ms={@window_ms}
           />
         <% end %>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp stats_panel(assigns) do
+    assigns =
+      assign(assigns,
+        statuses_order: stats_statuses_order(),
+        total: aggregate_stats(assigns.devices, assigns.stats)
+      )
+
+    ~H"""
+    <div class="mb-4 border border-gray-200 rounded-lg overflow-hidden">
+      <div class="px-3 py-2 bg-gray-50 border-b border-gray-200 text-sm font-semibold">
+        Sensor Statistics <span class="text-xs font-normal text-gray-400">(since startup)</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="text-gray-500 text-left">
+              <th class="px-3 py-1 font-medium">Sensor</th>
+              <th class="px-3 py-1 font-medium">Uptime</th>
+              <th class="px-3 py-1 font-medium">Working</th>
+              <th class="px-3 py-1 font-medium">Dropouts</th>
+              <th class="px-3 py-1 font-medium">Retries</th>
+              <th class="px-3 py-1 font-medium">Time per state (total · avg)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <%= for device <- @devices do %>
+              <% s = sensor_stat(@stats, device.device_id) %>
+              <tr class="border-t border-gray-100">
+                <td class="px-3 py-1 font-mono font-semibold">{device_letter(device.device_id)}</td>
+                <td class="px-3 py-1 font-mono">{format_duration_ms(s.total_ms)}</td>
+                <td class="px-3 py-1 font-mono">{working_pct(s)}%</td>
+                <td class="px-3 py-1 font-mono">{s.dropouts}</td>
+                <td class="px-3 py-1 font-mono">{s.retries}</td>
+                <td class="px-3 py-1">
+                  <.state_breakdown stats={s} statuses_order={@statuses_order} />
+                </td>
+              </tr>
+            <% end %>
+            <tr class="border-t-2 border-gray-300 bg-gray-50">
+              <td class="px-3 py-1 font-semibold">Total</td>
+              <td class="px-3 py-1 font-mono">{format_duration_ms(@total.total_ms)}</td>
+              <td class="px-3 py-1 font-mono">{working_pct(@total)}%</td>
+              <td class="px-3 py-1 font-mono">{@total.dropouts}</td>
+              <td class="px-3 py-1 font-mono">{@total.retries}</td>
+              <td class="px-3 py-1">
+                <.state_breakdown stats={@total} statuses_order={@statuses_order} />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    """
+  end
+
+  defp state_breakdown(assigns) do
+    ~H"""
+    <div class="flex flex-wrap gap-x-3 gap-y-1">
+      <%= for status <- @statuses_order, Map.get(@stats.durations, status, 0) > 0 do %>
+        <span class="inline-flex items-center gap-1 font-mono">
+          <span class="inline-block w-2.5 h-2.5 rounded-sm" style={"background:#{status_color(status)}"}></span>
+          <span class="text-gray-500">{status_label(status)}</span>
+          <span>{format_duration_ms(Map.get(@stats.durations, status, 0))}</span>
+          <span class="text-gray-400">· {format_duration_ms(avg_duration(@stats, status))}</span>
+        </span>
       <% end %>
     </div>
     """
@@ -530,6 +605,60 @@ defmodule OctopusWeb.RadarDebugLive do
   end
 
   defp device_letter(device_id), do: <<(?A + device_id - 1)::utf8>>
+
+  # Statuses in display order for the per-state breakdown. Mirrors status_legend/0.
+  defp stats_statuses_order do
+    [:working, :probing, :initializing, :stale, :unavailable, :resetting, :inactive]
+  end
+
+  defp empty_stats do
+    %{total_ms: 0, durations: %{}, entries: %{}, dropouts: 0, retries: 0, current_status: :inactive}
+  end
+
+  defp sensor_stat(stats, device_id), do: Map.get(stats, device_id, empty_stats())
+
+  defp aggregate_stats(devices, stats) do
+    Enum.reduce(devices, empty_stats(), fn device, acc ->
+      s = sensor_stat(stats, device.device_id)
+
+      %{
+        acc
+        | total_ms: acc.total_ms + s.total_ms,
+          dropouts: acc.dropouts + s.dropouts,
+          retries: acc.retries + s.retries,
+          durations: Map.merge(acc.durations, s.durations, fn _k, a, b -> a + b end),
+          entries: Map.merge(acc.entries, s.entries, fn _k, a, b -> a + b end)
+      }
+    end)
+  end
+
+  defp working_pct(%{total_ms: 0}), do: 0
+
+  defp working_pct(%{durations: durations, total_ms: total_ms}) do
+    round(Map.get(durations, :working, 0) / total_ms * 100)
+  end
+
+  defp avg_duration(%{durations: durations, entries: entries}, status) do
+    count = Map.get(entries, status, 0)
+    if count > 0, do: div(Map.get(durations, status, 0), count), else: 0
+  end
+
+  defp format_duration_ms(ms) when ms < 1_000, do: "#{ms}ms"
+
+  defp format_duration_ms(ms) do
+    total_seconds = div(ms, 1_000)
+    hours = div(total_seconds, 3_600)
+    minutes = total_seconds |> rem(3_600) |> div(60)
+    seconds = rem(total_seconds, 60)
+
+    cond do
+      hours > 0 -> "#{hours}h #{pad2(minutes)}m #{pad2(seconds)}s"
+      minutes > 0 -> "#{minutes}m #{pad2(seconds)}s"
+      true -> "#{seconds}s"
+    end
+  end
+
+  defp pad2(n), do: String.pad_leading(Integer.to_string(n), 2, "0")
 
   defp status_color(status), do: Map.get(@status_colors, status, "#d1d5db")
 
