@@ -67,12 +67,12 @@ defaults = [
   # Counter-intuitively, a HIGHER number means LOWER sensitivity.
   sensitivity: 4,
   # Device geometry in centimeters (manual §9.3)
-  height_cm: 320,
-  range_cm: 450,
-  x_pos_cm: 450,
-  x_neg_cm: -450,
-  y_pos_cm: 450,
-  y_neg_cm: -450,
+  height_cm: 500,
+  range_cm: 500,
+  x_pos_cm: 500,
+  x_neg_cm: -500,
+  y_pos_cm: 500,
+  y_neg_cm: -500,
   # Disappearance timing in 100 ms units (manual §9.4).
   moving_decisecs: 110,
   static_decisecs: 100,
@@ -108,20 +108,14 @@ setups = %{
   # rotation_deg is relative to the outward beam direction; 90 matches the
   # physical mounting direction.
   "redlady" => [
+    defaults: defaults,
     layout: [
       type: :radial,
       count: 6,
       start_angle_deg: 0,
-      distance_cm: 150,
+      distance_cm: 300,
       rotation_deg: 90,
-      baud: 115_200,
       sensitivity: 4,
-      height_cm: 450,
-      range_cm: 450,
-      x_pos_cm: 450,
-      x_neg_cm: -450,
-      y_pos_cm: 450,
-      y_neg_cm: -450,
       moving_decisecs: 110,
       static_decisecs: 100,
       exit_decisecs: 5
