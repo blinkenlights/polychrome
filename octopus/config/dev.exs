@@ -93,4 +93,5 @@ config :octopus, :radar_mock,
   enabled: System.get_env("RADAR_MOCK", "true") in ~w(true 1 yes),
   movement: 1.0
 
-# Radar: copy config/radar.local.exs.example to config/radar.local.exs
+# Radar: local dev uses the "dev" setup in config/radar.exs by default
+# (RADAR_SETUP unset). Set RADAR_SETUP=<name> to load a different setup.

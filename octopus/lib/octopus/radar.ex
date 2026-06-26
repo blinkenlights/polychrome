@@ -8,9 +8,10 @@ defmodule Octopus.Radar do
 
   ## Configuration
 
-  Loaded at runtime from `config/radar.exs` (via `config/runtime.exs`), with
-  optional per-machine overrides in `config/radar.local.exs` (dev, gitignored)
-  or `/data/radar.local.exs` (Docker deployments).
+  Loaded at runtime from `config/radar.exs` (via `config/runtime.exs`).
+  That file holds all named radar setups; the active one is selected per
+  deployment with the `RADAR_SETUP` env var (set in `deploy/<host>/.env`),
+  defaulting to `"dev"` for local development.
 
   Two configuration styles are supported: **manual** and **layout**.
 
@@ -310,7 +311,7 @@ defmodule Octopus.Radar do
   @doc """
   Return `true` if the radar layer is enabled in application config.
 
-  See `config/radar.exs` and optional `RADAR_ENABLED` / `config/radar.local.exs`.
+  See `config/radar.exs` and the `RADAR_SETUP` / `RADAR_ENABLED` env vars.
   """
   @spec enabled?() :: boolean()
   def enabled? do

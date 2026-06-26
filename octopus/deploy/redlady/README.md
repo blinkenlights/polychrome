@@ -92,26 +92,13 @@ ssh tim@redlady.crested-frog.ts.net \
     'cd /home/tim/polychrome/deploy/redlady && docker compose logs -f'
 ```
 
-## Radar sensors (optional)
+## Radar sensors
 
-If you connect HLK-LD6001A radar sensors via USB, mount the devices into the
-container by adding a `devices` section to `docker-compose.yml`:
+This deployment loads the `redlady` radar setup defined centrally in
+`config/radar.exs`. The setup is selected by `RADAR_SETUP=redlady` in
+`deploy/redlady/.env` (see `.env.example`).
 
-```yaml
-  polychrome:
-    ...
-    devices:
-      - /dev/ttyUSB0:/dev/ttyUSB0
-      - /dev/ttyUSB1:/dev/ttyUSB1
-```
-
-Then configure the sensor ports in `deploy/redlady/data/radar.local.exs`:
-
-```elixir
-import Config
-config :octopus, Octopus.Radar,
-  sensors: [
-    [port: "/dev/ttyUSB0"],
-    [port: "/dev/ttyUSB1"]
-  ]
-```
+To change the sensor layout, adapters, or ports, edit the `"redlady"` entry in
+`config/radar.exs` — there is no per-machine `radar.local.exs` file. The
+serial devices are made available to the container via the `/dev` and
+`/dev/serial` mounts in `docker-compose.yml`.

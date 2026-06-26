@@ -29,12 +29,6 @@ defmodule Octopus.MixProject do
       Path.join([releases_dir, "radar.exs"])
     )
 
-    local_source = Path.join([__DIR__, "config", "radar.local.exs"])
-
-    if File.exists?(local_source) do
-      File.cp!(local_source, Path.join([releases_dir, "radar.local.exs"]))
-    end
-
     release
   end
 

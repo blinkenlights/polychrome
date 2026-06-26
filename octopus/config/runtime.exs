@@ -1,23 +1,12 @@
 import Config
 
-# Radar (HLK-LD6001A): config/radar.exs + optional gitignored radar.local.exs.
-# runtime.exs cannot use import_config/1; evaluate those files instead.
+# Radar (HLK-LD6001A): config/radar.exs holds the named setups; the active one
+# is selected via RADAR_SETUP. runtime.exs cannot use import_config/1, so we
+# evaluate the file instead.
 if config_env() == :test do
   config :octopus, Octopus.Radar, enabled: false, sensors: []
 else
   Code.eval_file(Path.join(__DIR__, "radar.exs"))
-
-  # Check for host-specific radar overrides in order:
-  #   1. <release_dir>/radar.local.exs  — dev (config/) or baked into Docker image via
-  #                                        the copy_radar_config/1 release step in mix.exs
-  #   2. /data/radar.local.exs          — runtime override via bind-mounted data volume
-  radar_local =
-    [Path.join(__DIR__, "radar.local.exs"), "/data/radar.local.exs"]
-    |> Enum.find(&File.exists?/1)
-
-  if radar_local do
-    Code.eval_file(radar_local)
-  end
 end
 
 # config/runtime.exs is executed for all environments, including

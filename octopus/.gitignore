@@ -50,7 +50,5 @@ priv/native
 
 whackamole_highscore
 
-/config/radar.local.exs
-
 # Per-deployment secrets — never commit these
 /deploy/*/.env
