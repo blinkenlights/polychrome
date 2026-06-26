@@ -1,19 +1,25 @@
 defmodule OctopusWeb.RadarLive do
   @moduledoc """
-  Live visualization of one HLK-LD6001A-60G radar's tracked targets.
+  Live visualization of the HLK-LD6001A-60G radar layer.
 
-  Subscribes to the global radar topic and renders the currently selected
-  sensor's tracks as an inline SVG with auto-scaled axes (10 s rolling
-  min/max), per-target colors, height-encoded radius, velocity arrows, ID
-  labels, position trails and fade-out for stale tracks. All state and
-  rendering live on the server; LiveView's diffing pushes the per-frame
-  attribute updates over WebSocket.
+  Subscribes to the global radar topic and renders detections as a single
+  top-down SVG drawn in the installation global frame. The same canvas shows
+  the sensor placements and their coverage; in mock mode it additionally
+  draws the simulated world border and the ground-truth people, so the
+  operator can see at a glance how well each sensor's detections agree with
+  reality.
+
+  A feature legend lets the operator toggle individual visual layers
+  (velocity arrows, trails, height-as-size, ground-truth, …) on and off.
+  All state and rendering live on the server; LiveView's diffing pushes the
+  per-frame attribute updates over WebSocket.
   """
 
   use OctopusWeb, :live_view
 
   alias Octopus.Radar
   alias Octopus.Radar.{Frame, Track}
+  alias Octopus.Radar.Mock.World
 
   # 10 s rolling window used both for the displayed min/max and for
   # deriving per-id trails.
@@ -26,9 +32,7 @@ defmodule OctopusWeb.RadarLive do
 
   # Lightness range for the trail's per-segment color. The newest
   # segment (closest to the body circle) is rendered at `@trail_l_near`
-  # — a touch darker than the body so it stays distinguishable from it
-  # — and brightens linearly toward `@trail_l_far` for the oldest
-  # segment, so the historical end of the path is the most prominent.
+  # and brightens linearly toward `@trail_l_far` for the oldest segment.
   @trail_l_near 60
   @trail_l_far 95
 
@@ -44,20 +48,20 @@ defmodule OctopusWeb.RadarLive do
   @r_min 18
   @r_max 72
 
-  # Half-side of the sensor square in the layout diagram (SVG units = cm).
-  @layout_sensor_half 28
+  # Detection radius used when "height-as-size" is toggled off.
+  @detection_fixed_r 28
 
-  # Velocity (m/s) → viewBox-unit scale for the velocity arrow. A 2 m/s
-  # vector renders at ~80 viewBox units; faster vectors are clipped.
+  # Ground-truth person marker radius and sensor placement marker half-side.
+  @ground_truth_r 12
+  @sensor_marker_half 26
+
+  # Velocity (m/s) → viewBox-unit scale for the velocity arrow.
   @velocity_scale 40
   @velocity_max_len 100
 
-  # Fixed palette of well-separated hues. The tracker reports at most a
-  # handful of simultaneous targets, so 10 distinct hues are plenty;
-  # longer-running sessions cycle through them via `rem/2`. Saturation
-  # and lightness are shared across all targets so the only dimension
-  # that varies between targets is hue, which gives the strongest
-  # cross-target distinguishability.
+  # Fixed palette of well-separated hues. Saturation and lightness are
+  # shared across all sensors so the only dimension that varies between
+  # sensors is hue, giving the strongest cross-sensor distinguishability.
   @hues [0, 36, 72, 108, 144, 180, 216, 252, 288, 324]
   @body_saturation 70
   @body_lightness 75
@@ -67,24 +71,62 @@ defmodule OctopusWeb.RadarLive do
   @minmax_pad_m 0.5
 
   # Ruler tick lengths in viewBox units. Minor ticks are every 10 cm;
-  # major ticks land on full meters and are roughly 3× as long so they
-  # remain visible and the operator can quickly count meters.
+  # major ticks land on full meters and are roughly 3× as long.
   @minor_tick_len 8
   @major_tick_len 24
+
+  # Default per-session visibility of each visual layer. Persons, detections,
+  # coverage, placements, world border, height-as-size, trails, labels and
+  # ruler start on; velocity arrows start off to keep the overlay uncluttered.
+  @default_visuals %{
+    world_border: true,
+    coverage: true,
+    placements: true,
+    persons: true,
+    detections: true,
+    trails: true,
+    arrows: false,
+    height_size: true,
+    labels: true,
+    ruler: true
+  }
+
+  # Legend rows: {feature_key, label}. Rendered in this order.
+  @legend_items [
+    {:world_border, "World border"},
+    {:coverage, "Sensor coverage"},
+    {:placements, "Sensor placements"},
+    {:persons, "Virtual persons"},
+    {:detections, "Detections"},
+    {:trails, "Trails"},
+    {:arrows, "Velocity arrows"},
+    {:height_size, "Height as size"},
+    {:labels, "Track labels"},
+    {:ruler, "Ruler / grid"}
+  ]
 
   ## LiveView callbacks
 
   @impl true
   def mount(_params, _session, socket) do
     devices = Radar.devices() |> Enum.filter(& &1.enabled)
+    mock_mode = Radar.mock_mode()
+    world_radius = Radar.world_radius_m()
 
     if connected?(socket) and Radar.enabled?() do
       Radar.subscribe()
       Enum.each(devices, &Radar.subscribe_status(&1.device_id))
+      if mock_mode != :off, do: subscribe_world()
       Process.send_after(self(), :refresh_sensor_statuses, 2_000)
     end
 
-    selected_id = if length(devices) == 1, do: hd(devices).device_id, else: :all
+    selected_id =
+      cond do
+        mock_mode != :off -> :all
+        length(devices) == 1 -> hd(devices).device_id
+        true -> :all
+      end
+
     selected = Enum.find(devices, &(&1.device_id == selected_id))
 
     {:ok,
@@ -94,57 +136,29 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:sensor_statuses, build_sensor_statuses(devices))
      |> assign(:selected_device_id, selected_id)
      |> assign(:sensitivity, (selected && selected.sensitivity) || 4)
+     |> assign(:mock_mode, mock_mode)
+     |> assign(:max_people, safe_max_people())
+     |> assign(:entropy, safe_entropy())
+     |> assign(:world_radius, world_radius)
+     |> assign(:world_objects, [])
+     |> assign(:visuals, @default_visuals)
      |> assign(:bounds_mode, :static)
-     |> assign(:static_bounds, compute_static_bounds(selected_id, devices))
-     |> assign(:layout_sensors, build_layout_sensors(devices))
-     |> assign(:layout_vb_range, layout_vb_range(devices))
+     |> assign(:static_bounds, bounds_for(mock_mode, selected_id, devices, world_radius))
      |> reset_radar_state()}
   end
 
-  # Derive the static-mode rectangle for a selection. For a single
-  # device we use that device's `*_cm` config. For `:all` we take the
-  # union of every configured sensor's rectangle so the canvas
-  # encompasses everything that could possibly be plotted.
-  defp compute_static_bounds(nil, _devices), do: device_bounds(nil)
+  # The canvas always frames the entire simulated world (in every mode) so the
+  # world border, the sensors and their coverage, and the detections all share
+  # one fixed, fully-visible frame. The extent is padded slightly past the
+  # world radius so the border circle isn't clipped at the canvas edge.
+  defp bounds_for(_mode, _selected_id, _devices, radius), do: world_bounds(radius)
 
-  defp compute_static_bounds(:all, []), do: device_bounds(nil)
-
-  defp compute_static_bounds(:all, devices) do
-    bounds = Enum.map(devices, &device_bounds/1)
-
-    %{
-      min_x: bounds |> Enum.map(& &1.min_x) |> Enum.min(),
-      max_x: bounds |> Enum.map(& &1.max_x) |> Enum.max(),
-      min_y: bounds |> Enum.map(& &1.min_y) |> Enum.min(),
-      max_y: bounds |> Enum.map(& &1.max_y) |> Enum.max(),
-      # range_m on the aggregate is unused — range circles in :all
-      # mode are emitted per-sensor, not as a union.
-      range_m: 0.0
-    }
+  defp world_bounds(radius) do
+    ext = radius * 1.08
+    %{min_x: -ext, max_x: ext, min_y: -ext, max_y: ext, range_m: radius}
   end
 
-  defp compute_static_bounds(device_id, devices) when is_integer(device_id) do
-    devices |> Enum.find(&(&1.device_id == device_id)) |> device_bounds()
-  end
-
-  defp device_bounds(nil) do
-    %{min_x: -1.0, max_x: 1.0, min_y: -1.0, max_y: 1.0, range_m: 1.0}
-  end
-
-  defp device_bounds(device) do
-    %{
-      min_x: device.x_neg_cm / 100.0,
-      max_x: device.x_pos_cm / 100.0,
-      min_y: device.y_neg_cm / 100.0,
-      max_y: device.y_pos_cm / 100.0,
-      range_m: device.range_cm / 100.0
-    }
-  end
-
-  # Sensor → letter mapping for labels in :all mode. Device ids are
-  # 1-based contiguous integers, so device 1 = "A", 2 = "B", etc.
-  # Wraps around past Z, but in practice no installation has that many
-  # radars on one host.
+  # Sensor → letter mapping for labels. Device 1 = "A", 2 = "B", etc.
   defp device_letter(device_id) when is_integer(device_id) do
     <<?A + rem(device_id - 1, 26)>>
   end
@@ -154,7 +168,7 @@ defmodule OctopusWeb.RadarLive do
     {:noreply,
      socket
      |> assign(:selected_device_id, :all)
-     |> assign(:static_bounds, compute_static_bounds(:all, socket.assigns.devices))
+     |> assign(:static_bounds, active_bounds(socket, :all))
      |> reset_radar_state()}
   end
 
@@ -167,7 +181,7 @@ defmodule OctopusWeb.RadarLive do
          socket
          |> assign(:selected_device_id, id)
          |> assign(:sensitivity, (device && device.sensitivity) || 4)
-         |> assign(:static_bounds, compute_static_bounds(id, socket.assigns.devices))
+         |> assign(:static_bounds, active_bounds(socket, id))
          |> reset_radar_state()}
 
       _ ->
@@ -176,9 +190,7 @@ defmodule OctopusWeb.RadarLive do
   end
 
   # Toggle between static (canvas matches the sensor's configured X/Y
-  # rectangle) and auto (grow-only bounds derived from observed
-  # samples). Switching to :auto seeds the bounds from the current
-  # 10 s sample window so the canvas doesn't visually jump.
+  # rectangle) and auto (grow-only bounds derived from observed samples).
   def handle_event("toggle_bounds_mode", params, socket) do
     new_mode = if params["auto"] == "true", do: :auto, else: :static
 
@@ -191,11 +203,6 @@ defmodule OctopusWeb.RadarLive do
     {:noreply, socket}
   end
 
-  # The slider's value is the *intuitive* sensitivity (1=least, 9=most),
-  # which is the inverse of the device's DPKTH scale (1=most sensitive,
-  # 9=least). We translate here so the radar layer always sees the raw
-  # device value. In :all mode the slider isn't shown, but we still
-  # ignore the event defensively if a stray submission arrives.
   def handle_event("set_sensitivity", %{"sensitivity_ui" => ui_str}, socket) do
     with id when is_integer(id) <- socket.assigns.selected_device_id,
          {ui, ""} <- Integer.parse(ui_str),
@@ -212,6 +219,46 @@ defmodule OctopusWeb.RadarLive do
     end
   end
 
+  def handle_event("set_mock_mode", %{"mode" => mode_str}, socket) do
+    # The mode change is broadcast on the radar topic; this LiveView (and any
+    # others) updates itself in handle_info({:mock_mode_changed, _}, …).
+    Radar.set_mock_mode(parse_mode(mode_str))
+    {:noreply, socket}
+  end
+
+  def handle_event("set_max_people", %{"max_people" => v}, socket) do
+    case Integer.parse(v) do
+      {n, _} ->
+        Radar.set_max_people(n)
+        {:noreply, assign(socket, :max_people, n |> max(1) |> min(10))}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("set_entropy", %{"entropy" => v}, socket) do
+    case Integer.parse(v) do
+      {n, _} ->
+        Radar.set_entropy(n)
+        {:noreply, assign(socket, :entropy, n |> max(0) |> min(100))}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("toggle_visual", %{"feature" => feature}, socket) do
+    key = String.to_existing_atom(feature)
+
+    if Map.has_key?(socket.assigns.visuals, key) do
+      visuals = Map.update!(socket.assigns.visuals, key, &(!&1))
+      {:noreply, socket |> assign(:visuals, visuals) |> rebuild_view()}
+    else
+      {:noreply, socket}
+    end
+  end
+
   def handle_event("toggle_sensor", %{"device_id" => id_str}, socket) do
     case Integer.parse(id_str) do
       {id, ""} ->
@@ -225,11 +272,8 @@ defmodule OctopusWeb.RadarLive do
           Radar.disable_sensor(id)
         end
 
-        # Refresh statuses immediately after toggling.
-        devices = socket.assigns.devices
-        statuses = build_sensor_statuses(devices)
+        statuses = build_sensor_statuses(socket.assigns.devices)
 
-        # If the currently selected sensor was just deactivated, fall back to :all.
         selected =
           if status != :inactive and socket.assigns.selected_device_id == id do
             :all
@@ -241,7 +285,7 @@ defmodule OctopusWeb.RadarLive do
          socket
          |> assign(:sensor_statuses, statuses)
          |> assign(:selected_device_id, selected)
-         |> assign(:static_bounds, compute_static_bounds(selected, devices))
+         |> assign(:static_bounds, active_bounds(socket, selected))
          |> reset_radar_state()}
 
       _ ->
@@ -264,9 +308,6 @@ defmodule OctopusWeb.RadarLive do
     end
   end
 
-  # "Fit bounds" snaps the (growing) display bounds back down to the
-  # current 10 s sample window. After this, the bounds resume their
-  # grow-only behavior from the freshly-tightened state.
   def handle_event("fit_bounds", _params, socket) do
     {min_x, max_x, min_y, max_y, min_z, max_z} = compute_minmax(socket.assigns.samples)
 
@@ -293,6 +334,27 @@ defmodule OctopusWeb.RadarLive do
     {:noreply, assign(socket, :sensor_statuses, statuses)}
   end
 
+  def handle_info({:mock_mode_changed, mode}, socket) do
+    if connected?(socket) do
+      if mode == :off, do: unsubscribe_world(), else: subscribe_world()
+    end
+
+    {:noreply,
+     socket
+     |> assign(:mock_mode, mode)
+     |> assign(:max_people, safe_max_people())
+     |> assign(:entropy, safe_entropy())
+     |> assign(:selected_device_id, :all)
+     |> assign(:bounds_mode, :static)
+     |> assign(:world_objects, [])
+     |> assign(:static_bounds, bounds_for(mode, :all, socket.assigns.devices, socket.assigns.world_radius))
+     |> reset_radar_state()}
+  end
+
+  def handle_info({:mock_world, objects}, socket) do
+    {:noreply, socket |> assign(:world_objects, objects) |> rebuild_view()}
+  end
+
   @impl true
   def handle_info({:radar_frame, device_id, %Frame{} = frame}, socket) do
     selected = socket.assigns.selected_device_id
@@ -316,14 +378,13 @@ defmodule OctopusWeb.RadarLive do
     |> assign(:view_targets, [])
     |> assign(:ruler, empty_ruler())
     |> assign(:range_indicators, [])
+    |> assign(:ground_truth, [])
+    |> assign(:world_sensors, [])
+    |> assign(:world_border, nil)
     |> apply_bounds_for_mode()
     |> rebuild_view()
   end
 
-  # Set the X/Y bounds appropriately for the current `:bounds_mode`.
-  # In :static mode, snap to the configured rectangle. In :auto mode,
-  # initialize from whatever data we currently hold (so a toggle from
-  # static→auto doesn't immediately collapse to a tiny default range).
   defp apply_bounds_for_mode(socket) do
     case socket.assigns.bounds_mode do
       :static ->
@@ -347,6 +408,12 @@ defmodule OctopusWeb.RadarLive do
     end
   end
 
+  # Bounds to use for a (re)selection, honoring mock mode (world disk) vs
+  # real hardware (configured rectangle).
+  defp active_bounds(socket, selected_id) do
+    bounds_for(socket.assigns.mock_mode, selected_id, socket.assigns.devices, socket.assigns.world_radius)
+  end
+
   defp empty_ruler,
     do: %{x_axis_visible: false, y_axis_visible: false, origin_x: 0, origin_y: 0, ticks: []}
 
@@ -364,8 +431,6 @@ defmodule OctopusWeb.RadarLive do
       (new_samples ++ socket.assigns.samples)
       |> Enum.filter(&(&1.ts >= cutoff))
 
-    # tracks_now is keyed by `{device_id, id}` so that two sensors
-    # both reporting target id 1 don't merge into a single track.
     tracks_now =
       tracks
       |> Enum.reduce(socket.assigns.tracks_now, fn %Track{} = t, acc ->
@@ -400,10 +465,6 @@ defmodule OctopusWeb.RadarLive do
     |> rebuild_view()
   end
 
-  # In :static mode the X/Y bounds are pinned to the configured
-  # rectangle and never change with the data. In :auto mode they grow
-  # monotonically (see `grow_bounds/4`). Z always grows independently
-  # since it isn't on the canvas.
   defp update_xy_bounds(%{bounds_mode: :static} = a, _new_samples) do
     {a.min_x, a.max_x, a.min_y, a.max_y}
   end
@@ -414,12 +475,6 @@ defmodule OctopusWeb.RadarLive do
     {min_x, max_x, min_y, max_y}
   end
 
-  # Bounds are monotonically growing: once the visible range expands to
-  # accommodate a sample, it never contracts on its own. Operators can
-  # "Fit bounds" to snap the box back to the current 10 s data window
-  # whenever they want a tighter view. Empty `new_samples` leave the
-  # bounds untouched. The result is pre-padded so the rest of the
-  # pipeline can treat stored bounds as display-ready.
   defp grow_bounds(new_samples, min_v, max_v, key) do
     values = Enum.map(new_samples, &Map.fetch!(&1, key))
 
@@ -441,8 +496,7 @@ defmodule OctopusWeb.RadarLive do
   end
 
   # Recompute everything that depends on the current bounds + tracks +
-  # samples. Called after frame ingest, after "Fit bounds", and after
-  # mode toggles.
+  # samples + world snapshot.
   defp rebuild_view(socket) do
     a = socket.assigns
 
@@ -463,26 +517,30 @@ defmodule OctopusWeb.RadarLive do
     ruler = build_ruler(min_x, max_x, min_y, max_y)
 
     range_indicators =
-      build_range_indicators(
-        a.devices,
-        a.selected_device_id,
-        min_x,
-        max_x,
-        min_y,
-        max_y
-      )
+      build_range_indicators(a.devices, a.selected_device_id, min_x, max_x, min_y, max_y)
+
+    world_sensors = build_world_sensors(a.devices, min_x, max_x, min_y, max_y)
+
+    # The world border frames every mode; ground-truth people only exist in
+    # mock mode.
+    world_border = build_world_border(a.world_radius, min_x, max_x, min_y, max_y)
+
+    ground_truth =
+      if a.mock_mode == :off,
+        do: [],
+        else: build_ground_truth(a.world_objects, min_x, max_x, min_y, max_y)
 
     socket
     |> assign(:view_targets, view_targets)
     |> assign(:ruler, ruler)
     |> assign(:range_indicators, range_indicators)
+    |> assign(:world_sensors, world_sensors)
+    |> assign(:ground_truth, ground_truth)
+    |> assign(:world_border, world_border)
   end
 
-  # Build one coverage ellipse per sensor in the current selection.
-  # We use an ellipse rather than a circle because in :auto mode the X
-  # and Y axes can scale non-uniformly, in which case a true circle in
-  # world space is an ellipse on the canvas. In :static mode (typical
-  # symmetric config) `rx == ry` and each entry draws as a circle.
+  # One coverage ellipse per sensor in the current selection, centered on the
+  # sensor's global mount position and tinted in that sensor's color.
   defp build_range_indicators(_devices, nil, _, _, _, _), do: []
 
   defp build_range_indicators(devices, :all, min_x, max_x, min_y, max_y) do
@@ -499,18 +557,63 @@ defmodule OctopusWeb.RadarLive do
 
   defp range_indicator(device, min_x, max_x, min_y, max_y) do
     range_m = device.range_cm / 100.0
+    {tx, ty} = sensor_position(device)
 
     %{
-      cx: scale(0.0, min_x, max_x, @vb),
-      cy: scale(0.0, min_y, max_y, @vb),
+      id: device.device_id,
+      cx: scale(tx, min_x, max_x, @vb),
+      cy: scale(ty, min_y, max_y, @vb),
       rx: range_m / (max_x - min_x) * @vb,
-      ry: range_m / (max_y - min_y) * @vb
+      ry: range_m / (max_y - min_y) * @vb,
+      color: sensor_color(device.device_id)
     }
   end
 
+  # Sensor placement markers (square + label) in the global frame.
+  defp build_world_sensors(devices, min_x, max_x, min_y, max_y) do
+    Enum.map(devices, fn device ->
+      {tx, ty} = sensor_position(device)
+
+      %{
+        cx: scale(tx, min_x, max_x, @vb),
+        cy: scale(ty, min_y, max_y, @vb),
+        half: @sensor_marker_half,
+        label: device_letter(device.device_id),
+        color: sensor_color(device.device_id)
+      }
+    end)
+  end
+
+  # Ground-truth people as small black dots.
+  defp build_ground_truth(objects, min_x, max_x, min_y, max_y) do
+    Enum.map(objects, fn o ->
+      %{
+        id: o.id,
+        cx: scale(o.x, min_x, max_x, @vb),
+        cy: scale(o.y, min_y, max_y, @vb),
+        r: @ground_truth_r
+      }
+    end)
+  end
+
+  # The outer edge of the simulated world (a circle of radius `radius_m`
+  # centered on the origin), as an ellipse to honor non-uniform axis scales.
+  defp build_world_border(radius_m, min_x, max_x, min_y, max_y) do
+    %{
+      cx: scale(0.0, min_x, max_x, @vb),
+      cy: scale(0.0, min_y, max_y, @vb),
+      rx: radius_m / (max_x - min_x) * @vb,
+      ry: radius_m / (max_y - min_y) * @vb
+    }
+  end
+
+  defp sensor_position(device) do
+    angle_rad = device.angle_deg * :math.pi() / 180.0
+    distance_m = device.distance_cm / 100.0
+    {distance_m * :math.cos(angle_rad), distance_m * :math.sin(angle_rad)}
+  end
+
   defp compute_minmax([]) do
-    # No data yet: provide a symmetric padded box around the origin so the
-    # SVG still renders sensibly.
     {-@minmax_pad_m, @minmax_pad_m, -@minmax_pad_m, @minmax_pad_m, -@minmax_pad_m, @minmax_pad_m}
   end
 
@@ -524,9 +627,6 @@ defmodule OctopusWeb.RadarLive do
     {min_x, max_x, min_y, max_y, min_z, max_z}
   end
 
-  # Used at render time to guarantee the canvas has a non-degenerate
-  # range to scale into, even when no data has arrived yet (`nil`,
-  # `nil`) or when all samples coincide.
   defp pad_range(nil, nil), do: {-@minmax_pad_m, @minmax_pad_m}
 
   defp pad_range(min, max) do
@@ -542,6 +642,11 @@ defmodule OctopusWeb.RadarLive do
 
   @impl true
   def render(assigns) do
+    assigns =
+      assigns
+      |> assign(:legend_items, @legend_items)
+      |> assign(:detection_fixed_r, @detection_fixed_r)
+
     ~H"""
     <div class="container mx-auto p-4">
       <div class="card bg-base-100 shadow-md">
@@ -557,13 +662,32 @@ defmodule OctopusWeb.RadarLive do
                 <span class="text-sm opacity-70">No radar sensors configured</span>
               <% true -> %>
                 <div class="flex items-center gap-3 flex-wrap">
+                  <%!-- Data source: real hardware ("Live") vs the simulated world --%>
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm opacity-70">Source</span>
+                    <div class="join" id="radar-mock-mode">
+                      <%= for {value, label} <- [{"off", "Live"}, {"exact", "Mock · Exact"}, {"fuzzy", "Mock · Fuzzy"}] do %>
+                        <button
+                          type="button"
+                          phx-click="set_mock_mode"
+                          phx-value-mode={value}
+                          class={[
+                            "btn btn-sm join-item",
+                            if(Atom.to_string(@mock_mode) == value, do: "btn-primary", else: "btn-outline")
+                          ]}
+                        >
+                          {label}
+                        </button>
+                      <% end %>
+                    </div>
+                  </div>
                   <%!-- Status / active-inactive buttons — one per config-enabled sensor --%>
                   <%= for d <- @devices do %>
                     <button
                       type="button"
                       phx-click="toggle_sensor"
                       phx-value-device_id={d.device_id}
-                      title={"Sensor #{device_letter(d.device_id)} (#{d.port}) — #{sensor_status_label(@sensor_statuses[d.device_id])} — click to toggle"}
+                      title={sensor_tooltip(d, @sensor_statuses[d.device_id])}
                       class={[
                         "btn btn-sm font-mono min-w-[2.5rem]",
                         sensor_status_class(@sensor_statuses[d.device_id])
@@ -574,7 +698,7 @@ defmodule OctopusWeb.RadarLive do
                   <% end %>
                   <%!-- Sensor selector dropdown --%>
                   <form phx-change="select_sensor">
-                    <select id="radar-sensor" name="device_id" class="select select-bordered select-sm min-w-40">
+                    <select id="radar-sensor" name="device_id" class="select select-bordered min-w-40">
                       <%= for d <- @devices do %>
                         <option value={d.device_id} selected={d.device_id == @selected_device_id}>
                           Sensor {device_letter(d.device_id)} — {d.port}
@@ -591,11 +715,44 @@ defmodule OctopusWeb.RadarLive do
 
           <%= if @radar_enabled and @devices != [] do %>
             <div class="flex items-center flex-wrap gap-4 mt-2">
+              <%= if @mock_mode != :off do %>
+                <form phx-change="set_max_people" class="flex items-center gap-3 grow min-w-0">
+                  <label for="radar-max-people" class="text-sm whitespace-nowrap">
+                    Max people
+                  </label>
+                  <input
+                    id="radar-max-people"
+                    name="max_people"
+                    type="range"
+                    min="1"
+                    max="10"
+                    step="1"
+                    value={@max_people}
+                    phx-debounce="200"
+                    class="range range-sm grow"
+                  />
+                  <span class="text-sm font-mono w-12 text-right">{@max_people}/10</span>
+                </form>
+                <form phx-change="set_entropy" class="flex items-center gap-3 grow min-w-0">
+                  <label for="radar-entropy" class="text-sm whitespace-nowrap">
+                    Activity
+                  </label>
+                  <input
+                    id="radar-entropy"
+                    name="entropy"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="5"
+                    value={@entropy}
+                    phx-debounce="200"
+                    class="range range-sm grow"
+                  />
+                  <span class="text-sm font-mono w-12 text-right">{@entropy}%</span>
+                </form>
+              <% end %>
               <%= if @selected_device_id != :all do %>
-                <form
-                  phx-change="set_sensitivity"
-                  class="flex items-center gap-3 grow min-w-0"
-                >
+                <form phx-change="set_sensitivity" class="flex items-center gap-3 grow min-w-0">
                   <label for="radar-sensitivity" class="text-sm whitespace-nowrap">
                     Sensitivity
                   </label>
@@ -615,29 +772,6 @@ defmodule OctopusWeb.RadarLive do
                   <span class="text-sm font-mono w-12 text-right">{10 - @sensitivity}/9</span>
                 </form>
               <% end %>
-              <form phx-change="toggle_bounds_mode">
-                <label class="cursor-pointer label gap-2 py-0">
-                  <input type="hidden" name="auto" value="false" />
-                  <input
-                    type="checkbox"
-                    name="auto"
-                    value="true"
-                    class="toggle toggle-sm"
-                    checked={@bounds_mode == :auto}
-                  />
-                  <span class="label-text">Auto-expand bounds</span>
-                </label>
-              </form>
-              <%= if @bounds_mode == :auto do %>
-                <button
-                  id="radar-fit-bounds"
-                  type="button"
-                  class="btn btn-outline btn-sm"
-                  phx-click="fit_bounds"
-                >
-                  Fit bounds
-                </button>
-              <% end %>
               <button
                 id="radar-reinit"
                 type="button"
@@ -652,13 +786,6 @@ defmodule OctopusWeb.RadarLive do
               </button>
             </div>
           <% end %>
-
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm font-mono mt-2">
-            <div>X: {fmt_m(@min_x)} … {fmt_m(@max_x)}</div>
-            <div>Y: {fmt_m(@min_y)} … {fmt_m(@max_y)}</div>
-            <div>Z: {fmt_m(@min_z)} … {fmt_m(@max_z)}</div>
-            <div>Tracks: {map_size(@tracks_now)}</div>
-          </div>
 
           <%= if not @radar_enabled do %>
             <div class="alert alert-info mt-4">
@@ -676,203 +803,201 @@ defmodule OctopusWeb.RadarLive do
                 </span>
               </div>
             <% else %>
-            <div class="flex gap-4 mt-4 items-start">
-              <div class="flex-1 min-w-0 aspect-square bg-base-200 rounded">
-                <svg viewBox="0 0 1000 1000" class="w-full h-full">
-                  <%= for r <- @range_indicators do %>
-                    <ellipse
-                      cx={fmt_f(r.cx)}
-                      cy={fmt_f(r.cy)}
-                      rx={fmt_f(r.rx)}
-                      ry={fmt_f(r.ry)}
-                      fill="rgba(37, 99, 235, 0.2)"
-                      stroke="rgba(37, 99, 235, 0.5)"
-                      stroke-width="1"
-                    />
-                  <% end %>
-
-                  <g stroke="black">
-                    <%= if @ruler.x_axis_visible do %>
-                      <line
-                        x1="0"
-                        y1={fmt_f(@ruler.origin_y)}
-                        x2="1000"
-                        y2={fmt_f(@ruler.origin_y)}
-                        stroke-width="1"
-                        stroke-opacity="0.3"
-                      />
-                    <% end %>
-                    <%= if @ruler.y_axis_visible do %>
-                      <line
-                        x1={fmt_f(@ruler.origin_x)}
-                        y1="0"
-                        x2={fmt_f(@ruler.origin_x)}
-                        y2="1000"
-                        stroke-width="1"
-                        stroke-opacity="0.3"
-                      />
-                    <% end %>
-                    <%= for tick <- @ruler.ticks do %>
-                      <line
-                        x1={fmt_f(tick.x1)}
-                        y1={fmt_f(tick.y1)}
-                        x2={fmt_f(tick.x2)}
-                        y2={fmt_f(tick.y2)}
-                        stroke-width={if tick.major?, do: "2", else: "1"}
-                        stroke-opacity={if tick.major?, do: "0.7", else: "0.35"}
-                      />
-                    <% end %>
-                  </g>
-
-                  <%= for v <- @view_targets do %>
-                    <g opacity={fmt_f(v.opacity)}>
-                      <%= for seg <- v.trail do %>
-                        <line
-                          x1={fmt_f(seg.x1)}
-                          y1={fmt_f(seg.y1)}
-                          x2={fmt_f(seg.x2)}
-                          y2={fmt_f(seg.y2)}
-                          stroke={seg.color}
-                          stroke-width="3"
-                          stroke-linecap="round"
+              <div class="flex gap-4 mt-4 items-start flex-wrap md:flex-nowrap">
+                <%!-- Unified top-down display, always square and capped to the viewport. --%>
+                <div class="flex-1 min-w-0 flex justify-center">
+                  <div
+                    class="aspect-square bg-base-200 rounded w-full"
+                    style="max-height: min(80vh, 100%); max-width: min(80vh, 100%);"
+                  >
+                    <svg viewBox="0 0 1000 1000" class="w-full h-full">
+                      <%!-- World border --%>
+                      <%= if @visuals.world_border and @world_border do %>
+                        <ellipse
+                          cx={fmt_f(@world_border.cx)}
+                          cy={fmt_f(@world_border.cy)}
+                          rx={fmt_f(@world_border.rx)}
+                          ry={fmt_f(@world_border.ry)}
+                          fill="none"
+                          stroke="#9ca3af"
+                          stroke-width="2"
+                          stroke-dasharray="6,6"
                         />
                       <% end %>
-                      <line
-                        x1={fmt_f(v.cx)}
-                        y1={fmt_f(v.cy)}
-                        x2={fmt_f(v.arrow_x)}
-                        y2={fmt_f(v.arrow_y)}
-                        stroke={v.color}
-                        stroke-width="3"
-                        stroke-linecap="round"
-                      />
-                      <circle
-                        cx={fmt_f(v.arrow_x)}
-                        cy={fmt_f(v.arrow_y)}
-                        r="4"
-                        fill={v.color}
-                      />
-                      <circle
-                        cx={fmt_f(v.cx)}
-                        cy={fmt_f(v.cy)}
-                        r={fmt_f(v.radius)}
-                        fill={v.color}
-                        stroke="black"
-                        stroke-width="2"
-                      />
-                      <text
-                        x={fmt_f(v.cx)}
-                        y={fmt_f(v.cy)}
-                        text-anchor="middle"
-                        dominant-baseline="central"
-                        font-size="20"
-                        font-weight="bold"
-                        fill="black"
-                      >
-                        {v.label}
-                      </text>
-                    </g>
-                  <% end %>
-                </svg>
-              </div>
 
-              <div class="w-44 shrink-0 flex flex-col gap-1">
-                <p class="text-xs text-center opacity-60">Sensor layout</p>
-                <div class="aspect-square bg-base-200 rounded">
-                  <svg
-                    viewBox={"-#{@layout_vb_range} -#{@layout_vb_range} #{@layout_vb_range * 2} #{@layout_vb_range * 2}"}
-                    class="w-full h-full"
-                  >
-                    <%!-- Faint grid axes (positive quadrant highlights global +X/+Y) --%>
-                    <line
-                      x1={-@layout_vb_range}
-                      y1="0"
-                      x2={@layout_vb_range}
-                      y2="0"
-                      stroke="#888"
-                      stroke-width="0.8"
-                      stroke-opacity="0.3"
-                    />
-                    <line
-                      x1="0"
-                      y1={-@layout_vb_range}
-                      x2="0"
-                      y2={@layout_vb_range}
-                      stroke="#888"
-                      stroke-width="0.8"
-                      stroke-opacity="0.3"
-                    />
-                    <%!-- Axis labels — +Y is up so its SVG coord is negative --%>
-                    <text
-                      x={@layout_vb_range - 4}
-                      y="14"
-                      text-anchor="end"
-                      font-size="14"
-                      fill="#888"
-                    >
-                      +X
-                    </text>
-                    <text
-                      x="6"
-                      y={-@layout_vb_range + 16}
-                      text-anchor="start"
-                      font-size="14"
-                      fill="#888"
-                    >
-                      +Y
-                    </text>
-                    <%!-- Center marker --%>
-                    <line x1="-8" y1="0" x2="8" y2="0" stroke="#aaa" stroke-width="1.5" />
-                    <line x1="0" y1="-8" x2="0" y2="8" stroke="#aaa" stroke-width="1.5" />
-                    <circle cx="0" cy="0" r="4" fill="#aaa" />
-                    <%!-- Sensors --%>
-                    <%= for s <- @layout_sensors do %>
-                      <%!-- Dashed beam line from center to mount position --%>
-                      <line
-                        x1="0"
-                        y1="0"
-                        x2={fmt_f(s.cx)}
-                        y2={fmt_f(s.cy)}
-                        stroke="#888"
-                        stroke-width="1"
-                        stroke-dasharray="5,4"
-                        stroke-opacity="0.55"
+                      <%!-- Sensor coverage: radial fill fading with distance (signal
+                           strength) plus a 50% gray border marking the range edge. --%>
+                      <%= if @visuals.coverage do %>
+                        <defs>
+                          <%= for r <- @range_indicators do %>
+                            <radialGradient id={"rangegrad-#{r.id}"}>
+                              <stop offset="0%" stop-color={r.color} stop-opacity="0.5" />
+                              <stop offset="65%" stop-color={r.color} stop-opacity="0.18" />
+                              <stop offset="100%" stop-color={r.color} stop-opacity="0" />
+                            </radialGradient>
+                          <% end %>
+                        </defs>
+                        <%= for r <- @range_indicators do %>
+                          <ellipse
+                            cx={fmt_f(r.cx)}
+                            cy={fmt_f(r.cy)}
+                            rx={fmt_f(r.rx)}
+                            ry={fmt_f(r.ry)}
+                            fill={"url(#rangegrad-#{r.id})"}
+                            stroke="#808080"
+                            stroke-opacity="0.5"
+                            stroke-width="2"
+                          />
+                        <% end %>
+                      <% end %>
+
+                      <%!-- Ruler / grid axes --%>
+                      <%= if @visuals.ruler do %>
+                        <g stroke="black">
+                          <%= if @ruler.x_axis_visible do %>
+                            <line
+                              x1="0"
+                              y1={fmt_f(@ruler.origin_y)}
+                              x2="1000"
+                              y2={fmt_f(@ruler.origin_y)}
+                              stroke-width="1"
+                              stroke-opacity="0.3"
+                            />
+                          <% end %>
+                          <%= if @ruler.y_axis_visible do %>
+                            <line
+                              x1={fmt_f(@ruler.origin_x)}
+                              y1="0"
+                              x2={fmt_f(@ruler.origin_x)}
+                              y2="1000"
+                              stroke-width="1"
+                              stroke-opacity="0.3"
+                            />
+                          <% end %>
+                          <%= for tick <- @ruler.ticks do %>
+                            <line
+                              x1={fmt_f(tick.x1)}
+                              y1={fmt_f(tick.y1)}
+                              x2={fmt_f(tick.x2)}
+                              y2={fmt_f(tick.y2)}
+                              stroke-width={if tick.major?, do: "2", else: "1"}
+                              stroke-opacity={if tick.major?, do: "0.7", else: "0.35"}
+                            />
+                          <% end %>
+                        </g>
+                      <% end %>
+
+                      <%!-- Sensor placements --%>
+                      <%= if @visuals.placements do %>
+                        <%= for s <- @world_sensors do %>
+                          <rect
+                            x={fmt_f(s.cx - s.half)}
+                            y={fmt_f(s.cy - s.half)}
+                            width={fmt_f(s.half * 2)}
+                            height={fmt_f(s.half * 2)}
+                            rx="3"
+                            fill={s.color}
+                            fill-opacity="0.35"
+                            stroke={s.color}
+                            stroke-width="2"
+                          />
+                          <text
+                            x={fmt_f(s.cx)}
+                            y={fmt_f(s.cy)}
+                            text-anchor="middle"
+                            dominant-baseline="central"
+                            font-size="22"
+                            font-weight="bold"
+                            fill="black"
+                          >
+                            {s.label}
+                          </text>
+                        <% end %>
+                      <% end %>
+
+                      <%!-- Ground-truth people --%>
+                      <%= if @visuals.persons do %>
+                        <%= for g <- @ground_truth do %>
+                          <circle cx={fmt_f(g.cx)} cy={fmt_f(g.cy)} r={fmt_f(g.r)} fill="black" />
+                        <% end %>
+                      <% end %>
+
+                      <%!-- Detections --%>
+                      <%= if @visuals.detections do %>
+                        <%= for v <- @view_targets do %>
+                          <g opacity={fmt_f(v.opacity)}>
+                            <%= if @visuals.trails do %>
+                              <%= for seg <- v.trail do %>
+                                <line
+                                  x1={fmt_f(seg.x1)}
+                                  y1={fmt_f(seg.y1)}
+                                  x2={fmt_f(seg.x2)}
+                                  y2={fmt_f(seg.y2)}
+                                  stroke={seg.color}
+                                  stroke-width="3"
+                                  stroke-linecap="round"
+                                  stroke-opacity="0.5"
+                                />
+                              <% end %>
+                            <% end %>
+                            <%= if @visuals.arrows do %>
+                              <line
+                                x1={fmt_f(v.cx)}
+                                y1={fmt_f(v.cy)}
+                                x2={fmt_f(v.arrow_x)}
+                                y2={fmt_f(v.arrow_y)}
+                                stroke={v.color}
+                                stroke-width="3"
+                                stroke-linecap="round"
+                              />
+                              <circle cx={fmt_f(v.arrow_x)} cy={fmt_f(v.arrow_y)} r="4" fill={v.color} />
+                            <% end %>
+                            <circle
+                              cx={fmt_f(v.cx)}
+                              cy={fmt_f(v.cy)}
+                              r={fmt_f(if @visuals.height_size, do: v.radius, else: @detection_fixed_r)}
+                              fill={v.color}
+                              fill-opacity="0.5"
+                              stroke={v.color}
+                              stroke-width="1.5"
+                            />
+                            <%= if @visuals.labels do %>
+                              <text
+                                x={fmt_f(v.cx)}
+                                y={fmt_f(v.cy)}
+                                text-anchor="middle"
+                                dominant-baseline="central"
+                                font-size="18"
+                                font-weight="bold"
+                                fill="black"
+                              >
+                                {v.label}
+                              </text>
+                            <% end %>
+                          </g>
+                        <% end %>
+                      <% end %>
+                    </svg>
+                  </div>
+                </div>
+
+                <%!-- Feature legend / toggles --%>
+                <div class="w-48 shrink-0 flex flex-col gap-2">
+                  <p class="text-xs font-semibold opacity-70">Visual features</p>
+                  <%= for {key, label} <- @legend_items do %>
+                    <label class="flex items-center gap-2 cursor-pointer text-sm">
+                      <input
+                        type="checkbox"
+                        class="checkbox checkbox-xs"
+                        checked={@visuals[key]}
+                        phx-click="toggle_visual"
+                        phx-value-feature={key}
                       />
-                      <%!-- Sensor square group: translated to mount, then rotated by -(angle+rotation) --%>
-                      <g transform={"translate(#{fmt_f(s.cx)},#{fmt_f(s.cy)}) rotate(#{fmt_f(s.group_rotation)})"}>
-                        <rect
-                          x={s.rect_x}
-                          y={s.rect_y}
-                          width={s.rect_size}
-                          height={s.rect_size}
-                          rx="3"
-                          fill="rgba(37,99,235,0.25)"
-                          stroke="#2563eb"
-                          stroke-width="2"
-                        />
-                        <%!-- Orientation dot at the sensor-local +x, +y corner.
-                             In local SVG (y-down), +x is right and the radar's +y
-                             is up, i.e. negative SVG-y, so the dot sits top-right. --%>
-                        <circle cx={s.dot_cx} cy={s.dot_cy} r="5" fill="#2563eb" />
-                        <%!-- Label counter-rotated so it stays upright regardless of sensor orientation --%>
-                        <text
-                          x="0"
-                          y="0"
-                          text-anchor="middle"
-                          dominant-baseline="central"
-                          font-size="20"
-                          font-weight="bold"
-                          fill="#e0e7ff"
-                          transform={"rotate(#{fmt_f(s.text_rotation)})"}
-                        >
-                          {s.label}
-                        </text>
-                      </g>
-                    <% end %>
-                  </svg>
+                      <span>{label}</span>
+                    </label>
+                  <% end %>
                 </div>
               </div>
-            </div>
             <% end %>
           <% end %>
         </div>
@@ -910,7 +1035,7 @@ defmodule OctopusWeb.RadarLive do
       arrow_dx = clamp(t.vx * @velocity_scale, -@velocity_max_len, @velocity_max_len)
       arrow_dy = clamp(t.vy * @velocity_scale, -@velocity_max_len, @velocity_max_len)
 
-      hue = hue_for_track(device_id, id)
+      hue = sensor_hue(device_id)
 
       trail_segments =
         samples_by_key
@@ -923,7 +1048,7 @@ defmodule OctopusWeb.RadarLive do
         cy: cy,
         radius: radius_for_z(t.z),
         opacity: opacity,
-        color: color_for_track(device_id, id),
+        color: sensor_color(device_id),
         arrow_x: cx + arrow_dx,
         arrow_y: cy + arrow_dy,
         trail: trail_segments
@@ -931,17 +1056,11 @@ defmodule OctopusWeb.RadarLive do
     end)
   end
 
-  # In :all mode every label is prefixed by the source sensor's letter
-  # (A, B, C, …) so two sensors reporting the same numeric id are
-  # visually distinguishable. In single-sensor mode the prefix would
-  # be redundant clutter, so we omit it.
+  # In :all mode every label is prefixed by the source sensor's letter so two
+  # sensors reporting the same numeric id are distinguishable.
   defp track_label(device_id, id, :all), do: "#{device_letter(device_id)}#{id}"
   defp track_label(_device_id, id, _selected), do: Integer.to_string(id)
 
-  # Pair consecutive samples (oldest-first) into per-segment line
-  # records. Each segment carries a precomputed color whose lightness
-  # is driven by the *newer* endpoint's age — so as a sample ages, the
-  # segment touching it brightens smoothly.
   defp build_trail_segments(samples, now, hue, min_x, max_x, min_y, max_y) do
     samples
     |> Enum.chunk_every(2, 1, :discard)
@@ -956,10 +1075,6 @@ defmodule OctopusWeb.RadarLive do
     end)
   end
 
-  # Group samples by `{device_id, id}` and sort each group oldest-first
-  # so that the resulting polyline runs from old position → newest
-  # position. Composite keying makes trails from different sensors stay
-  # separate even when their numeric ids collide.
   defp group_samples_by_key(samples, trail_cutoff) do
     samples
     |> Enum.filter(&(&1.ts >= trail_cutoff))
@@ -968,13 +1083,7 @@ defmodule OctopusWeb.RadarLive do
   end
 
   ## Ruler view model
-  #
-  # Two perpendicular axes through the world origin (0, 0), with tick
-  # marks every 10 cm along both. Major ticks (multiples of 1 m) render
-  # `@major_tick_len` long; minor ticks `@minor_tick_len`. The axis
-  # lines themselves are only drawn when 0 actually lies inside the
-  # currently-visible range — otherwise the axis would be off-canvas
-  # anyway and a line stub at the edge looks misleading.
+
   defp build_ruler(min_x, max_x, min_y, max_y) do
     origin_x = scale(0.0, min_x, max_x, @vb)
     origin_y = scale(0.0, min_y, max_y, @vb)
@@ -990,10 +1099,6 @@ defmodule OctopusWeb.RadarLive do
     }
   end
 
-  # Enumerate every multiple of 10 cm inside `[lo_w, hi_w]` and emit a
-  # short perpendicular tick at that position on the matching axis.
-  # `axis_pos` is the canvas-space coordinate of the *other* axis (so
-  # X-axis ticks all share `axis_pos = origin_y`).
   defp axis_ticks(lo_w, hi_w, axis_pos, orientation) do
     lo_dm = ceil(lo_w * 10)
     hi_dm = floor(hi_w * 10)
@@ -1026,84 +1131,57 @@ defmodule OctopusWeb.RadarLive do
   defp clamp(v, _lo, hi) when v > hi, do: hi
   defp clamp(v, _lo, _hi), do: v
 
-  # Closer targets (smaller z) render with a larger radius, so a viewer
-  # gets an intuitive "perspective" cue when reading the canvas.
   defp radius_for_z(z) do
     z = clamp(z, @z_min, @z_max)
     @r_max - (z - @z_min) / (@z_max - @z_min) * (@r_max - @r_min)
   end
 
-  # Fixed-palette color assignment: cycle through `@hues` by a small
-  # mix of device_id and target id. A hash-based scheme produces
-  # near-identical hues for small consecutive integers (which is
-  # exactly what the device's track ids are), so the mix here is just
-  # `device_id * 7 + id` — multiplying by 7 (coprime with 10) ensures
-  # different sensors land on different hue offsets in :all mode.
-  defp hue_for_track(device_id, id) do
-    Enum.at(@hues, rem(device_id * 7 + id, length(@hues)))
-  end
+  # Stable per-sensor hue/color (independent of track id) so each sensor's
+  # placement, coverage and detections share one tint.
+  defp sensor_hue(device_id), do: Enum.at(@hues, rem(device_id * 7, length(@hues)))
 
-  defp color_for_track(device_id, id),
-    do: "hsl(#{hue_for_track(device_id, id)}, #{@body_saturation}%, #{@body_lightness}%)"
+  defp sensor_color(device_id),
+    do: "hsl(#{sensor_hue(device_id)}, #{@body_saturation}%, #{@body_lightness}%)"
 
-  # Per-segment trail color: the newest segment is `@trail_l_near` (a
-  # bit darker than the body) and brightens linearly to `@trail_l_far`
-  # for the oldest segment. So the historical tail of the path is the
-  # most prominent, fading INTO the body rather than away from it.
   defp trail_color(hue, age_ms) do
     age_fraction = min(1.0, age_ms / @trail_ms)
     lightness = @trail_l_near + age_fraction * (@trail_l_far - @trail_l_near)
     "hsl(#{hue}, #{@body_saturation}%, #{round(lightness)}%)"
   end
 
-  ## Layout diagram
+  ## Mock mode helpers
 
-  # Build the static sensor placement diagram shown beside the live track view.
-  # Each sensor becomes a square in a top-down SVG where 1 unit = 1 cm.
-  # All positions and rotations are pre-computed so the template is free of math.
-  #
-  # Coordinate conventions:
-  #   * World: +X right, +Y up  (radar convention)
-  #   * SVG:   +X right, +Y down — Y is negated when placing sensors
-  #   * group_rotation = -(angle_deg + rotation_deg): SVG rotates CW for positive
-  #     angles (y-down), so negating converts from CCW world convention to SVG.
-  #   * The orientation dot lives at the sensor-local (+x, +y) corner, which in
-  #     the SVG-local frame of the rotated group is (half, -half) — right and up.
-  defp build_layout_sensors(devices) do
-    half = @layout_sensor_half
+  defp parse_mode("exact"), do: :exact
+  defp parse_mode("fuzzy"), do: :fuzzy
+  defp parse_mode(_), do: :off
 
-    Enum.map(devices, fn device ->
-      angle_rad = device.angle_deg * :math.pi() / 180.0
-      eff_rotation = device.angle_deg + device.rotation_deg
-      svg_cx = device.distance_cm * :math.cos(angle_rad)
-      svg_cy = -(device.distance_cm * :math.sin(angle_rad))
+  defp safe_max_people, do: max(Radar.max_people(), 1)
 
-      %{
-        label: device_letter(device.device_id),
-        cx: svg_cx,
-        cy: svg_cy,
-        group_rotation: -eff_rotation,
-        text_rotation: eff_rotation,
-        rect_x: -half,
-        rect_y: -half,
-        rect_size: half * 2,
-        dot_cx: half,
-        dot_cy: -half
-      }
-    end)
-  end
+  defp safe_entropy, do: Radar.entropy()
 
-  defp layout_vb_range([]), do: 120
-
-  defp layout_vb_range(devices) do
-    max_dist = devices |> Enum.map(& &1.distance_cm) |> Enum.max()
-    trunc(max_dist) + @layout_sensor_half + 24
-  end
+  defp subscribe_world, do: Phoenix.PubSub.subscribe(Octopus.PubSub, World.world_topic())
+  defp unsubscribe_world, do: Phoenix.PubSub.unsubscribe(Octopus.PubSub, World.world_topic())
 
   ## Sensor status helpers
 
   defp build_sensor_statuses(devices) do
     Map.new(devices, fn d -> {d.device_id, Radar.sensor_status(d.device_id)} end)
+  end
+
+  # Multi-line hover text carrying each sensor's status and configuration
+  # (the data that used to live in the now-removed stats row).
+  defp sensor_tooltip(d, status) do
+    Enum.join(
+      [
+        "Sensor #{device_letter(d.device_id)} (#{d.port})",
+        "Status: #{sensor_status_label(status)}",
+        "Pose: #{d.angle_deg}° @ #{d.distance_cm} cm · rotation #{d.rotation_deg}°",
+        "Range: #{d.range_cm} cm · Height: #{d.height_cm} cm",
+        "Sensitivity: #{10 - d.sensitivity}/9",
+        "Click to toggle active/inactive"
+      ],
+      "\n"
+    )
   end
 
   defp sensor_status_class(:inactive),
@@ -1140,11 +1218,6 @@ defmodule OctopusWeb.RadarLive do
 
   ## Formatting helpers
 
-  defp fmt_m(nil), do: "—"
-  defp fmt_m(v) when is_number(v), do: :erlang.float_to_binary(v / 1.0, decimals: 2) <> " m"
-
-  # Trim float precision before it hits the DOM so diffs stay small and
-  # the SVG attributes don't get noisy decimals.
   defp fmt_f(v) when is_integer(v), do: Integer.to_string(v)
   defp fmt_f(v) when is_float(v), do: :erlang.float_to_binary(v, decimals: 2)
 end

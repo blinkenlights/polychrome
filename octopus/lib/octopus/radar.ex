@@ -114,6 +114,7 @@ defmodule Octopus.Radar do
   require Logger
 
   alias Octopus.Radar.{Runtime, Sensor}
+  alias Octopus.Radar.Mock
 
   @topic "radar:hlk6001"
   @supported_types [:ld6001a]
@@ -320,6 +321,86 @@ defmodule Octopus.Radar do
   end
 
   @doc """
+  Return the current radar mock mode.
+
+    * `:off`   — real sensors talk to their serial ports (default)
+    * `:exact` — each sensor is backed by a fake device deriving perfect
+      detections from the shared `Octopus.Radar.Mock.World`
+    * `:fuzzy` — like `:exact` but with per-sensor bias, distance-scaled
+      jitter and distance-based detection dropout
+
+  Returns `:off` when the radar layer (and thus the mock world) is not running.
+  """
+  @spec mock_mode() :: :off | :exact | :fuzzy
+  def mock_mode do
+    case Process.whereis(Mock.World) do
+      nil -> :off
+      _pid -> Mock.World.mode()
+    end
+  end
+
+  @doc """
+  Switch the radar mock mode at runtime.
+
+  All currently-enabled sensors are torn down and restarted: in `:off` they
+  reconnect to their real serial ports; in `:exact`/`:fuzzy` each is paired
+  with a freshly-started `Octopus.Radar.Mock.Server` fake device that feeds
+  it synthetic frames. Broadcasts `{:mock_mode_changed, mode}` on `topic/0`.
+  """
+  @spec set_mock_mode(:off | :exact | :fuzzy) :: :ok
+  def set_mock_mode(mode) when mode in [:off, :exact, :fuzzy] do
+    Mock.World.set_mode(mode)
+    restart_all_sensors(mode)
+    Phoenix.PubSub.broadcast(Octopus.PubSub, topic(), {:mock_mode_changed, mode})
+    :ok
+  end
+
+  @doc "Current mock-world population cap. See `Octopus.Radar.Mock.World`."
+  @spec max_people() :: pos_integer()
+  def max_people do
+    case Process.whereis(Mock.World) do
+      nil -> 0
+      _pid -> Mock.World.max_people()
+    end
+  end
+
+  @doc "Set the mock-world population cap (1..10)."
+  @spec set_max_people(integer()) :: :ok
+  def set_max_people(n) when is_integer(n) do
+    case Process.whereis(Mock.World) do
+      nil -> :ok
+      _pid -> Mock.World.set_max_people(n)
+    end
+  end
+
+  @doc "Radius (meters) of the simulated mock world. See `Octopus.Radar.Mock.World`."
+  @spec world_radius_m() :: float()
+  def world_radius_m do
+    case Process.whereis(Mock.World) do
+      nil -> 8.0
+      _pid -> Mock.World.radius_m()
+    end
+  end
+
+  @doc "Current mock-world activity level (0..100). See `Octopus.Radar.Mock.World`."
+  @spec entropy() :: 0..100
+  def entropy do
+    case Process.whereis(Mock.World) do
+      nil -> 50
+      _pid -> Mock.World.entropy()
+    end
+  end
+
+  @doc "Set the mock-world activity level (0..100)."
+  @spec set_entropy(integer()) :: :ok
+  def set_entropy(n) when is_integer(n) do
+    case Process.whereis(Mock.World) do
+      nil -> :ok
+      _pid -> Mock.World.set_entropy(n)
+    end
+  end
+
+  @doc """
   Return the live status of a single sensor.
 
     * `:inactive`     — toggled off at runtime by the operator (process stopped)
@@ -336,12 +417,13 @@ defmodule Octopus.Radar do
   the Registry; the call returns immediately.
   """
   @spec sensor_status(pos_integer()) ::
-          :inactive | :unavailable | :initializing | :working | :stale
+          :inactive | :unavailable | :probing | :initializing | :working | :stale
   def sensor_status(device_id) do
     if enabled?() and Runtime.enabled?(device_id) do
       case Sensor.get_phase(device_id) do
         {:ok, :running} -> :working
         {:ok, :stale} -> :stale
+        {:ok, :probing} -> :probing
         {:ok, :configuring} -> :initializing
         {:ok, :opening} -> :unavailable
         {:error, _} -> :unavailable
@@ -402,56 +484,26 @@ defmodule Octopus.Radar do
         {:error, :not_configured}
 
       {_, config} ->
-        child_spec =
-          Supervisor.child_spec(
-            {Sensor, Keyword.put(config, :device_id, device_id)},
-            id: {Sensor, device_id}
-          )
-
-        case Supervisor.start_child(__MODULE__, child_spec) do
-          {:ok, _} ->
-            :ok
-
-          {:error, {:already_started, _}} ->
-            :ok
-
-          {:error, :already_present} ->
-            case Supervisor.restart_child(__MODULE__, {Sensor, device_id}) do
-              {:ok, _} -> :ok
-              error -> error
-            end
-
-          error ->
-            error
-        end
+        # Start fresh from a clean slate so the right transport (real vs mock)
+        # is used for the current mock mode.
+        stop_sensor_children(device_id)
+        start_sensor_children(device_id, config, mock_mode())
+        :ok
     end
   end
 
   @doc """
   Disable a sensor at runtime, stopping and removing its process.
 
-  This is the inverse of `enable_sensor/1`. The change is not persisted
-  across restarts.
+  This is the inverse of `enable_sensor/1`. In mock mode it also stops the
+  paired fake device. The change is not persisted across restarts.
   """
   @spec disable_sensor(pos_integer()) :: :ok | {:error, term()}
   def disable_sensor(device_id) do
     Runtime.set(device_id, false)
-
-    result =
-      case Supervisor.terminate_child(__MODULE__, {Sensor, device_id}) do
-        :ok ->
-          Supervisor.delete_child(__MODULE__, {Sensor, device_id})
-          :ok
-
-        {:error, :not_found} ->
-          :ok
-
-        error ->
-          error
-      end
-
-    if result == :ok, do: broadcast_status(device_id, :inactive)
-    result
+    stop_sensor_children(device_id)
+    broadcast_status(device_id, :inactive)
+    :ok
   end
 
   @doc """
@@ -488,13 +540,18 @@ defmodule Octopus.Radar do
         {Registry, keys: :unique, name: Octopus.Radar.Registry},
         {Runtime, initial_runtime},
         Octopus.Radar.StatusHistory,
-        Octopus.Radar.Stats
+        Octopus.Radar.Stats,
+        Mock.World
       ] ++ sensor_children()
 
     Supervisor.init(children, strategy: :one_for_one)
   end
 
+  # Build the boot-time sensor children. Mock mode is :off at boot (the mock
+  # world has not started yet), so this yields real-UART sensors.
   defp sensor_children do
+    mode = mock_mode()
+
     sensor_configs()
     |> Enum.flat_map(fn {device_id, config} ->
       port = Keyword.fetch!(config, :port)
@@ -506,26 +563,25 @@ defmodule Octopus.Radar do
           []
 
         true ->
-          if not File.exists?(port) do
+          if mode == :off and not File.exists?(port) do
             Logger.info(
               "[radar #{device_id} #{port}] Configured port not present at boot — starting sensor (will retry until available)"
             )
           end
 
-          child_for_type(device_id, config)
+          device_child_specs(device_id, config, mode)
       end
     end)
   end
 
-  defp child_for_type(device_id, config) do
+  # Child specs for one device under the current mock mode. In `:off` this is
+  # just the `Sensor`; in mock modes it is a `Mock.Server` fake device plus a
+  # mock-backed `Sensor` (the server must come first so it exists when the
+  # sensor attaches).
+  defp device_child_specs(device_id, config, mode) do
     case Keyword.fetch!(config, :type) do
       :ld6001a ->
-        [
-          Supervisor.child_spec(
-            {Sensor, Keyword.put(config, :device_id, device_id)},
-            id: {Sensor, device_id}
-          )
-        ]
+        sensor_child_specs(device_id, config, mode)
 
       type ->
         Logger.warning(
@@ -534,6 +590,75 @@ defmodule Octopus.Radar do
 
         []
     end
+  end
+
+  defp sensor_child_specs(device_id, config, :off) do
+    [sensor_spec(device_id, config, [])]
+  end
+
+  defp sensor_child_specs(device_id, config, mode) when mode in [:exact, :fuzzy] do
+    mock_spec =
+      Supervisor.child_spec(
+        {Mock.Server,
+         [device_id: device_id, config: config, mode: mode, name: mock_via(device_id)]},
+        id: {Mock.Server, device_id}
+      )
+
+    sensor =
+      sensor_spec(device_id, config,
+        transport: Octopus.Radar.Transport.Mock,
+        transport_opts: [server: mock_via(device_id)]
+      )
+
+    [mock_spec, sensor]
+  end
+
+  defp sensor_spec(device_id, config, extra) do
+    opts =
+      config
+      |> Keyword.put(:device_id, device_id)
+      |> Keyword.merge(extra)
+
+    Supervisor.child_spec({Sensor, opts}, id: {Sensor, device_id})
+  end
+
+  defp mock_via(device_id),
+    do: {:via, Registry, {Octopus.Radar.Registry, {:mock, device_id}}}
+
+  # Tear down and restart every runtime-enabled sensor for a mode switch.
+  defp restart_all_sensors(mode) do
+    sensor_configs()
+    |> Enum.each(fn {device_id, _config} -> stop_sensor_children(device_id) end)
+
+    sensor_configs()
+    |> Enum.each(fn {device_id, config} ->
+      if Keyword.fetch!(config, :enabled) and Runtime.enabled?(device_id) do
+        start_sensor_children(device_id, config, mode)
+      end
+    end)
+  end
+
+  defp start_sensor_children(device_id, config, mode) do
+    device_child_specs(device_id, config, mode)
+    |> Enum.each(fn spec ->
+      case Supervisor.start_child(__MODULE__, spec) do
+        {:ok, _} -> :ok
+        {:error, {:already_started, _}} -> :ok
+        {:error, :already_present} -> :ok
+        error -> Logger.warning("[radar #{device_id}] start_child failed: #{inspect(error)}")
+      end
+    end)
+  end
+
+  defp stop_sensor_children(device_id) do
+    for child_id <- [{Sensor, device_id}, {Mock.Server, device_id}] do
+      case Supervisor.terminate_child(__MODULE__, child_id) do
+        :ok -> Supervisor.delete_child(__MODULE__, child_id)
+        _ -> :ok
+      end
+    end
+
+    :ok
   end
 
   defp log_boot_configuration do

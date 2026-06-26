@@ -134,6 +134,56 @@ defmodule Octopus.Radar.Protocol do
   def parse_frame(_), do: {:error, :bad_header}
 
   @doc """
+  Encode a `Frame` into one complete on-wire frame binary.
+
+  Inverse of `parse_frame/1`: lays out the fixed prefix (header, lengths,
+  TLVs), one 32-byte personnel record per track, and the trailing XOR
+  checksum computed over `frame_number_bytes <> track_data` (manual §13).
+
+  `parse_frame(encode_frame(frame))` reproduces the frame's `frame_number`
+  and `tracks` (a track's `:reserved` defaults to 0 and `:received_at` is not
+  part of the wire format). Used by `Octopus.Radar.Mock.Server` to emit
+  synthetic frames through the real parser.
+  """
+  @spec encode_frame(Frame.t()) :: binary()
+  def encode_frame(%Frame{frame_number: frame_number, tracks: tracks}) do
+    track_data = Enum.reduce(tracks, <<>>, fn track, acc -> acc <> encode_track(track) end)
+    track_length = byte_size(track_data)
+    total_length = @prefix_size + track_length
+    frame_number_bytes = <<frame_number::little-32>>
+    checksum = xor_bytes(frame_number_bytes <> track_data)
+
+    @header <>
+      <<total_length::little-32>> <>
+      frame_number_bytes <>
+      <<1::little-32, 0::little-32, 2::little-32, track_length::little-32>> <>
+      track_data <>
+      <<checksum>>
+  end
+
+  defp encode_track(%Track{
+         reserved: reserved,
+         id: id,
+         x: x,
+         y: y,
+         z: z,
+         vx: vx,
+         vy: vy,
+         vz: vz
+       }) do
+    <<
+      (reserved || 0)::little-32,
+      id::little-32,
+      x::little-float-32,
+      y::little-float-32,
+      z::little-float-32,
+      vx::little-float-32,
+      vy::little-float-32,
+      vz::little-float-32
+    >>
+  end
+
+  @doc """
   Stream parser. Append `new_data` to `buffer`, peel off as many complete
   frames as possible, return the parsed frames and the remaining tail.
 

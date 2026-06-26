@@ -126,6 +126,47 @@ defmodule Octopus.Radar.TransformTest do
     end
   end
 
+  describe "global_to_local_track/2 — inverse of transform_track/2" do
+    @poses [
+      [angle_deg: 0, distance_cm: 0, rotation_deg: 0],
+      [angle_deg: 0, distance_cm: 150, rotation_deg: 180],
+      [angle_deg: 90, distance_cm: 150, rotation_deg: 180],
+      [angle_deg: 217, distance_cm: 220, rotation_deg: 7],
+      [angle_deg: 45, distance_cm: 100, rotation_deg: 90]
+    ]
+
+    test "global → local → global is the identity across poses" do
+      global = track(x: 2.3, y: -1.4, z: 1.72, vx: 0.4, vy: -0.25, vz: 0.0)
+
+      for pose <- @poses do
+        local = Transform.global_to_local_track(global, pose)
+        round_trip = Transform.transform_track(local, pose)
+
+        assert_in_delta round_trip.x, global.x, 1.0e-6
+        assert_in_delta round_trip.y, global.y, 1.0e-6
+        assert_in_delta round_trip.vx, global.vx, 1.0e-6
+        assert_in_delta round_trip.vy, global.vy, 1.0e-6
+        assert round_trip.z == global.z
+        assert round_trip.id == global.id
+      end
+    end
+
+    test "different sensors reconstruct the same global coordinate (agreement)" do
+      global = track(x: 1.0, y: 0.5, z: 1.7)
+
+      reconstructed =
+        Enum.map(@poses, fn pose ->
+          local = Transform.global_to_local_track(global, pose)
+          Transform.transform_track(local, pose)
+        end)
+
+      Enum.each(reconstructed, fn r ->
+        assert_in_delta r.x, global.x, 1.0e-6
+        assert_in_delta r.y, global.y, 1.0e-6
+      end)
+    end
+  end
+
   describe "transform_frame/2" do
     test "transforms all tracks in a frame" do
       config = Keyword.merge(@base_config, distance_cm: 100, angle_deg: 0)

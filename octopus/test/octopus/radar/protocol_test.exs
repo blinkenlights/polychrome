@@ -155,4 +155,79 @@ defmodule Octopus.Radar.ProtocolTest do
       assert {[], [], <<0x01, 0x02, 0x03>>} = Protocol.feed(<<>>, <<0x01, 0x02, 0x03>>)
     end
   end
+
+  describe "encode_frame/1 — inverse of parse_frame/1" do
+    defp t(overrides) do
+      struct(
+        %Track{id: 0, reserved: 0, x: 0.0, y: 0.0, z: 0.0, vx: 0.0, vy: 0.0, vz: 0.0},
+        overrides
+      )
+    end
+
+    defp assert_track_equal(actual, expected) do
+      assert actual.id == expected.id
+      assert actual.reserved == (expected.reserved || 0)
+
+      for field <- [:x, :y, :z, :vx, :vy, :vz] do
+        # float32 round-trip is exact for values that originated as float32,
+        # but we encode arbitrary float64s, so allow a tiny epsilon.
+        assert_in_delta Map.fetch!(actual, field), Map.fetch!(expected, field), 1.0e-4
+      end
+    end
+
+    test "re-parses to the canonical reference vector" do
+      {:ok, frame} = Protocol.parse_frame(@reference)
+      assert Protocol.encode_frame(frame) == @reference
+    end
+
+    test "round-trips a single track" do
+      frame = %Frame{
+        frame_number: 12_345,
+        received_at: 0,
+        tracks: [t(id: 7, x: -1.25, y: 2.5, z: 1.7, vx: 0.1, vy: -0.2, vz: 0.05)]
+      }
+
+      assert {:ok, decoded} = Protocol.parse_frame(Protocol.encode_frame(frame))
+      assert decoded.frame_number == 12_345
+      assert [track] = decoded.tracks
+      assert_track_equal(track, hd(frame.tracks))
+    end
+
+    test "round-trips multiple tracks" do
+      tracks = [
+        t(id: 1, x: 1.0, y: 1.0, z: 1.8),
+        t(id: 2, x: -3.0, y: 0.5, z: 1.6, vx: 0.3),
+        t(id: 3, x: 0.0, y: -2.0, z: 1.9, vy: -0.4)
+      ]
+
+      frame = %Frame{frame_number: 1, received_at: 0, tracks: tracks}
+
+      assert {:ok, decoded} = Protocol.parse_frame(Protocol.encode_frame(frame))
+      assert length(decoded.tracks) == 3
+
+      Enum.zip(decoded.tracks, tracks)
+      |> Enum.each(fn {actual, expected} -> assert_track_equal(actual, expected) end)
+    end
+
+    test "round-trips a frame with zero tracks" do
+      frame = %Frame{frame_number: 99, received_at: 0, tracks: []}
+      encoded = Protocol.encode_frame(frame)
+
+      assert {:ok, decoded} = Protocol.parse_frame(encoded)
+      assert decoded.frame_number == 99
+      assert decoded.tracks == []
+    end
+
+    test "produces a checksum the parser accepts" do
+      frame = %Frame{frame_number: 5, received_at: 0, tracks: [t(id: 1, x: 1.0)]}
+      encoded = Protocol.encode_frame(frame)
+
+      # Flipping the last byte (the checksum) must be rejected.
+      body_size = byte_size(encoded) - 1
+      <<body::binary-size(^body_size), last>> = encoded
+      tampered = <<body::binary, Bitwise.bxor(last, 0xFF)>>
+
+      assert {:error, :checksum_mismatch} = Protocol.parse_frame(tampered)
+    end
+  end
 end

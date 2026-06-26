@@ -52,6 +52,33 @@ defmodule Octopus.Radar.Transform do
     %{frame | tracks: Enum.map(frame.tracks, &transform_track(&1, config))}
   end
 
+  @doc """
+  Inverse of `transform_track/2`: map a track from the installation global
+  frame back into the sensor's local frame.
+
+  Given the forward map `g = t + R·l` (with `R` the rotation by
+  `angle_deg + rotation_deg` and `t` the mount offset), the inverse is
+  `l = Rᵀ·(g − t)`. Used by `Octopus.Radar.Mock.Server` to turn a shared
+  world object (expressed globally) into the local coordinates a sensor at
+  this pose would report — so that feeding the result back through
+  `transform_track/2` reproduces the original global position.
+  """
+  @spec global_to_local_track(Track.t(), pose_config()) :: Track.t()
+  def global_to_local_track(%Track{} = track, config) do
+    {tx, ty, cos_r, sin_r} = pose_factors(config)
+
+    dx = track.x - tx
+    dy = track.y - ty
+
+    %Track{
+      track
+      | x: dx * cos_r + dy * sin_r,
+        y: -dx * sin_r + dy * cos_r,
+        vx: track.vx * cos_r + track.vy * sin_r,
+        vy: -track.vx * sin_r + track.vy * cos_r
+    }
+  end
+
   @doc false
   @spec pose_factors(pose_config()) :: {float(), float(), float(), float()}
   def pose_factors(config) do

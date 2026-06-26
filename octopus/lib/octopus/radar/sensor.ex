@@ -36,7 +36,6 @@ defmodule Octopus.Radar.Sensor do
   use GenServer
   require Logger
 
-  alias Circuits.UART
   alias Octopus.Radar
   alias Octopus.Radar.{Ack, Command, Frame, Protocol, Transform}
 
@@ -58,6 +57,7 @@ defmodule Octopus.Radar.Sensor do
       :port_name,
       :baud,
       :config,
+      :transport,
       :uart,
       :phase,
       :pending_commands,
@@ -108,9 +108,10 @@ defmodule Octopus.Radar.Sensor do
     call_sensor(device_id, :reinitialize)
   end
 
-  @doc "Return the sensor's current phase (`:opening`, `:configuring`, `:running`, or `:stale`)."
+  @doc "Return the sensor's current phase (`:opening`, `:probing`, `:configuring`, `:running`, or `:stale`)."
   @spec get_phase(pos_integer()) ::
-          {:ok, :opening | :configuring | :running | :stale} | {:error, :no_sensor | :unavailable}
+          {:ok, :opening | :probing | :configuring | :running | :stale}
+          | {:error, :no_sensor | :unavailable}
   def get_phase(device_id) do
     call_sensor(device_id, :get_phase)
   end
@@ -133,12 +134,15 @@ defmodule Octopus.Radar.Sensor do
   @impl true
   def init(opts) do
     device_id = Keyword.fetch!(opts, :device_id)
+    transport = Keyword.get(opts, :transport, Octopus.Radar.Transport.UART)
+    transport_opts = Keyword.get(opts, :transport_opts, [])
 
     state = %State{
       device_id: device_id,
       port_name: Keyword.fetch!(opts, :port),
       baud: Keyword.fetch!(opts, :baud),
       config: opts,
+      transport: transport,
       phase: :opening,
       pending_commands: [],
       buffer: <<>>,
@@ -146,7 +150,7 @@ defmodule Octopus.Radar.Sensor do
       last_track_count: nil
     }
 
-    {:ok, uart} = UART.start_link()
+    {:ok, uart} = transport.start_link(transport_opts)
     state = %State{state | uart: uart}
 
     stagger_ms = (device_id - 1) * @open_stagger_ms
@@ -330,8 +334,8 @@ defmodule Octopus.Radar.Sensor do
 
   ## Phase: opening
 
-  defp try_open(%State{uart: uart, port_name: port, baud: baud} = state) do
-    case UART.open(uart, port,
+  defp try_open(%State{transport: transport, uart: uart, port_name: port, baud: baud} = state) do
+    case transport.open(uart, port,
            speed: baud,
            data_bits: 8,
            stop_bits: 1,
@@ -374,8 +378,8 @@ defmodule Octopus.Radar.Sensor do
     }
   end
 
-  defp close_port(%State{uart: uart} = state) when is_pid(uart) do
-    _ = UART.close(uart)
+  defp close_port(%State{transport: transport, uart: uart} = state) when not is_nil(uart) do
+    _ = transport.close(uart)
     state = cancel_ack_timer(state)
     state = cancel_watchdog(state)
 
@@ -391,22 +395,23 @@ defmodule Octopus.Radar.Sensor do
 
   defp close_port(state), do: state
 
-  defp graceful_close(%State{uart: uart, phase: phase} = state)
-       when is_pid(uart) and phase in [:probing, :configuring, :running, :stale] do
-    _ = UART.write(uart, @stop_command)
+  defp graceful_close(%State{transport: transport, uart: uart, phase: phase} = state)
+       when not is_nil(uart) and phase in [:probing, :configuring, :running, :stale] do
+    _ = transport.write(uart, @stop_command)
     Process.sleep(100)
     close_port(state)
   end
 
   defp graceful_close(state), do: close_port(state)
 
-  defp escalate_init_failure(%State{uart: uart} = state) when is_pid(uart) do
+  defp escalate_init_failure(%State{transport: transport, uart: uart} = state)
+       when not is_nil(uart) do
     # Best-effort stop/reset (ignored if the device is streaming), then close
     # the port entirely. Closing the OS file descriptor drains both the kernel
     # UART queue and the adapter hardware buffer, giving the device a fresh
     # handshake on reopen — the only software-level way to break a streaming
     # device out of its unresponsive state without a physical power cycle.
-    _ = UART.write(uart, @reset_command)
+    _ = transport.write(uart, @reset_command)
 
     state
     |> cancel_ack_timer()
@@ -509,10 +514,10 @@ defmodule Octopus.Radar.Sensor do
     }
   end
 
-  defp write_command(cmd, %State{uart: uart, phase: phase} = state) do
+  defp write_command(cmd, %State{transport: transport, uart: uart, phase: phase} = state) do
     log(state, if(phase == :configuring, do: :debug, else: :info), "→ #{String.trim_trailing(cmd)}")
 
-    case UART.write(uart, cmd) do
+    case transport.write(uart, cmd) do
       :ok ->
         arm_ack_timer(%State{state | current_command: cmd, ack_buffer: <<>>})
 
@@ -522,10 +527,10 @@ defmodule Octopus.Radar.Sensor do
     end
   end
 
-  defp resend_command(%State{uart: uart, current_command: cmd, phase: phase} = state) do
+  defp resend_command(%State{transport: transport, uart: uart, current_command: cmd, phase: phase} = state) do
     log(state, if(phase == :configuring, do: :debug, else: :info), "→ #{String.trim_trailing(cmd)}")
 
-    case UART.write(uart, cmd) do
+    case transport.write(uart, cmd) do
       :ok ->
         arm_ack_timer(state)
 
