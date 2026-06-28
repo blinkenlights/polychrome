@@ -151,8 +151,8 @@ const textures: any[] = [];
 let radarHeight = 3.5;
 const RADAR_RADIUS_MIN_M = 0;
 const RADAR_RADIUS_MAX_M = 8;
-/** Lattenlänge (m): bei 0° Neigung = horizontaler Abstand der Chips von der Y-Achse, Default 1.5 m */
-let radarRadiusM = 1.5;
+/** Lattenlänge (m): bei 0° Neigung = horizontaler Abstand der Chips von der Y-Achse. Default kommt aus Phoenix (`radar_arm_length_m`). */
+let radarRadiusM = 2.0;
 /** Radar-Chip am Lattenende (ersetzt die schwarze Box): 5×5 cm Grundfläche, 1 cm dick, grün, sitzt an der Unterseite der Latte. */
 const RADAR_CHIP_W_M = 0.05;
 const RADAR_CHIP_D_M = 0.05;
@@ -165,15 +165,15 @@ let platformRadiusM = 2.5;
 const PLATFORM_RADIUS_MIN_M = 0.5;
 const PLATFORM_RADIUS_MAX_M = 3;
 /** Neigung der Latten (und damit der Chips/Kegel): die Latten kippen vom Mast aus nach oben, ein Wert für alle. */
-let radarTiltDeg = 45;
+let radarTiltDeg = 15;
 /** Toggle: semi-transparent blue cone meshes (`radar-cone-viz`) on each sensor */
-let renderRadarCones = true;
+let renderRadarCones = false;
 /**
  * Toggle: Sensor-Blickrichtung (blauer Kegel + gelbe Achse) unabhängig von der
  * Lattenneigung. Wenn true, zeigt der Kegel senkrecht nach unten (−Y), egal wie
  * stark die Dachlatte gekippt ist (Gegenrotation gegen die `tilt`-Gruppe).
  */
-let radarConeStraightDown = false;
+let radarConeStraightDown = true;
 /**
  * Voller Öffnungswinkel des Radar-Spotlights (A-Frame `light.angle`, Grad).
  * Der blaue Kegel (`radar-cone-viz`) nutzt denselben Winkel — Halbwinkel = /2.
@@ -190,8 +190,8 @@ const RADAR_COUNT_MIN = 4;
 const RADAR_COUNT_MAX = 12;
 const RADAR_COUNT_STEP = 2;
 let radarCount = 6;
-/** Zentraler Mast (unter den Radarboxen): Durchmesser per GUI 5–50 cm, Default 15 cm */
-let mastDiameterM = 0.15;
+/** Zentraler Mast (unter den Radarboxen): Durchmesser 5–50 cm, Default kommt aus Phoenix (`mast_diameter_m`). */
+let mastDiameterM = 0.35;
 const MAST_DIAMETER_MIN_M = 0.05;
 const MAST_DIAMETER_MAX_M = 0.5;
 /** Dachbalken-Stern statt Platte: Querschnitt (m) und kleine zentrale Nabe gegen Beam-Crossings. */
@@ -215,12 +215,7 @@ function clampRadarCount(v: number): number {
   return Math.min(RADAR_COUNT_MAX, Math.max(RADAR_COUNT_MIN, snapped));
 }
 
-/** Wenn true: Neigung so, dass die Oberkante der LED-Front (Panel 0) auf dem Kegelmantel liegt; Neigung-Slider gesperrt. */
-let radarTiltAutoAlign = false;
-
 let radarLilGui: GUI | null = null;
-/** lil-gui Controller für „Neigung (°)“ — zum Sperren bei Auto-Ausrichtung */
-let radarNeigungCtrl: { disable: (v: boolean) => void } | null = null;
 
 /**
  * Orbit-Cam: Kamera kreist per Maus um `cameraTarget` (Linksklick = Rotate,
@@ -449,51 +444,6 @@ function radarConeAxisFromTiltYawDeg(tiltDeg: number, yawDeg: number) {
   return ax;
 }
 
-/**
- * Neigung (°), sodass die Oberkante der Front-Plane (Panel azimuth 0) auf dem Kegelmantel liegt
- * (Halbwinkel = RADAR_SPOT_HALF_ANGLE_DEG) und knapp darüber außerhalb des Kegels.
- */
-function computeAutoRadarTiltDeg(): number {
-  const T = getThree();
-  const yTop = poleHeight + PANEL_SIZE;
-  const zFace = PANEL_DEPTH / 2 + 0.1;
-  const Tz = panelDiameter / 2 - zFace;
-  const H = radarHeight;
-  const L = radarRadiusM;
-
-  // `radarRadiusM` = Lattenlänge: Apex S(t) = (L·cos t, H + L·sin t) in (z,y),
-  // Achse a(t) = (sin t, -cos t). Gesucht a(t) || (Top - S(t)); Kreuzprodukt-x = 0
-  // liefert f(t) = sin t·(yTop - H) + cos t·Tz - L = 0.
-  const f = (deg: number) => {
-    const t = (deg * Math.PI) / 180;
-    const c = Math.cos(t);
-    const s = Math.sin(t);
-    return s * (yTop - H) + c * Tz - L;
-  };
-
-  let lo = 5;
-  let hi = RADAR_ARM_TILT_MAX_DEG;
-  let flo = f(lo);
-  const fhi = f(hi);
-  if (flo === 0) return lo;
-  if (fhi === 0) return hi;
-  if (flo * fhi > 0) {
-    // Kein Vorzeichenwechsel im Bereich → den Rand mit kleinerem Restfehler nehmen.
-    return Math.abs(flo) < Math.abs(fhi) ? lo : hi;
-  }
-  for (let i = 0; i < 50; i++) {
-    const mid = (lo + hi) / 2;
-    const fm = f(mid);
-    if (flo * fm <= 0) {
-      hi = mid;
-    } else {
-      lo = mid;
-      flo = fm;
-    }
-  }
-  return T.MathUtils.clamp((lo + hi) / 2, 5, RADAR_ARM_TILT_MAX_DEG);
-}
-
 /** Max. Latten-Neigung; verhindert, dass `armLen`/`chipHeight` bei tilt→90° divergieren. */
 const RADAR_ARM_TILT_MAX_DEG = 85;
 
@@ -532,6 +482,16 @@ type Param = {
     foot_diameter?: number;
     button_diameter?: number;
     radar_count?: number;
+    radar_height?: number;
+    radar_tilt_deg?: number;
+    radar_arm_length_m?: number;
+    mast_diameter_m?: number;
+    platform_radius_m?: number;
+    lean_post_bottom_r?: number;
+    lean_post_top_r?: number;
+    lean_post_height?: number;
+    render_radar_cones?: boolean;
+    radar_cone_straight_down?: boolean;
   };
 };
 
@@ -630,173 +590,22 @@ class Pixels3dAframeHook extends Hook {
 
   setupRadarGui() {
     radarLilGui?.destroy();
-    radarNeigungCtrl = null;
-    if (radarTiltAutoAlign) {
-      radarTiltDeg = computeAutoRadarTiltDeg();
-    }
-    const params = {
-      panelDiameter,
-      radarHeight,
-      radarTiltDeg,
-      radarCount,
-      radarRadiusM,
-      mastDiameterM,
-      renderRadarCones,
-      radarConeStraightDown,
-      radarTiltAutoAlign,
-    };
     const gui = new GUI({ title: "Sim 3D" });
     radarLilGui = gui;
-    const panelsFolder = gui.addFolder("Panels");
-    panelsFolder
-      .add(params, "panelDiameter", PANEL_DIAMETER_MIN, PANEL_DIAMETER_MAX, 0.1)
-      .name("Durchmesser")
-      .onChange((v: number) => {
-        panelDiameter = clampPanelDiameter(v);
-        params.panelDiameter = panelDiameter;
-        this.updatePanels();
-        this.updateRadarVisualization();
-      });
-    panelsFolder.open();
-    const folder = gui.addFolder("Radar");
-    const radarRadiusMinM = Math.max(RADAR_RADIUS_MIN_M, mastDiameterM / 2);
-    folder
-      .add(params, "radarTiltAutoAlign")
-      .name("Neigung: Auto (Mitte = Kante)")
-      .onChange((v: boolean) => {
-        radarTiltAutoAlign = !!v;
-        params.radarTiltAutoAlign = radarTiltAutoAlign;
-        if (radarTiltAutoAlign) {
-          radarTiltDeg = computeAutoRadarTiltDeg();
-          params.radarTiltDeg = radarTiltDeg;
-        }
-        this.updateRadarVisualization();
-        radarNeigungCtrl?.disable(!!radarTiltAutoAlign);
-        const nc = radarNeigungCtrl as { object?: { radarTiltDeg?: number }; updateDisplay?: () => void } | null;
-        if (nc?.object) nc.object.radarTiltDeg = radarTiltDeg;
-        nc?.updateDisplay?.();
-      });
-    folder
-      .add(params, "renderRadarCones")
-      .name("Blaue Licht-Kegel")
-      .onChange((v: boolean) => {
-        renderRadarCones = !!v;
-        params.renderRadarCones = renderRadarCones;
-        this.updateRadarVisualization();
-      });
-    folder
-      .add(params, "radarConeStraightDown")
-      .name("Sensor senkrecht n. unten")
-      .onChange((v: boolean) => {
-        radarConeStraightDown = !!v;
-        params.radarConeStraightDown = radarConeStraightDown;
-        this.updateRadarVisualization();
-      });
-    folder
-      .add(params, "radarCount", RADAR_COUNT_MIN, RADAR_COUNT_MAX, RADAR_COUNT_STEP)
-      .name("Anzahl Sensoren (= 2·Balken)")
-      .onChange((v: number) => {
-        radarCount = clampRadarCount(v);
-        params.radarCount = radarCount;
-        this.updateRadarVisualization();
-      });
-    folder
-      .add(params, "radarRadiusM", radarRadiusMinM, RADAR_RADIUS_MAX_M, 0.01)
-      .name("Latten-Länge (m)")
-      .onChange((v: number) => {
-        radarRadiusM = Math.min(
-          RADAR_RADIUS_MAX_M,
-          Math.max(radarRadiusMinM, Number(v))
-        );
-        params.radarRadiusM = radarRadiusM;
-        this.updateRadarVisualization();
-      });
-    folder
-      .add(params, "radarHeight", 0.5, 12, 0.05)
-      .name("Gruppen-Höhe (m)")
-      .onChange((v: number) => {
-        radarHeight = v;
-        params.radarHeight = radarHeight;
-        this.updateRadarVisualization();
-      });
-    folder
-      .add(params, "mastDiameterM", MAST_DIAMETER_MIN_M, MAST_DIAMETER_MAX_M, 0.005)
-      .name("Mast-Durchmesser (m)")
-      .onChange((v: number) => {
-        mastDiameterM = Math.min(
-          MAST_DIAMETER_MAX_M,
-          Math.max(MAST_DIAMETER_MIN_M, Number(v))
-        );
-        params.mastDiameterM = mastDiameterM;
-        this.applyRadarMastConstraints();
-        this.updateRadarVisualization();
-        this.setupRadarGui();
-      });
-    radarNeigungCtrl = folder
-      .add(params, "radarTiltDeg", 0, 120, 1)
-      .name("Neigung (°)")
-      .onChange((v: number) => {
-        if (radarTiltAutoAlign) return;
-        radarTiltDeg = v;
-        this.updateRadarVisualization();
-      });
-    if (radarTiltAutoAlign) {
-      radarNeigungCtrl.disable(true);
-    }
-    folder.open();
 
-    const platformParams = { platformRadiusM };
-    const platformFolder = gui.addFolder("Plattform");
-    platformFolder
-      .add(platformParams, "platformRadiusM", PLATFORM_RADIUS_MIN_M, PLATFORM_RADIUS_MAX_M, 0.05)
-      .name("Radius (m)")
-      .onChange((v: number) => {
-        platformRadiusM = Math.min(
-          PLATFORM_RADIUS_MAX_M,
-          Math.max(PLATFORM_RADIUS_MIN_M, Number(v))
-        );
-        platformParams.platformRadiusM = platformRadiusM;
-        this.updateCentralCylinder();
-      });
-    platformFolder.open();
+    // Unten links statt Default oben rechts (oben rechts liegt das Phoenix-Panel).
+    const guiEl = gui.domElement as HTMLElement;
+    guiEl.style.position = "fixed";
+    guiEl.style.left = "8px";
+    guiEl.style.right = "auto";
+    guiEl.style.top = "auto";
+    guiEl.style.bottom = "8px";
+    // Per Default zugeklappt.
+    gui.close();
 
-    const leanParams = { leanPostBottomR, leanPostTopR, leanPostHeight };
-    const leanFolder = gui.addFolder("Rückenlehne");
-    leanFolder
-      .add(leanParams, "leanPostBottomR", LEAN_POST_BOTTOM_R_MIN_M, LEAN_POST_BOTTOM_R_MAX_M, 0.01)
-      .name("Radius unten (m)")
-      .onChange((v: number) => {
-        leanPostBottomR = Math.min(
-          LEAN_POST_BOTTOM_R_MAX_M,
-          Math.max(LEAN_POST_BOTTOM_R_MIN_M, Number(v))
-        );
-        leanParams.leanPostBottomR = leanPostBottomR;
-        this.updateLeanPost();
-      });
-    leanFolder
-      .add(leanParams, "leanPostTopR", LEAN_POST_TOP_R_MIN_M, LEAN_POST_TOP_R_MAX_M, 0.01)
-      .name("Radius oben (m)")
-      .onChange((v: number) => {
-        leanPostTopR = Math.min(
-          LEAN_POST_TOP_R_MAX_M,
-          Math.max(LEAN_POST_TOP_R_MIN_M, Number(v))
-        );
-        leanParams.leanPostTopR = leanPostTopR;
-        this.updateLeanPost();
-      });
-    leanFolder
-      .add(leanParams, "leanPostHeight", LEAN_POST_HEIGHT_MIN_M, LEAN_POST_HEIGHT_MAX_M, 0.01)
-      .name("Höhe (m)")
-      .onChange((v: number) => {
-        leanPostHeight = Math.min(
-          LEAN_POST_HEIGHT_MAX_M,
-          Math.max(LEAN_POST_HEIGHT_MIN_M, Number(v))
-        );
-        leanParams.leanPostHeight = leanPostHeight;
-        this.updateLeanPost();
-      });
-    leanFolder.open();
-
+    // Weltgeometrie (Panels/Radar/Plattform/Rückenlehne) wird jetzt ausschließlich
+    // über Phoenix (`Params.Sim3d` → `handleParams`) gesteuert. lil-gui haelt nur
+    // noch den read-only Info-HUD und die client-seitigen Kamera-Controls.
     updateRadarFootprintInfo();
     const infoFolder = gui.addFolder("Info (Boden-Footprint)");
     infoFolder
@@ -914,7 +723,6 @@ class Pixels3dAframeHook extends Hook {
   destroyed() {
     radarLilGui?.destroy();
     radarLilGui = null;
-    radarNeigungCtrl = null;
   }
 
   /**
@@ -1340,25 +1148,82 @@ class Pixels3dAframeHook extends Hook {
       panelDiameter = clampPanelDiameter(param.diameter);
       this.updatePanels();
       this.updateRadarVisualization();
-      this.setupRadarGui();
     }
     if (param.height) {
       poleHeight = param.height;
       this.updatePanels();
-      if (radarTiltAutoAlign) {
-        this.updateRadarVisualization();
-      }
     }
     if (param.foot_diameter) {
-      poleDiameter  = param.foot_diameter;
-      this.updatePanels()
+      poleDiameter = param.foot_diameter;
+      this.updatePanels();
     }
     if (param.button_diameter) {
-      buttonPolesRadius  = param.button_diameter / 2;
-      this.updatePanels()
+      buttonPolesRadius = param.button_diameter / 2;
+      this.updatePanels();
     }
     if (param.radar_count !== undefined && param.radar_count !== null) {
       radarCount = clampRadarCount(Number(param.radar_count));
+      this.updateRadarVisualization();
+    }
+    if (param.radar_height !== undefined && param.radar_height !== null) {
+      radarHeight = Number(param.radar_height);
+      this.updateRadarVisualization();
+    }
+    if (param.radar_tilt_deg !== undefined && param.radar_tilt_deg !== null) {
+      radarTiltDeg = Number(param.radar_tilt_deg);
+      this.updateRadarVisualization();
+    }
+    if (param.radar_arm_length_m !== undefined && param.radar_arm_length_m !== null) {
+      radarRadiusM = Math.min(
+        RADAR_RADIUS_MAX_M,
+        Math.max(RADAR_RADIUS_MIN_M, Number(param.radar_arm_length_m))
+      );
+      this.updateRadarVisualization();
+    }
+    if (param.mast_diameter_m !== undefined && param.mast_diameter_m !== null) {
+      mastDiameterM = Math.min(
+        MAST_DIAMETER_MAX_M,
+        Math.max(MAST_DIAMETER_MIN_M, Number(param.mast_diameter_m))
+      );
+      this.updateRadarVisualization();
+    }
+    if (param.platform_radius_m !== undefined && param.platform_radius_m !== null) {
+      platformRadiusM = Math.min(
+        PLATFORM_RADIUS_MAX_M,
+        Math.max(PLATFORM_RADIUS_MIN_M, Number(param.platform_radius_m))
+      );
+      this.updateCentralCylinder();
+    }
+    if (param.lean_post_bottom_r !== undefined && param.lean_post_bottom_r !== null) {
+      leanPostBottomR = Math.min(
+        LEAN_POST_BOTTOM_R_MAX_M,
+        Math.max(LEAN_POST_BOTTOM_R_MIN_M, Number(param.lean_post_bottom_r))
+      );
+      this.updateLeanPost();
+    }
+    if (param.lean_post_top_r !== undefined && param.lean_post_top_r !== null) {
+      leanPostTopR = Math.min(
+        LEAN_POST_TOP_R_MAX_M,
+        Math.max(LEAN_POST_TOP_R_MIN_M, Number(param.lean_post_top_r))
+      );
+      this.updateLeanPost();
+    }
+    if (param.lean_post_height !== undefined && param.lean_post_height !== null) {
+      leanPostHeight = Math.min(
+        LEAN_POST_HEIGHT_MAX_M,
+        Math.max(LEAN_POST_HEIGHT_MIN_M, Number(param.lean_post_height))
+      );
+      this.updateLeanPost();
+    }
+    if (param.render_radar_cones !== undefined && param.render_radar_cones !== null) {
+      renderRadarCones = !!param.render_radar_cones;
+      this.updateRadarVisualization();
+    }
+    if (
+      param.radar_cone_straight_down !== undefined &&
+      param.radar_cone_straight_down !== null
+    ) {
+      radarConeStraightDown = !!param.radar_cone_straight_down;
       this.updateRadarVisualization();
     }
   }
@@ -1522,12 +1387,7 @@ class Pixels3dAframeHook extends Hook {
   updateRadarVisualization() {
     const sceneEl = document.querySelector('a-scene');
     if (!sceneEl) return;
-    if (radarTiltAutoAlign) {
-      radarTiltDeg = computeAutoRadarTiltDeg();
-    }
-    if (this.applyRadarMastConstraints()) {
-      this.setupRadarGui();
-    }
+    this.applyRadarMastConstraints();
     const oldRings = document.querySelector('#radar-ground-rings');
     const oldRadar = document.querySelector('#radar-sensors');
     const oldMast = document.querySelector('#radar-mast');
@@ -1537,14 +1397,6 @@ class Pixels3dAframeHook extends Hook {
     sceneEl.appendChild(this.createRadarGroundRings());
     sceneEl.appendChild(this.createRadarMast());
     sceneEl.appendChild(this.createRadarSensors());
-    if (radarTiltAutoAlign && radarNeigungCtrl) {
-      const nc = radarNeigungCtrl as {
-        object?: { radarTiltDeg?: number };
-        updateDisplay?: () => void;
-      };
-      if (nc.object) nc.object.radarTiltDeg = radarTiltDeg;
-      nc.updateDisplay?.();
-    }
     updateRadarFootprintInfo();
   }
 }
