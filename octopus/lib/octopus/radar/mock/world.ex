@@ -55,8 +55,15 @@ defmodule Octopus.Radar.Mock.World do
   @wander_ms {2_000, 5_000}
   @z_range {1.6, 1.85}
 
-  # Per-tick spawn/despawn probabilities (10 Hz tick → these are per 100 ms).
-  @spawn_prob 0.05
+  # Population dynamics (10 Hz tick). When below the cap we let up to
+  # `@spawn_burst` people enter per tick so raising the "max people" slider fills
+  # in promptly (a steady stream walking in from the edge); above the cap we let
+  # up to `@despawn_burst` leave per tick (outermost first) so lowering it drains
+  # gradually instead of popping people out. `@despawn_prob` is the ambient
+  # per-tick chance of one person leaving once the cap is reached, to keep the
+  # crowd lightly breathing.
+  @spawn_burst 3
+  @despawn_burst 3
   @despawn_prob 0.01
 
   # --- Central platform ("chill zone") --------------------------------------
@@ -455,13 +462,12 @@ defmodule Octopus.Radar.Mock.World do
 
     cond do
       count > max_people ->
-        {Enum.take_random(people, max_people), next_id}
+        n = min(count - max_people, @despawn_burst)
+        {drop_outermost(people, n), next_id}
 
-      count == 0 ->
-        {[spawn_person(radius, now, next_id, factor, anchors)], next_id + 1}
-
-      count < max_people and :rand.uniform() < @spawn_prob ->
-        {[spawn_person(radius, now, next_id, factor, anchors) | people], next_id + 1}
+      count < max_people ->
+        n = min(max_people - count, @spawn_burst)
+        spawn_many(n, people, radius, now, next_id, factor, anchors)
 
       count > 1 and :rand.uniform() < @despawn_prob ->
         {Enum.drop(Enum.shuffle(people), 1), next_id}
@@ -469,6 +475,30 @@ defmodule Octopus.Radar.Mock.World do
       true ->
         {people, next_id}
     end
+  end
+
+  # Remove the `n` people farthest from the center, so the crowd thins from the
+  # edges inward (people leaving the scene) rather than vanishing at random.
+  defp drop_outermost(people, n) when n > 0 do
+    people
+    |> Enum.sort_by(fn p -> -(p.x * p.x + p.y * p.y) end)
+    |> Enum.drop(n)
+  end
+
+  defp drop_outermost(people, _n), do: people
+
+  defp spawn_many(0, people, _radius, _now, next_id, _factor, _anchors), do: {people, next_id}
+
+  defp spawn_many(n, people, radius, now, next_id, factor, anchors) when n > 0 do
+    spawn_many(
+      n - 1,
+      [spawn_person(radius, now, next_id, factor, anchors) | people],
+      radius,
+      now,
+      next_id + 1,
+      factor,
+      anchors
+    )
   end
 
   # People enter from the world border and then head inward, rather than

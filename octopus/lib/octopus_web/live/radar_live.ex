@@ -30,6 +30,10 @@ defmodule OctopusWeb.RadarLive do
   # How far back the per-id trail extends.
   @trail_ms 4_000
 
+  # Minimum time the "max people applying" spinner stays visible, so the
+  # feedback is noticeable even when the population reaches the cap quickly.
+  @apply_min_ms 700
+
   # Lightness range for the trail's per-segment color. The newest
   # segment (closest to the body circle) is rendered at `@trail_l_near`
   # and brightens linearly toward `@trail_l_far` for the oldest segment.
@@ -144,6 +148,8 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:mock_mode, mock_mode)
      |> assign(:max_people, safe_max_people())
      |> assign(:max_people_limit, Radar.max_people_limit())
+     |> assign(:max_people_applying, false)
+     |> assign(:max_people_applying_until, 0)
      |> assign(:entropy, safe_entropy())
      |> assign(:world_radius, world_radius)
      |> assign(:platform_radius, platform_radius)
@@ -240,8 +246,20 @@ defmodule OctopusWeb.RadarLive do
   def handle_event("set_max_people", %{"max_people" => v}, socket) do
     case Integer.parse(v) do
       {n, _} ->
-        Radar.set_max_people(n)
-        {:noreply, assign(socket, :max_people, n |> max(1) |> min(socket.assigns.max_people_limit))}
+        target = n |> max(1) |> min(socket.assigns.max_people_limit)
+        Radar.set_max_people(target)
+
+        # The world ramps toward the cap over a few ticks; show a loading state
+        # until the live population reaches the target AND a minimum time has
+        # elapsed, so the feedback is visible even for near-instant changes.
+        applying? = length(socket.assigns.world_objects) != target
+        until = System.monotonic_time(:millisecond) + @apply_min_ms
+
+        {:noreply,
+         socket
+         |> assign(:max_people, target)
+         |> assign(:max_people_applying, applying?)
+         |> assign(:max_people_applying_until, until)}
 
       _ ->
         {:noreply, socket}
@@ -354,6 +372,7 @@ defmodule OctopusWeb.RadarLive do
      socket
      |> assign(:mock_mode, mode)
      |> assign(:max_people, safe_max_people())
+     |> assign(:max_people_applying, false)
      |> assign(:entropy, safe_entropy())
      |> assign(:selected_device_id, :all)
      |> assign(:bounds_mode, :static)
@@ -363,7 +382,19 @@ defmodule OctopusWeb.RadarLive do
   end
 
   def handle_info({:mock_world, objects}, socket) do
-    {:noreply, socket |> assign(:world_objects, objects) |> rebuild_view()}
+    # Clear the "applying" loading state once the live population has reached the
+    # requested cap (it lands exactly on the target while ramping up or down) and
+    # the minimum display time has elapsed. The world broadcasts every tick, so
+    # this is re-evaluated ~10x/s and clears promptly once both hold.
+    reached? = length(objects) == socket.assigns.max_people
+    past_floor? = System.monotonic_time(:millisecond) >= socket.assigns.max_people_applying_until
+    applying? = socket.assigns.max_people_applying and not (reached? and past_floor?)
+
+    {:noreply,
+     socket
+     |> assign(:world_objects, objects)
+     |> assign(:max_people_applying, applying?)
+     |> rebuild_view()}
   end
 
   @impl true
@@ -750,22 +781,41 @@ defmodule OctopusWeb.RadarLive do
           <%= if @radar_enabled and @devices != [] do %>
             <div class="flex items-center flex-wrap gap-4 mt-2">
               <%= if @mock_mode != :off do %>
-                <form phx-change="set_max_people" class="flex items-center gap-3 grow min-w-0">
+                <form phx-change="set_max_people" class="flex items-center gap-2">
                   <label for="radar-max-people" class="text-sm whitespace-nowrap">
                     Max people
                   </label>
-                  <input
-                    id="radar-max-people"
-                    name="max_people"
-                    type="range"
-                    min="1"
-                    max={@max_people_limit}
-                    step="1"
-                    value={@max_people}
-                    phx-debounce="200"
-                    class="range range-sm grow"
-                  />
-                  <span class="text-sm font-mono w-12 text-right">{@max_people}/{@max_people_limit}</span>
+                  <div class="join">
+                    <input
+                      id="radar-max-people"
+                      name="max_people"
+                      type="number"
+                      inputmode="numeric"
+                      min="1"
+                      max={@max_people_limit}
+                      value={@max_people}
+                      phx-debounce="400"
+                      class="input input-bordered input-sm join-item w-20 font-mono text-right"
+                    />
+                    <span class="join-item btn btn-sm btn-disabled font-mono pointer-events-none">
+                      / {@max_people_limit}
+                    </span>
+                  </div>
+                  <span
+                    :if={@max_people_applying}
+                    class="flex items-center gap-1 text-xs opacity-70 whitespace-nowrap"
+                    title="Population is ramping to the requested cap"
+                  >
+                    <svg class="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                      <path
+                        class="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                      />
+                    </svg>
+                    {length(@world_objects)}/{@max_people}
+                  </span>
                 </form>
                 <form phx-change="set_entropy" class="flex items-center gap-3 grow min-w-0">
                   <label for="radar-entropy" class="text-sm whitespace-nowrap">
