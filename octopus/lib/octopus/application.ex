@@ -59,8 +59,7 @@ defmodule Octopus.Application do
           nil -> []
           telegram_bot_secret -> [{Octopus.TelegramBot, bot_key: telegram_bot_secret}]
         end ++
-        radar_children() ++
-        radar_mock_children()
+        radar_children()
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
@@ -74,25 +73,6 @@ defmodule Octopus.Application do
     else
       Logger.info("[radar] Feature disabled (enabled: false)")
       []
-    end
-  end
-
-  # Dev-only mock radar feed (see Octopus.Apps.Collective.MockRadar). Started
-  # only when explicitly enabled in config AND no real sensor port is present,
-  # so it can never inject phantom tracks alongside real hardware.
-  defp radar_mock_children do
-    mock_env = Application.get_env(:octopus, :radar_mock, [])
-
-    cond do
-      not Keyword.get(mock_env, :enabled, false) ->
-        []
-
-      Octopus.Radar.any_present?() ->
-        Logger.info("[radar_mock] Real sensor port present — mock radar not started")
-        []
-
-      true ->
-        [{Octopus.Apps.Collective.MockRadar, Keyword.take(mock_env, [:movement])}]
     end
   end
 

@@ -2,7 +2,6 @@ defmodule OctopusWeb.AppConfigComponent do
   use OctopusWeb, :live_component
 
   alias Octopus.AppSupervisor
-  alias Octopus.Apps.Collective.MockRadar
 
   def mount(socket) do
     {:ok, assign(socket, config_info: nil)}
@@ -145,19 +144,10 @@ defmodule OctopusWeb.AppConfigComponent do
   # defined order; a map renders in its enumeration order as before).
   defp visible_entries(config_schema, config) do
     Enum.filter(config_schema, fn {_key, {_name, _type, opts}} ->
-      mock_ok =
-        case Map.get(opts, :mock_only) do
-          true -> MockRadar.running?()
-          _ -> true
-        end
-
-      visible =
-        case Map.get(opts, :visible_when) do
-          nil -> true
-          {dep_key, allowed} -> Map.get(config, dep_key) in allowed
-        end
-
-      mock_ok and visible
+      case Map.get(opts, :visible_when) do
+        nil -> true
+        {dep_key, allowed} -> Map.get(config, dep_key) in allowed
+      end
     end)
   end
 

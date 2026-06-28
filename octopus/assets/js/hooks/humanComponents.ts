@@ -12,7 +12,7 @@
  */
 
 import AFRAME from "aframe";
-import { HumanWorld, Human, HumanSource, colorForId } from "./humanWorld";
+import { HumanWorld, Human, colorForId } from "./humanWorld";
 
 function getThree() {
   return (AFRAME as any).THREE;
@@ -31,57 +31,14 @@ export function registerHumanComponents() {
   registered = true;
 
   AFRAME.registerComponent("humans-root", {
-    schema: {
-      count: { type: "int", default: 5 },
-      speed: { type: "number", default: 1.0 },
-      paused: { type: "boolean", default: false },
-      mode: { type: "string", default: "wander" },
-      panelDiameter: { type: "number", default: 18 },
-      source: { type: "string", default: "mock" },
-    },
+    schema: {},
     init: function (this: any) {
       this.knownIds = new Set<string>();
-      const data = this.data as {
-        count: number;
-        speed: number;
-        paused: boolean;
-        mode: string;
-        panelDiameter: number;
-        source: string;
-      };
-      const world = new HumanWorld({
-        count: data.count,
-        speedMult: data.speed,
-        paused: data.paused,
-        mode: data.mode === "approach" ? "approach" : "wander",
-        panelDiameter: data.panelDiameter,
-        source: parseSource(data.source),
-      });
-      humanWorldSingleton = world;
+      humanWorldSingleton = new HumanWorld();
     },
-    update: function (this: any) {
-      const data = this.data as {
-        count: number;
-        speed: number;
-        paused: boolean;
-        mode: string;
-        panelDiameter: number;
-        source: string;
-      };
-      const w = humanWorldSingleton;
-      if (!w) return;
-      w.setSource(parseSource(data.source));
-      w.setBounds(data.panelDiameter);
-      w.setCount(data.count);
-      w.setSpeed(data.speed);
-      w.setPaused(data.paused);
-      w.setMode(data.mode === "approach" ? "approach" : "wander");
-    },
-    tick: function (this: any, _t: number, dtMs: number) {
+    tick: function (this: any, _t: number, _dtMs: number) {
       const world = humanWorldSingleton;
       if (!world) return;
-      const dt = Math.max(0, Math.min(0.25, dtMs / 1000));
-      world.tick(dt);
       this.syncChildren(world);
     },
     syncChildren: function (this: any, world: HumanWorld) {
@@ -232,10 +189,6 @@ export function registerHumanComponents() {
       this.el.removeObject3D("mesh");
     },
   });
-}
-
-function parseSource(s: string): HumanSource {
-  return s === "radar" ? "radar" : "mock";
 }
 
 function buildMarkerData(human: Human): string {

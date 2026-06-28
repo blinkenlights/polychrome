@@ -321,6 +321,23 @@ defmodule Octopus.Radar do
   end
 
   @doc """
+  Return the mock mode to apply at boot, from `:boot_mock_mode` in config.
+
+  Defaults to `:off` (real serial sensors). When `:exact`/`:fuzzy`, the radar
+  layer starts mock-backed sensors directly at boot (see `config/radar.exs`,
+  selectable per setup / via the `RADAR_MOCK_MODE` env var). Unlike the runtime
+  `mock_mode/0`, this reads config and does not depend on the (not-yet-started)
+  `Mock.World` process, so it is safe to use while building the supervision tree.
+  """
+  @spec boot_mock_mode() :: :off | :exact | :fuzzy
+  def boot_mock_mode do
+    case Application.get_env(:octopus, __MODULE__, []) |> Keyword.get(:boot_mock_mode, :off) do
+      mode when mode in [:off, :exact, :fuzzy] -> mode
+      _ -> :off
+    end
+  end
+
+  @doc """
   Return the current radar mock mode.
 
     * `:off`   — real sensors talk to their serial ports (default)
@@ -541,16 +558,17 @@ defmodule Octopus.Radar do
         {Runtime, initial_runtime},
         Octopus.Radar.StatusHistory,
         Octopus.Radar.Stats,
-        Mock.World
+        {Mock.World, [mode: boot_mock_mode()]}
       ] ++ sensor_children()
 
     Supervisor.init(children, strategy: :one_for_one)
   end
 
-  # Build the boot-time sensor children. Mock mode is :off at boot (the mock
-  # world has not started yet), so this yields real-UART sensors.
+  # Build the boot-time sensor children. The boot mock mode comes from config
+  # (:boot_mock_mode, default :off) rather than from the not-yet-started mock
+  # world process, so in :exact/:fuzzy each sensor is built mock-backed at boot.
   defp sensor_children do
-    mode = mock_mode()
+    mode = boot_mock_mode()
 
     sensor_configs()
     |> Enum.flat_map(fn {device_id, config} ->

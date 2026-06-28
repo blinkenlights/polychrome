@@ -7,7 +7,7 @@ import "aframe-orbit-controls";
 import { GUI } from "three/addons/libs/lil-gui.module.min.js";
 import { Frame, RGB, rgbPixelsFromFrame } from "./shared/frame";
 import { getHumanWorld, registerHumanComponents } from "./humanComponents";
-import type { HumanMode, HumanSource, RadarTrack } from "./humanWorld";
+import type { RadarTrack } from "./humanWorld";
 
 /** A-Frame ships its own THREE (~r173). Never mix the npm `three` package here — duplicate runtime breaks `setObject3D` / materials. */
 function getThree() {
@@ -262,28 +262,6 @@ function applyCameraAttributes() {
       y: cameraInitialPos[1],
       z: cameraInitialPos[2],
     },
-  });
-}
-
-/** Humans-Mock: lokaler Avatar-Controller in `humanComponents.ts`/`humanWorld.ts`. */
-let humanCount = 5;
-let humanSpeed = 1.0;
-let humanPaused = false;
-let humanMode: HumanMode = "wander";
-/** Datenquelle der Humans: lokales Mock-Modell oder echte Radar-Tracks vom Backend. */
-let humanSource: HumanSource = "mock";
-
-/** Sync `humans-root` schema attributes with the module-level state. */
-function applyHumansAttributes() {
-  const root = document.querySelector("#humans-root") as any;
-  if (!root) return;
-  root.setAttribute("humans-root", {
-    count: humanCount,
-    speed: humanSpeed,
-    paused: humanPaused,
-    mode: humanMode,
-    panelDiameter,
-    source: humanSource,
   });
 }
 
@@ -575,8 +553,6 @@ class Pixels3dAframeHook extends Hook {
     this.handleEvent(
       `radar_frame:${id}`,
       (payload: { device_id: number; frame_number: number; tracks: RadarTrack[] }) => {
-        // Im Mock-Modus ignorieren — wir wollen das Modell nicht durcheinanderbringen.
-        if (humanSource !== "radar") return;
         const world = getHumanWorld();
         if (!world) return;
         world.setRadarTracks(Array.isArray(payload?.tracks) ? payload.tracks : []);
@@ -680,7 +656,6 @@ class Pixels3dAframeHook extends Hook {
         params.panelDiameter = panelDiameter;
         this.updatePanels();
         this.updateRadarVisualization();
-        applyHumansAttributes();
       });
     panelsFolder.open();
     const folder = gui.addFolder("Radar");
@@ -850,56 +825,6 @@ class Pixels3dAframeHook extends Hook {
       .listen()
       .disable();
     infoFolder.open();
-
-    const humansParams = {
-      humanSource,
-      humanCount,
-      humanSpeed,
-      humanPaused,
-      humanMode,
-    };
-    const humansFolder = gui.addFolder("Humans");
-    humansFolder
-      .add(humansParams, "humanSource", { Mock: "mock", "Radar (live)": "radar" })
-      .name("Quelle")
-      .onChange((v: string) => {
-        humanSource = v === "radar" ? "radar" : "mock";
-        humansParams.humanSource = humanSource;
-        applyHumansAttributes();
-      });
-    humansFolder
-      .add(humansParams, "humanCount", 0, 10, 1)
-      .name("Anzahl (nur Mock)")
-      .onChange((v: number) => {
-        humanCount = Math.max(0, Math.round(Number(v)));
-        humansParams.humanCount = humanCount;
-        applyHumansAttributes();
-      });
-    humansFolder
-      .add(humansParams, "humanSpeed", 0, 2, 0.05)
-      .name("Geschwindigkeit (nur Mock)")
-      .onChange((v: number) => {
-        humanSpeed = Math.max(0, Number(v));
-        humansParams.humanSpeed = humanSpeed;
-        applyHumansAttributes();
-      });
-    humansFolder
-      .add(humansParams, "humanPaused")
-      .name("Pause (nur Mock)")
-      .onChange((v: boolean) => {
-        humanPaused = !!v;
-        humansParams.humanPaused = humanPaused;
-        applyHumansAttributes();
-      });
-    humansFolder
-      .add(humansParams, "humanMode", ["wander", "approach"])
-      .name("Modus (nur Mock)")
-      .onChange((v: HumanMode) => {
-        humanMode = v === "approach" ? "approach" : "wander";
-        humansParams.humanMode = humanMode;
-        applyHumansAttributes();
-      });
-    humansFolder.open();
 
     const camParams = {
       cameraFov,
@@ -1321,14 +1246,7 @@ class Pixels3dAframeHook extends Hook {
   createHumansRoot() {
     const root = document.createElement('a-entity');
     root.setAttribute('id', 'humans-root');
-    root.setAttribute('humans-root', {
-      count: humanCount,
-      speed: humanSpeed,
-      paused: humanPaused,
-      mode: humanMode,
-      panelDiameter,
-      source: humanSource,
-    } as any);
+    root.setAttribute('humans-root', '');
     return root;
   }
 
@@ -1423,7 +1341,6 @@ class Pixels3dAframeHook extends Hook {
       this.updatePanels();
       this.updateRadarVisualization();
       this.setupRadarGui();
-      applyHumansAttributes();
     }
     if (param.height) {
       poleHeight = param.height;

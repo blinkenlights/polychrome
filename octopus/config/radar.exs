@@ -156,4 +156,14 @@ enabled? =
     val -> val in ~w(true 1 yes)
   end
 
-config :octopus, Octopus.Radar, Keyword.put(setup, :enabled, enabled?)
+# Boot-time mock mode (see Octopus.Radar.boot_mock_mode/0). The "dev" setup has
+# no real hardware, so it defaults to :exact (mock-backed sensors stream a
+# simulated crowd from boot); all other setups default to :off (real serial).
+# Override anywhere with RADAR_MOCK_MODE=off|exact|fuzzy.
+boot_mock_mode =
+  System.get_env("RADAR_MOCK_MODE", if(setup_name == "dev", do: "exact", else: "off"))
+  |> String.to_existing_atom()
+
+config :octopus,
+       Octopus.Radar,
+       Keyword.merge(setup, enabled: enabled?, boot_mock_mode: boot_mock_mode)

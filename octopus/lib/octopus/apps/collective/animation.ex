@@ -18,13 +18,11 @@ defmodule Octopus.Apps.Collective.Animation do
 
     * `:dt` — seconds since last frame
     * `:sensitivity` — user-tunable gain (animation-specific meaning)
-    * `:movement` — current mock movement factor (0.0..1.0)
     * `:display_info` — `Octopus.App.get_display_info/0` result (width/height/...)
   """
   @type ctx :: %{
           dt: float(),
           sensitivity: float(),
-          movement: float(),
           display_info: map()
         }
 
