@@ -20,6 +20,13 @@ defmodule Octopus.Radar.Mock.World do
     * `:standing` — stands still for a few seconds
     * `:wander_slow` — strolls at ~0.2-0.5 m/s toward a random point
     * `:wander_fast` — walks at ~0.8-1.4 m/s toward a random point
+    * `:lounging` — sits on the central platform near a group anchor for a long
+      time at near-zero speed and a lowered (sitting) height
+    * `:circling` — strolls a loop just outside the platform edge
+
+  Which behavior is picked depends on whether the person is currently on the
+  central platform (the "chill zone", radius `platform_radius_m`): on it people
+  mostly lounge in small groups, off it they mostly wander.
 
   The live population is kept within `1..max_people`; people appear and
   disappear over time. `max_people` is operator-adjustable at runtime.
@@ -41,7 +48,7 @@ defmodule Octopus.Radar.Mock.World do
   @edge_margin_m 0.5
 
   # Behavior parameter ranges. The standing/slow/fast mix and dwell times are
-  # modulated at runtime by the activity "entropy" (see `pick_behavior/4`).
+  # modulated at runtime by the activity "entropy" (see `pick_behavior/2`).
   @slow_speed {0.2, 0.5}
   @fast_speed {0.8, 1.4}
   @stand_ms {2_000, 6_000}
@@ -51,6 +58,33 @@ defmodule Octopus.Radar.Mock.World do
   # Per-tick spawn/despawn probabilities (10 Hz tick → these are per 100 ms).
   @spawn_prob 0.05
   @despawn_prob 0.01
+
+  # --- Central platform ("chill zone") --------------------------------------
+  # The central platform is a disk of radius `platform_radius_m` (read live from
+  # `Octopus.Params.Sim3d`). People on it mostly sit (lounge) in small groups
+  # for long periods, sit lower (smaller z), or stroll/circle around it; outside
+  # they wander as before. A small center keepout keeps people off the mast /
+  # lean post in the middle.
+  @default_platform_radius_m 2.5
+  @center_keepout_m 0.5
+
+  # Lounging = sitting on the platform: a long dwell at near-zero speed, reached
+  # by a slow stroll, with a lowered (sitting) height.
+  @lounge_ms {15_000, 60_000}
+  @stroll_speed {0.2, 0.4}
+  @sit_z {0.7, 1.1}
+
+  # Circling = strolling a loop just outside the platform edge.
+  @circle_ms {4_000, 9_000}
+  @circle_speed {0.3, 0.8}
+
+  # Social cluster points on the platform. People gravitate toward an anchor and
+  # sit within `@anchor_jitter_m` of it; an anchor holds at most `@group_cap`
+  # loungers (counted within `@group_radius_m`) so groups stay small.
+  @anchor_count 3
+  @group_cap 4
+  @anchor_jitter_m 0.5
+  @group_radius_m 1.0
 
   ## Client API
 
@@ -75,11 +109,11 @@ defmodule Octopus.Radar.Mock.World do
   def set_mode(mode) when mode in [:off, :exact, :fuzzy],
     do: GenServer.call(__MODULE__, {:set_mode, mode})
 
-  @doc "Current population cap (1..10)."
+  @doc "Current population cap (`1..Octopus.Radar.max_people_limit/0`)."
   @spec max_people() :: pos_integer()
   def max_people, do: GenServer.call(__MODULE__, :max_people)
 
-  @doc "Set the population cap (clamped to 1..10)."
+  @doc "Set the population cap (clamped to `1..Octopus.Radar.max_people_limit/0`)."
   @spec set_max_people(integer()) :: :ok
   def set_max_people(n) when is_integer(n), do: GenServer.call(__MODULE__, {:set_max_people, n})
 
@@ -110,9 +144,15 @@ defmodule Octopus.Radar.Mock.World do
   def init(opts) do
     radius_m = Keyword.get(opts, :radius_m, configured_radius_m())
     max_people = Keyword.get(opts, :max_people, @default_max_people) |> clamp_max_people()
+    platform_radius_m = clamp_platform(configured_platform_radius_m(), radius_m)
+
+    # Track the Sim3D platform radius so the chill zone matches the 3D view.
+    Phoenix.PubSub.subscribe(Octopus.PubSub, Octopus.Params.Sim3d.topic())
 
     state = %{
       radius_m: radius_m,
+      platform_radius_m: platform_radius_m,
+      group_anchors: gen_anchors(platform_radius_m, @anchor_count),
       mode: Keyword.get(opts, :mode, :off),
       max_people: max_people,
       entropy: Keyword.get(opts, :entropy, @default_entropy) |> clamp_entropy(),
@@ -191,6 +231,22 @@ defmodule Octopus.Radar.Mock.World do
     {:noreply, state}
   end
 
+  # The Sim3D platform radius drives the chill zone. Re-derive the anchors on
+  # change so groups stay on the (possibly resized) platform.
+  def handle_info({:platform_radius_m, value}, state) do
+    platform_radius_m = clamp_platform(value, state.radius_m)
+
+    {:noreply,
+     %{
+       state
+       | platform_radius_m: platform_radius_m,
+         group_anchors: gen_anchors(platform_radius_m, @anchor_count)
+     }}
+  end
+
+  # Ignore the other Sim3D parameter broadcasts on the shared topic.
+  def handle_info(_msg, state), do: {:noreply, state}
+
   ## Simulation
 
   defp step(%{mode: :off} = state), do: state
@@ -200,19 +256,33 @@ defmodule Octopus.Radar.Mock.World do
     now = System.monotonic_time(:millisecond)
     dt = @tick_ms / 1000.0
     factor = state.entropy / 100.0
+    anchors = state.group_anchors
+    platform_r = state.platform_radius_m
+    occ = anchor_occupancy(state.people, anchors)
 
     people =
       state.people
-      |> Enum.map(&update_person(&1, now, dt, state.radius_m, factor))
+      |> Enum.map(&update_person(&1, now, dt, state.radius_m, platform_r, factor, anchors, occ))
 
     {people, next_id} =
-      manage_population(people, state.max_people, state.radius_m, now, state.next_id, factor)
+      manage_population(
+        people,
+        state.max_people,
+        state.radius_m,
+        now,
+        state.next_id,
+        factor,
+        anchors
+      )
 
     %{state | people: people, next_id: next_id}
   end
 
-  defp update_person(person, now, dt, radius, factor) do
-    person = if now >= person.until_ms, do: retarget(person, now, radius, factor), else: person
+  defp update_person(person, now, dt, radius, platform_r, factor, anchors, occ) do
+    person =
+      if now >= person.until_ms,
+        do: retarget(person, now, radius, platform_r, factor, anchors, occ),
+        else: person
 
     dx = person.target_x - person.x
     dy = person.target_y - person.y
@@ -249,7 +319,41 @@ defmodule Octopus.Radar.Mock.World do
     end
   end
 
-  defp retarget(person, now, radius, factor) do
+  # Pick the next behavior. Whether the person is currently on the central
+  # platform biases the choice heavily: on the platform they mostly lounge in
+  # small groups (and sometimes circle or leave); off it they sometimes head in
+  # to chill or circle, otherwise they wander as before. `factor` (entropy/100)
+  # shifts the balance from chilling toward roaming.
+  defp retarget(person, now, radius, platform_r, factor, anchors, occ) do
+    on_platform? = :math.sqrt(person.x * person.x + person.y * person.y) <= platform_r
+    roll = :rand.uniform()
+    p_lounge = clampf(0.75 - 0.4 * factor, 0.2, 0.85)
+    p_circle = clampf(0.1 + 0.15 * factor, 0.05, 0.35)
+    p_seek = clampf(0.45 - 0.25 * factor, 0.1, 0.5)
+
+    cond do
+      on_platform? and roll < p_lounge ->
+        lounge(person, now, radius, platform_r, factor, anchors, occ)
+
+      on_platform? and roll < p_lounge + p_circle ->
+        circle(person, now, platform_r, factor)
+
+      not on_platform? and roll < p_seek ->
+        lounge(person, now, radius, platform_r, factor, anchors, occ)
+
+      not on_platform? and roll < p_seek + p_circle ->
+        circle(person, now, platform_r, factor)
+
+      true ->
+        wander_or_stand(person, now, radius, factor)
+    end
+  end
+
+  # The original off-platform behavior: mostly stand, otherwise stroll/walk to a
+  # random point. Resets the height to standing in case the person was sitting.
+  defp wander_or_stand(person, now, radius, factor) do
+    person = %{person | z: rand_in(@z_range)}
+
     case pick_behavior(:rand.uniform(), factor) do
       :standing ->
         # Higher entropy → shorter dwell before moving again.
@@ -270,6 +374,54 @@ defmodule Octopus.Radar.Mock.World do
       :wander_fast ->
         start_wander(person, :wander_fast, @fast_speed, now, radius, factor)
     end
+  end
+
+  # Sit on the platform near a group anchor: a slow stroll to a spot, then a
+  # long dwell at a lowered (sitting) height. If every anchor is full the person
+  # gives up on chilling and roams instead.
+  defp lounge(person, now, radius, platform_r, factor, anchors, occ) do
+    case choose_anchor(anchors, occ) do
+      nil ->
+        wander_or_stand(person, now, radius, factor)
+
+      anchor ->
+        {tx, ty} =
+          anchor
+          |> jitter_around(@anchor_jitter_m)
+          |> keep_out_center()
+          |> clamp_point(platform_r)
+
+        dwell = round(rand_in(@lounge_ms) * (1.0 - 0.5 * factor))
+
+        %{
+          person
+          | behavior: :lounging,
+            speed: rand_in(@stroll_speed),
+            target_x: tx,
+            target_y: ty,
+            z: rand_in(@sit_z),
+            until_ms: now + max(dwell, 2_000)
+        }
+    end
+  end
+
+  # Stroll a loop just outside the platform edge: advance the current bearing by
+  # a step in a random direction and aim there at standing height.
+  defp circle(person, now, platform_r, factor) do
+    orbit_r = platform_r + rand_in({0.3, 1.0})
+    theta = :math.atan2(person.y, person.x)
+    dir = if :rand.uniform() < 0.5, do: 1.0, else: -1.0
+    next = theta + dir * rand_in({0.4, 1.0})
+
+    %{
+      person
+      | behavior: :circling,
+        speed: rand_in(@circle_speed) * (0.6 + 0.4 * factor),
+        target_x: orbit_r * :math.cos(next),
+        target_y: orbit_r * :math.sin(next),
+        z: rand_in(@z_range),
+        until_ms: now + rand_in(@circle_ms)
+    }
   end
 
   # Choose the next behavior given a uniform roll and the activity factor
@@ -298,7 +450,7 @@ defmodule Octopus.Radar.Mock.World do
     }
   end
 
-  defp manage_population(people, max_people, radius, now, next_id, factor) do
+  defp manage_population(people, max_people, radius, now, next_id, factor, anchors) do
     count = length(people)
 
     cond do
@@ -306,10 +458,10 @@ defmodule Octopus.Radar.Mock.World do
         {Enum.take_random(people, max_people), next_id}
 
       count == 0 ->
-        {[spawn_person(radius, now, next_id, factor)], next_id + 1}
+        {[spawn_person(radius, now, next_id, factor, anchors)], next_id + 1}
 
       count < max_people and :rand.uniform() < @spawn_prob ->
-        {[spawn_person(radius, now, next_id, factor) | people], next_id + 1}
+        {[spawn_person(radius, now, next_id, factor, anchors) | people], next_id + 1}
 
       count > 1 and :rand.uniform() < @despawn_prob ->
         {Enum.drop(Enum.shuffle(people), 1), next_id}
@@ -320,14 +472,22 @@ defmodule Octopus.Radar.Mock.World do
   end
 
   # People enter from the world border and then head inward, rather than
-  # popping into existence in the middle of the scene.
-  defp spawn_person(radius, now, id, factor) do
+  # popping into existence in the middle of the scene. About half head straight
+  # for a platform anchor so the chill zone fills up realistically; the rest
+  # roam toward a random point.
+  defp spawn_person(radius, now, id, factor, anchors) do
     usable = radius - @edge_margin_m
     theta = 2.0 * :math.pi() * :rand.uniform()
     x = usable * :math.cos(theta)
     y = usable * :math.sin(theta)
 
-    {tx, ty} = random_point_in_disk(usable * 0.7)
+    {tx, ty} =
+      if anchors != [] and :rand.uniform() < 0.5 do
+        anchors |> Enum.random() |> jitter_around(@anchor_jitter_m) |> keep_out_center()
+      else
+        random_point_in_disk(usable * 0.7)
+      end
+
     behavior = if :rand.uniform() < factor, do: :wander_fast, else: :wander_slow
     speed_range = if behavior == :wander_fast, do: @fast_speed, else: @slow_speed
 
@@ -352,6 +512,80 @@ defmodule Octopus.Radar.Mock.World do
     {r * :math.cos(theta), r * :math.sin(theta)}
   end
 
+  ## Platform / group helpers
+
+  # Social cluster points on the platform ring, between the center keepout and
+  # just inside the platform edge.
+  defp gen_anchors(platform_r, n) do
+    inner = @center_keepout_m + 0.2
+    outer = max(platform_r - 0.3, inner + 0.1)
+
+    for _ <- 1..n do
+      theta = 2.0 * :math.pi() * :rand.uniform()
+      r = inner + :rand.uniform() * (outer - inner)
+      %{x: r * :math.cos(theta), y: r * :math.sin(theta)}
+    end
+  end
+
+  # Count of lounging people within `@group_radius_m` of each anchor, as a list
+  # aligned with the anchor list by index.
+  defp anchor_occupancy(people, anchors) do
+    loungers = Enum.filter(people, &(&1.behavior == :lounging))
+
+    Enum.map(anchors, fn a ->
+      Enum.count(loungers, fn p -> :math.sqrt(sq(p.x - a.x) + sq(p.y - a.y)) <= @group_radius_m end)
+    end)
+  end
+
+  # Pick an anchor to sit at: prefer joining an anchor that already has a small
+  # group (so clusters form), otherwise take a free one. Anchors at the group
+  # cap are skipped; if all are full, return nil (caller roams instead).
+  defp choose_anchor([], _occ), do: nil
+
+  defp choose_anchor(anchors, occ) do
+    indexed = Enum.with_index(anchors)
+    joinable = Enum.filter(indexed, fn {_a, i} -> c = Enum.at(occ, i); c > 0 and c < @group_cap end)
+    empty = Enum.filter(indexed, fn {_a, i} -> Enum.at(occ, i) == 0 end)
+
+    cond do
+      joinable != [] and :rand.uniform() < 0.7 -> joinable |> Enum.random() |> elem(0)
+      joinable ++ empty != [] -> (joinable ++ empty) |> Enum.random() |> elem(0)
+      true -> nil
+    end
+  end
+
+  defp jitter_around(%{x: x, y: y}, max_offset) do
+    {dx, dy} = random_point_in_disk(max_offset)
+    {x + dx, y + dy}
+  end
+
+  # Push a point radially out to the center keepout so nobody sits on the mast /
+  # lean post in the very middle of the platform.
+  defp keep_out_center({x, y}) do
+    dist = :math.sqrt(x * x + y * y)
+
+    if dist > 0.0 and dist < @center_keepout_m do
+      scale = @center_keepout_m / dist
+      {x * scale, y * scale}
+    else
+      {x, y}
+    end
+  end
+
+  # Clamp a point to the platform disk (used for lounge targets).
+  defp clamp_point({x, y}, radius) do
+    dist = :math.sqrt(x * x + y * y)
+
+    if dist > radius and dist > 0.0 do
+      scale = radius / dist
+      {x * scale, y * scale}
+    else
+      {x, y}
+    end
+  end
+
+  defp sq(v), do: v * v
+
   defp rand_in({lo, hi}) when is_integer(lo) and is_integer(hi),
     do: lo + :rand.uniform(hi - lo + 1) - 1
 
@@ -375,7 +609,9 @@ defmodule Octopus.Radar.Mock.World do
   @spec world_topic() :: String.t()
   def world_topic, do: "#{Radar.topic()}:world"
 
-  defp clamp_max_people(n), do: n |> max(1) |> min(10)
+  # The cap scales with the number of configured sensors (each real sensor can
+  # track up to ~10 people); see `Octopus.Radar.max_people_limit/0`.
+  defp clamp_max_people(n), do: n |> max(1) |> min(Radar.max_people_limit())
 
   defp clamp_entropy(n), do: n |> max(0) |> min(100)
 
@@ -386,4 +622,17 @@ defmodule Octopus.Radar.Mock.World do
     |> Keyword.get(:mock, [])
     |> Keyword.get(:radius_m, @default_radius_m)
   end
+
+  defp configured_platform_radius_m do
+    Octopus.Params.Sim3d.platform_radius_m()
+  rescue
+    _ -> @default_platform_radius_m
+  end
+
+  # Keep the platform strictly inside the world disk, and never degenerate.
+  defp clamp_platform(value, radius) when is_number(value) do
+    value |> max(0.1) |> min(radius - @edge_margin_m)
+  end
+
+  defp clamp_platform(_value, radius), do: clamp_platform(@default_platform_radius_m, radius)
 end

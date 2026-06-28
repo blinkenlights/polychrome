@@ -81,7 +81,60 @@ defmodule Octopus.Radar.MockTest do
     end
   end
 
+  describe "platform chill behavior" do
+    test "tracks the Sim3D platform radius and clamps it inside the world" do
+      start_supervised!({World, [radius_m: 10.0, mode: :off]})
+
+      broadcast_platform_radius(1.5)
+      assert %{platform_radius_m: 1.5} = :sys.get_state(World)
+
+      # An absurd radius is clamped strictly inside the world disk.
+      broadcast_platform_radius(999.0)
+      assert :sys.get_state(World).platform_radius_m < 10.0
+    end
+
+    test "ignores unrelated Sim3D parameter broadcasts" do
+      pid = start_supervised!({World, [radius_m: 10.0, mode: :off]})
+
+      Phoenix.PubSub.broadcast(Octopus.PubSub, Octopus.Params.Sim3d.topic(), {:diameter, 12.0})
+      Phoenix.PubSub.broadcast(Octopus.PubSub, Octopus.Params.Sim3d.topic(), {:radar_height, 4.0})
+
+      # Still responsive and alive — the catch-all clause swallowed them.
+      assert is_map(:sys.get_state(World))
+      assert Process.alive?(pid)
+    end
+
+    test "people stay inside the world disk at plausible heights" do
+      radius = 6.0
+      start_supervised!({World, [radius_m: radius, mode: :exact, max_people: 8, entropy: 40]})
+
+      # The simulation is time-driven; let a handful of 100 ms ticks run so the
+      # population spawns and moves before sampling the ground truth.
+      Process.sleep(600)
+      objects = World.objects()
+
+      assert objects != []
+
+      for o <- objects do
+        assert :math.sqrt(o.x * o.x + o.y * o.y) <= radius + 1.0e-6
+        assert o.z >= 0.6 and o.z <= 1.9
+      end
+    end
+  end
+
   ## Helpers
+
+  defp broadcast_platform_radius(value) do
+    Phoenix.PubSub.broadcast(
+      Octopus.PubSub,
+      Octopus.Params.Sim3d.topic(),
+      {:platform_radius_m, value}
+    )
+
+    # Force a synchronous round-trip so the broadcast is processed before we read.
+    _ = :sys.get_state(World)
+    :ok
+  end
 
   defp start_server(pose) do
     config = Keyword.merge([type: :ld6001a], pose)

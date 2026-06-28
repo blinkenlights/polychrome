@@ -80,6 +80,7 @@ defmodule OctopusWeb.RadarLive do
   # ruler start on; velocity arrows start off to keep the overlay uncluttered.
   @default_visuals %{
     world_border: true,
+    platform: true,
     coverage: true,
     placements: true,
     persons: true,
@@ -94,6 +95,7 @@ defmodule OctopusWeb.RadarLive do
   # Legend rows: {feature_key, label}. Rendered in this order.
   @legend_items [
     {:world_border, "World border"},
+    {:platform, "Platform"},
     {:coverage, "Sensor coverage"},
     {:placements, "Sensor placements"},
     {:persons, "Virtual persons"},
@@ -112,11 +114,14 @@ defmodule OctopusWeb.RadarLive do
     devices = Radar.devices() |> Enum.filter(& &1.enabled)
     mock_mode = Radar.mock_mode()
     world_radius = Radar.world_radius_m()
+    platform_radius = Octopus.Params.Sim3d.platform_radius_m()
 
     if connected?(socket) and Radar.enabled?() do
       Radar.subscribe()
       Enum.each(devices, &Radar.subscribe_status(&1.device_id))
       if mock_mode != :off, do: subscribe_world()
+      # Track the Sim3D platform radius so the drawn chill zone matches the mock.
+      Phoenix.PubSub.subscribe(Octopus.PubSub, Octopus.Params.Sim3d.topic())
       Process.send_after(self(), :refresh_sensor_statuses, 2_000)
     end
 
@@ -138,8 +143,10 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:sensitivity, (selected && selected.sensitivity) || 4)
      |> assign(:mock_mode, mock_mode)
      |> assign(:max_people, safe_max_people())
+     |> assign(:max_people_limit, Radar.max_people_limit())
      |> assign(:entropy, safe_entropy())
      |> assign(:world_radius, world_radius)
+     |> assign(:platform_radius, platform_radius)
      |> assign(:world_objects, [])
      |> assign(:visuals, @default_visuals)
      |> assign(:bounds_mode, :static)
@@ -234,7 +241,7 @@ defmodule OctopusWeb.RadarLive do
     case Integer.parse(v) do
       {n, _} ->
         Radar.set_max_people(n)
-        {:noreply, assign(socket, :max_people, n |> max(1) |> min(10))}
+        {:noreply, assign(socket, :max_people, n |> max(1) |> min(socket.assigns.max_people_limit))}
 
       _ ->
         {:noreply, socket}
@@ -370,6 +377,13 @@ defmodule OctopusWeb.RadarLive do
     end
   end
 
+  def handle_info({:platform_radius_m, value}, socket) do
+    {:noreply, socket |> assign(:platform_radius, value) |> rebuild_view()}
+  end
+
+  # The Sim3D topic carries other parameter broadcasts too; ignore them.
+  def handle_info(_msg, socket), do: {:noreply, socket}
+
   ## State updates
 
   defp reset_radar_state(socket) do
@@ -385,6 +399,7 @@ defmodule OctopusWeb.RadarLive do
     |> assign(:ground_truth, [])
     |> assign(:world_sensors, [])
     |> assign(:world_border, nil)
+    |> assign(:platform_ring, nil)
     |> apply_bounds_for_mode()
     |> rebuild_view()
   end
@@ -528,6 +543,7 @@ defmodule OctopusWeb.RadarLive do
     # The world border frames every mode; ground-truth people only exist in
     # mock mode.
     world_border = build_world_border(a.world_radius, min_x, max_x, min_y, max_y)
+    platform_ring = build_platform_ring(a.platform_radius, min_x, max_x, min_y, max_y)
 
     ground_truth =
       if a.mock_mode == :off,
@@ -541,6 +557,7 @@ defmodule OctopusWeb.RadarLive do
     |> assign(:world_sensors, world_sensors)
     |> assign(:ground_truth, ground_truth)
     |> assign(:world_border, world_border)
+    |> assign(:platform_ring, platform_ring)
   end
 
   # One coverage ellipse per sensor in the current selection, centered on the
@@ -603,6 +620,19 @@ defmodule OctopusWeb.RadarLive do
   # The outer edge of the simulated world (a circle of radius `radius_m`
   # centered on the origin), as an ellipse to honor non-uniform axis scales.
   defp build_world_border(radius_m, min_x, max_x, min_y, max_y) do
+    %{
+      cx: scale(0.0, min_x, max_x, @vb),
+      cy: scale(0.0, min_y, max_y, @vb),
+      rx: radius_m / (max_x - min_x) * @vb,
+      ry: radius_m / (max_y - min_y) * @vb
+    }
+  end
+
+  # The central platform ("chill zone", radius `platform_radius_m`), drawn the
+  # same way as the world border so it honors non-uniform axis scales.
+  defp build_platform_ring(nil, _min_x, _max_x, _min_y, _max_y), do: nil
+
+  defp build_platform_ring(radius_m, min_x, max_x, min_y, max_y) do
     %{
       cx: scale(0.0, min_x, max_x, @vb),
       cy: scale(0.0, min_y, max_y, @vb),
@@ -729,13 +759,13 @@ defmodule OctopusWeb.RadarLive do
                     name="max_people"
                     type="range"
                     min="1"
-                    max="10"
+                    max={@max_people_limit}
                     step="1"
                     value={@max_people}
                     phx-debounce="200"
                     class="range range-sm grow"
                   />
-                  <span class="text-sm font-mono w-12 text-right">{@max_people}/10</span>
+                  <span class="text-sm font-mono w-12 text-right">{@max_people}/{@max_people_limit}</span>
                 </form>
                 <form phx-change="set_entropy" class="flex items-center gap-3 grow min-w-0">
                   <label for="radar-entropy" class="text-sm whitespace-nowrap">
@@ -825,6 +855,21 @@ defmodule OctopusWeb.RadarLive do
                           stroke="#9ca3af"
                           stroke-width="2"
                           stroke-dasharray="6,6"
+                        />
+                      <% end %>
+
+                      <%!-- Central platform (chill zone) --%>
+                      <%= if @visuals.platform and @platform_ring do %>
+                        <ellipse
+                          cx={fmt_f(@platform_ring.cx)}
+                          cy={fmt_f(@platform_ring.cy)}
+                          rx={fmt_f(@platform_ring.rx)}
+                          ry={fmt_f(@platform_ring.ry)}
+                          fill="#8B4513"
+                          fill-opacity="0.08"
+                          stroke="#a16207"
+                          stroke-width="2"
+                          stroke-dasharray="3,5"
                         />
                       <% end %>
 

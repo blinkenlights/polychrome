@@ -381,7 +381,7 @@ defmodule Octopus.Radar do
     end
   end
 
-  @doc "Set the mock-world population cap (1..10)."
+  @doc "Set the mock-world population cap (`1..max_people_limit/0`)."
   @spec set_max_people(integer()) :: :ok
   def set_max_people(n) when is_integer(n) do
     case Process.whereis(Mock.World) do
@@ -389,6 +389,18 @@ defmodule Octopus.Radar do
       _pid -> Mock.World.set_max_people(n)
     end
   end
+
+  # Each physical HLK-LD6001A can track up to ~10 people, so the simulated
+  # world is capped at this many per configured sensor.
+  @per_sensor_detection_cap 10
+
+  @doc """
+  Upper bound for the mock-world population cap: `@per_sensor_detection_cap`
+  detectable people per configured sensor (e.g. 6 sensors → 60). Derived from
+  config, so it is valid even before the `Mock.World` process is running.
+  """
+  @spec max_people_limit() :: pos_integer()
+  def max_people_limit, do: max(length(devices()), 1) * @per_sensor_detection_cap
 
   @doc "Radius (meters) of the simulated mock world. See `Octopus.Radar.Mock.World`."
   @spec world_radius_m() :: float()
