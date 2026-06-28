@@ -120,9 +120,55 @@ defmodule Octopus.Radar.MockTest do
         assert o.z >= 0.6 and o.z <= 1.9
       end
     end
+
+    test "off-platform people form standing groups around gathering anchors" do
+      # Low entropy + a decent crowd biases people toward standing in groups
+      # rather than wandering, so at least one gathering anchor should collect a
+      # small cluster within a few seconds.
+      start_supervised!({World, [radius_m: 8.0, mode: :exact, max_people: 16, entropy: 10]})
+
+      assert eventually_clustered?(deadline_ms(15_000)),
+             "expected at least one gathering anchor with >= 2 grouping people"
+
+      # Standing groups never sit inside the chill zone.
+      %{people: people, platform_radius_m: platform_r} = :sys.get_state(World)
+
+      for p <- Enum.filter(people, &(&1.behavior == :grouping)) do
+        assert :math.sqrt(p.x * p.x + p.y * p.y) >= platform_r - 1.0e-6
+      end
+    end
   end
 
   ## Helpers
+
+  # `@group_radius_m` in World — duplicated here since it's a private attribute.
+  @group_radius_m 1.0
+
+  defp eventually_clustered?(deadline) do
+    if clustered?() do
+      true
+    else
+      if System.monotonic_time(:millisecond) >= deadline do
+        false
+      else
+        Process.sleep(250)
+        eventually_clustered?(deadline)
+      end
+    end
+  end
+
+  defp clustered? do
+    %{people: people, gather_anchors: anchors} = :sys.get_state(World)
+    grouping = Enum.filter(people, &(&1.behavior == :grouping))
+
+    Enum.any?(anchors, fn a ->
+      Enum.count(grouping, fn p ->
+        :math.sqrt(sq(p.x - a.x) + sq(p.y - a.y)) <= @group_radius_m
+      end) >= 2
+    end)
+  end
+
+  defp sq(v), do: v * v
 
   defp broadcast_platform_radius(value) do
     Phoenix.PubSub.broadcast(

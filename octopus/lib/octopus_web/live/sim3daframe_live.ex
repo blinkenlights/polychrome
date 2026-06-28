@@ -129,6 +129,10 @@ defmodule OctopusWeb.Sim3dAframeLive do
     {:noreply, push_radar_frame(socket, payload)}
   end
 
+  # Ignore other broadcasts on the subscribed topics (e.g. radar mock
+  # mode/world updates this view doesn't render).
+  def handle_info(_msg, socket), do: {:noreply, socket}
+
   defp push_frame(socket, frame) do
     push_event(socket, "frame:#{@id_prefix}-#{socket.id}", %{frame: frame})
   end
