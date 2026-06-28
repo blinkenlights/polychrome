@@ -36,6 +36,13 @@ export type Human = {
 
 const HUMAN_HEIGHT_M = 1.7;
 
+/** Monotone Zeit in ms; fällt auf Date.now zurück, falls performance fehlt. */
+function nowMs(): number {
+  return typeof performance !== "undefined" && performance.now
+    ? performance.now()
+    : Date.now();
+}
+
 /** Stable, light-touch hash → 0..1, used for deterministic per-id colors. */
 function hashStringToUnit(s: string): number {
   let h = 2166136261;
@@ -52,18 +59,64 @@ export function colorForId(id: string): string {
   return `hsl(${h}, 55%, 55%)`;
 }
 
+/**
+ * Wie lange die letzten Tracks eines Sensors gültig bleiben, wenn keine neuen
+ * Frames mehr kommen (z.B. Sensor deaktiviert). Bei 10 Hz pro Sensor ist 1 s
+ * großzügig; danach fällt der Sensor aus der Union.
+ */
+const DEVICE_TTL_MS = 1000;
+
 export class HumanWorld {
   humans: Map<string, Human> = new Map();
 
   /**
-   * Externe Tracks vom Radar-Backend einspeisen. Ersetzt die `humans`-Map
-   * komplett bei jedem Frame — Tracks die in dieser Liste fehlen sind raus.
-   * Heading wird aus dem Velocity-Vektor abgeleitet (sofern Bewegung > 5 cm/s,
-   * sonst behält ein bekannter Track sein letztes Heading).
+   * Letzter Frame je Sensor (device_id → Tracks + Zeitstempel). Jeder Sensor
+   * sieht nur eine Teilmenge der Personen (Reichweite/Position), daher wird die
+   * gerenderte Welt aus der *Union* aller frischen Sensor-Frames gebildet statt
+   * bei jedem einzelnen Frame komplett überschrieben.
+   */
+  private deviceTracks: Map<number, { tracks: RadarTrack[]; ts: number }> =
+    new Map();
+
+  /**
+   * Frame eines einzelnen Sensors einspeisen. Ersetzt nur die Tracks *dieses*
+   * Sensors und baut danach die gemergte Welt neu auf. So flackern Personen
+   * nicht mehr, wenn mehrere Sensoren (mit unterschiedlichen Teilansichten)
+   * interleaved senden.
+   */
+  setRadarTracksForDevice(deviceId: number, tracks: RadarTrack[]) {
+    this.deviceTracks.set(deviceId, { tracks, ts: nowMs() });
+    this.rebuild();
+  }
+
+  /**
+   * Union aller frischen Sensor-Frames bilden (dedupe per Track-ID; bei
+   * Kollision gewinnt der zuletzt einspeiste Sensor) und anwenden. Sensoren,
+   * deren letzter Frame älter als `DEVICE_TTL_MS` ist, fallen raus.
+   */
+  private rebuild() {
+    const now = nowMs();
+    const merged = new Map<number, RadarTrack>();
+
+    for (const [deviceId, entry] of this.deviceTracks) {
+      if (now - entry.ts > DEVICE_TTL_MS) {
+        this.deviceTracks.delete(deviceId);
+        continue;
+      }
+      for (const t of entry.tracks) merged.set(t.id, t);
+    }
+
+    this.applyTracks([...merged.values()]);
+  }
+
+  /**
+   * Gemergte Track-Liste auf die `humans`-Map anwenden — Tracks die fehlen sind
+   * raus. Heading wird aus dem Velocity-Vektor abgeleitet (sofern Bewegung
+   * > 5 cm/s, sonst behält ein bekannter Track sein letztes Heading).
    *
    * Koordinaten-Mapping: Radar-`x` → Welt-X, Radar-`y` → Welt-Z.
    */
-  setRadarTracks(tracks: RadarTrack[]) {
+  private applyTracks(tracks: RadarTrack[]) {
     const seen = new Set<string>();
 
     for (const t of tracks) {

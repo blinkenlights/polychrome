@@ -515,7 +515,8 @@ class Pixels3dAframeHook extends Hook {
       (payload: { device_id: number; frame_number: number; tracks: RadarTrack[] }) => {
         const world = getHumanWorld();
         if (!world) return;
-        world.setRadarTracks(Array.isArray(payload?.tracks) ? payload.tracks : []);
+        const tracks = Array.isArray(payload?.tracks) ? payload.tracks : [];
+        world.setRadarTracksForDevice(Number(payload?.device_id), tracks);
       }
     );
     const events = ['frame:pixels-*', `frame:${id}`];

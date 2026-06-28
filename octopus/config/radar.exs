@@ -82,14 +82,31 @@ defaults = [
 # All known radar setups, keyed by name. Select one per deployment with
 # RADAR_SETUP=<name>.
 setups = %{
-  # Local Mac development. Three sensors on Tim's quad-serial adapter.
+  # Local Mac development. Six mock sensors arranged in a radial circle.
+  # Runs mock-backed (boot_mock_mode :exact), so the placeholder ports below
+  # are never opened for real hardware. Tune the sensor-circle radius via
+  # :distance_cm, the mounting height via :height_cm, and the simulated
+  # world-disk radius (where mock people roam) via mock: [radius_m: ...].
   "dev" => [
-    sensors: [
-      [port: "/dev/tty.usbmodemBD6545ABCD1"],
-      [port: "/dev/tty.usbmodemBD6545ABCD3"],
-      [port: "/dev/tty.usbmodemBD6545ABCD5"]
+    defaults: defaults,
+    layout: [
+      type: :radial,
+      count: 6,
+      start_angle_deg: 0,
+      distance_cm: 300,
+      rotation_deg: 90,
+      height_cm: 250
     ],
-    defaults: defaults
+    # Mock mode never opens these ports for real, so placeholder paths are fine.
+    ports: [
+      "/dev/tty.mock-radar-1",
+      "/dev/tty.mock-radar-2",
+      "/dev/tty.mock-radar-3",
+      "/dev/tty.mock-radar-4",
+      "/dev/tty.mock-radar-5",
+      "/dev/tty.mock-radar-6"
+    ],
+    mock: [radius_m: 8.0]
   ],
 
   # metaebene.org production server — no radar hardware.
