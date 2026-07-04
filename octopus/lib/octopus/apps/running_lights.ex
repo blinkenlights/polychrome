@@ -17,7 +17,7 @@ defmodule Octopus.Apps.RunningLights do
   @hue_step 360 * @tick_ms / @hue_cycle_duration_ms
 
   defmodule State do
-    defstruct [:position, :direction, :hue, :display_info]
+    defstruct [:position, :direction, :hue, :display_info, :global_speed]
   end
 
   def name(), do: "Running Lights"
@@ -30,14 +30,17 @@ defmodule Octopus.Apps.RunningLights do
 
   def app_init(_args) do
     Octopus.App.configure_display(layout: :gapped_panels)
+    Octopus.Params.Global.subscribe()
 
     display_info = Octopus.App.get_display_info()
+    global_speed = Octopus.Params.Global.speed()
 
     state = %State{
       position: 0.0,
       direction: 1.0,
       hue: 0.0,
-      display_info: display_info
+      display_info: display_info,
+      global_speed: global_speed
     }
 
     render(state)
@@ -54,12 +57,20 @@ defmodule Octopus.Apps.RunningLights do
 
   def handle_event(_, state), do: {:noreply, state}
 
+  def handle_info({:param_updated, :speed, global_speed}, %State{} = state) do
+    {:noreply, %{state | global_speed: global_speed}}
+  end
+
+  def handle_info({:param_updated, _, _}, %State{} = state), do: {:noreply, state}
+
   def handle_info(:tick, %State{} = state) do
     last = max(state.display_info.panel_width - 1, 0)
-    next_position = state.position + state.direction * @position_step
+    position_step = @position_step * state.global_speed
+    hue_step = @hue_step * state.global_speed
+    next_position = state.position + state.direction * position_step
 
     {position, direction} = bounce(next_position, state.direction, last)
-    hue = :math.fmod(state.hue + @hue_step, 360.0)
+    hue = :math.fmod(state.hue + hue_step, 360.0)
 
     state = %State{state | position: position, direction: direction, hue: hue}
     render(state)

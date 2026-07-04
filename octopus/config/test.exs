@@ -28,3 +28,5 @@ config :phoenix, :plug_init_mode, :runtime
 
 # Set environment for broadcaster
 config :octopus, :env, :test
+config :octopus, :firmware_broadcaster_local_port, 0
+config :octopus, :controller_interface_port, 0

@@ -5,6 +5,8 @@ defmodule Octopus.Broadcaster do
   alias Phoenix.Tracker.State
   alias Octopus.Protobuf
   alias Octopus.Protobuf.{FirmwareConfig, RemoteLog, FirmwareInfo, FirmwarePacket, ProximityEvent}
+  alias Octopus.Hardware
+  alias Octopus.Hardware.{InstallationValidator, Untangle}
   alias Octopus.Installation
 
   @default_config %FirmwareConfig{
@@ -52,6 +54,8 @@ defmodule Octopus.Broadcaster do
   end
 
   def init(:ok) do
+    validate_installation!()
+
     network_config = Installation.network_config()
     remote_port = Application.fetch_env!(:octopus, :firmware_broadcaster_remote_port)
     local_port = Application.fetch_env!(:octopus, :firmware_broadcaster_local_port)
@@ -166,7 +170,7 @@ defmodule Octopus.Broadcaster do
   end
 
   defp frame_payload(binary, %State{network_mode: :individual, pixel_count: pixel_count}, panel_index) do
-    if Installation.num_panels() == 1 and panel_index > 1 do
+    if panel_index > 1 do
       Protobuf.pad_for_panel_index(binary, panel_index, pixel_count)
     else
       binary
@@ -198,13 +202,36 @@ defmodule Octopus.Broadcaster do
   end
 
   defp handle_firmware_packet(%ProximityEvent{} = protobuf_event, _from_ip, %State{} = state) do
-    Octopus.Events.Factory.create_proximity_event(protobuf_event)
-    |> Octopus.Events.handle_event()
+    logical_panel =
+      case Untangle.logical_panel_number(Installation, protobuf_event.panel_index) do
+        nil ->
+          if Installation.panels() == [] do
+            protobuf_event.panel_index
+          else
+            Logger.warning(
+              "Ignoring proximity event from unknown firmware panel_index #{protobuf_event.panel_index}"
+            )
+
+            nil
+          end
+
+        logical ->
+          logical
+      end
+
+    if logical_panel do
+      translated = %{protobuf_event | panel_index: logical_panel}
+
+      Octopus.Events.Factory.create_proximity_event(translated)
+      |> Octopus.Events.handle_event()
+    end
 
     state
   end
 
   defp update_firmware_stats(%FirmwareInfo{} = firmware_info, from_ip, %State{} = state) do
+    maybe_warn_catalog_mac_mismatch(firmware_info)
+
     stats = %FirmwareInfoMeta{
       last_seen: :os.system_time(:second),
       from_ip: from_ip,
@@ -242,9 +269,18 @@ defmodule Octopus.Broadcaster do
           [{broadcast_ip, 1}]
 
         :individual ->
-          network_config
-          |> Keyword.get(:panels, [])
-          |> Enum.map(&resolve_panel_target/1)
+          case Installation.panels() do
+            [] ->
+              network_config
+              |> Keyword.get(:panels, [])
+              |> Enum.map(&resolve_panel_target/1)
+
+            panel_ids ->
+              Enum.map(panel_ids, fn panel_id ->
+                panel = Hardware.fetch!(panel_id)
+                {resolve_address(panel.hostname), panel.firmware_panel_index}
+              end)
+          end
       end
 
     {targets, network_mode, should_send_udp}
@@ -287,6 +323,41 @@ defmodule Octopus.Broadcaster do
       [ip, _ | _] ->
         Logger.warning("Multiple broadcast IPs found. Using the first one: #{inspect(ip)}")
         ip
+    end
+  end
+
+  defp validate_installation! do
+    installation_module = Application.fetch_env!(:octopus, :installation)
+
+    opts = [
+      panels: installation_module.panels(),
+      network_config: installation_module.network_config()
+    ]
+
+    if opts[:panels] != [] do
+      InstallationValidator.validate!(opts)
+    end
+  end
+
+  defp maybe_warn_catalog_mac_mismatch(%FirmwareInfo{mac: mac, hostname: hostname}) do
+    catalog_panel =
+      Hardware.registry()
+      |> Map.values()
+      |> Enum.find(fn panel ->
+        panel.mac == mac or panel.hostname == hostname
+      end)
+
+    case catalog_panel do
+      %{mac: ^mac} ->
+        :ok
+
+      %{mac: catalog_mac, id: id} when not is_nil(catalog_mac) ->
+        Logger.warning(
+          "Firmware #{hostname} MAC #{mac} does not match catalog #{inspect(id)} expected #{catalog_mac}"
+        )
+
+      _ ->
+        :ok
     end
   end
 end

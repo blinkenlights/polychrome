@@ -1,20 +1,16 @@
 defmodule Octopus.Installation.Prototype do
   use Octopus.Installation,
     arrangement: :linear,
-    num_panels: 1,
+    panels: [:polychrome_panel_prototype],
+    panel_layout: {8, 8},
     num_buttons: 1,
     num_joysticks: 0,
-    panel_width: 8,
-    panel_height: 8,
     panel_gap: 0,
     global_speed: 0.3,
     location: :auto,
     auto_brightness: false,
     network_config: [
       mode: :individual,
-      panels: [
-        [address: "blinkenleds-prototype.local", panel_index: 1]
-      ],
       send_in_dev: true
     ],
     simulator_layouts: [
