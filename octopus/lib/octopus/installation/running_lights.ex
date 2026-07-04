@@ -13,7 +13,7 @@ defmodule Octopus.Installation.RunningLights do
     network_config: [
       mode: :individual,
       panels: [
-        [address: "blinkenleds-2.local", panel_index: 2]
+        [address: "blinkenleds-prototype.local", panel_index: 1]
       ],
       send_in_dev: true
     ],
