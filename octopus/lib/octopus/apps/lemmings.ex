@@ -16,7 +16,7 @@ defmodule Octopus.Apps.Lemmings do
   def icon(), do: Sprite.load("lemmings/LemmingWalk", 3)
 
   def compatible?() do
-    Octopus.App.get_installation_info().num_panels >= 3
+    Octopus.App.get_installation_info().panel_count >= 3
   end
 
   def app_init(_args) do

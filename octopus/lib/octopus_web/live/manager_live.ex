@@ -369,7 +369,6 @@ defmodule OctopusWeb.ManagerLive do
             :incompatible -> "App is not compatible with this installation"
             :start_failed -> "Failed to start app"
             :app_not_found -> "App not found"
-            _ -> "Could not start app"
           end
 
         {:noreply, put_flash(socket, :error, message)}
