@@ -15,6 +15,10 @@ defmodule Octopus.Apps.Lemmings do
 
   def icon(), do: Sprite.load("lemmings/LemmingWalk", 3)
 
+  def compatible?() do
+    Octopus.App.get_installation_info().num_panels >= 3
+  end
+
   def app_init(_args) do
     # Configure display with gapped panels layout (original VirtualMatrix default)
     Octopus.App.configure_display(layout: :gapped_panels)
