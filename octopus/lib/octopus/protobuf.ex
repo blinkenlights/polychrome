@@ -77,6 +77,45 @@ defmodule Octopus.Protobuf do
 
   def split_and_encode(nil), do: []
 
+  @doc """
+  Prepends zero padding to pixel frame data so firmware with a higher
+  `PANEL_INDEX` reads the correct slice from a single-panel frame.
+  """
+  def pad_for_panel_index(binary, panel_index, _pixel_count) when panel_index <= 1, do: binary
+
+  def pad_for_panel_index(binary, panel_index, pixel_count)
+      when is_binary(binary) and is_integer(panel_index) and panel_index > 0 and
+             is_integer(pixel_count) and pixel_count > 0 do
+    case Packet.decode(binary) do
+      %Packet{content: {:rgb_frame, %RGBFrame{data: data} = frame}} ->
+        pad_and_reencode(:rgb_frame, frame, data, panel_index, pixel_count, 3)
+
+      %Packet{content: {:w_frame, %WFrame{data: data} = frame}} ->
+        pad_and_reencode(:w_frame, frame, data, panel_index, pixel_count, 1)
+
+      %Packet{content: {:rgb_frame_part1, %RGBFrame{data: data} = frame}}
+      when panel_index <= 5 ->
+        pad_and_reencode(:rgb_frame_part1, frame, data, panel_index, pixel_count, 3)
+
+      %Packet{content: {:rgb_frame_part2, %RGBFrame{data: data} = frame}}
+      when panel_index > 5 ->
+        pad_and_reencode(:rgb_frame_part2, frame, data, panel_index - 5, pixel_count, 3)
+
+      _ ->
+        binary
+    end
+  end
+
+  def pad_for_panel_index(binary, _panel_index, _pixel_count), do: binary
+
+  defp pad_and_reencode(tag, frame, data, panel_index, pixel_count, bytes_per_pixel) do
+    padding_size = (panel_index - 1) * pixel_count * bytes_per_pixel
+    padding = :binary.copy(<<0>>, padding_size)
+
+    %Packet{content: {tag, %{frame | data: padding <> data}}}
+    |> Packet.encode()
+  end
+
   def decode_firmware_packet(protobuf) when is_binary(protobuf) do
     {:ok, FirmwarePacket.decode(protobuf)}
   rescue

@@ -1,4 +1,4 @@
-defmodule Octopus.Installation.Prototype do
+defmodule Octopus.Installation.Blinkenled2 do
   use Octopus.Installation,
     arrangement: :linear,
     num_panels: 1,
@@ -13,13 +13,13 @@ defmodule Octopus.Installation.Prototype do
     network_config: [
       mode: :individual,
       panels: [
-        [address: "blinkenleds-prototype.local", panel_index: 1]
+        [address: "blinkenleds-2.local", panel_index: 2]
       ],
       send_in_dev: true
     ],
     simulator_layouts: [
       [
-        name: "Prototype",
+        name: "Blinkenled 2",
         mode: "generic",
         pixel_size: {64, 64}
       ]

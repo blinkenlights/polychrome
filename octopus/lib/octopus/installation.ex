@@ -109,11 +109,11 @@ defmodule Octopus.Installation do
                              ]},
                           required: false
                         ],
-                        panel_ips: [
-                          type:
-                            {:list,
-                             {:or, [:string, {:tuple, [:integer, :integer, :integer, :integer]}]}},
-                          default: []
+                        panels: [
+                          type: {:list, :keyword_list},
+                          default: [],
+                          doc:
+                            "Individual-mode panel targets. Each entry has :address (hostname or IPv4 tuple) and optional :panel_index (firmware PANEL_INDEX, default 1)."
                         ],
                         send_in_dev: [type: :boolean, default: false]
                       ]
