@@ -121,7 +121,7 @@ defmodule Octopus.Installation do
                     auto_brightness: [type: :boolean, default: false],
                     radar_enabled: [
                       type: :boolean,
-                      default: true,
+                      default: false,
                       doc: "When false, the radar layer does not start for this installation."
                     ],
                     network_config: [
