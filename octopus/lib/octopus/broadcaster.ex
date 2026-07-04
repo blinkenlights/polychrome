@@ -158,11 +158,6 @@ defmodule Octopus.Broadcaster do
     if state.should_send_udp do
       for {target_ip, panel_index} <- state.targets do
         payload = frame_payload(binary, state, panel_index)
-
-        Logger.debug(
-          "Sending UDP Packet to #{inspect(target_ip)}:#{state.remote_port} (#{byte_size(payload)} bytes)"
-        )
-
         :gen_udp.send(state.udp, target_ip, state.remote_port, payload)
       end
     else
