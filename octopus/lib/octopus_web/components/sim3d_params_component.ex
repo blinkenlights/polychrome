@@ -49,7 +49,7 @@ defmodule OctopusWeb.Sim3dParamsComponent do
                 opts={opts}
                 value={@config[key]}
               />
-              <span class="text-xs tabular-nums w-12 text-right opacity-70">{@config[key]}</span>
+              <.config_number key={key} type={type} opts={opts} value={@config[key]} />
             <% end %>
           </div>
         </fieldset>
@@ -157,6 +157,7 @@ defmodule OctopusWeb.Sim3dParamsComponent do
       phx-debounce={@debounce}
       value={@value}
       disabled={@disabled}
+      oninput="if(this.nextElementSibling)this.nextElementSibling.value=this.value"
       class="range range-primary range-sm"
       {@rest}
     />
@@ -175,6 +176,7 @@ defmodule OctopusWeb.Sim3dParamsComponent do
       phx-debounce={@debounce}
       value={@value}
       disabled={@disabled}
+      oninput="if(this.nextElementSibling)this.nextElementSibling.value=this.value"
       class="range range-primary range-sm"
       {@rest}
     />
@@ -207,6 +209,28 @@ defmodule OctopusWeb.Sim3dParamsComponent do
       disabled={@disabled}
       class="checkbox checkbox-primary checkbox-sm shrink-0"
       {@rest}
+    />
+    """
+  end
+
+  attr :key, :atom, required: true
+  attr :type, :atom, required: true
+  attr :opts, :map, required: true
+  attr :value, :any, required: true
+  attr :debounce, :integer, default: 100
+
+  defp config_number(assigns) do
+    ~H"""
+    <input
+      type="number"
+      name={@key}
+      step={@opts |> Map.get(:step, if(@type == :int, do: 1, else: 0.01))}
+      min={@opts[:min]}
+      max={@opts[:max]}
+      phx-debounce={@debounce}
+      value={@value}
+      oninput="if(this.previousElementSibling)this.previousElementSibling.value=this.value"
+      class="input input-bordered input-xs w-16 text-right tabular-nums shrink-0"
     />
     """
   end
