@@ -106,7 +106,7 @@ setups = %{
       "/dev/tty.mock-radar-5",
       "/dev/tty.mock-radar-6"
     ],
-    mock: [radius_m: 8.0]
+    mock: [radius_m: 9.0]
   ],
 
   # metaebene.org production server — no radar hardware.

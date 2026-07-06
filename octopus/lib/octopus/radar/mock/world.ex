@@ -45,7 +45,7 @@ defmodule Octopus.Radar.Mock.World do
   alias Octopus.Radar
 
   @tick_ms 100
-  @default_radius_m 8.0
+  @default_radius_m 9.0
   @default_max_people 5
   @default_entropy 50
   @edge_margin_m 0.5
