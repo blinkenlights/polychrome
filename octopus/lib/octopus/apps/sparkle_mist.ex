@@ -2,18 +2,21 @@ defmodule Octopus.Apps.SparkleMist do
   use Octopus.App, category: :interactive
   use Octopus.Params, prefix: :sparkle_mist
 
-  require Logger
-
   alias Octopus.Installation
-  alias Octopus.Events.Event.Proximity, as: ProximityEvent
-  alias Octopus.Events.Event.Input, as: InputEvent
   alias Octopus.Canvas
   alias Octopus.Particles
-  alias Octopus.PerlinNoise
+  alias Octopus.Radar
+  alias Octopus.Radar.Frame
+  alias Octopus.Radar.PanelMapping
 
   @fps 60
   @frame_time_ms trunc(1000 / @fps)
-  # @panel_wait_duration_ms 2000  # Currently unused, kept for potential future use with clear_panels_with_particles
+
+  @ring_inner_m 4.0
+  @ring_outer_m 10.0
+  @track_stale_ms 500
+  @trickle_cooldown_ms 400
+  @burst_count 25
 
   def name, do: "✨ Sparkle Mist ✨"
 
@@ -21,21 +24,20 @@ defmodule Octopus.Apps.SparkleMist do
     defstruct [
       :particles,
       :last_update,
-      :noise,
-      :last_proximity,
+      :parsed_expr,
       :color_a,
       :color_b,
-
-      # Config parameters
       :foreground_hue,
       :background_hue_a,
       :background_hue_b,
       :background_sat_a,
       :background_sat_b,
       :expr,
-      :parsed_expr,
       :particle_speed_scale,
-      :background_speed
+      :background_speed,
+      :track_registry,
+      :track_motion,
+      :last_trickle
     ]
   end
 
@@ -67,12 +69,7 @@ defmodule Octopus.Apps.SparkleMist do
   end
 
   def handle_config(config, %State{} = state) do
-    hue_a = config.background_hue_a
-    hue_b = config.background_hue_b
-    sat_a = config.background_sat_a
-    sat_b = config.background_sat_b
-    color_a = Chameleon.HSV.new(hue_a, sat_a, 100)
-    color_b = Chameleon.HSV.new(hue_b, sat_b, 100)
+    {color_a, color_b} = background_colors(config)
 
     parsed_expr =
       case Octopus.Apps.PixelFun.Program.parse(config.expr) do
@@ -80,22 +77,21 @@ defmodule Octopus.Apps.SparkleMist do
         {:error, _} -> state.parsed_expr
       end
 
-    new_state = %State{
-      state
-      | foreground_hue: config.foreground_hue,
-        background_hue_a: config.background_hue_a,
-        background_hue_b: config.background_hue_b,
-        background_sat_a: config.background_sat_a,
-        background_sat_b: config.background_sat_b,
-        expr: config.expr,
-        parsed_expr: parsed_expr,
-        particle_speed_scale: config.particle_speed_scale,
-        background_speed: config.background_speed,
-        color_a: color_a,
-        color_b: color_b
-    }
-
-    {:noreply, new_state}
+    {:noreply,
+     %State{
+       state
+       | foreground_hue: config.foreground_hue,
+         background_hue_a: config.background_hue_a,
+         background_hue_b: config.background_hue_b,
+         background_sat_a: config.background_sat_a,
+         background_sat_b: config.background_sat_b,
+         expr: config.expr,
+         parsed_expr: parsed_expr,
+         particle_speed_scale: config.particle_speed_scale,
+         background_speed: config.background_speed,
+         color_a: color_a,
+         color_b: color_b
+     }}
   end
 
   def app_init(config) do
@@ -106,64 +102,24 @@ defmodule Octopus.Apps.SparkleMist do
       merge_rgbw: true
     )
 
-    subscribe_to_button_events()
+    Radar.subscribe()
+
+    panel_count = Installation.num_panels()
+    panel_width = Installation.panel_width()
+    panel_height = Installation.panel_height()
 
     particles =
-      for panel <- 1..Installation.num_panels(),
-          sensor <- 0..1,
-          into: %{} do
-        colors =
-          Stream.repeatedly(fn ->
-            # base_hue = 360 * (panel - 1) / Installation.num_panels()
-            base_hue = config.foreground_hue
-            hue = base_hue
-            # hue = if sensor == 0, do: base_hue, else: rem(trunc(base_hue + 180), 360)
-            saturation = :rand.uniform() * 25 + 60
-            lightness = :rand.uniform() * 25 + 45
-            hsl = Chameleon.HSL.new(trunc(hue), trunc(saturation), trunc(lightness))
-            %Chameleon.RGB{r: r, g: g, b: b} = Chameleon.convert(hsl, Chameleon.RGB)
-            {r, g, b}
-          end)
-
-        # Sensor 0 (left): up-right (290°), Sensor 1 (right): up-left (250°)
-        angle = if sensor == 0, do: 29 * :math.pi() / 18, else: 25 * :math.pi() / 18
-
-        particle_system =
-          Particles.new(
-            Installation.panel_width(),
-            Installation.panel_height(),
-            angle,
-            0.05,
-            colors,
-            1.0,
-            2.5,
-            25,
-            50
-          )
-
-        {{panel, sensor}, particle_system}
+      for panel <- 0..(panel_count - 1), into: %{} do
+        {panel, new_panel_particles(config.foreground_hue, panel_width, panel_height)}
       end
 
-    last_proximity =
-      for panel <- 1..Installation.num_panels(), into: %{} do
-        {panel, nil}
-      end
-
-    # Use config values for color scheme
-    hue_a = config.background_hue_a
-    hue_b = config.background_hue_b
-    sat_a = config.background_sat_a
-    sat_b = config.background_sat_b
-    color_a = Chameleon.HSV.new(hue_a, sat_a, 100)
-    color_b = Chameleon.HSV.new(hue_b, sat_b, 100)
-
+    {color_a, color_b} = background_colors(config)
     {:ok, parsed_expr} = Octopus.Apps.PixelFun.Program.parse(config.expr)
 
     state = %State{
       particles: particles,
-      noise: PerlinNoise.new(),
       last_update: System.os_time(:millisecond),
-      last_proximity: last_proximity,
+      parsed_expr: parsed_expr,
       color_a: color_a,
       color_b: color_b,
       foreground_hue: config.foreground_hue,
@@ -172,102 +128,72 @@ defmodule Octopus.Apps.SparkleMist do
       background_sat_a: config.background_sat_a,
       background_sat_b: config.background_sat_b,
       expr: config.expr,
-      parsed_expr: parsed_expr,
       particle_speed_scale: config.particle_speed_scale,
-      background_speed: config.background_speed
+      background_speed: config.background_speed,
+      track_registry: %{},
+      track_motion: %{},
+      last_trickle: %{}
     }
 
     :timer.send_interval(@frame_time_ms, :tick)
-
     {:ok, state}
   end
 
-  def handle_event(%ProximityEvent{} = event, %State{} = state) do
-    Logger.debug("Proximity Event #{event.panel} #{event.sensor} #{event.distance_combined}")
+  def handle_info({:radar_frame, _device_id, %Frame{tracks: tracks}}, state) do
+    now = :erlang.monotonic_time(:millisecond)
 
-    now = System.os_time(:millisecond)
-    last_proximity = Map.put(state.last_proximity, event.panel, now)
+    track_registry =
+      Enum.reduce(tracks, state.track_registry, fn track, acc ->
+        person = %{
+          id: track.id,
+          x: track.x,
+          y: track.y,
+          vx: track.vx,
+          vy: track.vy
+        }
 
-    probability = 1.0
-
-    state =
-      case :rand.uniform() do
-        random when random < probability ->
-          key = {event.panel, event.sensor}
-          particle_system = Map.get(state.particles, key)
-
-          # Spawn from corners based on sensor: 1 = left, 0 = right
-          spawn_x = if event.sensor == 1, do: 0, else: Installation.panel_width() - 1
-          spawn_y = Installation.panel_height() - 1
-
-          {min_speed, max_speed} =
-            scale_distance_to_speed(event.distance_combined, state.particle_speed_scale)
-
-          updated_system =
-            Particles.spawn(particle_system, {spawn_x, spawn_y}, 25,
-              min_speed: min_speed,
-              max_speed: max_speed
-            )
-
-          particles = Map.put(state.particles, key, updated_system)
-
-          %{state | particles: particles, last_proximity: last_proximity}
-
-        _ ->
-          %{state | last_proximity: last_proximity}
-      end
-
-    {:noreply, state}
-  end
-
-  def handle_event(
-        %InputEvent{type: :button, action: :press, button: button_number},
-        %State{} = state
-      ) do
-    Logger.debug("Input Event Button #{button_number}")
-
-    colors =
-      Stream.repeatedly(fn ->
-        # base_hue = 360 * (panel - 1) / Installation.num_panels()
-        base_hue = 55
-        hue = base_hue
-        # hue = if sensor == 0, do: base_hue, else: rem(trunc(base_hue + 180), 360)
-        saturation = :rand.uniform() * 25 + 60
-        lightness = :rand.uniform() * 25 + 45
-        hsl = Chameleon.HSL.new(trunc(hue), trunc(saturation), trunc(lightness))
-        %Chameleon.RGB{r: r, g: g, b: b} = Chameleon.convert(hsl, Chameleon.RGB)
-        {r, g, b}
+        Map.put(acc, track.id, {person, now})
       end)
 
-    # Use sensor 0 (left) particle system for button presses
-    key = {button_number, 0}
-
-    updated_system =
-      Map.get(state.particles, key)
-      |> Particles.spawn({Installation.panel_width() / 2, Installation.panel_height()}, 25,
-        angle: :math.pi() * 1.5,
-        min_speed: 25,
-        max_speed: 50,
-        colors: colors
-      )
-
-    particles = Map.put(state.particles, key, updated_system)
-
-    {:noreply, %{state | particles: particles}}
-  end
-
-  def handle_event(_event, state) do
-    Logger.debug("Sparkle Mist: Unhandled event")
-    {:noreply, state}
+    {:noreply, %{state | track_registry: track_registry}}
   end
 
   def handle_info(:tick, %State{} = state) do
+    radar_now = :erlang.monotonic_time(:millisecond)
+    now = System.os_time(:millisecond)
+
+    people = active_people(state.track_registry, radar_now, @track_stale_ms)
+
+    panel_count = Installation.num_panels()
+    panel_width = Installation.panel_width()
+    panel_height = Installation.panel_height()
+
+    {particles, track_motion, last_trickle} =
+      apply_radar_sparkles(
+        people,
+        state.particles,
+        state.track_motion,
+        state.last_trickle,
+        now,
+        panel_count,
+        panel_width,
+        panel_height,
+        state.particle_speed_scale
+      )
+
+    state = %{
+      state
+      | particles: particles,
+        track_motion: track_motion,
+        last_trickle: last_trickle
+    }
+
     state = update_particles(state)
 
     empty_canvas =
       Canvas.new(
-        Installation.num_panels() * Installation.panel_width(),
-        Installation.panel_height()
+        panel_count * panel_width,
+        panel_height
       )
 
     empty_canvas
@@ -277,15 +203,162 @@ defmodule Octopus.Apps.SparkleMist do
       state.color_b,
       state.parsed_expr
     )
-    # |> clear_panels_with_particles(state)
     |> render_particles(state)
     |> update_display(:rgb)
 
-    # PerlinNoise.draw(state.noise, empty_canvas, state.last_update / 1000.0)
-    # # |> dimm_panels(0.5)
-    # |> update_display(:grayscale)
-
     {:noreply, state}
+  end
+
+  def handle_info(_msg, state), do: {:noreply, state}
+
+  defp active_people(track_registry, now, stale_ms) do
+    track_registry
+    |> Enum.filter(fn {_id, {_person, seen_at}} -> now - seen_at <= stale_ms end)
+    |> Enum.map(fn {_id, {person, _seen_at}} -> person end)
+  end
+
+  defp apply_radar_sparkles(
+         people,
+         particles,
+         track_motion,
+         last_trickle,
+         now,
+         panel_count,
+         panel_width,
+         panel_height,
+         speed_scale
+       ) do
+    active_ids = MapSet.new(Enum.map(people, & &1.id))
+    spawn_y = panel_height - 1
+
+    {particles, track_motion, last_trickle} =
+      Enum.reduce(people, {particles, track_motion, last_trickle}, fn person,
+                                                                        {particles_acc, motion_acc,
+                                                                         trickle_acc} ->
+        in_ring = PanelMapping.in_ring?(person, @ring_inner_m, @ring_outer_m)
+        prev = Map.get(motion_acc, person.id, %{in_ring: in_ring})
+        ring_entry = in_ring and not prev.in_ring
+        motion_acc = Map.put(motion_acc, person.id, %{in_ring: in_ring})
+
+        if in_ring do
+          {panel_index, spawn_x, radius} =
+            PanelMapping.track_to_splash_pos(person, panel_count, panel_width)
+
+          {min_speed, max_speed} = scale_radius_to_speed(radius, speed_scale)
+          angle = sparkle_angle(spawn_x, panel_width)
+          trickle_key = {person.id, panel_index}
+
+          cond do
+            ring_entry ->
+              system = Map.fetch!(particles_acc, panel_index)
+
+              updated =
+                Particles.spawn(system, {spawn_x, spawn_y}, @burst_count,
+                  min_speed: min_speed,
+                  max_speed: max_speed,
+                  angle: angle
+                )
+
+              particles_acc = Map.put(particles_acc, panel_index, updated)
+              trickle_acc = Map.put(trickle_acc, trickle_key, now)
+              {particles_acc, motion_acc, trickle_acc}
+
+            recently_trickled?(trickle_acc, trickle_key, now) ->
+              {particles_acc, motion_acc, trickle_acc}
+
+            true ->
+              speed = PanelMapping.track_speed(person)
+              trickle_count = trickle_count(radius, speed)
+              system = Map.fetch!(particles_acc, panel_index)
+
+              updated =
+                Particles.spawn(system, {spawn_x, spawn_y}, trickle_count,
+                  min_speed: min_speed,
+                  max_speed: max_speed,
+                  angle: angle
+                )
+
+              particles_acc = Map.put(particles_acc, panel_index, updated)
+              trickle_acc = Map.put(trickle_acc, trickle_key, now)
+              {particles_acc, motion_acc, trickle_acc}
+          end
+        else
+          {particles_acc, motion_acc, trickle_acc}
+        end
+      end)
+
+    track_motion = Map.take(track_motion, MapSet.to_list(active_ids))
+
+    last_trickle =
+      Map.filter(last_trickle, fn {{track_id, _panel}, _ts} ->
+        MapSet.member?(active_ids, track_id)
+      end)
+
+    {particles, track_motion, last_trickle}
+  end
+
+  defp recently_trickled?(last_trickle, key, now) do
+    case Map.get(last_trickle, key) do
+      nil -> false
+      ts -> now - ts < @trickle_cooldown_ms
+    end
+  end
+
+  defp trickle_count(radius, speed) do
+    radial =
+      (radius - @ring_inner_m) / (@ring_outer_m - @ring_inner_m)
+      |> clamp01()
+
+    trunc(5 + radial * 2 + speed * 1.5) |> max(5) |> min(8)
+  end
+
+  defp scale_radius_to_speed(radius_m, scale) do
+    clamped = radius_m |> max(@ring_inner_m) |> min(@ring_outer_m)
+
+    normalized =
+      (clamped - @ring_inner_m) / (@ring_outer_m - @ring_inner_m)
+      |> clamp01()
+
+    min_speed = (15 + normalized * 20) * scale
+    max_speed = (30 + normalized * 15) * scale
+    {min_speed, max_speed}
+  end
+
+  defp sparkle_angle(spawn_x, panel_width) do
+    if spawn_x < div(panel_width, 2) do
+      25 * :math.pi() / 18
+    else
+      29 * :math.pi() / 18
+    end
+  end
+
+  defp new_panel_particles(foreground_hue, panel_width, panel_height) do
+    colors =
+      Stream.repeatedly(fn ->
+        saturation = :rand.uniform() * 25 + 60
+        lightness = :rand.uniform() * 25 + 45
+        hsl = Chameleon.HSL.new(trunc(foreground_hue), trunc(saturation), trunc(lightness))
+        %Chameleon.RGB{r: r, g: g, b: b} = Chameleon.convert(hsl, Chameleon.RGB)
+        {r, g, b}
+      end)
+
+    Particles.new(
+      panel_width,
+      panel_height,
+      27 * :math.pi() / 18,
+      0.05,
+      colors,
+      1.0,
+      2.5,
+      25,
+      50
+    )
+  end
+
+  defp background_colors(config) do
+    color_a = Chameleon.HSV.new(config.background_hue_a, config.background_sat_a, 100)
+    color_b = Chameleon.HSV.new(config.background_hue_b, config.background_sat_b, 100)
+    {color_a, color_b}
   end
 
   defp update_particles(%State{} = state) do
@@ -303,43 +376,15 @@ defmodule Octopus.Apps.SparkleMist do
   end
 
   defp render_particles(canvas, %State{} = state) do
-    Enum.reduce(state.particles, canvas, fn {{panel, _sensor}, particle_system}, acc_canvas ->
-      dx = (panel - 1) * Installation.panel_width()
-      dy = 0
+    panel_width = Installation.panel_width()
 
-      Particles.draw(particle_system, acc_canvas, {dx, dy})
+    Enum.reduce(state.particles, canvas, fn {panel, particle_system}, acc_canvas ->
+      dx = panel * panel_width
+      Particles.draw(particle_system, acc_canvas, {dx, 0})
     end)
   end
 
-  # defp clear_panels_with_particles(canvas, %State{} = state) do
-  #   now = System.os_time(:millisecond)
-
-  #   panels_to_clean =
-  #     state.last_proximity
-  #     |> Enum.filter(fn {_panel, last_proximity} ->
-  #       last_proximity != nil and now - last_proximity <= @panel_wait_duration_ms
-  #     end)
-  #     |> Enum.map(fn {panel, _} -> panel end)
-
-  #   Enum.reduce(panels_to_clean, canvas, fn panel, acc_canvas ->
-  #     start_x = (panel - 1) * Installation.panel_width()
-  #     end_x = start_x + Installation.panel_width() - 1
-  #     end_y = Installation.panel_height() - 1
-
-  #     Canvas.clear_rect(acc_canvas, {start_x, 0}, {end_x, end_y})
-  #   end)
-  # end
-
-  defp scale_distance_to_speed(distance, scale) do
-    clamped_distance = max(400, min(2000, distance))
-
-    normalized = (2000 - clamped_distance) / (2000 - 400)
-
-    min_speed = (15 + normalized * (35 - 15)) * scale
-    max_speed = (30 + normalized * (45 - 30)) * scale
-
-    {min_speed, max_speed}
-  end
+  defp clamp01(value), do: value |> max(0.0) |> min(1.0)
 
   defp draw_pixel_fun(canvas, t, color_a, color_b, parsed_expr) do
     for y <- 0..(canvas.height - 1),
@@ -363,23 +408,19 @@ defmodule Octopus.Apps.SparkleMist do
   defp lerp_colors(%Chameleon.HSV{} = a, %Chameleon.HSV{} = b, value) do
     cond do
       value > 0 ->
-        # Use color A, adjust brightness based on value, hardcode saturation at 70%
         hsv = %Chameleon.HSV{a | s: 70, v: trunc(100 * value) |> max(0) |> min(100)}
         fast_hsv_to_rgb(hsv.h, hsv.s, hsv.v)
 
       value < 0 ->
-        # Use color B, adjust brightness based on absolute value, hardcode saturation at 70%
         hsv = %Chameleon.HSV{b | s: 70, v: trunc(100 * -value) |> max(0) |> min(100)}
         fast_hsv_to_rgb(hsv.h, hsv.s, hsv.v)
 
       true ->
-        # Black
         {0, 0, 0}
     end
   end
 
   defp fast_hsv_to_rgb(h, s, v) do
-    # Normalize inputs
     h_norm = rem(h, 360) / 60.0
     s_norm = s / 100.0
     v_norm = v / 100.0
@@ -398,7 +439,6 @@ defmodule Octopus.Apps.SparkleMist do
         true -> {c, 0, x}
       end
 
-    # Convert to 0-255 range and ensure integer values
     {
       trunc((r + m) * 255) |> max(0) |> min(255),
       trunc((g + m) * 255) |> max(0) |> min(255),
@@ -406,17 +446,13 @@ defmodule Octopus.Apps.SparkleMist do
     }
   end
 
-  # Profile target function for tprof
   def profile_draw_pixel_fun() do
-    # Create test canvas and parameters similar to real usage
-    # Typical total canvas size
     canvas = Canvas.new(8 * 12, 8)
     {:ok, parsed_expr} = Octopus.Apps.PixelFun.Program.parse("sin(x/26-t+y/40)")
     color_a = Chameleon.HSV.new(200, 100, 100)
     color_b = Chameleon.HSV.new(170, 85, 100)
     t = 1.0
 
-    # Run multiple iterations to get meaningful data
     for _i <- 1..10 do
       draw_pixel_fun(canvas, t, color_a, color_b, parsed_expr)
     end
