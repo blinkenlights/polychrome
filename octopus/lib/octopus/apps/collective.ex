@@ -18,13 +18,15 @@ defmodule Octopus.Apps.Collective do
   alias Octopus.Canvas
   alias Octopus.Radar
   alias Octopus.Radar.Frame
+  alias Octopus.Radar.Mock.World
   alias Octopus.Apps.Collective.Animations
 
   @fps 30
   @frame_ms trunc(1000 / @fps)
+  @track_stale_ms 1500
 
   # Maps the :select config value to the animation module.
-  @animations %{storm: Animations.Storm, breath: Animations.Breath}
+  @animations %{storm: Animations.Storm, breath: Animations.Breath, dots: Animations.Dots}
 
   def name, do: "Collective"
 
@@ -33,12 +35,14 @@ defmodule Octopus.Apps.Collective do
     display_info = Octopus.App.get_display_info()
 
     Radar.subscribe()
+    Phoenix.PubSub.subscribe(Octopus.PubSub, World.world_topic())
 
     sensitivity = Map.get(config, :sensitivity, 1.0)
     breath_liveliness = Map.get(config, :breath_liveliness, 0.25)
     breath_palette = Map.get(config, :breath_palette, :ocean)
     breath_hue_shift = Map.get(config, :breath_hue_shift, 0.0)
     breath_layout = Map.get(config, :breath_layout, :wave)
+    dots_smoothing = Map.get(config, :dots_smoothing, 0.35)
     background = Map.get(config, :background, :deep_dark)
     animation = Map.get(config, :animation, :storm)
     anim_mod = Map.fetch!(@animations, animation)
@@ -48,12 +52,13 @@ defmodule Octopus.Apps.Collective do
     state = %{
       canvas: Canvas.new(display_info.width, display_info.height),
       display_info: display_info,
-      people: [],
+      track_registry: %{},
       sensitivity: sensitivity,
       breath_liveliness: breath_liveliness,
       breath_palette: breath_palette,
       breath_hue_shift: breath_hue_shift,
       breath_layout: breath_layout,
+      dots_smoothing: dots_smoothing,
       background: background,
       animation: animation,
       anim_mod: anim_mod,
@@ -64,14 +69,37 @@ defmodule Octopus.Apps.Collective do
     {:ok, state}
   end
 
-  def handle_info({:radar_frame, _device_id, %Frame{} = frame}, state) do
-    people = Enum.map(frame.tracks, &track_to_person/1)
-    {:noreply, %{state | people: people}}
+  def handle_info({:mock_world, objects}, state) when is_list(objects) and objects != [] do
+    now = :erlang.monotonic_time(:millisecond)
+
+    track_registry =
+      Map.new(objects, fn obj ->
+        person = object_to_person(obj)
+        {person.id, {person, now}}
+      end)
+
+    {:noreply, %{state | track_registry: track_registry}}
+  end
+
+  def handle_info({:mock_world, _objects}, state), do: {:noreply, state}
+
+  def handle_info({:radar_frame, device_id, %Frame{tracks: tracks}}, state) do
+    now = :erlang.monotonic_time(:millisecond)
+    track_registry = Map.get(state, :track_registry, %{})
+
+    track_registry =
+      Enum.reduce(tracks, track_registry, fn track, acc ->
+        person = track_to_person(track, device_id)
+        Map.put(acc, person.id, {person, now})
+      end)
+
+    {:noreply, %{state | track_registry: track_registry}}
   end
 
   def handle_info(:tick, state) do
-    now = now_ms()
+    now = :erlang.monotonic_time(:millisecond)
     dt = max(now - state.last_update, 0) / 1000.0
+    people = fetch_people(state, now)
 
     ctx = %{
       dt: dt,
@@ -80,19 +108,21 @@ defmodule Octopus.Apps.Collective do
       breath_palette: state.breath_palette,
       breath_hue_shift: state.breath_hue_shift,
       breath_layout: state.breath_layout,
+      dots_smoothing: state.dots_smoothing,
       background: state.background,
       display_info: state.display_info
     }
 
     {canvas, anim_state} =
-      state.canvas
-      |> Canvas.clear()
-      |> state.anim_mod.render(state.people, ctx, state.anim_state)
+      Canvas.new(state.display_info.width, state.display_info.height)
+      |> state.anim_mod.render(people, ctx, state.anim_state)
 
     Octopus.App.update_display(canvas)
 
     {:noreply, %{state | canvas: canvas, anim_state: anim_state, last_update: now}}
   end
+
+  def handle_info(_msg, state), do: {:noreply, state}
 
   # Keyword list => the config UI renders in this exact order (Animation first).
   # `visible_when: {:animation, [...]}` hides storm-only options unless Tempest
@@ -101,7 +131,7 @@ defmodule Octopus.Apps.Collective do
     [
       animation:
         {"Animation", :select,
-         %{default: 0, options: [{"Tempest", :storm}, {"Crowd Breath", :breath}]}},
+         %{default: 0, options: [{"Tempest", :storm}, {"Crowd Breath", :breath}, {"Crowd Dots", :dots}]}},
       background:
         {"Background", :select,
          %{
@@ -149,6 +179,15 @@ defmodule Octopus.Apps.Collective do
            default: 0.0,
            step: 0.02,
            visible_when: {:animation, [:breath]}
+         }},
+      dots_smoothing:
+        {"Dot Smoothing", :float,
+         %{
+           min: 0.0,
+           max: 1.0,
+           default: 0.35,
+           step: 0.05,
+           visible_when: {:animation, [:dots]}
          }}
     ]
   end
@@ -185,6 +224,16 @@ defmodule Octopus.Apps.Collective do
     """
   end
 
+  def config_info(%{animation: :dots}) do
+    """
+    Crowd Dots — one pixel per person.
+    X = angular position on the ring (dot wanders horizontally with the person).
+    Y = distance from centre: at the ring / near the panels → bottom row;
+    at the centre → top row. Stable colour per track id.
+    • Dot Smoothing — low = snappy, high = soft follow (EMA on position).
+    """
+  end
+
   def config_info(_config), do: nil
 
   def get_config(state) do
@@ -195,7 +244,8 @@ defmodule Octopus.Apps.Collective do
       breath_liveliness: state.breath_liveliness,
       breath_palette: state.breath_palette,
       breath_hue_shift: state.breath_hue_shift,
-      breath_layout: state.breath_layout
+      breath_layout: state.breath_layout,
+      dots_smoothing: state.dots_smoothing
     }
   end
 
@@ -221,12 +271,58 @@ defmodule Octopus.Apps.Collective do
          breath_liveliness: Map.get(config, :breath_liveliness, state.breath_liveliness),
          breath_palette: Map.get(config, :breath_palette, state.breath_palette),
          breath_hue_shift: Map.get(config, :breath_hue_shift, state.breath_hue_shift),
-         breath_layout: Map.get(config, :breath_layout, state.breath_layout)
+         breath_layout: Map.get(config, :breath_layout, state.breath_layout),
+         dots_smoothing: Map.get(config, :dots_smoothing, state.dots_smoothing)
      }}
   end
 
-  defp track_to_person(track) do
-    %{id: track.id, x: track.x, y: track.y, vx: track.vx, vy: track.vy}
+  defp fetch_people(state, now) do
+    registry_people =
+      active_people(Map.get(state, :track_registry, %{}), now, @track_stale_ms)
+
+    case registry_people do
+      [] -> mock_world_people()
+      people -> people
+    end
+  end
+
+  defp mock_world_people do
+    case Process.whereis(World) do
+      nil ->
+        []
+
+      _pid ->
+        World.objects()
+        |> Enum.map(&object_to_person/1)
+    end
+  rescue
+    _ -> []
+  end
+
+  defp object_to_person(obj) do
+    %{
+      id: Map.get(obj, :id),
+      x: Map.get(obj, :x, 0.0),
+      y: Map.get(obj, :y, 0.0),
+      vx: Map.get(obj, :vx, 0.0),
+      vy: Map.get(obj, :vy, 0.0)
+    }
+  end
+
+  defp track_to_person(track, device_id) do
+    %{
+      id: device_id * 10_000 + track.id,
+      x: track.x,
+      y: track.y,
+      vx: track.vx,
+      vy: track.vy
+    }
+  end
+
+  defp active_people(track_registry, now, stale_ms) do
+    track_registry
+    |> Enum.filter(fn {_id, {_person, seen_at}} -> now - seen_at <= stale_ms end)
+    |> Enum.map(fn {_id, {person, _seen_at}} -> person end)
   end
 
   defp now_ms, do: :erlang.monotonic_time(:millisecond)
