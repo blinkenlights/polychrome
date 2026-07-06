@@ -1,6 +1,9 @@
 /**
- * HumanWorld — holds the people rendered in the 3D sim, fed exclusively by the
- * radar backend (`Octopus.Radar` PubSub `radar_frame` events).
+ * HumanWorld — people rendered in the 3D sim.
+ *
+ * Detected humans come from radar `radar_frame` events. In mock mode, ground-truth
+ * people outside sensor range are shown as transparent white "ghosts" via
+ * `mock_world` snapshots from `Octopus.Radar.Mock.World`.
  *
  * Coordinate system: A-Frame world frame. Y is up, ground is the X/Z plane.
  * Radar `x` → world X, radar `y` → world Z. Pose correction (mount offset +
@@ -23,6 +26,16 @@ export type RadarTrack = {
   vz: number;
 };
 
+/** Ground-truth person from the mock world feed. */
+export type MockWorldObject = {
+  id: number;
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+};
+
 export type Human = {
   id: string;
   pos: { x: number; z: number };
@@ -30,6 +43,7 @@ export type Human = {
   heading: number;
   height: number;
   color: string;
+  ghost: boolean;
   /** velocity vector in m/s (world frame, X/Z) */
   vel: { x: number; z: number };
 };
@@ -68,6 +82,7 @@ const DEVICE_TTL_MS = 1000;
 
 export class HumanWorld {
   humans: Map<string, Human> = new Map();
+  ghosts: Map<string, Human> = new Map();
 
   /**
    * Letzter Frame je Sensor (device_id → Tracks + Zeitstempel). Jeder Sensor
@@ -78,6 +93,9 @@ export class HumanWorld {
   private deviceTracks: Map<number, { tracks: RadarTrack[]; ts: number }> =
     new Map();
 
+  private mockObjects: MockWorldObject[] = [];
+  private detectedTrackIds: Set<number> = new Set();
+
   /**
    * Frame eines einzelnen Sensors einspeisen. Ersetzt nur die Tracks *dieses*
    * Sensors und baut danach die gemergte Welt neu auf. So flackern Personen
@@ -87,6 +105,18 @@ export class HumanWorld {
   setRadarTracksForDevice(deviceId: number, tracks: RadarTrack[]) {
     this.deviceTracks.set(deviceId, { tracks, ts: nowMs() });
     this.rebuild();
+  }
+
+  /** Replace the mock-world ground-truth snapshot (mock mode only). */
+  setMockWorldObjects(objects: MockWorldObject[]) {
+    this.mockObjects = objects;
+    this.rebuildGhosts();
+  }
+
+  /** Clear all ghost markers (mock mode turned off). */
+  clearMockWorld() {
+    this.mockObjects = [];
+    this.ghosts.clear();
   }
 
   /**
@@ -106,7 +136,9 @@ export class HumanWorld {
       for (const t of entry.tracks) merged.set(t.id, t);
     }
 
+    this.detectedTrackIds = new Set(merged.keys());
     this.applyTracks([...merged.values()]);
+    this.rebuildGhosts();
   }
 
   /**
@@ -142,6 +174,7 @@ export class HumanWorld {
           heading,
           height: HUMAN_HEIGHT_M,
           color: colorForId(id),
+          ghost: false,
           vel: { x: t.vx, z: t.vy },
         });
       }
@@ -149,6 +182,48 @@ export class HumanWorld {
 
     for (const id of this.humans.keys()) {
       if (!seen.has(id)) this.humans.delete(id);
+    }
+  }
+
+  /** Ghosts = mock-world people not currently seen by any radar sensor. */
+  private rebuildGhosts() {
+    const seen = new Set<string>();
+
+    for (const o of this.mockObjects) {
+      if (this.detectedTrackIds.has(o.id)) continue;
+
+      const id = `ghost_${o.id}`;
+      seen.add(id);
+      const moving = Math.hypot(o.vx, o.vy) > 0.05;
+      const existing = this.ghosts.get(id);
+      const heading = moving ? Math.atan2(o.vx, o.vy) : existing?.heading ?? 0;
+      const height = o.z > 0 ? o.z : HUMAN_HEIGHT_M;
+
+      if (existing) {
+        existing.prevPos.x = existing.pos.x;
+        existing.prevPos.z = existing.pos.z;
+        existing.pos.x = o.x;
+        existing.pos.z = o.y;
+        existing.heading = heading;
+        existing.height = height;
+        existing.vel.x = o.vx;
+        existing.vel.z = o.vy;
+      } else {
+        this.ghosts.set(id, {
+          id,
+          pos: { x: o.x, z: o.y },
+          prevPos: { x: o.x, z: o.y },
+          heading,
+          height,
+          color: "#ffffff",
+          ghost: true,
+          vel: { x: o.vx, z: o.vy },
+        });
+      }
+    }
+
+    for (const id of this.ghosts.keys()) {
+      if (!seen.has(id)) this.ghosts.delete(id);
     }
   }
 }

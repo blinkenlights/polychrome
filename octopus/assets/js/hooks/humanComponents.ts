@@ -43,20 +43,22 @@ export function registerHumanComponents() {
     },
     syncChildren: function (this: any, world: HumanWorld) {
       const seen = new Set<string>();
-      for (const human of world.humans.values()) {
+
+      for (const human of [...world.ghosts.values(), ...world.humans.values()]) {
         seen.add(human.id);
+        const buildData = human.ghost ? buildGhostMarkerData : buildMarkerData;
         let child = this.el.querySelector(`[data-human-id="${human.id}"]`) as any;
         if (!child) {
           child = document.createElement("a-entity");
           child.setAttribute("data-human-id", human.id);
-          child.setAttribute("human-marker", buildMarkerData(human));
+          child.setAttribute("human-marker", buildData(human));
           this.el.appendChild(child);
           this.knownIds.add(human.id);
         } else {
-          child.setAttribute("human-marker", buildMarkerData(human));
+          child.setAttribute("human-marker", buildData(human));
         }
       }
-      // Remove markers whose human despawned.
+
       for (const id of this.knownIds) {
         if (!seen.has(id)) {
           const stale = this.el.querySelector(`[data-human-id="${id}"]`);
@@ -78,6 +80,7 @@ export function registerHumanComponents() {
       heading: { type: "number", default: 0 },
       height: { type: "number", default: 1.7 },
       color: { type: "string", default: "#ccc" },
+      ghost: { type: "boolean", default: false },
     },
     init: function (this: {
       el: any;
@@ -88,26 +91,31 @@ export function registerHumanComponents() {
       const T = getThree();
       const height = this.data.height;
       const bodyHeight = Math.max(0.4, height - 0.25);
+      const ghost = this.data.ghost;
 
       const group = new T.Group();
 
       const bodyMat = new T.MeshStandardMaterial({
-        color: new T.Color(this.data.color),
+        color: new T.Color(ghost ? "#ffffff" : this.data.color),
         roughness: 0.75,
         metalness: 0.0,
+        transparent: ghost,
+        opacity: ghost ? 0.25 : 1.0,
       });
       const body = new T.Mesh(
         new T.CylinderGeometry(0.18, 0.18, bodyHeight, 16),
         bodyMat
       );
       body.position.y = bodyHeight / 2;
-      body.castShadow = true;
+      body.castShadow = !ghost;
       group.add(body);
 
       const headMat = new T.MeshStandardMaterial({
-        color: new T.Color(this.data.color).offsetHSL(0, 0, 0.1),
+        color: new T.Color(ghost ? "#ffffff" : this.data.color).offsetHSL(0, 0, 0.1),
         roughness: 0.55,
         metalness: 0.0,
+        transparent: ghost,
+        opacity: ghost ? 0.3 : 1.0,
       });
       const head = new T.Mesh(
         new T.SphereGeometry(0.12, 20, 14),
@@ -115,27 +123,26 @@ export function registerHumanComponents() {
       );
       // Head sits just above the cylinder body.
       head.position.y = bodyHeight + 0.12;
-      head.castShadow = true;
+      head.castShadow = !ghost;
       group.add(head);
 
-      // Heading arrow — flat triangle laid on the ground, tip pointing in +Z.
-      // Marker yaw lives on `group.rotation.y`, so the arrow co-rotates with
-      // the body. Kept low to the floor so it reads as a footprint indicator
-      // rather than a body-mounted protrusion.
-      const arrowShape = new T.Shape();
-      arrowShape.moveTo(-0.12, -0.14);
-      arrowShape.lineTo(0.12, -0.14);
-      arrowShape.lineTo(0, 0.2);
-      arrowShape.lineTo(-0.12, -0.14);
-      const arrowMat = new T.MeshStandardMaterial({
-        color: new T.Color(this.data.color).offsetHSL(0, 0.1, -0.2),
-        roughness: 0.6,
-        side: T.DoubleSide,
-      });
-      const arrow = new T.Mesh(new T.ShapeGeometry(arrowShape), arrowMat);
-      arrow.rotation.x = Math.PI / 2;
-      arrow.position.set(0, 0.02, 0.05);
-      group.add(arrow);
+      if (!ghost) {
+        // Heading arrow — flat triangle laid on the ground, tip pointing in +Z.
+        const arrowShape = new T.Shape();
+        arrowShape.moveTo(-0.12, -0.14);
+        arrowShape.lineTo(0.12, -0.14);
+        arrowShape.lineTo(0, 0.2);
+        arrowShape.lineTo(-0.12, -0.14);
+        const arrowMat = new T.MeshStandardMaterial({
+          color: new T.Color(this.data.color).offsetHSL(0, 0.1, -0.2),
+          roughness: 0.6,
+          side: T.DoubleSide,
+        });
+        const arrow = new T.Mesh(new T.ShapeGeometry(arrowShape), arrowMat);
+        arrow.rotation.x = Math.PI / 2;
+        arrow.position.set(0, 0.02, 0.05);
+        group.add(arrow);
+      }
 
       this.group = group;
       this.el.setObject3D("mesh", group);
@@ -152,7 +159,9 @@ export function registerHumanComponents() {
       if (
         oldData &&
         Object.keys(oldData).length > 0 &&
-        (oldData.color !== this.data.color || oldData.height !== this.data.height)
+        (oldData.color !== this.data.color ||
+          oldData.height !== this.data.height ||
+          oldData.ghost !== this.data.ghost)
       ) {
         this.el.removeObject3D("mesh");
         // Re-run init logic to rebuild with new color/height.
@@ -199,6 +208,17 @@ function buildMarkerData(human: Human): string {
     `heading: ${human.heading.toFixed(4)}`,
     `height: ${human.height.toFixed(3)}`,
     `color: ${human.color}`,
+    `ghost: false`,
+  ].join("; ");
+}
+
+function buildGhostMarkerData(human: Human): string {
+  return [
+    `x: ${human.pos.x.toFixed(4)}`,
+    `z: ${human.pos.z.toFixed(4)}`,
+    `heading: ${human.heading.toFixed(4)}`,
+    `height: ${human.height.toFixed(3)}`,
+    `ghost: true`,
   ].join("; ");
 }
 

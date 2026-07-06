@@ -7,7 +7,7 @@ import "aframe-orbit-controls";
 import { GUI } from "three/addons/libs/lil-gui.module.min.js";
 import { Frame, RGB, rgbPixelsFromFrame } from "./shared/frame";
 import { getHumanWorld, registerHumanComponents } from "./humanComponents";
-import type { RadarTrack } from "./humanWorld";
+import type { MockWorldObject, RadarTrack } from "./humanWorld";
 
 /** A-Frame ships its own THREE (~r173). Never mix the npm `three` package here — duplicate runtime breaks `setObject3D` / materials. */
 function getThree() {
@@ -523,6 +523,19 @@ class Pixels3dAframeHook extends Hook {
         if (!world) return;
         const tracks = Array.isArray(payload?.tracks) ? payload.tracks : [];
         world.setRadarTracksForDevice(Number(payload?.device_id), tracks);
+      }
+    );
+    this.handleEvent(
+      `mock_world:${id}`,
+      (payload: { objects: MockWorldObject[] }) => {
+        const world = getHumanWorld();
+        if (!world) return;
+        const objects = Array.isArray(payload?.objects) ? payload.objects : [];
+        if (objects.length === 0) {
+          world.clearMockWorld();
+        } else {
+          world.setMockWorldObjects(objects);
+        }
       }
     );
     const events = ['frame:pixels-*', `frame:${id}`];

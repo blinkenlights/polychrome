@@ -7,6 +7,7 @@ defmodule OctopusWeb.Sim3dAframeLive do
   alias Octopus.Installation
   alias Octopus.Radar
   alias Octopus.Radar.Frame
+  alias Octopus.Radar.Mock.World
 
   @default_config %FirmwareConfig{
     easing_mode: :LINEAR,
@@ -44,10 +45,14 @@ defmodule OctopusWeb.Sim3dAframeLive do
 
         Phoenix.PubSub.subscribe(Octopus.PubSub, Params.topic())
 
+        mock_mode = Radar.mock_mode()
+        if mock_mode != :off, do: subscribe_world()
+
         socket
         |> push_config(@default_config)
         |> push_frame(frame)
         |> push_initial_params()
+        |> maybe_push_mock_world(mock_mode)
       else
         socket
       end
@@ -129,8 +134,20 @@ defmodule OctopusWeb.Sim3dAframeLive do
     {:noreply, push_radar_frame(socket, payload)}
   end
 
-  # Ignore other broadcasts on the subscribed topics (e.g. radar mock
-  # mode/world updates this view doesn't render).
+  def handle_info({:mock_mode_changed, :off}, socket) do
+    if connected?(socket), do: unsubscribe_world()
+    {:noreply, push_mock_world(socket, [])}
+  end
+
+  def handle_info({:mock_mode_changed, mode}, socket) when mode in [:exact, :fuzzy] do
+    if connected?(socket), do: subscribe_world()
+    {:noreply, push_mock_world(socket, mock_world_objects())}
+  end
+
+  def handle_info({:mock_world, objects}, socket) do
+    {:noreply, push_mock_world(socket, objects)}
+  end
+
   def handle_info(_msg, socket), do: {:noreply, socket}
 
   defp push_frame(socket, frame) do
@@ -154,4 +171,39 @@ defmodule OctopusWeb.Sim3dAframeLive do
   defp push_radar_frame(socket, payload) do
     push_event(socket, "radar_frame:#{@id_prefix}-#{socket.id}", payload)
   end
+
+  defp push_mock_world(socket, objects) when is_list(objects) do
+    push_event(socket, "mock_world:#{@id_prefix}-#{socket.id}", %{
+      objects: serialize_mock_objects(objects)
+    })
+  end
+
+  defp maybe_push_mock_world(socket, mode) when mode in [:exact, :fuzzy] do
+    push_mock_world(socket, mock_world_objects())
+  end
+
+  defp maybe_push_mock_world(socket, _mode), do: socket
+
+  defp mock_world_objects do
+    case Process.whereis(World) do
+      nil -> []
+      _pid -> World.objects()
+    end
+  end
+
+  defp serialize_mock_objects(objects) do
+    Enum.map(objects, fn o ->
+      %{
+        id: o.id,
+        x: o.x,
+        y: o.y,
+        z: Map.get(o, :z, 1.7),
+        vx: Map.get(o, :vx, 0.0),
+        vy: Map.get(o, :vy, 0.0)
+      }
+    end)
+  end
+
+  defp subscribe_world, do: Phoenix.PubSub.subscribe(Octopus.PubSub, World.world_topic())
+  defp unsubscribe_world, do: Phoenix.PubSub.unsubscribe(Octopus.PubSub, World.world_topic())
 end
