@@ -12,9 +12,9 @@ defmodule Octopus.Params.Sim3d do
   def button_diameter, do: param(:button_diameter, 5.0)
   def radar_count, do: param(:radar_count, 6)
 
-  def radar_height, do: param(:radar_height, 3.5)
+  def radar_height, do: param(:radar_height, 4.5)
   def radar_tilt_deg, do: param(:radar_tilt_deg, 15.0)
-  def radar_arm_length_m, do: param(:radar_arm_length_m, 2.0)
+  def radar_arm_length_m, do: param(:radar_arm_length_m, 3.0)
   def mast_diameter_m, do: param(:mast_diameter_m, 0.35)
   def platform_radius_m, do: param(:platform_radius_m, 2.5)
   def lean_post_bottom_r, do: param(:lean_post_bottom_r, 0.5)
@@ -32,13 +32,13 @@ defmodule Octopus.Params.Sim3d do
         {"Durchmesser (m)", :float, %{default: 18.0, min: 10.0, max: 20.0, step: 0.1, group: "Panels"}},
       radar_count: {"Anzahl Sensoren", :int, %{default: 6, min: 4, max: 12, step: 2, group: "Radar"}},
       radar_height:
-        {"Höhe (m)", :float, %{default: 3.5, min: 0.5, max: 12.0, step: 0.05, group: "Radar"}},
+        {"Höhe (m)", :float, %{default: 4.5, min: 0.5, max: 12.0, step: 0.05, group: "Radar"}},
       radar_tilt_deg:
         {"Neigung (°)", :float, %{default: 15.0, min: 0.0, max: 90.0, step: 1.0, group: "Radar"}},
       radar_cone_straight_down:
         {"Senkrecht n. unten", :boolean, %{default: true, group: "Radar"}},
       radar_arm_length_m:
-        {"Latten-Länge (m)", :float, %{default: 2.0, min: 0.0, max: 8.0, step: 0.01, group: "Radar"}},
+        {"Latten-Länge (m)", :float, %{default: 3.0, min: 0.0, max: 8.0, step: 0.01, group: "Radar"}},
       mast_diameter_m:
         {"Mast-Ø (m)", :float, %{default: 0.35, min: 0.05, max: 0.5, step: 0.005, group: "Radar"}},
       render_radar_cones: {"Licht-Kegel", :boolean, %{default: false, group: "Radar"}},

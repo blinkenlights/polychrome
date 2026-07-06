@@ -1,8 +1,8 @@
 import { Hook, makeHook } from "phoenix_typed_hook";
 import AFRAME from "aframe";
-// `aframe-orbit-controls` greift auf die Globals `AFRAME` und `THREE` zu, die
-// A-Frame beim Laden auf `window` setzt — Import-Reihenfolge muss daher AFRAME
-// → orbit-controls bleiben.
+// `aframe-orbit-controls` accesses the globals `AFRAME` and `THREE` that
+// A-Frame sets on `window` at load time — so the import order must stay
+// AFRAME → orbit-controls.
 import "aframe-orbit-controls";
 import { GUI } from "three/addons/libs/lil-gui.module.min.js";
 import { Frame, RGB, rgbPixelsFromFrame } from "./shared/frame";
@@ -147,58 +147,58 @@ let poleDiameter: number = 0.4;
 let poleHeight: number = 0.4;
 const textures: any[] = [];
 
-/** Radar-Sensoren: Abstand zum Zentrum (m) per lil-gui; Kegel-Visualisierung; Höhe per radarHeight */
-let radarHeight = 3.5;
+/** Radar sensors: distance to center (m) via lil-gui; cone visualization; height via radarHeight */
+let radarHeight = 4.5;
 const RADAR_RADIUS_MIN_M = 0;
 const RADAR_RADIUS_MAX_M = 8;
-/** Lattenlänge (m): bei 0° Neigung = horizontaler Abstand der Chips von der Y-Achse. Default kommt aus Phoenix (`radar_arm_length_m`). */
-let radarRadiusM = 2.0;
-/** Radar-Chip am Lattenende (ersetzt die schwarze Box): 5×5 cm Grundfläche, 1 cm dick, grün, sitzt an der Unterseite der Latte. */
+/** Arm length (m): at 0° tilt = horizontal distance of the chips from the Y axis. Default comes from Phoenix (`radar_arm_length_m`). */
+let radarRadiusM = 3.0;
+/** Radar chip at the arm end (replaces the black box): 5×5 cm base, 1 cm thick, green, sits on the underside of the arm. */
 const RADAR_CHIP_W_M = 0.05;
 const RADAR_CHIP_D_M = 0.05;
 const RADAR_CHIP_H_M = 0.01;
 const RADAR_CHIP_COLOR = "#22c55e";
-/** Oberkante des zentralen Podests (Plattform); Mast/Latten beginnen hier. */
+/** Top edge of the central pedestal (platform); mast/arms start here. */
 const PEDESTAL_TOP_Y_M = 0.5;
-/** Zentrale Plattform („Sofa/Platte"): Radius per GUI 0.5–3 m, Default 2.5 m. */
+/** Central platform ("sofa/plate"): radius via GUI 0.5–3 m, default 2.5 m. */
 let platformRadiusM = 2.5;
 const PLATFORM_RADIUS_MIN_M = 0.5;
 const PLATFORM_RADIUS_MAX_M = 3;
-/** Neigung der Latten (und damit der Chips/Kegel): die Latten kippen vom Mast aus nach oben, ein Wert für alle. */
+/** Tilt of the arms (and thus the chips/cones): arms tilt upward from the mast, one value for all. */
 let radarTiltDeg = 15;
 /** Toggle: semi-transparent blue cone meshes (`radar-cone-viz`) on each sensor */
 let renderRadarCones = false;
 /**
- * Toggle: Sensor-Blickrichtung (blauer Kegel + gelbe Achse) unabhängig von der
- * Lattenneigung. Wenn true, zeigt der Kegel senkrecht nach unten (−Y), egal wie
- * stark die Dachlatte gekippt ist (Gegenrotation gegen die `tilt`-Gruppe).
+ * Toggle: sensor look direction (blue cone + yellow axis) independent of the
+ * arm tilt. If true, the cone points straight down (−Y) no matter how far the
+ * arm is tilted (counter-rotation against the `tilt` group).
  */
 let radarConeStraightDown = true;
 /**
- * Voller Öffnungswinkel des Radar-Spotlights (A-Frame `light.angle`, Grad).
- * Der blaue Kegel (`radar-cone-viz`) nutzt denselben Winkel — Halbwinkel = /2.
+ * Full opening angle of the radar spotlight (A-Frame `light.angle`, degrees).
+ * The blue cone (`radar-cone-viz`) uses the same angle — half-angle = /2.
  */
 const RADAR_SPOT_ANGLE_DEG = 120;
 const RADAR_SPOT_HALF_ANGLE_DEG = RADAR_SPOT_ANGLE_DEG / 2;
-/** Three.js SpotLight: Intensität fällt auf 0 bei dieser Entfernung (m) */
+/** Three.js SpotLight: intensity falls to 0 at this distance (m) */
 const RADAR_SPOT_DISTANCE_M = 8;
 /**
- * Anzahl Sensoren: je Sensor eine schräg nach oben laufende Dachlatte (Speiche)
- * vom Mast aus. Bleibt in 2er-Schritten gerade, damit der Stern symmetrisch ist.
+ * Number of sensors: one upward-tilting arm (spoke) per sensor from the mast.
+ * Stays even in steps of 2 so the star is symmetric.
  */
 const RADAR_COUNT_MIN = 4;
 const RADAR_COUNT_MAX = 12;
 const RADAR_COUNT_STEP = 2;
 let radarCount = 6;
-/** Zentraler Mast (unter den Radarboxen): Durchmesser 5–50 cm, Default kommt aus Phoenix (`mast_diameter_m`). */
+/** Central mast (below the radar boxes): diameter 5–50 cm, default comes from Phoenix (`mast_diameter_m`). */
 let mastDiameterM = 0.35;
 const MAST_DIAMETER_MIN_M = 0.05;
 const MAST_DIAMETER_MAX_M = 0.5;
-/** Dachbalken-Stern statt Platte: Querschnitt (m) und kleine zentrale Nabe gegen Beam-Crossings. */
+/** Beam star instead of a plate: cross-section (m) and a small central hub against beam crossings. */
 const BEAM_HEIGHT_M = 0.06;
 const BEAM_WIDTH_M = 0.1;
 
-/** Anlehn-Kegelstumpf auf der Plattform um den Mast: unten breit, oben schmal. Per GUI editierbar. */
+/** Leaning frustum on the platform around the mast: wide at the bottom, narrow at the top. Editable via GUI. */
 let leanPostBottomR = 0.5;
 let leanPostTopR = 0.1;
 let leanPostHeight = 1.2;
@@ -218,10 +218,10 @@ function clampRadarCount(v: number): number {
 let radarLilGui: GUI | null = null;
 
 /**
- * Orbit-Cam: Kamera kreist per Maus um `cameraTarget` (Linksklick = Rotate,
- * Rechtsklick = Pan, Mausrad = Zoom). Werte hier sind Defaults; lil-gui
- * (Kamera-Folder) schreibt direkt in diese Variablen und ruft
- * `applyCameraAttributes()` auf.
+ * Orbit cam: camera orbits `cameraTarget` via mouse (left-click = rotate,
+ * right-click = pan, wheel = zoom). Values here are defaults; lil-gui
+ * (camera folder) writes directly into these variables and calls
+ * `applyCameraAttributes()`.
  */
 let cameraFov = 60;
 let cameraTargetY = 1.5;
@@ -261,17 +261,16 @@ function applyCameraAttributes() {
 }
 
 /**
- * Footprint des sphärisch gekappten Radar-Kegels auf der Bodenebene (y = 0).
+ * Footprint of the spherically-capped radar cone on the ground plane (y = 0).
  *
- * Der `radar-cone-viz`-Kegel hat Apex am Sensor, Halbwinkel θ und Slant-Länge L
- * (= sphärische Kappe statt flacher Boden). Bei tilt > 0 ist der Schnitt mit
- * der Bodenebene eine Konik (Ellipse/Parabel), zusätzlich durch die Kappe
- * begrenzt. Wir samplen die Mantel- und Kappenrand-Kurve numerisch und
- * berechnen daraus die längste Sehne (Ø max) sowie die Querausdehnung
- * senkrecht dazu (Ø min).
+ * The `radar-cone-viz` cone has its apex at the sensor, half-angle θ and slant
+ * length L (= spherical cap instead of a flat base). At tilt > 0 the ground
+ * intersection is a conic (ellipse/parabola), additionally bounded by the cap.
+ * We derive the longest chord (Ø max) and the extent perpendicular to it
+ * (Ø min) from the sampled boundary points.
  *
- * Annahme: yaw = 0 (alle Sensoren sind identisch parametriert, nur in Yaw
- * rotiert — der Footprint ist invariant unter Yaw-Rotation der Apex-Lage).
+ * Assumption: yaw = 0 (all sensors are parametrized identically, only rotated
+ * in yaw — the footprint is invariant under yaw-rotation of the apex position).
  */
 type RadarFootprint = {
   hasGroundHit: boolean;
@@ -281,6 +280,67 @@ type RadarFootprint = {
   groundReachMinM: number;
 };
 
+/**
+ * Ground footprint outline of a single radar cone. For each azimuth ψ around
+ * the sensor's foot point (0, r0) we intersect the beam with the ground plane
+ * (y = 0). A ground point is lit iff it lies within the spherical cap (distance
+ * ≤ L from the apex) AND inside the cone half-angle θ, so the boundary radius
+ * at ψ is min(R_cap, R_cone(ψ)). The cone condition is a quadratic in R.
+ * Points come out ordered by ψ (no convex sorting needed) as (x, z) in the
+ * sensor-local frame (yaw = 0, +z radially outward). Empty when the cone
+ * never reaches the ground. Handles the straight-down case (tilt = 0) too,
+ * where the footprint is a plain circle.
+ */
+function computeRadarConeGroundBoundary(): Array<[number, number]> {
+  const { armTiltDeg, chipHeight, horizontalRadius } = computeRadarArmGeometry();
+  const h = chipHeight;
+  const r0 = horizontalRadius;
+  if (h <= 0) return [];
+
+  // Cone axis is vertical (tilt = 0) when the sensor is decoupled to point straight down.
+  const coneTiltDeg = radarConeStraightDown ? 0 : armTiltDeg;
+  const tiltRad = (coneTiltDeg * Math.PI) / 180;
+  const theta = (RADAR_SPOT_HALF_ANGLE_DEG * Math.PI) / 180;
+  const L = RADAR_SPOT_DISTANCE_M;
+  // Apex sits at height h; if h ≥ L not even the spherical cap can touch the ground.
+  if (h >= L) return [];
+  const cosT = Math.cos(tiltRad);
+  const sinT = Math.sin(tiltRad);
+  const c = Math.cos(theta);
+  const rCap = Math.sqrt(L * L - h * h);
+
+  const pts: Array<[number, number]> = [];
+  const steps = 240;
+  for (let i = 0; i < steps; i++) {
+    const psi = (i / steps) * 2 * Math.PI;
+    // Cone boundary: (A²−c²)R² + 2AB·R + (B²−c²h²) = 0 with A = sinψ·sinT, B = h·cosT.
+    const A = Math.sin(psi) * sinT;
+    const B = h * cosT;
+    const qa = A * A - c * c;
+    const qb = 2 * A * B;
+    const qc = B * B - c * c * h * h;
+    let rCone = Infinity;
+    const cand: number[] = [];
+    if (Math.abs(qa) < 1e-9) {
+      if (Math.abs(qb) > 1e-9) cand.push(-qc / qb);
+    } else {
+      const disc = qb * qb - 4 * qa * qc;
+      if (disc >= 0) {
+        const s = Math.sqrt(disc);
+        cand.push((-qb + s) / (2 * qa));
+        cand.push((-qb - s) / (2 * qa));
+      }
+    }
+    for (const R of cand) {
+      // Keep the nearest positive root on the downward-facing sheet.
+      if (R > 1e-6 && B + A * R >= -1e-9 && R < rCone) rCone = R;
+    }
+    const R = Math.min(rCone, rCap);
+    if (Number.isFinite(R)) pts.push([R * Math.cos(psi), r0 + R * Math.sin(psi)]);
+  }
+  return pts;
+}
+
 function computeRadarConeGroundFootprint(): RadarFootprint {
   const empty: RadarFootprint = {
     hasGroundHit: false,
@@ -289,67 +349,13 @@ function computeRadarConeGroundFootprint(): RadarFootprint {
     groundReachMaxM: 0,
     groundReachMinM: 0,
   };
-  const { armTiltDeg, chipHeight, horizontalRadius } = computeRadarArmGeometry();
-  const h = chipHeight;
+  const { horizontalRadius } = computeRadarArmGeometry();
   const r0 = horizontalRadius;
-  if (h <= 0) return empty;
-
-  // Kegelachse ist senkrecht (tilt=0), wenn der Sensor entkoppelt nach unten zeigt.
-  const coneTiltDeg = radarConeStraightDown ? 0 : armTiltDeg;
-  const tiltRad = (coneTiltDeg * Math.PI) / 180;
-  const theta = (RADAR_SPOT_HALF_ANGLE_DEG * Math.PI) / 180;
-  const L = RADAR_SPOT_DISTANCE_M;
-  const cosT = Math.cos(tiltRad);
-  const sinT = Math.sin(tiltRad);
-  const cosTh = Math.cos(theta);
-  const sinTh = Math.sin(theta);
-
-  // Apex S = (0, h, r0), Achse d = (0, -cos T, sin T),
-  // Hilfsbasis e1 = (1,0,0), e2 = (0, sin T, cos T).
-  // Strahlrichtung r̂(α, φ) = cos α · d + sin α · (cos φ · e1 + sin φ · e2).
-  const points: Array<[number, number]> = [];
-
-  // (1) Mantel (α = θ): φ über vollen Kreis sampeln, jeden mit Boden schneiden.
-  const phiSteps = 360;
-  for (let i = 0; i < phiSteps; i++) {
-    const phi = (i / phiSteps) * 2 * Math.PI;
-    const cphi = Math.cos(phi);
-    const sphi = Math.sin(phi);
-    const ry = -cosTh * cosT + sinTh * sphi * sinT;
-    if (ry >= -1e-9) continue; // Strahl zeigt nicht nach unten → kein Bodenhit
-    const t = -h / ry;
-    if (t > L) continue; // verlässt Kegel via Kappe vor dem Boden
-    const rx = sinTh * cphi;
-    const rz = cosTh * sinT + sinTh * sphi * cosT;
-    points.push([t * rx, r0 + t * rz]);
-  }
-
-  // (2) Kappenrand schneidet Boden: |P-S| = L, α ∈ (0, θ]. Aus P_y = 0 folgt
-  // sin φ = (cos α · cos T − h/L) / (sin α · sin T) (sofern Nenner ≠ 0).
-  const alphaSteps = 90;
-  for (let j = 1; j <= alphaSteps; j++) {
-    const alpha = (j / alphaSteps) * theta;
-    const cA = Math.cos(alpha);
-    const sA = Math.sin(alpha);
-    const denom = sA * sinT;
-    if (Math.abs(denom) < 1e-9) continue;
-    const sinPhi = (cA * cosT - h / L) / denom;
-    if (sinPhi > 1 + 1e-9 || sinPhi < -1 - 1e-9) continue;
-    const sp = Math.max(-1, Math.min(1, sinPhi));
-    const phi1 = Math.asin(sp);
-    const phi2 = Math.PI - phi1;
-    for (const phi of [phi1, phi2]) {
-      const cphi = Math.cos(phi);
-      const sphi = Math.sin(phi);
-      const rx = sA * cphi;
-      const rz = cA * sinT + sA * sphi * cosT;
-      points.push([L * rx, r0 + L * rz]);
-    }
-  }
+  const points = computeRadarConeGroundBoundary();
 
   if (points.length < 2) return empty;
 
-  // Ø max: längste paarweise Distanz (O(N²), N ≈ 540 → ok, läuft nur on-change).
+  // Ø max: longest pairwise distance (O(N²), N ≈ 240 → fine, runs only on-change).
   let maxD2 = 0;
   let i1 = 0;
   let i2 = 0;
@@ -367,7 +373,7 @@ function computeRadarConeGroundFootprint(): RadarFootprint {
   }
   const major = Math.sqrt(maxD2);
 
-  // Ø min: Spannweite senkrecht zur Major-Achse.
+  // Ø min: extent perpendicular to the major axis.
   const dx = points[i2][0] - points[i1][0];
   const dz = points[i2][1] - points[i1][1];
   const len = Math.sqrt(dx * dx + dz * dz) || 1;
@@ -382,7 +388,7 @@ function computeRadarConeGroundFootprint(): RadarFootprint {
   }
   const minor = pMax - pMin;
 
-  // Reichweite vom Sensorfußpunkt (0, r0) auf dem Boden.
+  // Reach from the sensor foot point (0, r0) on the ground.
   let reachMin = Infinity;
   let reachMax = -Infinity;
   for (const p of points) {
@@ -411,10 +417,10 @@ const radarFootprintInfo = {
 };
 
 /**
- * Höchster Punkt der Dachlatten: obere Außenkante am freien Lattenende. Die
- * Mittellinie endet bei `chipHeight`; durch die Lattendicke liegt die Oberkante
- * senkrecht zur Lattenachse um BEAM_HEIGHT_M/2 höher, vertikal projiziert
- * ·cos(tilt).
+ * Highest point of the arms: top outer edge at the free arm end. The center
+ * line ends at `chipHeight`; due to the arm thickness the top edge sits
+ * BEAM_HEIGHT_M/2 higher perpendicular to the arm axis, projected vertically
+ * by ·cos(tilt).
  */
 function computeBeamTopMaxHeight(): number {
   const { armTiltDeg, chipHeight } = computeRadarArmGeometry();
@@ -432,7 +438,7 @@ function updateRadarFootprintInfo() {
   radarFootprintInfo.beamTopMaxM = round3(computeBeamTopMaxHeight());
 }
 
-/** Kegelachse (vom Sensor in den Kegel) wie in `createRadarSensors`: R_y(yaw) · R_x(-tilt) · (0,-1,0). */
+/** Cone axis (from the sensor into the cone) as in `createRadarSensors`: R_y(yaw) · R_x(-tilt) · (0,-1,0). */
 function radarConeAxisFromTiltYawDeg(tiltDeg: number, yawDeg: number) {
   const T = getThree();
   const ax = new T.Vector3(0, -1, 0);
@@ -444,15 +450,15 @@ function radarConeAxisFromTiltYawDeg(tiltDeg: number, yawDeg: number) {
   return ax;
 }
 
-/** Max. Latten-Neigung; verhindert, dass `armLen`/`chipHeight` bei tilt→90° divergieren. */
+/** Max arm tilt; prevents `armLen`/`chipHeight` from diverging as tilt→90°. */
 const RADAR_ARM_TILT_MAX_DEG = 85;
 
 /**
- * Geometrie der nach oben kippenden Dachlatten: die Anbringung am Mast ist fix
- * bei `radarHeight` (= Masthöhe). `radarRadiusM` ist die **Lattenlänge** selbst
- * (nicht der horizontale Abstand): bei 0° Neigung deckt sich beides, bei
- * Neigung t verkürzt sich der horizontale Abstand auf `L·cos(t)` und das
- * Außenende steigt auf `innerY + L·sin(t)`.
+ * Geometry of the upward-tilting arms: the mount at the mast is fixed at
+ * `radarHeight` (= mast height). `radarRadiusM` is the **arm length** itself
+ * (not the horizontal distance): at 0° tilt both coincide; at tilt t the
+ * horizontal distance shrinks to `L·cos(t)` and the outer end rises to
+ * `innerY + L·sin(t)`.
  * `armLen = radarRadiusM`, `horizontalRadius = L·cos(tilt)`,
  * `chipHeight = innerY + L·sin(tilt)`.
  */
@@ -579,6 +585,9 @@ class Pixels3dAframeHook extends Hook {
     const radarSensors = this.createRadarSensors();
     sceneEl.appendChild(radarSensors);
 
+    const radarFootprints = this.createRadarGroundFootprints();
+    sceneEl.appendChild(radarFootprints);
+
     const humansRoot = this.createHumansRoot();
     sceneEl.appendChild(humansRoot);
 
@@ -594,19 +603,19 @@ class Pixels3dAframeHook extends Hook {
     const gui = new GUI({ title: "Sim 3D" });
     radarLilGui = gui;
 
-    // Unten links statt Default oben rechts (oben rechts liegt das Phoenix-Panel).
+    // Bottom-left instead of the default top-right (top-right holds the Phoenix panel).
     const guiEl = gui.domElement as HTMLElement;
     guiEl.style.position = "fixed";
     guiEl.style.left = "8px";
     guiEl.style.right = "auto";
     guiEl.style.top = "auto";
     guiEl.style.bottom = "8px";
-    // Per Default zugeklappt.
+    // Collapsed by default.
     gui.close();
 
-    // Weltgeometrie (Panels/Radar/Plattform/Rückenlehne) wird jetzt ausschließlich
-    // über Phoenix (`Params.Sim3d` → `handleParams`) gesteuert. lil-gui haelt nur
-    // noch den read-only Info-HUD und die client-seitigen Kamera-Controls.
+    // World geometry (panels/radar/platform/backrest) is now driven exclusively
+    // via Phoenix (`Params.Sim3d` → `handleParams`). lil-gui only holds the
+    // read-only info HUD and the client-side camera controls.
     updateRadarFootprintInfo();
     const infoFolder = gui.addFolder("Info (Boden-Footprint)");
     infoFolder
@@ -709,10 +718,10 @@ class Pixels3dAframeHook extends Hook {
   }
 
   /**
-   * Setzt die Kamera-Position auf den Default zurück. Reicht nicht, einfach
-   * `setAttribute('position', …)` zu rufen — `orbit-controls` hält den
-   * THREE-State intern. Wir entfernen das Component und setzen es neu, dann
-   * greift `initialPosition` wieder.
+   * Resets the camera position to the default. It is not enough to just call
+   * `setAttribute('position', …)` — `orbit-controls` holds the THREE state
+   * internally. We remove the component and set it again, then `initialPosition`
+   * takes effect again.
    */
   resetCameraView() {
     const cam = document.querySelector("#cameraRig") as any;
@@ -727,20 +736,20 @@ class Pixels3dAframeHook extends Hook {
   }
 
   /**
-   * Orbit-Cam: ein einzelnes Entity trägt sowohl `camera` als auch
-   * `orbit-controls` (das Component verlangt `dependencies: ['camera']` und
-   * greift auf `getObject3D('camera')` desselben Entitys zu — kein Rig).
-   * `look-controls`/`wasd-controls` werden vom Component automatisch
-   * deaktiviert, wenn vorhanden.
+   * Orbit cam: a single entity carries both `camera` and `orbit-controls` (the
+   * component requires `dependencies: ['camera']` and accesses
+   * `getObject3D('camera')` of the same entity — no rig).
+   * `look-controls`/`wasd-controls` are disabled automatically by the component
+   * when present.
    */
   createCameraRig() {
     const cam = document.createElement("a-entity");
     cam.setAttribute("id", "cameraRig");
     cam.setAttribute("camera", `fov: ${cameraFov}; near: 0.05; far: 2000`);
-    // Wichtig: Entity bleibt am Origin. `orbit-controls` schreibt die
-    // gewünschte Eye-Position in `getObject3D('camera').position` (Local
-    // gegenüber diesem Entity). Eine zusätzliche `position` auf dem Entity
-    // würde die Eye-Position verschieben und Target verfälschen.
+    // Important: the entity stays at the origin. `orbit-controls` writes the
+    // desired eye position into `getObject3D('camera').position` (local to this
+    // entity). An additional `position` on the entity would shift the eye
+    // position and distort the target.
     cam.setAttribute("orbit-controls", {
       target: { x: 0, y: cameraTargetY, z: 0 },
       enableDamping: true,
@@ -825,7 +834,7 @@ class Pixels3dAframeHook extends Hook {
       spotlight.setAttribute('distance', '0.2');
       spotlight.setAttribute('decay', '1');
       spotlight.setAttribute('position', `0 0.127 0`);
-      spotlight.setAttribute('rotation', '-90 0 0'); // nach oben
+      spotlight.setAttribute('rotation', '-90 0 0'); // pointing up
       buzzer.appendChild(spotlight);
       polesEl.appendChild(buzzer);
     }
@@ -842,7 +851,7 @@ class Pixels3dAframeHook extends Hook {
       'shader: standard; src: #ground-albedo; normalMap: #ground-normal; roughnessMap: #ground-roughness; normalScale: 1 1; metalness: 0.0; repeat: 1000 1000; side: double'
     );
 
-    // Repeat-Wrapping für Texturen setzen, damit repeat funktioniert
+    // Set repeat wrapping for textures so repeat works
     groundEl.addEventListener('materialtextureloaded', () => {
       const mesh = (groundEl as any).getObject3D('mesh');
       if (!mesh) return;
@@ -850,7 +859,7 @@ class Pixels3dAframeHook extends Hook {
         const tex = mesh.material[key];
         if (tex) {
           tex.wrapS = tex.wrapT = getThree().RepeatWrapping;
-          tex.repeat.set(1000, 1000); // oder gewünschtes repeat
+          tex.repeat.set(1000, 1000); // or desired repeat
           tex.needsUpdate = true;
         }
       });
@@ -892,8 +901,78 @@ class Pixels3dAframeHook extends Hook {
   }
 
   /**
-   * Kreis der Radarboxen: Radius mindestens Mast-Radius (Abstand ≥ Mast-Durchmesser/2).
-   * @returns true wenn radarRadiusM angepasst wurde (GUI ggf. neu aufsetzen)
+   * Ground footprint of the radar cones: per sensor a yellow outline plus a
+   * faint yellow fill exactly where that cone cuts the ground plane (y = 0).
+   * Only rendered while the cones are visible (`renderRadarCones`). Geometry is
+   * built in the sensor-local frame (yaw = 0, +z radial) and yaw-rotated per
+   * sensor — identical placement to `createRadarSensors`.
+   */
+  createRadarGroundFootprints() {
+    const root = document.createElement('a-entity');
+    root.setAttribute('id', 'radar-ground-footprints');
+    if (!renderRadarCones) return root;
+
+    const boundary = computeRadarConeGroundBoundary();
+    if (boundary.length < 3) return root;
+
+    const T = getThree();
+    const n = clampRadarCount(radarCount);
+    const y = 0.03;
+    const FOOTPRINT_COLOR = 0xffee00;
+
+    // Centroid for the fill's triangle fan.
+    let cx = 0;
+    let cz = 0;
+    for (const p of boundary) {
+      cx += p[0];
+      cz += p[1];
+    }
+    cx /= boundary.length;
+    cz /= boundary.length;
+
+    // Fill: triangle fan from the centroid (footprint is convex).
+    const fillPos: number[] = [];
+    for (let i = 0; i < boundary.length; i++) {
+      const a = boundary[i];
+      const b = boundary[(i + 1) % boundary.length];
+      fillPos.push(cx, y, cz, a[0], y, a[1], b[0], y, b[1]);
+    }
+    const fillGeo = new T.BufferGeometry();
+    fillGeo.setAttribute(
+      'position',
+      new T.Float32BufferAttribute(fillPos, 3)
+    );
+    const fillMat = new T.MeshBasicMaterial({
+      color: FOOTPRINT_COLOR,
+      transparent: true,
+      opacity: 0.15,
+      depthWrite: false,
+      side: T.DoubleSide,
+    });
+
+    // Outline: closed line along the boundary, nudged up slightly to avoid z-fighting.
+    const linePts = boundary.map(
+      (p) => new T.Vector3(p[0], y + 0.002, p[1])
+    );
+    const lineGeo = new T.BufferGeometry().setFromPoints(linePts);
+    const lineMat = new T.LineBasicMaterial({ color: FOOTPRINT_COLOR });
+
+    for (let i = 0; i < n; i++) {
+      const yawDeg = T.MathUtils.radToDeg((i / n) * Math.PI * 2);
+      const host = document.createElement('a-entity');
+      host.setAttribute('rotation', `0 ${yawDeg} 0`);
+      const group = new T.Group();
+      group.add(new T.Mesh(fillGeo, fillMat));
+      group.add(new T.LineLoop(lineGeo, lineMat));
+      host.setObject3D('mesh', group);
+      root.appendChild(host);
+    }
+    return root;
+  }
+
+  /**
+   * Circle of the radar boxes: radius at least the mast radius (distance ≥ mast-diameter/2).
+   * @returns true if radarRadiusM was adjusted (GUI may need to be rebuilt)
    */
   applyRadarMastConstraints(): boolean {
     const rMin = mastDiameterM / 2;
@@ -903,10 +982,10 @@ class Pixels3dAframeHook extends Hook {
   }
 
   /**
-   * Zentraler Mast (#8B4513) vom Podest (0.5 m) bis zur Nabe (`innerY`), wo die
-   * nach oben kippenden Dachlatten zusammenlaufen. Die Latten selbst (eine pro
-   * Sensor) sowie die Chips werden in `createRadarSensors` gebaut, weil sie pro
-   * Sensor dieselbe Neigung teilen.
+   * Central mast (#8B4513) from the pedestal (0.5 m) up to the hub (`innerY`),
+   * where the upward-tilting arms converge. The arms themselves (one per sensor)
+   * and the chips are built in `createRadarSensors`, because they share the same
+   * tilt per sensor.
    */
   createRadarMast() {
     const holder = document.createElement("a-entity");
@@ -924,7 +1003,7 @@ class Pixels3dAframeHook extends Hook {
       holder.appendChild(cyl);
     }
 
-    // Zentrale Nabe, in der die Latten zusammenlaufen.
+    // Central hub where the arms converge.
     const hubR = Math.max(mastDiameterM / 2, BEAM_WIDTH_M * 0.9);
     const hub = document.createElement("a-cylinder");
     hub.setAttribute("radius", hubR.toString());
@@ -937,11 +1016,11 @@ class Pixels3dAframeHook extends Hook {
   }
 
   /**
-   * Pro Sensor eine Dachlatte, die vom Mast (Nabe, `innerY`) schräg nach oben zum
-   * Außenende kippt. Am Außenende sitzt an der Unterseite (zum Boden zeigend) der
-   * grüne Radar-Chip; der Kegel geht von der Chip-Unterseite entlang der Latten-
-   * Unterseiten-Normalen (nach unten/außen) ab. Pivot (Yaw) → tilt (Latten-
-   * Neigung) → Latte/Chip/Kegel teilen sich dieselbe Transform.
+   * One arm per sensor, tilting upward from the mast (hub, `innerY`) to the
+   * outer end. At the outer end, on the underside (facing the ground), sits the
+   * green radar chip; the cone extends from the chip underside along the arm's
+   * underside normal (down/outward). Pivot (yaw) → tilt (arm tilt) →
+   * arm/chip/cone share the same transform.
    */
   createRadarSensors() {
     const root = document.createElement('a-entity');
@@ -953,17 +1032,17 @@ class Pixels3dAframeHook extends Hook {
     const chipZ = armLen - RADAR_CHIP_D_M / 2;
     for (let i = 0; i < n; i++) {
       const angle = (i / n) * Math.PI * 2;
-      // +Z radial nach außen (ohne +180 — sonst zeigen Sensoren zur Mitte)
+      // +Z radially outward (without +180 — otherwise sensors point to the center)
       const yawDeg = T.MathUtils.radToDeg(angle);
       const pivot = document.createElement('a-entity');
       pivot.setAttribute('position', `0 ${innerY} 0`);
       pivot.setAttribute('rotation', `0 ${yawDeg} 0`);
       const tilt = document.createElement('a-entity');
-      // -armTiltDeg um X: das +Z-Ende (außen) geht hoch, die Unterseiten-Normale
-      // zeigt nach unten/außen (= Kegelachse), Chip an dieser Unterseite.
+      // -armTiltDeg about X: the +Z end (outer) goes up, the underside normal
+      // points down/outward (= cone axis), chip on this underside.
       tilt.setAttribute('rotation', `${-armTiltDeg} 0 0`);
 
-      // Dachlatte: liegt entlang +Z, Innenende an der Nabe, Außenende beim Chip.
+      // Arm: lies along +Z, inner end at the hub, outer end at the chip.
       const arm = document.createElement('a-box');
       arm.setAttribute('width', BEAM_WIDTH_M.toString());
       arm.setAttribute('height', BEAM_HEIGHT_M.toString());
@@ -973,7 +1052,7 @@ class Pixels3dAframeHook extends Hook {
       arm.setAttribute('position', `0 0 ${armLen / 2}`);
       tilt.appendChild(arm);
 
-      // Grüner Chip an der Unterseite des Lattenendes (zum Boden zeigend).
+      // Green chip on the underside of the arm end (facing the ground).
       const chip = document.createElement('a-box');
       chip.setAttribute('width', RADAR_CHIP_W_M.toString());
       chip.setAttribute('height', RADAR_CHIP_H_M.toString());
@@ -985,10 +1064,10 @@ class Pixels3dAframeHook extends Hook {
 
       if (renderRadarCones) {
         const coneHost = document.createElement('a-entity');
-        // Apex an der Chip-Unterseite; Öffnung in -Y = Latten-Neigung.
+        // Apex at the chip underside; opening in -Y = arm tilt.
         coneHost.setAttribute('position', `0 ${chipY - RADAR_CHIP_H_M / 2} ${chipZ}`);
-        // Bei „senkrecht nach unten" Gegenrotation gegen die tilt-Gruppe
-        // (+armTiltDeg um X), sodass die Kegelachse weltweit auf −Y zeigt.
+        // For "straight down", counter-rotate against the tilt group
+        // (+armTiltDeg about X) so the cone axis points to −Y in world space.
         if (radarConeStraightDown) {
           coneHost.setAttribute('rotation', `${armTiltDeg} 0 0`);
         }
@@ -996,8 +1075,8 @@ class Pixels3dAframeHook extends Hook {
           'radar-cone-viz',
           `length: ${RADAR_SPOT_DISTANCE_M}; halfAngleDeg: ${RADAR_SPOT_HALF_ANGLE_DEG}`
         );
-        // Kein a-light Spot: sonst würde das Radar andere Meshes (Mast, Boden) mitblau anstrahlen; der Effekt
-        // kommt nur noch aus dem halbtransparenten Kegel-Mesh (radar-cone-viz), nicht aus Scene-Lighting.
+        // No a-light spot: it would tint other meshes (mast, ground) blue too; the effect
+        // now comes only from the semi-transparent cone mesh (radar-cone-viz), not from scene lighting.
         tilt.appendChild(coneHost);
       }
 
@@ -1025,10 +1104,10 @@ class Pixels3dAframeHook extends Hook {
   }
 
   /**
-   * Anlehn-Kegelstumpf um den Mast: `a-cylinder` exponiert nur einen Radius,
-   * deshalb `geometry: cone` mit `radiusBottom` ≠ `radiusTop`. Sitzt mittig
-   * auf der Plattform (Top y=0.5), Mast wächst durch das hohle Innere weiter
-   * nach oben.
+   * Leaning frustum around the mast: `a-cylinder` exposes only one radius,
+   * hence `geometry: cone` with `radiusBottom` ≠ `radiusTop`. Sits centered on
+   * the platform (top y=0.5), the mast grows further up through the hollow
+   * interior.
    */
   createLeanPost() {
     const post = document.createElement('a-entity');
@@ -1060,10 +1139,10 @@ class Pixels3dAframeHook extends Hook {
   }
 
   createLight() {
-    // Directional Light wie 17 Uhr: warm, schräg von oben (Südwesten)
+    // Directional light like 5 PM: warm, at an angle from above (southwest)
     const sun = document.createElement('a-entity');
     sun.setAttribute('light', 'type: directional; color: #ffd9a0; intensity: 1.1; castShadow: true');
-    // Position: schräg von oben, Südwesten
+    // Position: at an angle from above, southwest
     sun.setAttribute('position', '-10 20 -10');
     sun.setAttribute('rotation', '-45 -45 0');
     return sun;
@@ -1091,7 +1170,7 @@ class Pixels3dAframeHook extends Hook {
         (panelDiameter / 2) * Math.cos(angle)
       );
       group.object3D.rotation.y = angle + Math.PI;
-      // 8x8 Textur
+      // 8x8 texture
       const size = 8;
       const data = new Uint8Array(size * size * 4);
       for (let k = 0; k < size * size; k++) {
@@ -1104,20 +1183,20 @@ class Pixels3dAframeHook extends Hook {
       const texture = new T.DataTexture(data, size, size, T.RGBAFormat);
       texture.needsUpdate = true;
       textures.push(texture);
-      // Front-Plane
+      // Front plane
       const front = document.createElement('a-entity');
       front.setAttribute('geometry', `primitive: plane; height: ${PANEL_SIZE}; width: ${PANEL_SIZE}`);
       front.setAttribute('material', 'shader: led-shader; transparent: true');
       front.setAttribute('led-panel', `textureIndex: ${i}; side: front`);
       front.setAttribute('position', `0 ${poleHeight + PANEL_SIZE/2} ${PANEL_DEPTH/2 + 0.1}`);
-      // Back-Plane
+      // Back plane
       const back = document.createElement('a-entity');
       back.setAttribute('geometry', `primitive: plane; height: ${PANEL_SIZE}; width: ${PANEL_SIZE}`);
       back.setAttribute('material', 'shader: led-shader; transparent: true');
       back.setAttribute('led-panel', `textureIndex: ${i}; side: back`);
       back.setAttribute('rotation', `0 180 0`);
       back.setAttribute('position', `0 ${poleHeight + PANEL_SIZE/2} ${-(PANEL_DEPTH/2 + 0.1)}`);
-      // Center-Box (optional, als "Körper" des Panels)
+      // Center box (optional, as the panel "body")
       const center = document.createElement('a-entity');
       center.setAttribute('geometry', `primitive: box; height: ${PANEL_SIZE}; width: ${PANEL_SIZE}; depth: ${PANEL_DEPTH}`);
       center.setAttribute('material', 'color: #fff; roughness: 0.4');
@@ -1241,9 +1320,9 @@ class Pixels3dAframeHook extends Hook {
         data: { length: number; halfAngleDeg: number };
       }) {
         const T = getThree();
-        // `length` ist jetzt der Radius (Slant-Länge) vom Sensor: alle Punkte des Kegels
-        // liegen ≤ length vom Apex. Statt flacher Basis schließt eine Sphärenkappe
-        // (Kugel um Apex, Radius = length) den Kegel ab → kein gerades Abschneiden.
+        // `length` is now the radius (slant length) from the sensor: all cone points
+        // lie ≤ length from the apex. Instead of a flat base, a spherical cap
+        // (sphere around the apex, radius = length) closes the cone → no straight cut-off.
         const L = this.data.length;
         const theta = T.MathUtils.degToRad(this.data.halfAngleDeg);
         const h = L * Math.cos(theta);
@@ -1269,20 +1348,20 @@ class Pixels3dAframeHook extends Hook {
           depthWrite: false,
           side: T.DoubleSide,
         });
-        // Spitze (Sensor) am Entity-Ursprung = Mitte der Box; Achse entlang -Y = gleiche Achse
-        // wie die 45°-Tilt-Gruppe (kein extra X-Flip — sonst zeigt der Kegel nicht „mit“ der Box).
+        // Tip (sensor) at the entity origin = center of the box; axis along -Y = same axis
+        // as the 45° tilt group (no extra X flip — otherwise the cone would not point "with" the box).
         const group = new T.Group();
         const coneMesh = new T.Mesh(coneGeo, mat);
         coneMesh.position.y = -h / 2;
         group.add(coneMesh);
-        // Sphäre ist um Apex zentriert; 180°-Rotation um X dreht den Pol auf -Y, Rim landet
-        // dadurch automatisch bei y=-h, Radius=r (= Kegel-Rim).
+        // Sphere is centered on the apex; a 180° rotation about X turns the pole to -Y, so the rim
+        // automatically lands at y=-h, radius=r (= cone rim).
         const capMesh = new T.Mesh(capGeo, mat);
         capMesh.rotation.x = Math.PI;
         group.add(capMesh);
         this.el.setObject3D('mesh', group);
 
-        // Zentrumslinie Kegel: von Spitze (0) bis zum Pol der Kappe (-L), ~2 cm Ø, neon-gelb
+        // Cone center line: from the tip (0) to the cap pole (-L), ~2 cm Ø, neon yellow
         const axisRadiusM = 0.01;
         const axisGeo = new T.CylinderGeometry(axisRadiusM, axisRadiusM, L, 16, 1, false);
         const axisMat = new T.MeshBasicMaterial({
@@ -1392,12 +1471,15 @@ class Pixels3dAframeHook extends Hook {
     const oldRings = document.querySelector('#radar-ground-rings');
     const oldRadar = document.querySelector('#radar-sensors');
     const oldMast = document.querySelector('#radar-mast');
+    const oldFootprints = document.querySelector('#radar-ground-footprints');
     oldRings?.parentNode?.removeChild(oldRings);
     oldRadar?.parentNode?.removeChild(oldRadar);
     oldMast?.parentNode?.removeChild(oldMast);
+    oldFootprints?.parentNode?.removeChild(oldFootprints);
     sceneEl.appendChild(this.createRadarGroundRings());
     sceneEl.appendChild(this.createRadarMast());
     sceneEl.appendChild(this.createRadarSensors());
+    sceneEl.appendChild(this.createRadarGroundFootprints());
     updateRadarFootprintInfo();
   }
 }
