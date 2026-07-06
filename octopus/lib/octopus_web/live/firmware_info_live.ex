@@ -36,7 +36,9 @@ defmodule OctopusWeb.FirmwareInfoLive do
             <table class="table table-zebra w-full text-center">
               <thead>
                 <tr>
-                  <th>Panel Index</th>
+                  <th>Catalog ID</th>
+                  <th>Logical Panel</th>
+                  <th>Firmware Index</th>
                   <th>Hostname</th>
                   <th>MAC</th>
                   <th>IPv4</th>
@@ -51,7 +53,10 @@ defmodule OctopusWeb.FirmwareInfoLive do
               </thead>
               <tbody>
                 <%= for {mac, meta} <- @firmware_stats do %>
+                  <% {catalog_id, logical_panel} = panel_catalog_info(meta) %>
                   <tr>
+                    <td>{catalog_id || "-"}</td>
+                    <td>{format_logical_panel(logical_panel)}</td>
                     <td>{meta.firmware_info.panel_index}</td>
                     <td>{meta.firmware_info.hostname}</td>
                     <td class="font-mono text-sm">{mac}</td>
@@ -95,13 +100,6 @@ defmodule OctopusWeb.FirmwareInfoLive do
     """
   end
 
-  defp time_ago(nil, _current_time), do: "-"
-
-  defp time_ago(timestamp, current_time) do
-    diff = current_time - timestamp
-    format_duration(diff) <> " ago"
-  end
-
   defp format_build_time(build_time, current_time) when is_binary(build_time) do
     case Integer.parse(build_time) do
       {timestamp, _} -> time_ago(timestamp, current_time)
@@ -121,5 +119,37 @@ defmodule OctopusWeb.FirmwareInfoLive do
       seconds < 86_400 -> "#{div(seconds, 3_600)}h"
       true -> "#{div(seconds, 86_400)}d"
     end
+  end
+
+  defp panel_catalog_info(%{firmware_info: info}) do
+    catalog_panel =
+      Octopus.Hardware.registry()
+      |> Map.values()
+      |> Enum.find(fn panel ->
+        panel.mac == info.mac or panel.hostname == info.hostname
+      end)
+
+    logical_panel =
+      case catalog_panel do
+        nil ->
+          nil
+
+        %{id: id} ->
+          Octopus.Installation.panels()
+          |> Enum.find_index(&(&1 == id))
+      end
+
+    catalog_id = catalog_panel && catalog_panel.id
+    {catalog_id, logical_panel}
+  end
+
+  defp format_logical_panel(nil), do: "-"
+  defp format_logical_panel(slot), do: slot + 1
+
+  defp time_ago(nil, _current_time), do: "-"
+
+  defp time_ago(timestamp, current_time) do
+    diff = current_time - timestamp
+    format_duration(diff) <> " ago"
   end
 end

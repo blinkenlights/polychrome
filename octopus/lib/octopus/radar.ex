@@ -310,14 +310,19 @@ defmodule Octopus.Radar do
   def reinitialize(device_id), do: Sensor.reinitialize(device_id)
 
   @doc """
-  Return `true` if the radar layer is enabled in application config.
+  Return `true` if the radar layer is enabled in application config and for
+  the current installation.
 
-  See `config/radar.exs` and the `RADAR_SETUP` / `RADAR_ENABLED` env vars.
+  See `config/radar.exs`, `RADAR_SETUP` / `RADAR_ENABLED`, and
+  `Octopus.Installation.radar_enabled/0`.
   """
   @spec enabled?() :: boolean()
   def enabled? do
-    Application.get_env(:octopus, __MODULE__, [])
-    |> Keyword.get(:enabled, true)
+    config_enabled =
+      Application.get_env(:octopus, __MODULE__, [])
+      |> Keyword.get(:enabled, true)
+
+    config_enabled and Octopus.Installation.radar_enabled()
   end
 
   @doc """

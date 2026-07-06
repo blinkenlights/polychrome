@@ -2,6 +2,7 @@ defmodule Octopus.Mixer do
   use GenServer
 
   alias Octopus.{Broadcaster, Protobuf, Canvas, AppManager, AppSupervisor, Installation}
+  alias Octopus.Hardware.Untangle
 
   alias Octopus.Protobuf.{
     RGBFrame,
@@ -69,10 +70,19 @@ defmodule Octopus.Mixer do
 
   def handle_frame(app_id, %RGBFrame{} = frame) do
     # Split RGB frames to avoid UDP fragmenting. Can be removed when we fix the fragmenting in the firmware
-    Protobuf.split_and_encode(frame)
+    frame
+    |> Untangle.encode_rgb_frame()
+    |> Protobuf.split_and_encode()
     |> Enum.each(fn binary ->
       send_frame(binary, frame, app_id)
     end)
+  end
+
+  def handle_frame(app_id, %WFrame{} = frame) do
+    frame
+    |> Untangle.encode_w_frame()
+    |> Protobuf.encode()
+    |> send_frame(frame, app_id)
   end
 
   def handle_frame(app_id, %{} = frame) do
@@ -823,6 +833,7 @@ defmodule Octopus.Mixer do
         )
 
       frame
+      |> Untangle.encode_rgb_frame()
       |> Protobuf.split_and_encode()
       |> Enum.each(&send_frame(&1, frame))
     else
@@ -849,7 +860,11 @@ defmodule Octopus.Mixer do
           main_app_display
         )
 
-      binary = Protobuf.encode(frame)
+      binary =
+        frame
+        |> Untangle.encode_w_frame()
+        |> Protobuf.encode()
+
       send_frame(binary, frame)
     else
       _ -> send_wframe(main_canvas, main_display_info, main_app_display, easing_interval)
@@ -860,14 +875,18 @@ defmodule Octopus.Mixer do
     frame = canvas_to_frame(main_canvas, main_display_info, easing_interval, main_app_display)
 
     frame
+    |> Untangle.encode_rgb_frame()
     |> Protobuf.split_and_encode()
     |> Enum.each(&send_frame(&1, frame))
   end
 
   defp send_wframe(main_canvas, main_display_info, main_app_display, easing_interval) do
     frame = canvas_to_wframe(main_canvas, main_display_info, easing_interval, main_app_display)
-    binary = Protobuf.encode(frame)
-    send_frame(binary, frame)
+
+    frame
+    |> Untangle.encode_w_frame()
+    |> Protobuf.encode()
+    |> send_frame(frame)
   end
 
   defp update_output_mode(%State{rendered_app: main, mask_app_id: mask} = state) do

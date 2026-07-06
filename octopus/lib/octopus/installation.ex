@@ -5,6 +5,16 @@ defmodule Octopus.Installation do
   @type pixel :: {integer(), integer()}
 
   @doc """
+  Returns ordered panel ids for this installation (logical slots 0..N-1).
+  """
+  @callback panels() :: [atom()]
+
+  @doc """
+  Returns the `{width, height}` layout shape for each panel.
+  """
+  @callback panel_layout() :: {pos_integer(), pos_integer()}
+
+  @doc """
   Returns the physical layout of the installation
   """
   @callback arrangement() :: :circular | :linear
@@ -71,8 +81,23 @@ defmodule Octopus.Installation do
   """
   @callback auto_brightness() :: boolean()
 
+  @doc """
+  Returns whether the radar layer should start for this installation.
+  """
+  @callback radar_enabled() :: boolean()
+
   @options_schema NimbleOptions.new!(
                     arrangement: [type: {:in, [:linear, :circular]}, required: true],
+                    panels: [
+                      type: {:list, :atom},
+                      required: false,
+                      doc: "Ordered panel ids from the hardware catalog (logical slots 0..N-1)."
+                    ],
+                    panel_layout: [
+                      type: {:tuple, [:pos_integer, :pos_integer]},
+                      default: {8, 8},
+                      doc: "Panel layout shape `{width, height}` when using `panels:`."
+                    ],
                     num_panels: [type: :pos_integer, required: true],
                     num_buttons: [type: :non_neg_integer, required: true],
                     num_joysticks: [type: :non_neg_integer, required: true],
@@ -94,6 +119,11 @@ defmodule Octopus.Installation do
                       default: :auto
                     ],
                     auto_brightness: [type: :boolean, default: false],
+                    radar_enabled: [
+                      type: :boolean,
+                      default: false,
+                      doc: "When false, the radar layer does not start for this installation."
+                    ],
                     network_config: [
                       type: :keyword_list,
                       default: [],
@@ -109,11 +139,11 @@ defmodule Octopus.Installation do
                              ]},
                           required: false
                         ],
-                        panel_ips: [
-                          type:
-                            {:list,
-                             {:or, [:string, {:tuple, [:integer, :integer, :integer, :integer]}]}},
-                          default: []
+                        panels: [
+                          type: {:list, :keyword_list},
+                          default: [],
+                          doc:
+                            "Individual-mode panel targets. Each entry has :address (hostname or IPv4 tuple) and optional :panel_index (firmware PANEL_INDEX, default 1)."
                         ],
                         send_in_dev: [type: :boolean, default: false]
                       ]
@@ -250,9 +280,17 @@ defmodule Octopus.Installation do
   end
 
   defmacro __using__(opts) do
+    opts =
+      opts
+      |> Keyword.put_new(:panel_layout, {8, 8})
+      |> derive_panel_fields!()
+      |> validate_panels!()
+
     opts = NimbleOptions.validate!(opts, @options_schema)
 
     arrangement = Keyword.fetch!(opts, :arrangement)
+    panels = Keyword.get(opts, :panels, [])
+    panel_layout = Keyword.fetch!(opts, :panel_layout)
     num_panels = Keyword.fetch!(opts, :num_panels)
     num_buttons = Keyword.fetch!(opts, :num_buttons)
     num_joysticks = Keyword.fetch!(opts, :num_joysticks)
@@ -262,6 +300,7 @@ defmodule Octopus.Installation do
     global_speed = Keyword.fetch!(opts, :global_speed)
     location = Keyword.fetch!(opts, :location)
     auto_brightness = Keyword.fetch!(opts, :auto_brightness)
+    radar_enabled = Keyword.fetch!(opts, :radar_enabled)
     network_config = Keyword.fetch!(opts, :network_config)
 
     width =
@@ -310,6 +349,10 @@ defmodule Octopus.Installation do
       @behaviour Octopus.Installation
 
       @impl Octopus.Installation
+      def panels, do: unquote(Macro.escape(panels))
+      @impl Octopus.Installation
+      def panel_layout, do: unquote(panel_layout)
+      @impl Octopus.Installation
       def arrangement, do: unquote(arrangement)
       @impl Octopus.Installation
       def num_panels, do: unquote(num_panels)
@@ -337,7 +380,47 @@ defmodule Octopus.Installation do
       def location, do: unquote(location)
       @impl Octopus.Installation
       def auto_brightness, do: unquote(auto_brightness)
+      @impl Octopus.Installation
+      def radar_enabled, do: unquote(radar_enabled)
     end
+  end
+
+  defp derive_panel_fields!(opts) do
+    case Keyword.get(opts, :panels) do
+      nil ->
+        opts
+
+      panels ->
+        {panel_width, panel_height} = Keyword.fetch!(opts, :panel_layout)
+
+        opts
+        |> Keyword.put(:num_panels, length(panels))
+        |> Keyword.put(:panel_width, panel_width)
+        |> Keyword.put(:panel_height, panel_height)
+        |> Keyword.update(:network_config, derive_panel_network_config(panels, []), fn nc ->
+          derive_panel_network_config(panels, nc)
+        end)
+    end
+  end
+
+  defp derive_panel_network_config(panels, network_config) do
+    registry = Octopus.Hardware.registry()
+
+    panel_targets =
+      Enum.map(panels, fn id ->
+        panel = Map.fetch!(registry, id)
+        [address: panel.hostname, panel_index: panel.firmware_panel_index]
+      end)
+
+    Keyword.put(network_config, :panels, panel_targets)
+  end
+
+  defp validate_panels!(opts) do
+    if Keyword.has_key?(opts, :panels) do
+      Octopus.Hardware.InstallationValidator.validate!(opts)
+    end
+
+    opts
   end
 
   @behaviour __MODULE__
@@ -348,6 +431,10 @@ defmodule Octopus.Installation do
 
   @impl __MODULE__
   def arrangement, do: installation().arrangement()
+  @impl __MODULE__
+  def panels, do: installation().panels()
+  @impl __MODULE__
+  def panel_layout, do: installation().panel_layout()
   @impl __MODULE__
   def num_panels, do: installation().num_panels()
   @impl __MODULE__
@@ -374,6 +461,8 @@ defmodule Octopus.Installation do
   def location, do: installation().location()
   @impl __MODULE__
   def auto_brightness, do: installation().auto_brightness()
+  @impl __MODULE__
+  def radar_enabled, do: installation().radar_enabled()
 
   @doc """
   Returns the concrete pixel positions of all panels in the installation

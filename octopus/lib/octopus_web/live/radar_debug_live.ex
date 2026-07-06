@@ -207,7 +207,7 @@ defmodule OctopusWeb.RadarDebugLive do
   def render(assigns) do
     ~H"""
     <div class="p-4">
-      <div class="flex items-center gap-4 mb-4 flex-wrap">
+      <div class="flex items-center gap-4 mb-4 flex-wrap pl-12">
         <h1 class="text-xl font-bold">Radar Debug</h1>
         <a href="/radar" class="btn btn-outline btn-sm">← Radar</a>
         <%= if @adapters != [] do %>

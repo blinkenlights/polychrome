@@ -5,6 +5,8 @@ defmodule Octopus.Broadcaster do
   alias Phoenix.Tracker.State
   alias Octopus.Protobuf
   alias Octopus.Protobuf.{FirmwareConfig, RemoteLog, FirmwareInfo, FirmwarePacket, ProximityEvent}
+  alias Octopus.Hardware
+  alias Octopus.Hardware.{InstallationValidator, Untangle}
   alias Octopus.Installation
 
   @default_config %FirmwareConfig{
@@ -15,7 +17,16 @@ defmodule Octopus.Broadcaster do
   }
 
   defmodule State do
-    defstruct [:udp, :config, :target_ips, :remote_port, :should_send_udp, firmware_stats: %{}]
+    defstruct [
+      :udp,
+      :config,
+      :targets,
+      :network_mode,
+      :pixel_count,
+      :remote_port,
+      :should_send_udp,
+      firmware_stats: %{}
+    ]
   end
 
   defmodule FirmwareInfoMeta do
@@ -43,14 +54,17 @@ defmodule Octopus.Broadcaster do
   end
 
   def init(:ok) do
+    validate_installation!()
+
     network_config = Installation.network_config()
     remote_port = Application.fetch_env!(:octopus, :firmware_broadcaster_remote_port)
     local_port = Application.fetch_env!(:octopus, :firmware_broadcaster_local_port)
 
-    {target_ips, should_send_udp} = determine_target_ips(network_config)
+    {targets, network_mode, should_send_udp} = determine_targets(network_config)
+    pixel_count = Installation.panel_width() * Installation.panel_height()
 
     Logger.info(
-      "Broadcasting to #{inspect(target_ips)}. Port #{remote_port}. Send UDP: #{should_send_udp}"
+      "Broadcasting to #{inspect(targets)}. Port #{remote_port}. Send UDP: #{should_send_udp}"
     )
 
     {:ok, udp} = :gen_udp.open(local_port, [:binary, active: true, broadcast: true])
@@ -58,7 +72,9 @@ defmodule Octopus.Broadcaster do
     state = %State{
       udp: udp,
       config: @default_config,
-      target_ips: target_ips,
+      targets: targets,
+      network_mode: network_mode,
+      pixel_count: pixel_count,
       remote_port: remote_port,
       should_send_udp: should_send_udp
     }
@@ -144,17 +160,24 @@ defmodule Octopus.Broadcaster do
 
   defp send_binary(binary, %State{} = state) do
     if state.should_send_udp do
-      for target_ip <- state.target_ips do
-        Logger.debug(
-          "Sending UDP Packet to #{inspect(target_ip)}:#{state.remote_port} (#{byte_size(binary)} bytes)"
-        )
-
-        :gen_udp.send(state.udp, target_ip, state.remote_port, binary)
+      for {target_ip, panel_index} <- state.targets do
+        payload = frame_payload(binary, state, panel_index)
+        :gen_udp.send(state.udp, target_ip, state.remote_port, payload)
       end
     else
       Logger.debug("UDP sending disabled - packets not sent")
     end
   end
+
+  defp frame_payload(binary, %State{network_mode: :individual, pixel_count: pixel_count}, panel_index) do
+    if panel_index > 1 do
+      Protobuf.pad_for_panel_index(binary, panel_index, pixel_count)
+    else
+      binary
+    end
+  end
+
+  defp frame_payload(binary, _state, _panel_index), do: binary
 
   defp handle_firmware_packet(%RemoteLog{message: message}, from_ip, %State{} = state) do
     Logger.info("#{print_ip(from_ip)}: Remote log #{inspect(message)}")
@@ -179,13 +202,36 @@ defmodule Octopus.Broadcaster do
   end
 
   defp handle_firmware_packet(%ProximityEvent{} = protobuf_event, _from_ip, %State{} = state) do
-    Octopus.Events.Factory.create_proximity_event(protobuf_event)
-    |> Octopus.Events.handle_event()
+    logical_panel =
+      case Untangle.logical_panel_number(Installation, protobuf_event.panel_index) do
+        nil ->
+          if Installation.panels() == [] do
+            protobuf_event.panel_index
+          else
+            Logger.warning(
+              "Ignoring proximity event from unknown firmware panel_index #{protobuf_event.panel_index}"
+            )
+
+            nil
+          end
+
+        logical ->
+          logical
+      end
+
+    if logical_panel do
+      translated = %{protobuf_event | panel_index: logical_panel}
+
+      Octopus.Events.Factory.create_proximity_event(translated)
+      |> Octopus.Events.handle_event()
+    end
 
     state
   end
 
   defp update_firmware_stats(%FirmwareInfo{} = firmware_info, from_ip, %State{} = state) do
+    maybe_warn_catalog_mac_mismatch(firmware_info)
+
     stats = %FirmwareInfoMeta{
       last_seen: :os.system_time(:second),
       from_ip: from_ip,
@@ -197,7 +243,7 @@ defmodule Octopus.Broadcaster do
     %State{state | firmware_stats: firmware_stats}
   end
 
-  defp determine_target_ips(network_config) do
+  defp determine_targets(network_config) do
     # Use Application.get_env to determine environment, defaulting to :prod
     current_env = Application.get_env(:octopus, :env, :prod)
     send_in_dev = Keyword.get(network_config, :send_in_dev, false)
@@ -208,31 +254,46 @@ defmodule Octopus.Broadcaster do
         _ -> true
       end
 
-    target_ips =
-      case Keyword.get(network_config, :mode, :broadcast) do
+    network_mode = Keyword.get(network_config, :mode, :broadcast)
+
+    targets =
+      case network_mode do
         :broadcast ->
           broadcast_ip =
             case Keyword.get(network_config, :broadcast_ip, :auto) do
               :auto -> get_broadcast_ip()
-              ip when is_binary(ip) -> resolve_hostname(ip)
+              ip when is_binary(ip) -> resolve_address(ip)
               ip when is_tuple(ip) -> ip
             end
 
-          [broadcast_ip]
+          [{broadcast_ip, 1}]
 
         :individual ->
-          panel_ips = Keyword.get(network_config, :panel_ips, [])
+          case Installation.panels() do
+            [] ->
+              network_config
+              |> Keyword.get(:panels, [])
+              |> Enum.map(&resolve_panel_target/1)
 
-          Enum.map(panel_ips, fn ip ->
-            case ip do
-              ip when is_binary(ip) -> resolve_hostname(ip)
-              ip when is_tuple(ip) -> ip
-            end
-          end)
+            panel_ids ->
+              Enum.map(panel_ids, fn panel_id ->
+                panel = Hardware.fetch!(panel_id)
+                {resolve_address(panel.hostname), panel.firmware_panel_index}
+              end)
+          end
       end
 
-    {target_ips, should_send_udp}
+    {targets, network_mode, should_send_udp}
   end
+
+  defp resolve_panel_target(panel) do
+    address = Keyword.fetch!(panel, :address)
+    panel_index = Keyword.get(panel, :panel_index, 1)
+    {resolve_address(address), panel_index}
+  end
+
+  defp resolve_address(address) when is_binary(address), do: resolve_hostname(address)
+  defp resolve_address(address) when is_tuple(address), do: address
 
   defp resolve_hostname(hostname) when is_binary(hostname) do
     case :inet.gethostbyname(String.to_charlist(hostname)) do
@@ -262,6 +323,41 @@ defmodule Octopus.Broadcaster do
       [ip, _ | _] ->
         Logger.warning("Multiple broadcast IPs found. Using the first one: #{inspect(ip)}")
         ip
+    end
+  end
+
+  defp validate_installation! do
+    installation_module = Application.fetch_env!(:octopus, :installation)
+
+    opts = [
+      panels: installation_module.panels(),
+      network_config: installation_module.network_config()
+    ]
+
+    if opts[:panels] != [] do
+      InstallationValidator.validate!(opts)
+    end
+  end
+
+  defp maybe_warn_catalog_mac_mismatch(%FirmwareInfo{mac: mac, hostname: hostname}) do
+    catalog_panel =
+      Hardware.registry()
+      |> Map.values()
+      |> Enum.find(fn panel ->
+        panel.mac == mac or panel.hostname == hostname
+      end)
+
+    case catalog_panel do
+      %{mac: ^mac} ->
+        :ok
+
+      %{mac: catalog_mac, id: id} when not is_nil(catalog_mac) ->
+        Logger.warning(
+          "Firmware #{hostname} MAC #{mac} does not match catalog #{inspect(id)} expected #{catalog_mac}"
+        )
+
+      _ ->
+        :ok
     end
   end
 end

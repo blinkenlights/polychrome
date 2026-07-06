@@ -357,9 +357,22 @@ defmodule OctopusWeb.ManagerLive do
 
   def handle_event("start", %{"module" => module_string}, socket) do
     module = String.to_existing_atom(module_string)
-    {:ok, app_id} = AppSupervisor.start_or_select_app(module)
-    AppManager.select_app(app_id)
-    {:noreply, socket}
+
+    case AppSupervisor.start_or_select_app(module) do
+      {:ok, app_id} ->
+        AppManager.select_app(app_id)
+        {:noreply, socket}
+
+      {:error, reason} ->
+        message =
+          case reason do
+            :incompatible -> "App is not compatible with this installation"
+            :start_failed -> "Failed to start app"
+            :app_not_found -> "App not found"
+          end
+
+        {:noreply, put_flash(socket, :error, message)}
+    end
   end
 
   def handle_event("stop", %{"app-id" => app_id}, socket) do
