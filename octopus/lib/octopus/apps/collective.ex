@@ -22,7 +22,7 @@ defmodule Octopus.Apps.Collective do
   alias Octopus.Apps.Collective.Animations
 
   @fps 30
-  @frame_ms trunc(1000 / @fps)
+  @max_dt 0.1
   @track_stale_ms 1500
 
   # Maps the :select config value to the animation module.
@@ -38,7 +38,9 @@ defmodule Octopus.Apps.Collective do
   def name, do: "Collective"
 
   def app_init(config) do
-    Octopus.App.configure_display(layout: :adjacent_panels)
+    # Instant panel updates — easing on the firmware side never completes when every
+    # pixel changes every frame (Lava Lamp / Ring Noise) and can freeze the panel.
+    Octopus.App.configure_display(layout: :adjacent_panels, easing_interval: 0)
     display_info = Octopus.App.get_display_info()
 
     Radar.subscribe()
@@ -66,7 +68,7 @@ defmodule Octopus.Apps.Collective do
     animation = Map.get(config, :animation, :storm)
     anim_mod = Map.fetch!(@animations, animation)
 
-    :timer.send_interval(@frame_ms, :tick)
+    Process.send_after(self(), :tick, 0)
 
     state = %{
       canvas: Canvas.new(display_info.width, display_info.height),
@@ -128,8 +130,9 @@ defmodule Octopus.Apps.Collective do
   end
 
   def handle_info(:tick, state) do
-    now = :erlang.monotonic_time(:millisecond)
-    dt = max(now - state.last_update, 0) / 1000.0
+    tick_start = now_ms()
+    now = tick_start
+    dt = (max(now - state.last_update, 0) / 1000.0) |> min(@max_dt)
     people = fetch_people(state, now)
 
     ctx = %{
@@ -161,6 +164,9 @@ defmodule Octopus.Apps.Collective do
       |> state.anim_mod.render(people, ctx, state.anim_state)
 
     Octopus.App.update_display(canvas)
+
+    elapsed = now_ms() - tick_start
+    Process.send_after(self(), :tick, max(frame_ms() - elapsed, 1))
 
     {:noreply, %{state | canvas: canvas, anim_state: anim_state, last_update: now}}
   end
@@ -460,12 +466,12 @@ defmodule Octopus.Apps.Collective do
   def handle_config(config, state) do
     animation = Map.get(config, :animation, state.animation)
 
-    {anim_mod, anim_state} =
+    {anim_mod, anim_state, last_update} =
       if animation != state.animation do
         mod = Map.fetch!(@animations, animation)
-        {mod, mod.init(state.display_info)}
+        {mod, mod.init(state.display_info), now_ms()}
       else
-        {state.anim_mod, state.anim_state}
+        {state.anim_mod, state.anim_state, state.last_update}
       end
 
     {:noreply,
@@ -474,6 +480,7 @@ defmodule Octopus.Apps.Collective do
        | animation: animation,
          anim_mod: anim_mod,
          anim_state: anim_state,
+         last_update: last_update,
          background: Map.get(config, :background, state.background),
          sensitivity: Map.get(config, :sensitivity, state.sensitivity),
          breath_liveliness: Map.get(config, :breath_liveliness, state.breath_liveliness),
@@ -549,4 +556,9 @@ defmodule Octopus.Apps.Collective do
   end
 
   defp now_ms, do: :erlang.monotonic_time(:millisecond)
+
+  defp frame_ms do
+    speed = Octopus.Installation.global_speed() |> max(0.1)
+    trunc(1000 / (@fps * speed))
+  end
 end

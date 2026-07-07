@@ -45,17 +45,18 @@ defmodule Octopus.Apps.Collective.Animations.RingNoise do
     counter_wave = Map.get(ctx, :ring_noise_counter_wave, true)
     palette = palette_stops(Map.get(ctx, :ring_noise_palette, :lava))
 
-    canvas =
-      for x <- 0..(width - 1), y <- 0..(height - 1), reduce: canvas do
-        acc ->
-          theta = x / width * @two_pi
-          br = brightness(theta, t, pulse_period, pulse_amount, counter_wave)
-          v = noise(theta, y * 0.9, t * noise_speed)
-          {r, g, b} = palette_color(palette, v)
-          Canvas.put_pixel(acc, {x, y}, {round(r * br), round(g * br), round(b * br)})
+    brightness_scale = panel_brightness_scale(width, height)
+
+    pixels =
+      for x <- 0..(width - 1), y <- 0..(height - 1), into: %{} do
+        theta = x / max(width, 1) * @two_pi
+        br = brightness(theta, t, pulse_period, pulse_amount, counter_wave)
+        v = noise(theta, y * 0.9, t * noise_speed)
+        {r, g, b} = palette_color(palette, v)
+        {{x, y}, scale_rgb({round(r * br), round(g * br), round(b * br)}, brightness_scale)}
       end
 
-    {canvas, state}
+    {%Canvas{canvas | pixels: pixels}, state}
   end
 
   @doc false
@@ -125,6 +126,13 @@ defmodule Octopus.Apps.Collective.Animations.RingNoise do
     {r2, g2, b2} = Enum.at(stops, i + 1)
 
     {lerp(r1, r2, t), lerp(g1, g2, t), lerp(b1, b2, t)}
+  end
+
+  defp panel_brightness_scale(w, h) when w * h <= 64, do: 0.5
+  defp panel_brightness_scale(_w, _h), do: 1.0
+
+  defp scale_rgb({r, g, b}, factor) do
+    {round(r * factor), round(g * factor), round(b * factor)}
   end
 
   defp lerp(a, b, t), do: a + (b - a) * t

@@ -4,6 +4,9 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
 
   Slow sinusoidal rise/fall, soft sigmoid colouring, seamless wrap at panel 12→1.
   No crowd input.
+
+  Blob sizes are tuned for a 12-panel (96 px wide) ring and scaled down for
+  smaller installations (e.g. Pixie 8×8) so the field does not saturate every pixel.
   """
 
   @behaviour Octopus.Apps.Collective.Animation
@@ -13,6 +16,11 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
 
   @two_pi 2.0 * :math.pi()
   @field_softness 0.35
+  # Ring layout the blob parameters were authored for (12 panels × 8 px).
+  @reference_circumference 96
+  # Below this width, linear scale alone makes blobs invisible; floor keeps Pixie readable.
+  @small_ring_width 16
+  @small_ring_min_scale 0.28
 
   @palettes %{
     classic: [
@@ -48,18 +56,20 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
   def name, do: "Lava Lamp"
 
   @impl true
-  def init(_display_info) do
+  def init(%{width: width}) do
+    scale = layout_scale(width)
     count = 7
 
     %{
       t: 0.0,
       blob_count: count,
-      blobs: generate_blobs(count)
+      layout_scale: scale,
+      blobs: generate_blobs(count, scale)
     }
   end
 
   @impl true
-  def render(canvas, _people, ctx, state) do
+  def render(%Canvas{} = canvas, _people, ctx, state) do
     dt = ctx.dt
     speed = Map.get(ctx, :lava_speed, 1.0) |> clamp(0.2, 3.0)
     size_mul = Map.get(ctx, :lava_size_mul, 1.25) |> clamp(0.6, 2.2)
@@ -73,31 +83,33 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
 
     width = canvas.width
     height = canvas.height
-    circumference = width
+    circumference = max(width, 1)
+    layout_scale = layout_scale(circumference)
 
-    canvas =
-      for x <- 0..(width - 1), y <- 0..(height - 1), reduce: canvas do
-        acc ->
-          theta_px = x / circumference * @two_pi
-          field = field_at(theta_px, y, t_anim, state.blobs, circumference, size_mul)
-          color = pixel_color(field, y, height, thresh, palette)
-          Canvas.put_pixel(acc, {x, y}, color)
+    pixels =
+      for x <- 0..(width - 1), y <- 0..(height - 1), into: %{} do
+        theta_px = x / circumference * @two_pi
+        field = field_at(theta_px, y, t_anim, state.blobs, circumference, height, size_mul)
+        color = pixel_color(field, y, height, thresh, palette)
+        {{x, y}, color}
       end
 
-    {canvas, %{state | t: t}}
+    {%Canvas{canvas | pixels: pixels}, %{state | t: t, layout_scale: layout_scale}}
   end
 
   @doc false
-  def field_at(theta_px, y, t, blobs, circumference, size_mul \\ 1.25) do
+  def field_at(theta_px, y, t, blobs, circumference, height \\ 8, size_mul \\ 1.25) do
+    layout_scale = layout_scale(circumference)
     k = circumference / @two_pi
+    softness = @field_softness * layout_scale * layout_scale
 
     Enum.reduce(blobs, 0.0, fn blob, acc ->
-      {theta_blob, y_blob, radius} = blob_pose(blob, t, size_mul)
+      {theta_blob, y_blob, radius} = blob_pose(blob, t, size_mul, layout_scale, height)
       dth = angular_dist(theta_px, theta_blob)
       dx = dth * k
       dy = (y - y_blob) * 1.15
       r2 = radius * radius
-      acc + r2 / (dx * dx + dy * dy + @field_softness)
+      acc + r2 / (dx * dx + dy * dy + softness)
     end)
   end
 
@@ -117,7 +129,7 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
   end
 
   @doc false
-  def generate_blobs(count) do
+  def generate_blobs(count, _layout_scale \\ 1.0) do
     for i <- 0..(count - 1) do
       n = count
 
@@ -136,21 +148,36 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
     end
   end
 
-  defp ensure_blobs(%{blob_count: existing} = state, existing), do: state
+  defp layout_scale(circumference) when is_number(circumference) do
+    linear = circumference / @reference_circumference
 
-  defp ensure_blobs(state, count) do
-    %{state | blob_count: count, blobs: generate_blobs(count)}
+    if circumference <= @small_ring_width do
+      max(linear, @small_ring_min_scale)
+    else
+      linear
+    end
   end
 
-  defp blob_pose(blob, t, size_mul) do
-    y_blob = 3.5 + blob.y_amp * :math.sin(@two_pi * t / blob.y_period + blob.y_phase)
+  defp ensure_blobs(%{blob_count: existing} = state, existing), do: state
+
+  defp ensure_blobs(%{layout_scale: scale} = state, count) do
+    %{state | blob_count: count, blobs: generate_blobs(count, scale)}
+  end
+
+  defp blob_pose(blob, t, size_mul, layout_scale, height) do
+    y_center = (height - 1) / 2.0
+
+    y_blob =
+      y_center +
+        blob.y_amp * layout_scale *
+          :math.sin(@two_pi * t / blob.y_period + blob.y_phase)
 
     theta_blob =
       blob.theta0 + blob.drift * t +
         0.12 * :math.sin(@two_pi * t / blob.wob_period + blob.wob_phase)
 
     radius =
-      blob.r * size_mul *
+      blob.r * size_mul * layout_scale *
         (1 + 0.18 * :math.sin(@two_pi * t / blob.pulse_period + blob.pulse_phase))
 
     {theta_blob, y_blob, radius}
@@ -184,7 +211,7 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
     i = trunc(x)
     t = x - i
     {r1, g1, b1} = Enum.at(stops, i)
-    {r2, g2, b2} = Enum.at(stops, i + 1)
+    {r2, g2, b2} = Enum.at(stops, min(i + 1, n - 1))
 
     {round(lerp(r1, r2, t)), round(lerp(g1, g2, t)), round(lerp(b1, b2, t))}
   end
