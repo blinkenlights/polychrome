@@ -49,18 +49,50 @@ defmodule Octopus.Apps.PixelFun do
 
   def config_schema() do
     %{
-      program: {"Program", :string, %{default: "sin(10*t-hypot(x,y))"}},
-      color_interval: {"Color change Interval (s)", :float, %{default: 5, min: 1, max: 20}},
-      invert_colors: {"Invert Colors", :boolean, %{default: false}},
-      translate_scale: {"Translate Scale", :float, %{default: 0.0, min: 0, max: 20}},
-      rotate_scale: {"Rotation Scale", :float, %{default: 0.0, min: 0, max: 4}},
-      zoom_scale: {"Zoom Scale", :float, %{default: 1.0, min: 0, max: 10}},
-      cycle_functions: {"Cycle Functions", :boolean, %{default: false}},
+      program: {"Formula", :string, %{default: "sin(10*t-hypot(x,y))"}},
+      color_interval:
+        {"Palette crossfade (s)", :float, %{default: 5, min: 1, max: 20, step: 0.5}},
+      invert_colors: {"Swap color roles", :boolean, %{default: false}},
+      translate_scale: {"Drift strength", :float, %{default: 0.0, min: 0, max: 20, step: 0.1}},
+      rotate_scale: {"Rotation speed", :float, %{default: 0.0, min: 0, max: 4, step: 0.01}},
+      zoom_scale: {"Zoom pulse strength", :float, %{default: 1.0, min: 0, max: 10, step: 0.1}},
+      cycle_functions: {"Cycle presets", :boolean, %{default: false}},
       cycle_functions_interval:
-        {"Cycle Functions Interval (s)", :float, %{default: 30, min: 1, max: 60 * 60}},
+        {"Preset interval (s)", :float,
+         %{
+           default: 30,
+           min: 1,
+           max: 60 * 60,
+           step: 1,
+           visible_when: {:cycle_functions, [true]}
+         }},
       input: {"Input", :boolean, %{default: false}},
-      lerp_over_black: {"Lerp over black", :boolean, %{default: true}}
+      lerp_over_black: {"Black at zero", :boolean, %{default: true}}
     }
+  end
+
+  def config_info(_config) do
+    """
+    Pixel Fun draws a math formula per pixel. Result −1…1 maps to two palette colours.
+
+    Formula — expression evaluated per pixel. Variables: x, y (position), t (time, scaled by global Speed), i (pixel index), l/m/h (audio bass/mid/high if present), pi, tau.
+
+    Palette crossfade — seconds between new random colour pairs; the transition is smooth over the same duration.
+
+    Swap color roles — flips which palette colour is used for positive vs negative formula values.
+
+    Drift strength — automatic sin/cos panning of the pattern (0 = off). Not manual translation.
+
+    Rotation speed — spin rate around the installation centre (0 = off).
+
+    Zoom pulse strength — breathing zoom; actual zoom oscillates between ~0 and this value (0 forces zoom 1×).
+
+    Cycle presets / Preset interval — reserved for rotating through preset formulas (not active yet).
+
+    Black at zero — on: formula ≈ 0 renders black; positive/negative use palette A/B. off: RGB blend between A and B (no black at zero).
+
+    Input — for installations with buttons/joystick (no effect here without hardware).
+    """
   end
 
   def get_config(state) do
@@ -87,7 +119,7 @@ defmodule Octopus.Apps.PixelFun do
     {:ok, program} = config.program |> Program.parse()
 
     :timer.send_interval(@frame_time_ms, :tick)
-    Process.send_after(self(), :update_colors, param(:color_interval_ms, 5000))
+    Process.send_after(self(), :update_colors, color_interval_ms(config.color_interval))
 
     {seconds, micros} = NaiveDateTime.utc_now() |> NaiveDateTime.to_gregorian_seconds()
     seconds = seconds + micros / 1_000_000
@@ -132,7 +164,7 @@ defmodule Octopus.Apps.PixelFun do
           rotate_scale: rotate_scale,
           zoom_scale: zoom_scale,
           lerp_over_black: lerp_over_black
-        },
+        } = config,
         %State{} = state
       ) do
     source = program
@@ -143,18 +175,24 @@ defmodule Octopus.Apps.PixelFun do
         _ -> 0
       end
 
-    {:noreply,
-     %State{
-       state
-       | program: program,
-         source: source,
-         invert_colors: invert_colors,
-         cycle_functions: cycle_functions,
-         translate_scale: translate_scale,
-         rotate_scale: rotate_scale,
-         zoom_scale: zoom_scale,
-         lerp_over_black: lerp_over_black
-     }}
+    color_interval = Map.get(config, :color_interval, state.color_interval)
+
+    new_state = %State{
+      state
+      | program: program,
+        source: source,
+        invert_colors: invert_colors,
+        cycle_functions: cycle_functions,
+        cycle_functions_interval: Map.get(config, :cycle_functions_interval, state.cycle_functions_interval),
+        translate_scale: translate_scale,
+        rotate_scale: rotate_scale,
+        zoom_scale: zoom_scale,
+        lerp_over_black: lerp_over_black,
+        color_interval: color_interval,
+        input: Map.get(config, :input, state.input)
+    }
+
+    {:noreply, new_state}
   end
 
   def update_program(pid, program) do
@@ -171,20 +209,20 @@ defmodule Octopus.Apps.PixelFun do
     {:noreply, %{state | program: program}}
   end
 
-  defp color_interval_s, do: color_interval_ms() / 1000.0
-  defp color_interval_ms, do: max(param(:color_interval_ms, 5000), 1)
+  defp color_interval_s(%State{} = state), do: color_interval_ms(state.color_interval) / 1000.0
+  defp color_interval_ms(interval) when is_number(interval), do: max(trunc(interval * 1000), 1)
 
   def handle_info(:update_colors, %State{} = state) do
     colors = generate_random_colors()
 
-    Process.send_after(self(), :update_colors, color_interval_ms())
+    Process.send_after(self(), :update_colors, color_interval_ms(state.color_interval))
 
     {:noreply,
      %State{
        state
        | last_colors: state.colors,
          target_colors: colors,
-         lerp_time: color_interval_s()
+         lerp_time: color_interval_s(state)
      }}
   end
 
@@ -287,9 +325,9 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   defp render(%State{program: program} = state) do
-    zoom = 1.0
-
-    rotation = state.seconds * param(:rotate_speed, 0)
+    {offset_x, offset_y} = translate_offset(state)
+    zoom = zoom_factor(state)
+    rotation = state.seconds * state.rotate_scale
 
     {color_a, color_b} = state.colors
 
@@ -302,6 +340,11 @@ defmodule Octopus.Apps.PixelFun do
 
     center_x = Installation.width() / 2 - 0.5
     center_y = Installation.height() / 2 - 0.5
+
+    lerp_fn =
+      if state.lerp_over_black,
+        do: &interpolate_colors_with_black/3,
+        else: &interpolate_colors/3
 
     Installation.virtual_pixel_positions_per_panel()
     |> Enum.with_index()
@@ -321,8 +364,8 @@ defmodule Octopus.Apps.PixelFun do
         local_x = rem(i, 8)
         local_y = div(i, 8)
 
-        x_translated = x - center_x
-        y_translated = y - center_y
+        x_translated = x - offset_x - center_x
+        y_translated = y - offset_y - center_y
 
         x_rotated = x_translated * :math.cos(rotation) - y_translated * :math.sin(rotation)
         y_rotated = x_translated * :math.sin(rotation) + y_translated * :math.cos(rotation)
@@ -341,7 +384,7 @@ defmodule Octopus.Apps.PixelFun do
            state.audio_input.mid,
            state.audio_input.high,
            colors,
-           &lerp_colors/3
+           lerp_fn
          )}
       end
     end)
@@ -420,9 +463,41 @@ defmodule Octopus.Apps.PixelFun do
     {r, g, b}
   end
 
+  defp interpolate_colors(%Chameleon.HSV{} = a, %Chameleon.HSV{} = b, value) do
+    %Chameleon.RGB{r: a_r, g: a_g, b: a_b} = Chameleon.convert(a, Chameleon.RGB)
+    %Chameleon.RGB{r: b_r, g: b_g, b: b_b} = Chameleon.convert(b, Chameleon.RGB)
+
+    r = lerp(a_r, b_r, value) |> trunc() |> min(255) |> max(0)
+    g = lerp(a_g, b_g, value) |> trunc() |> min(255) |> max(0)
+    b = lerp(a_b, b_b, value) |> trunc() |> min(255) |> max(0)
+
+    hsv = Chameleon.RGB.new(r, g, b) |> Chameleon.convert(Chameleon.HSV)
+
+    hsv = %Chameleon.HSV{
+      hsv
+      | s: param(:saturation_percent, 70),
+        v: trunc(param(:value_percent, 100) * abs(value)) |> min(100) |> max(0)
+    }
+
+    %Chameleon.RGB{r: r, g: g, b: b} = Chameleon.convert(hsv, Chameleon.RGB)
+    {r, g, b}
+  end
+
+  defp translate_offset(%State{translate_scale: scale, offset: {ox, oy}} = state) do
+    anim_x = :math.sin(0.3 + state.seconds * 0.17) * scale
+    anim_y = :math.cos(0.7 + state.seconds * 0.05) * scale
+    {ox + anim_x, oy + anim_y}
+  end
+
+  defp zoom_factor(%State{zoom_scale: 0}), do: 1.0
+
+  defp zoom_factor(%State{zoom_scale: scale, seconds: seconds}) do
+    (:math.sin(seconds * 0.1) * 0.5 + 0.5) * scale
+  end
+
   defp lerp_toward_target_colors(%State{} = state) do
-    current_time = max(color_interval_s() - state.lerp_time, 0)
-    t = current_time / color_interval_s()
+    current_time = max(color_interval_s(state) - state.lerp_time, 0)
+    t = current_time / color_interval_s(state)
     lerp_time = max(state.lerp_time - 1 / @fps, 0)
 
     {last_a, last_b} = state.last_colors
@@ -457,51 +532,5 @@ defmodule Octopus.Apps.PixelFun do
     hsv_a = Chameleon.HSV.new(hue_a, sat_a, 100)
     hsv_b = Chameleon.HSV.new(hue_b, sat_b, 100)
     {hsv_a, hsv_b}
-  end
-
-  defp lerp_colors(%Chameleon.HSV{} = a, %Chameleon.HSV{} = b, value) do
-    cond do
-      value > 0 ->
-        # Use color A, adjust brightness based on value, hardcode saturation at 70%
-        hsv = %Chameleon.HSV{a | s: 70, v: trunc(100 * value) |> max(0) |> min(100)}
-        fast_hsv_to_rgb(hsv.h, hsv.s, hsv.v)
-
-      value < 0 ->
-        # Use color B, adjust brightness based on absolute value, hardcode saturation at 70%
-        hsv = %Chameleon.HSV{b | s: 70, v: trunc(100 * -value) |> max(0) |> min(100)}
-        fast_hsv_to_rgb(hsv.h, hsv.s, hsv.v)
-
-      true ->
-        # Black
-        {0, 0, 0}
-    end
-  end
-
-  defp fast_hsv_to_rgb(h, s, v) do
-    # Normalize inputs
-    h_norm = rem(h, 360) / 60.0
-    s_norm = s / 100.0
-    v_norm = v / 100.0
-
-    c = v_norm * s_norm
-    x = c * (1 - abs(:math.fmod(h_norm, 2.0) - 1))
-    m = v_norm - c
-
-    {r, g, b} =
-      cond do
-        h_norm < 1 -> {c, x, 0}
-        h_norm < 2 -> {x, c, 0}
-        h_norm < 3 -> {0, c, x}
-        h_norm < 4 -> {0, x, c}
-        h_norm < 5 -> {x, 0, c}
-        true -> {c, 0, x}
-      end
-
-    # Convert to 0-255 range and ensure integer values
-    {
-      trunc((r + m) * 255) |> max(0) |> min(255),
-      trunc((g + m) * 255) |> max(0) |> min(255),
-      trunc((b + m) * 255) |> max(0) |> min(255)
-    }
   end
 end

@@ -34,16 +34,38 @@ defmodule OctopusWeb.AppConfigComponent do
           <label :if={type != :button} class="label" for={"#{@app_id}-#{key}"}>
             <span class="label-text font-semibold">{name}</span>
           </label>
-          <.config_input
-            class="w-full"
-            app_id={@app_id}
-            key={key}
-            name={name}
-            type={type}
-            opts={opts}
-            value={@config[key]}
-            target={@myself}
-          />
+          <%= if type in [:float, :int] do %>
+            <div class="flex items-center gap-2">
+              <.config_input
+                class="flex-grow"
+                app_id={@app_id}
+                key={key}
+                name={name}
+                type={type}
+                opts={opts}
+                value={@config[key]}
+                target={@myself}
+              />
+              <.config_number
+                app_id={@app_id}
+                key={key}
+                type={type}
+                opts={opts}
+                value={@config[key]}
+              />
+            </div>
+          <% else %>
+            <.config_input
+              class="w-full"
+              app_id={@app_id}
+              key={key}
+              name={name}
+              type={type}
+              opts={opts}
+              value={@config[key]}
+              target={@myself}
+            />
+          <% end %>
         </div>
       </form>
       <p
@@ -180,7 +202,7 @@ defmodule OctopusWeb.AppConfigComponent do
   attr(:type, :atom, required: true)
   attr(:name, :string, required: true)
   attr(:opts, :map, required: true)
-  attr(:debounce, :integer, default: 0)
+  attr(:debounce, :integer, default: 100)
   attr(:value, :any, required: true)
   attr(:target, :any, default: nil)
   attr(:rest, :global)
@@ -196,7 +218,8 @@ defmodule OctopusWeb.AppConfigComponent do
       max={@opts[:max]}
       phx-debounce={@debounce}
       value={@value}
-      class="range range-primary"
+      oninput={"if(this.nextElementSibling)this.nextElementSibling.value=this.value"}
+      class="range range-primary range-sm"
       {@rest}
     />
     """
@@ -213,7 +236,8 @@ defmodule OctopusWeb.AppConfigComponent do
       max={@opts[:max]}
       phx-debounce={@debounce}
       value={@value}
-      class="range range-primary"
+      oninput={"if(this.nextElementSibling)this.nextElementSibling.value=this.value"}
+      class="range range-primary range-sm"
       {@rest}
     />
     """
@@ -291,6 +315,32 @@ defmodule OctopusWeb.AppConfigComponent do
     >
       {@name}
     </button>
+    """
+  end
+
+  attr(:app_id, :string, required: true)
+  attr(:key, :atom, required: true)
+  attr(:type, :atom, required: true)
+  attr(:opts, :map, required: true)
+  attr(:debounce, :integer, default: 100)
+  attr(:value, :any, required: true)
+  attr(:rest, :global)
+
+  defp config_number(assigns) do
+    ~H"""
+    <input
+      type="number"
+      name={@key}
+      id={"#{@app_id}-#{@key}-number"}
+      step={@opts |> Map.get(:step, if(@type == :int, do: 1, else: 0.01))}
+      min={@opts[:min]}
+      max={@opts[:max]}
+      phx-debounce={@debounce}
+      value={@value}
+      oninput={"if(this.previousElementSibling)this.previousElementSibling.value=this.value"}
+      class="input input-bordered input-xs w-20 text-right tabular-nums shrink-0"
+      {@rest}
+    />
     """
   end
 end
