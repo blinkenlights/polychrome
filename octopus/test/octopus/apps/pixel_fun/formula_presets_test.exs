@@ -83,6 +83,18 @@ defmodule Octopus.Apps.PixelFun.FormulaPresetsTest do
     end
   end
 
+  describe "user_formula_exists?/1" do
+    test "detects saved user formulas only" do
+      refute FormulaPresets.user_formula_exists?("sin(x+t*99)")
+
+      assert {:ok, _} =
+               FormulaPresets.create(%{name: "Saved", formula: "cos(x-y+t)"})
+
+      assert FormulaPresets.user_formula_exists?("cos(x-y+t)")
+      refute FormulaPresets.user_formula_exists?("sin(10*t-hypot(x,y))")
+    end
+  end
+
   describe "validate_formula/1" do
     test "accepts valid and rejects invalid input" do
       assert :ok = FormulaPresets.validate_formula("sin(x+y+t)")

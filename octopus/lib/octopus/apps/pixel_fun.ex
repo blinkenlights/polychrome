@@ -16,12 +16,10 @@ defmodule Octopus.Apps.PixelFun do
     defstruct [
       :program,
       :source,
-      :invert_colors,
       :colors,
       :last_colors,
       :target_colors,
       :lerp_time,
-      :lerp_over_black,
       :translate_scale,
       :rotate_scale,
       :zoom_scale,
@@ -57,7 +55,6 @@ defmodule Octopus.Apps.PixelFun do
          }},
       color_interval:
         {"Palette crossfade (s)", :float, %{default: 5, min: 1, max: 20, step: 0.5}},
-      invert_colors: {"Swap color roles", :boolean, %{default: false}},
       translate_scale: {"Drift strength", :float, %{default: 0.0, min: 0, max: 20, step: 0.1}},
       rotate_scale: {"Rotation speed", :float, %{default: 0.0, min: 0, max: 4, step: 0.01}},
       zoom_scale: {"Zoom pulse strength", :float, %{default: 1.0, min: 0, max: 10, step: 0.1}},
@@ -71,20 +68,17 @@ defmodule Octopus.Apps.PixelFun do
            step: 1,
            visible_when: {:cycle_functions, [true]}
          }},
-      input: {"Input", :boolean, %{default: false}},
-      lerp_over_black: {"Black at zero", :boolean, %{default: true}}
+      input: {"Input", :boolean, %{default: false}}
     }
   end
 
   def config_info(_config) do
     """
-    Pixel Fun draws a math formula per pixel. Result −1…1 maps to two palette colours.
+    Pixel Fun draws a math formula per pixel. Result −1…1 maps to two palette colours; zero renders black.
 
     Formula — expression evaluated per pixel. Pick a preset or type your own; saved presets persist across restarts. Variables: x, y (position), t (time, scaled by global Speed), i (pixel index), l/m/h (audio bass/mid/high if present), pi, tau.
 
     Palette crossfade — seconds between new random colour pairs; the transition is smooth over the same duration.
-
-    Swap color roles — flips which palette colour is used for positive vs negative formula values.
 
     Drift strength — automatic sin/cos panning of the pattern (0 = off). Not manual translation.
 
@@ -94,8 +88,6 @@ defmodule Octopus.Apps.PixelFun do
 
     Cycle presets / Preset interval — reserved for rotating through preset formulas (not active yet).
 
-    Black at zero — on: formula ≈ 0 renders black; positive/negative use palette A/B. off: RGB blend between A and B (no black at zero).
-
     Input — for installations with buttons/joystick (no effect here without hardware).
     """
   end
@@ -103,15 +95,13 @@ defmodule Octopus.Apps.PixelFun do
   def get_config(state) do
     %{
       program: state.source,
-      invert_colors: state.invert_colors,
       color_interval: state.color_interval,
       cycle_functions: state.cycle_functions,
       cycle_functions_interval: state.cycle_functions_interval,
       translate_scale: state.translate_scale,
       rotate_scale: state.rotate_scale,
       zoom_scale: state.zoom_scale,
-      input: state.input,
-      lerp_over_black: state.lerp_over_black
+      input: state.input
     }
   end
 
@@ -136,12 +126,10 @@ defmodule Octopus.Apps.PixelFun do
      %State{
        program: program,
        source: config.program,
-       invert_colors: config.invert_colors,
        colors: generate_random_colors(),
        last_colors: generate_random_colors(),
        target_colors: generate_random_colors(),
        lerp_time: config.color_interval,
-       lerp_over_black: config.lerp_over_black,
        color_interval: config.color_interval,
        cycle_functions: config.cycle_functions,
        cycle_functions_interval: config.cycle_functions_interval,
@@ -163,12 +151,10 @@ defmodule Octopus.Apps.PixelFun do
   def handle_config(
         %{
           program: program,
-          invert_colors: invert_colors,
           cycle_functions: cycle_functions,
           translate_scale: translate_scale,
           rotate_scale: rotate_scale,
-          zoom_scale: zoom_scale,
-          lerp_over_black: lerp_over_black
+          zoom_scale: zoom_scale
         } = config,
         %State{} = state
       ) do
@@ -186,13 +172,11 @@ defmodule Octopus.Apps.PixelFun do
       state
       | program: program,
         source: source,
-        invert_colors: invert_colors,
         cycle_functions: cycle_functions,
         cycle_functions_interval: Map.get(config, :cycle_functions_interval, state.cycle_functions_interval),
         translate_scale: translate_scale,
         rotate_scale: rotate_scale,
         zoom_scale: zoom_scale,
-        lerp_over_black: lerp_over_black,
         color_interval: color_interval,
         input: Map.get(config, :input, state.input)
     }
@@ -336,20 +320,8 @@ defmodule Octopus.Apps.PixelFun do
 
     {color_a, color_b} = state.colors
 
-    colors =
-      if state.invert_colors do
-        {color_b, color_a}
-      else
-        {color_a, color_b}
-      end
-
     center_x = Installation.width() / 2 - 0.5
     center_y = Installation.height() / 2 - 0.5
-
-    lerp_fn =
-      if state.lerp_over_black,
-        do: &interpolate_colors_with_black/3,
-        else: &interpolate_colors/3
 
     Installation.virtual_pixel_positions_per_panel()
     |> Enum.with_index()
@@ -358,7 +330,7 @@ defmodule Octopus.Apps.PixelFun do
       hue_shift = proximity * 180 * 5
       interaction_factor = Map.get(state.panel_interaction_factors, index, 0.0)
 
-      {color_a, color_b} = colors
+      {color_a, color_b} = state.colors
 
       colors = {
         %Chameleon.HSV{(%Chameleon.HSV{} = color_a) | h: rem(trunc(color_a.h + hue_shift), 360)},
@@ -389,7 +361,7 @@ defmodule Octopus.Apps.PixelFun do
            state.audio_input.mid,
            state.audio_input.high,
            colors,
-           lerp_fn
+           &interpolate_colors_with_black/3
          )}
       end
     end)
@@ -463,26 +435,6 @@ defmodule Octopus.Apps.PixelFun do
       end
 
     hsv = %Chameleon.HSV{hsv | h: hsv.h |> max(0) |> min(359)}
-
-    %Chameleon.RGB{r: r, g: g, b: b} = Chameleon.convert(hsv, Chameleon.RGB)
-    {r, g, b}
-  end
-
-  defp interpolate_colors(%Chameleon.HSV{} = a, %Chameleon.HSV{} = b, value) do
-    %Chameleon.RGB{r: a_r, g: a_g, b: a_b} = Chameleon.convert(a, Chameleon.RGB)
-    %Chameleon.RGB{r: b_r, g: b_g, b: b_b} = Chameleon.convert(b, Chameleon.RGB)
-
-    r = lerp(a_r, b_r, value) |> trunc() |> min(255) |> max(0)
-    g = lerp(a_g, b_g, value) |> trunc() |> min(255) |> max(0)
-    b = lerp(a_b, b_b, value) |> trunc() |> min(255) |> max(0)
-
-    hsv = Chameleon.RGB.new(r, g, b) |> Chameleon.convert(Chameleon.HSV)
-
-    hsv = %Chameleon.HSV{
-      hsv
-      | s: param(:saturation_percent, 70),
-        v: trunc(param(:value_percent, 100) * abs(value)) |> min(100) |> max(0)
-    }
 
     %Chameleon.RGB{r: r, g: g, b: b} = Chameleon.convert(hsv, Chameleon.RGB)
     {r, g, b}

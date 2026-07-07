@@ -149,6 +149,12 @@ defmodule Octopus.Apps.PixelFun.FormulaPresets do
     end
   end
 
+  @doc "Returns true if a user-saved preset already uses this exact formula."
+  @spec user_formula_exists?(String.t()) :: boolean()
+  def user_formula_exists?(formula) when is_binary(formula) do
+    Enum.any?(list_user(), &(&1.formula == formula))
+  end
+
   @doc "Returns a preset id for an exact formula match, or `\"custom\"`."
   @spec id_for_formula(String.t()) :: String.t()
   def id_for_formula(formula) do

@@ -7,8 +7,11 @@ defmodule OctopusWeb.AppConfigComponent do
     {:ok,
      assign(socket,
        config_info: nil,
-       preset_save_name: "",
-       preset_message: nil
+       formula_save_name: "",
+       preset_message: nil,
+       show_save_formula_modal: false,
+       formula_baseline: nil,
+       can_save_formula: false
      )}
   end
 
@@ -60,8 +63,10 @@ defmodule OctopusWeb.AppConfigComponent do
                 presets={@formula_presets}
                 selected_preset_id={@selected_preset_id}
                 formula_valid={@formula_valid}
-                preset_save_name={@preset_save_name}
                 preset_message={@preset_message}
+                show_save_formula_modal={@show_save_formula_modal}
+                formula_save_name={@formula_save_name}
+                can_save_formula={@can_save_formula}
               />
             <% type in [:float, :int] -> %>
               <div class="flex items-center gap-2">
@@ -121,38 +126,72 @@ defmodule OctopusWeb.AppConfigComponent do
   def handle_event("change", params, socket) do
     case target_name(params["_target"]) do
       "program_preset_id" -> handle_preset_select(params, socket)
-      "preset_save_name" -> {:noreply, assign(socket, preset_save_name: params["preset_save_name"] || "")}
+      "formula_save_name" -> {:noreply, assign(socket, formula_save_name: params["formula_save_name"] || "")}
       _ -> handle_config_change(params, socket)
     end
+  end
+
+  def handle_event("open_save_formula_modal", _params, socket) do
+    if socket.assigns.can_save_formula do
+      {:noreply,
+       assign(socket,
+         show_save_formula_modal: true,
+         formula_save_name: "",
+         preset_message: nil
+       )}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("close_save_formula_modal", _params, socket) do
+    {:noreply, assign(socket, show_save_formula_modal: false, formula_save_name: "")}
   end
 
   def handle_event("save_formula_preset", params, socket) do
     module = socket.assigns.formula_preset_module
     key = socket.assigns.formula_preset_key
-    name = (params["preset_save_name"] || socket.assigns.preset_save_name || "") |> String.trim()
+
+    name =
+      (params["formula_save_name"] || socket.assigns.formula_save_name || "")
+      |> String.trim()
+
     formula = Map.get(socket.assigns.config, key, "")
 
     cond do
       is_nil(module) ->
         {:noreply, socket}
 
+      not socket.assigns.can_save_formula ->
+        {:noreply, assign(socket, preset_message: {:error, "Formula cannot be saved"})}
+
       name == "" ->
-        {:noreply, assign(socket, preset_message: {:error, "Enter a preset name"})}
+        {:noreply, assign(socket, preset_message: {:error, "Enter a formula name"})}
 
       module.validate_formula(formula) == :error ->
-        {:noreply, assign(socket, preset_message: {:error, "Formula is invalid"})}
+        {:noreply,
+         assign(socket,
+           show_save_formula_modal: false,
+           preset_message: {:error, "Formula is invalid"}
+         )}
 
       true ->
         case module.create(%{name: name, formula: formula}) do
           {:ok, preset} ->
+            new_config = Map.put(socket.assigns.config, key, formula)
+
             {:noreply,
              socket
              |> assign(
+               config: new_config,
                formula_presets: module.list_all(),
                selected_preset_id: preset.id,
-               preset_save_name: "",
-               preset_message: {:ok, "Preset saved"}
-             )}
+               formula_save_name: "",
+               formula_baseline: formula,
+               show_save_formula_modal: false,
+               preset_message: {:ok, "Formula saved"}
+             )
+             |> assign_formula_preset_state(new_config, clear_message: false)}
 
           {:error, changeset} ->
             {:noreply, assign(socket, preset_message: {:error, preset_error_message(changeset)})}
@@ -169,7 +208,7 @@ defmodule OctopusWeb.AppConfigComponent do
         {:noreply, socket}
 
       not user_preset_id?(id) ->
-        {:noreply, assign(socket, preset_message: {:error, "Only saved presets can be deleted"})}
+        {:noreply, assign(socket, preset_message: {:error, "Only saved formulas can be deleted"})}
 
       true ->
         case module.delete(id) do
@@ -179,11 +218,11 @@ defmodule OctopusWeb.AppConfigComponent do
              |> assign(
                formula_presets: module.list_all(),
                selected_preset_id: "custom",
-               preset_message: {:ok, "Preset deleted"}
+               preset_message: {:ok, "Formula deleted"}
              )}
 
           {:error, _} ->
-            {:noreply, assign(socket, preset_message: {:error, "Could not delete preset"})}
+            {:noreply, assign(socket, preset_message: {:error, "Could not delete formula"})}
         end
     end
   end
@@ -211,9 +250,11 @@ defmodule OctopusWeb.AppConfigComponent do
            config: new_config,
            selected_preset_id: preset_id,
            formula_valid: true,
+           formula_baseline: formula,
            preset_message: nil,
            config_info: config_info(socket.assigns.app_module, new_config)
-         )}
+         )
+         |> assign_formula_preset_state(new_config, clear_message: false)}
     end
   end
 
@@ -222,7 +263,7 @@ defmodule OctopusWeb.AppConfigComponent do
 
     parsed =
       params
-      |> Map.drop(["_target", "program_preset_id", "preset_save_name"])
+      |> Map.drop(["_target", "program_preset_id", "formula_save_name"])
       |> Enum.reject(fn {key, _value} -> String.starts_with?(key, "_unused_") end)
       |> Enum.map(fn {key, value} -> {String.to_existing_atom(key), value} end)
       |> Enum.map(fn {key, value} ->
@@ -273,7 +314,7 @@ defmodule OctopusWeb.AppConfigComponent do
 
   defp target_keys(params) do
     params
-    |> Map.drop(["_target", "program_preset_id", "preset_save_name"])
+    |> Map.drop(["_target", "program_preset_id", "formula_save_name"])
     |> Map.keys()
     |> Enum.flat_map(&schema_key/1)
   end
@@ -323,6 +364,7 @@ defmodule OctopusWeb.AppConfigComponent do
       {key, _name, %{presets_module: module}} ->
         formula = Map.get(config, key, "")
         valid? = module.validate_formula(formula) == :ok
+        baseline = socket.assigns.formula_baseline || formula
 
         socket
         |> assign(
@@ -330,10 +372,18 @@ defmodule OctopusWeb.AppConfigComponent do
           formula_preset_key: key,
           formula_preset_module: module,
           selected_preset_id: module.id_for_formula(formula),
-          formula_valid: valid?
+          formula_valid: valid?,
+          formula_baseline: baseline,
+          can_save_formula: can_save_formula?(formula, baseline, valid?, module)
         )
         |> then(fn s -> if clear_message?, do: assign(s, preset_message: nil), else: s end)
     end
+  end
+
+  defp can_save_formula?(formula, baseline, valid?, module) do
+    valid? &&
+      String.trim(formula) != String.trim(baseline) &&
+      !module.user_formula_exists?(formula)
   end
 
   defp formula_preset_field(config_schema) do
@@ -349,7 +399,7 @@ defmodule OctopusWeb.AppConfigComponent do
     case changeset.errors do
       [{:name, {msg, _}} | _] -> "Name #{msg}"
       [{:formula, {msg, _}} | _] -> "Formula #{msg}"
-      _ -> "Could not save preset"
+      _ -> "Could not save formula"
     end
   end
 
@@ -506,8 +556,10 @@ defmodule OctopusWeb.AppConfigComponent do
   attr(:presets, :list, required: true)
   attr(:selected_preset_id, :string, required: true)
   attr(:formula_valid, :boolean, required: true)
-  attr(:preset_save_name, :string, default: "")
+  attr(:formula_save_name, :string, default: "")
   attr(:preset_message, :any, default: nil)
+  attr(:show_save_formula_modal, :boolean, default: false)
+  attr(:can_save_formula, :boolean, default: false)
   attr(:debounce, :integer, default: 100)
 
   defp formula_preset_input(assigns) do
@@ -518,16 +570,11 @@ defmodule OctopusWeb.AppConfigComponent do
       assign(assigns,
         builtin_presets: builtin_presets,
         user_presets: user_presets,
-        can_delete?: user_preset_id?(assigns.selected_preset_id),
-        can_save?:
-          assigns.formula_valid and String.trim(assigns.preset_save_name) != ""
+        can_delete?: user_preset_id?(assigns.selected_preset_id)
       )
 
     ~H"""
     <div class="space-y-2">
-      <label class="label py-0" for={"#{@app_id}-program-preset"}>
-        <span class="label-text text-sm opacity-80">Preset</span>
-      </label>
       <select
         name="program_preset_id"
         id={"#{@app_id}-program-preset"}
@@ -556,14 +603,40 @@ defmodule OctopusWeb.AppConfigComponent do
         </optgroup>
       </select>
 
-      <input
-        type="text"
-        name={@key}
-        id={"#{@app_id}-#{@key}"}
-        phx-debounce={@debounce}
-        value={@value}
-        class="input input-bordered w-full font-mono text-sm"
-      />
+      <label class="label py-0" for={"#{@app_id}-#{@key}"}>
+        <span class="label-text text-sm opacity-80">Formula</span>
+      </label>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          name={@key}
+          id={"#{@app_id}-#{@key}"}
+          phx-debounce={@debounce}
+          value={@value}
+          class="input input-bordered flex-grow min-w-0 font-mono text-sm"
+        />
+        <button
+          type="button"
+          id={"#{@app_id}-save-formula"}
+          phx-click="open_save_formula_modal"
+          phx-target={@target}
+          disabled={!@can_save_formula}
+          class="btn btn-primary btn-sm shrink-0"
+        >
+          Save as formula
+        </button>
+        <button
+          :if={@can_delete?}
+          type="button"
+          id={"#{@app_id}-delete-formula"}
+          phx-click="delete_formula_preset"
+          phx-target={@target}
+          class="btn btn-outline btn-error btn-sm shrink-0"
+        >
+          Delete
+        </button>
+      </div>
 
       <p class={[
         "text-xs",
@@ -572,43 +645,6 @@ defmodule OctopusWeb.AppConfigComponent do
       ]}>
         {if @formula_valid, do: "Valid formula", else: "Invalid formula syntax"}
       </p>
-
-      <div class="flex flex-wrap items-end gap-2">
-        <label class="form-control flex-grow min-w-[10rem]">
-          <span class="label-text text-xs opacity-70">Save as</span>
-          <input
-            type="text"
-            name="preset_save_name"
-            id={"#{@app_id}-preset-save-name"}
-            phx-debounce={@debounce}
-            phx-change="change"
-            phx-target={@target}
-            value={@preset_save_name}
-            placeholder="Preset name"
-            class="input input-bordered input-sm w-full"
-          />
-        </label>
-        <button
-          type="button"
-          id={"#{@app_id}-save-formula-preset"}
-          phx-click="save_formula_preset"
-          phx-target={@target}
-          disabled={!@can_save?}
-          class="btn btn-primary btn-sm"
-        >
-          Save preset
-        </button>
-        <button
-          :if={@can_delete?}
-          type="button"
-          id={"#{@app_id}-delete-formula-preset"}
-          phx-click="delete_formula_preset"
-          phx-target={@target}
-          class="btn btn-outline btn-error btn-sm"
-        >
-          Delete
-        </button>
-      </div>
 
       <p
         :if={@preset_message}
@@ -620,6 +656,54 @@ defmodule OctopusWeb.AppConfigComponent do
       >
         {preset_message_text(@preset_message)}
       </p>
+
+      <div :if={@show_save_formula_modal} class="modal modal-open" role="dialog" aria-modal="true">
+        <div class="modal-box">
+          <h3 class="font-bold text-lg">Save formula</h3>
+          <p class="py-2 text-sm opacity-70">
+            Save the current formula under a name you can pick from the list later.
+          </p>
+          <form
+            id={"#{@app_id}-save-formula-form"}
+            phx-submit="save_formula_preset"
+            phx-target={@target}
+            class="space-y-4"
+          >
+            <input
+              type="text"
+              name="formula_save_name"
+              id={"#{@app_id}-formula-save-name"}
+              phx-debounce={@debounce}
+              phx-change="change"
+              phx-target={@target}
+              value={@formula_save_name}
+              placeholder="Formula name"
+              autofocus
+              class="input input-bordered w-full"
+            />
+            <div class="modal-action mt-0">
+              <button
+                type="button"
+                phx-click="close_save_formula_modal"
+                phx-target={@target}
+                class="btn btn-ghost"
+              >
+                Cancel
+              </button>
+              <button type="submit" class="btn btn-primary">
+                Save
+              </button>
+            </div>
+          </form>
+        </div>
+        <button
+          type="button"
+          class="modal-backdrop"
+          phx-click="close_save_formula_modal"
+          phx-target={@target}
+          aria-label="Close"
+        />
+      </div>
     </div>
     """
   end
