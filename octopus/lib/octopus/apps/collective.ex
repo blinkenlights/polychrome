@@ -30,7 +30,9 @@ defmodule Octopus.Apps.Collective do
     storm: Animations.Storm,
     breath: Animations.Breath,
     dots: Animations.Dots,
-    orbital: Animations.Orbital
+    orbital: Animations.Orbital,
+    lava_lamp: Animations.LavaLamp,
+    ring_noise: Animations.RingNoise
   }
 
   def name, do: "Collective"
@@ -50,6 +52,16 @@ defmodule Octopus.Apps.Collective do
     dots_smoothing = Map.get(config, :dots_smoothing, 0.35)
     orbital_liveliness = Map.get(config, :orbital_liveliness, 0.35)
     orbital_sun_gain = Map.get(config, :orbital_sun_gain, 1.0)
+    lava_blob_count = Map.get(config, :lava_blob_count, 7)
+    lava_speed = Map.get(config, :lava_speed, 1.0)
+    lava_size_mul = Map.get(config, :lava_size_mul, 1.25)
+    lava_thresh = Map.get(config, :lava_thresh, 0.9)
+    lava_palette = Map.get(config, :lava_palette, :classic)
+    ring_noise_speed = Map.get(config, :ring_noise_speed, 1.0)
+    ring_noise_pulse_period = Map.get(config, :ring_noise_pulse_period, 24.0)
+    ring_noise_pulse_amount = Map.get(config, :ring_noise_pulse_amount, 0.65)
+    ring_noise_counter_wave = Map.get(config, :ring_noise_counter_wave, true)
+    ring_noise_palette = Map.get(config, :ring_noise_palette, :lava)
     background = Map.get(config, :background, :deep_dark)
     animation = Map.get(config, :animation, :storm)
     anim_mod = Map.fetch!(@animations, animation)
@@ -68,6 +80,16 @@ defmodule Octopus.Apps.Collective do
       dots_smoothing: dots_smoothing,
       orbital_liveliness: orbital_liveliness,
       orbital_sun_gain: orbital_sun_gain,
+      lava_blob_count: lava_blob_count,
+      lava_speed: lava_speed,
+      lava_size_mul: lava_size_mul,
+      lava_thresh: lava_thresh,
+      lava_palette: lava_palette,
+      ring_noise_speed: ring_noise_speed,
+      ring_noise_pulse_period: ring_noise_pulse_period,
+      ring_noise_pulse_amount: ring_noise_pulse_amount,
+      ring_noise_counter_wave: ring_noise_counter_wave,
+      ring_noise_palette: ring_noise_palette,
       background: background,
       animation: animation,
       anim_mod: anim_mod,
@@ -120,6 +142,16 @@ defmodule Octopus.Apps.Collective do
       dots_smoothing: state.dots_smoothing,
       orbital_liveliness: state.orbital_liveliness,
       orbital_sun_gain: state.orbital_sun_gain,
+      lava_blob_count: state.lava_blob_count,
+      lava_speed: state.lava_speed,
+      lava_size_mul: state.lava_size_mul,
+      lava_thresh: state.lava_thresh,
+      lava_palette: state.lava_palette,
+      ring_noise_speed: state.ring_noise_speed,
+      ring_noise_pulse_period: state.ring_noise_pulse_period,
+      ring_noise_pulse_amount: state.ring_noise_pulse_amount,
+      ring_noise_counter_wave: state.ring_noise_counter_wave,
+      ring_noise_palette: state.ring_noise_palette,
       background: state.background,
       display_info: state.display_info
     }
@@ -148,7 +180,9 @@ defmodule Octopus.Apps.Collective do
              {"Tempest", :storm},
              {"Crowd Breath", :breath},
              {"Crowd Dots", :dots},
-             {"Orbital", :orbital}
+             {"Orbital", :orbital},
+             {"Lava Lamp", :lava_lamp},
+             {"Ring Noise", :ring_noise}
            ]
          }},
       background:
@@ -225,6 +259,93 @@ defmodule Octopus.Apps.Collective do
            default: 1.0,
            step: 0.05,
            visible_when: {:animation, [:orbital]}
+         }},
+      lava_blob_count:
+        {"Blob Count", :int,
+         %{
+           min: 3,
+           max: 12,
+           default: 7,
+           visible_when: {:animation, [:lava_lamp]}
+         }},
+      lava_speed:
+        {"Speed", :float,
+         %{
+           min: 0.2,
+           max: 3.0,
+           default: 1.0,
+           step: 0.05,
+           visible_when: {:animation, [:lava_lamp]}
+         }},
+      lava_size_mul:
+        {"Size", :float,
+         %{
+           min: 0.6,
+           max: 2.2,
+           default: 1.25,
+           step: 0.05,
+           visible_when: {:animation, [:lava_lamp]}
+         }},
+      lava_thresh:
+        {"Threshold", :float,
+         %{
+           min: 0.4,
+           max: 1.6,
+           default: 0.9,
+           step: 0.05,
+           visible_when: {:animation, [:lava_lamp]}
+         }},
+      lava_palette:
+        {"Palette", :select,
+         %{
+           default: 0,
+           options: [
+             {"Classic", :classic},
+             {"Magenta", :magenta},
+             {"Slime", :slime}
+           ],
+           visible_when: {:animation, [:lava_lamp]}
+         }},
+      ring_noise_speed:
+        {"Noise Speed", :float,
+         %{
+           min: 0.0,
+           max: 3.0,
+           default: 1.0,
+           step: 0.05,
+           visible_when: {:animation, [:ring_noise]}
+         }},
+      ring_noise_pulse_period:
+        {"Pulse Period", :float,
+         %{
+           min: 4.0,
+           max: 120.0,
+           default: 24.0,
+           step: 1.0,
+           visible_when: {:animation, [:ring_noise]}
+         }},
+      ring_noise_pulse_amount:
+        {"Pulse Amount", :float,
+         %{
+           min: 0.0,
+           max: 1.0,
+           default: 0.65,
+           step: 0.05,
+           visible_when: {:animation, [:ring_noise]}
+         }},
+      ring_noise_counter_wave:
+        {"Counter Wave", :boolean,
+         %{default: true, visible_when: {:animation, [:ring_noise]}}},
+      ring_noise_palette:
+        {"Palette", :select,
+         %{
+           default: 0,
+           options: [
+             {"Lava", :lava},
+             {"Ocean", :ocean},
+             {"Aurora", :aurora}
+           ],
+           visible_when: {:animation, [:ring_noise]}
          }}
     ]
   end
@@ -285,6 +406,30 @@ defmodule Octopus.Apps.Collective do
     """
   end
 
+  def config_info(%{animation: :lava_lamp}) do
+    """
+    Lava Lamp — cylindrical metaball blobs, no crowd input.
+    Blobs rise and fall on sinusoidal paths and merge when close.
+    • Blob Count — re-rolls blob layout when changed (3–12).
+    • Speed — animation time scale (not frame rate).
+    • Size — global blob radius multiplier.
+    • Threshold — sigmoid field cutoff (lower = more blob visible).
+    • Palette — Classic, Magenta, or Slime colour stops.
+    """
+  end
+
+  def config_info(%{animation: :ring_noise}) do
+    """
+    Ring Noise — seamless cylindrical noise field with palette colours and
+    counter-rotating brightness waves. No crowd input.
+    • Noise Speed — how fast the noise field evolves.
+    • Pulse Period — seconds for one brightness wave lap around the ring.
+    • Pulse Amount — mix between flat brightness and pulsing waves.
+    • Counter Wave — second wave running the opposite direction.
+    • Palette — Lava, Ocean, or Aurora colour stops.
+    """
+  end
+
   def config_info(_config), do: nil
 
   def get_config(state) do
@@ -298,7 +443,17 @@ defmodule Octopus.Apps.Collective do
       breath_layout: state.breath_layout,
       dots_smoothing: state.dots_smoothing,
       orbital_liveliness: state.orbital_liveliness,
-      orbital_sun_gain: state.orbital_sun_gain
+      orbital_sun_gain: state.orbital_sun_gain,
+      lava_blob_count: state.lava_blob_count,
+      lava_speed: state.lava_speed,
+      lava_size_mul: state.lava_size_mul,
+      lava_thresh: state.lava_thresh,
+      lava_palette: state.lava_palette,
+      ring_noise_speed: state.ring_noise_speed,
+      ring_noise_pulse_period: state.ring_noise_pulse_period,
+      ring_noise_pulse_amount: state.ring_noise_pulse_amount,
+      ring_noise_counter_wave: state.ring_noise_counter_wave,
+      ring_noise_palette: state.ring_noise_palette
     }
   end
 
@@ -327,7 +482,20 @@ defmodule Octopus.Apps.Collective do
          breath_layout: Map.get(config, :breath_layout, state.breath_layout),
          dots_smoothing: Map.get(config, :dots_smoothing, state.dots_smoothing),
          orbital_liveliness: Map.get(config, :orbital_liveliness, state.orbital_liveliness),
-         orbital_sun_gain: Map.get(config, :orbital_sun_gain, state.orbital_sun_gain)
+         orbital_sun_gain: Map.get(config, :orbital_sun_gain, state.orbital_sun_gain),
+         lava_blob_count: Map.get(config, :lava_blob_count, state.lava_blob_count),
+         lava_speed: Map.get(config, :lava_speed, state.lava_speed),
+         lava_size_mul: Map.get(config, :lava_size_mul, state.lava_size_mul),
+         lava_thresh: Map.get(config, :lava_thresh, state.lava_thresh),
+         lava_palette: Map.get(config, :lava_palette, state.lava_palette),
+         ring_noise_speed: Map.get(config, :ring_noise_speed, state.ring_noise_speed),
+         ring_noise_pulse_period:
+           Map.get(config, :ring_noise_pulse_period, state.ring_noise_pulse_period),
+         ring_noise_pulse_amount:
+           Map.get(config, :ring_noise_pulse_amount, state.ring_noise_pulse_amount),
+         ring_noise_counter_wave:
+           Map.get(config, :ring_noise_counter_wave, state.ring_noise_counter_wave),
+         ring_noise_palette: Map.get(config, :ring_noise_palette, state.ring_noise_palette)
      }}
   end
 
