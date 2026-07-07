@@ -28,7 +28,6 @@ defmodule Octopus.Apps.PixelFun do
       :cycle_functions_interval,
       :offset,
       :move,
-      :input,
       :audio_input,
       :seconds,
       :buttons,
@@ -67,8 +66,7 @@ defmodule Octopus.Apps.PixelFun do
            max: 60 * 60,
            step: 1,
            visible_when: {:cycle_functions, [true]}
-         }},
-      input: {"Input", :boolean, %{default: false}}
+         }}
     }
   end
 
@@ -87,8 +85,6 @@ defmodule Octopus.Apps.PixelFun do
     Zoom pulse strength — breathing zoom; actual zoom oscillates between ~0 and this value (0 forces zoom 1×).
 
     Cycle presets / Preset interval — reserved for rotating through preset formulas (not active yet).
-
-    Input — for installations with buttons/joystick (no effect here without hardware).
     """
   end
 
@@ -100,8 +96,7 @@ defmodule Octopus.Apps.PixelFun do
       cycle_functions_interval: state.cycle_functions_interval,
       translate_scale: state.translate_scale,
       rotate_scale: state.rotate_scale,
-      zoom_scale: state.zoom_scale,
-      input: state.input
+      zoom_scale: state.zoom_scale
     }
   end
 
@@ -138,7 +133,6 @@ defmodule Octopus.Apps.PixelFun do
        zoom_scale: config.zoom_scale,
        offset: {0, 0},
        move: {0, 0},
-       input: config.input,
        audio_input: %{low: 0.0, mid: 0.0, high: 0.0},
        seconds: seconds,
        buttons: %{},
@@ -177,8 +171,7 @@ defmodule Octopus.Apps.PixelFun do
         translate_scale: translate_scale,
         rotate_scale: rotate_scale,
         zoom_scale: zoom_scale,
-        color_interval: color_interval,
-        input: Map.get(config, :input, state.input)
+        color_interval: color_interval
     }
 
     {:noreply, new_state}
@@ -255,41 +248,9 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   def handle_event(
-        %InputEvent{type: :joystick, joystick: _joystick, direction: :left},
-        %State{move: {_, y}, input: true} = state
+        %InputEvent{type: :button} = event,
+        %State{} = state
       ) do
-    {:noreply, %State{state | move: {1, y}}}
-  end
-
-  def handle_event(
-        %InputEvent{type: :joystick, joystick: _joystick, direction: :right},
-        %State{move: {_, y}, input: true} = state
-      ) do
-    {:noreply, %State{state | move: {-1, y}}}
-  end
-
-  def handle_event(
-        %InputEvent{type: :joystick, joystick: _joystick, direction: :up},
-        %State{move: {x, _}, input: true} = state
-      ) do
-    {:noreply, %State{state | move: {x, 1}}}
-  end
-
-  def handle_event(
-        %InputEvent{type: :joystick, joystick: _joystick, direction: :down},
-        %State{move: {x, _}, input: true} = state
-      ) do
-    {:noreply, %State{state | move: {x, -1}}}
-  end
-
-  def handle_event(
-        %InputEvent{type: :joystick, joystick: _joystick, direction: :center},
-        %State{input: true} = state
-      ) do
-    {:noreply, %State{state | move: {0, 0}}}
-  end
-
-  def handle_event(%InputEvent{type: :button} = event, %State{} = state) do
     pressed = event.action == :press
     {:noreply, %State{state | buttons: Map.put(state.buttons, event.button - 1, pressed)}}
   end
