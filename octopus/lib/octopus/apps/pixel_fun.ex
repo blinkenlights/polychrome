@@ -49,7 +49,12 @@ defmodule Octopus.Apps.PixelFun do
 
   def config_schema() do
     %{
-      program: {"Formula", :string, %{default: "sin(10*t-hypot(x,y))"}},
+      program:
+        {"Formula", :formula_preset,
+         %{
+           default: "sin(10*t-hypot(x,y))",
+           presets_module: Octopus.Apps.PixelFun.FormulaPresets
+         }},
       color_interval:
         {"Palette crossfade (s)", :float, %{default: 5, min: 1, max: 20, step: 0.5}},
       invert_colors: {"Swap color roles", :boolean, %{default: false}},
@@ -75,7 +80,7 @@ defmodule Octopus.Apps.PixelFun do
     """
     Pixel Fun draws a math formula per pixel. Result −1…1 maps to two palette colours.
 
-    Formula — expression evaluated per pixel. Variables: x, y (position), t (time, scaled by global Speed), i (pixel index), l/m/h (audio bass/mid/high if present), pi, tau.
+    Formula — expression evaluated per pixel. Pick a preset or type your own; saved presets persist across restarts. Variables: x, y (position), t (time, scaled by global Speed), i (pixel index), l/m/h (audio bass/mid/high if present), pi, tau.
 
     Palette crossfade — seconds between new random colour pairs; the transition is smooth over the same duration.
 
