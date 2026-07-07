@@ -1,11 +1,11 @@
-defmodule Octopus.Hardware.Panels do
+defmodule Octopus.Hardware.Controllers do
   @moduledoc """
   Catalog of Polychrome Blinkenled controllers.
   """
 
-  alias Octopus.Hardware.Panel
+  alias Octopus.Hardware.Controller
 
-  @panels [
+  @controllers [
     {:polychrome_panel_1, 1, "blinkenleds-1.local", "cc:db:a7:46:03:03"},
     {:polychrome_panel_2, 2, "blinkenleds-2.local", "cc:db:a7:46:03:13"},
     {:polychrome_panel_3, 3, "blinkenleds-3.local", "cc:db:a7:51:eb:ab"},
@@ -23,30 +23,30 @@ defmodule Octopus.Hardware.Panels do
   ]
 
   @doc """
-  Returns all catalog panels as a map of panel id => `%Panel{}`.
+  Returns all catalog controllers as a map of controller id => `%Controller{}`.
   """
-  @spec all() :: %{atom() => Panel.t()}
+  @spec all() :: %{atom() => Controller.t()}
   def all do
-    Map.new(@panels, fn {id, index, hostname, mac} ->
-      {id, panel(id, index, hostname, mac)}
+    Map.new(@controllers, fn {id, index, hostname, mac} ->
+      {id, controller(id, index, hostname, mac)}
     end)
   end
 
   @doc """
-  Returns all panel ids in catalog definition order.
+  Returns all controller ids in catalog definition order.
   """
   @spec ids() :: [atom()]
-  def ids, do: for({id, _, _, _} <- @panels, do: id)
+  def ids, do: for({id, _, _, _} <- @controllers, do: id)
 
-  defp panel(id, index, hostname, mac) do
-    %Panel{
+  defp controller(id, index, hostname, mac) do
+    %Controller{
       id: id,
       firmware_panel_index: index,
       hostname: hostname,
       mac: mac,
       pixel_count: 64,
-      matrix: {8, 8},
-      wire_map: :serpentine_8x8_bottom_left,
+      firmware_matrix: {8, 8},
+      firmware_wire_map: :serpentine_8x8_bottom_left,
       firmware_version: nil
     }
   end

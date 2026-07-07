@@ -6,7 +6,7 @@ defmodule Octopus.Hardware.InstallationValidator do
   require Logger
 
   alias Octopus.Hardware
-  alias Octopus.Hardware.Panel
+  alias Octopus.Hardware.{Controller, PanelSlot, Wiring}
 
   defmodule Error do
     defexception [:message]
@@ -15,45 +15,64 @@ defmodule Octopus.Hardware.InstallationValidator do
   @broadcast_pixel_limit 768
 
   @doc """
-  Validates installation options against the panel registry.
+  Validates installation options against the controller and wiring registries.
 
   Raises `InstallationValidator.Error` on invalid configuration.
   Logs warnings for broadcast frame size limits.
   """
-  @spec validate!(keyword(), %{atom() => Panel.t()}) :: :ok
-  def validate!(installation_opts, panel_registry \\ Hardware.registry()) do
-    panels = Keyword.get(installation_opts, :panels)
+  @spec validate!(keyword(), %{atom() => Controller.t()}) :: :ok
+  def validate!(installation_opts, controller_registry \\ Hardware.registry()) do
+    panel_slots = Keyword.get(installation_opts, :panel_slots)
 
-    if panels do
-      validate_panels!(panels, installation_opts, panel_registry)
+    if panel_slots do
+      wiring_registry = Hardware.wiring_registry()
+      validate_panel_slots!(panel_slots, installation_opts, controller_registry, wiring_registry)
     end
 
     :ok
   end
 
-  defp validate_panels!(panels, installation_opts, panel_registry) do
-    for panel_id <- panels do
-      unless Map.has_key?(panel_registry, panel_id) do
+  defp validate_panel_slots!(panel_slots, installation_opts, controller_registry, wiring_registry) do
+    for %PanelSlot{controller_id: controller_id, wiring_id: wiring_id} <- panel_slots do
+      unless Map.has_key?(controller_registry, controller_id) do
         raise Error,
               message:
-                "unknown panel id #{inspect(panel_id)} in installation panels list; not in hardware catalog"
+                "unknown controller id #{inspect(controller_id)} in installation panels list; not in hardware catalog"
+      end
+
+      unless Map.has_key?(wiring_registry, wiring_id) do
+        raise Error,
+              message:
+                "unknown wiring id #{inspect(wiring_id)} in installation panels list; not in wiring catalog"
+      end
+    end
+
+    panel_layout = Keyword.get(installation_opts, :panel_layout, {8, 8})
+
+    for %PanelSlot{wiring_id: wiring_id} <- panel_slots do
+      %Wiring{matrix: wiring_matrix} = Map.fetch!(wiring_registry, wiring_id)
+
+      unless wiring_matrix == panel_layout do
+        raise Error,
+              message:
+                "wiring #{inspect(wiring_id)} matrix #{inspect(wiring_matrix)} does not match installation panel_layout #{inspect(panel_layout)}"
       end
     end
 
     network_config = Keyword.get(installation_opts, :network_config, [])
     mode = Keyword.get(network_config, :mode, :broadcast)
 
-    duplicate_firmware_indices(panels, panel_registry)
-    |> validate_duplicate_indices!(mode, length(panels))
+    duplicate_firmware_indices(panel_slots, controller_registry)
+    |> validate_duplicate_indices!(mode, length(panel_slots))
 
-    maybe_warn_broadcast_frame_size(panels, panel_registry, mode, installation_opts)
+    maybe_warn_broadcast_frame_size(panel_slots, controller_registry, mode)
 
     :ok
   end
 
-  defp duplicate_firmware_indices(panels, panel_registry) do
-    panels
-    |> Enum.map(&Map.fetch!(panel_registry, &1))
+  defp duplicate_firmware_indices(panel_slots, controller_registry) do
+    panel_slots
+    |> Enum.map(fn %PanelSlot{controller_id: id} -> Map.fetch!(controller_registry, id) end)
     |> Enum.group_by(& &1.firmware_panel_index)
     |> Enum.filter(fn {_index, entries} -> length(entries) > 1 end)
   end
@@ -61,9 +80,9 @@ defmodule Octopus.Hardware.InstallationValidator do
   defp validate_duplicate_indices!([], _mode, _num_panels), do: :ok
 
   defp validate_duplicate_indices!(duplicates, :broadcast, _num_panels) do
-    {index, panels} = hd(duplicates)
+    {index, controllers} = hd(duplicates)
 
-    ids = Enum.map(panels, & &1.id)
+    ids = Enum.map(controllers, & &1.id)
 
     raise Error,
           message:
@@ -71,8 +90,8 @@ defmodule Octopus.Hardware.InstallationValidator do
   end
 
   defp validate_duplicate_indices!(duplicates, :individual, num_panels) when num_panels > 1 do
-    {index, panels} = hd(duplicates)
-    ids = Enum.map(panels, & &1.id)
+    {index, controllers} = hd(duplicates)
+    ids = Enum.map(controllers, & &1.id)
 
     raise Error,
           message:
@@ -81,15 +100,15 @@ defmodule Octopus.Hardware.InstallationValidator do
 
   defp validate_duplicate_indices!(_duplicates, :individual, _num_panels), do: :ok
 
-  defp maybe_warn_broadcast_frame_size(panels, panel_registry, :broadcast, _installation_opts) do
+  defp maybe_warn_broadcast_frame_size(panel_slots, controller_registry, :broadcast) do
     max_index =
-      panels
-      |> Enum.map(&Map.fetch!(panel_registry, &1).firmware_panel_index)
+      panel_slots
+      |> Enum.map(fn %PanelSlot{controller_id: id} -> Map.fetch!(controller_registry, id).firmware_panel_index end)
       |> Enum.max(fn -> 0 end)
 
     pixel_count =
-      panels
-      |> Enum.map(&Map.fetch!(panel_registry, &1).pixel_count)
+      panel_slots
+      |> Enum.map(fn %PanelSlot{controller_id: id} -> Map.fetch!(controller_registry, id).pixel_count end)
       |> Enum.max(fn -> 64 end)
 
     required_pixels = max_index * pixel_count
@@ -104,5 +123,5 @@ defmodule Octopus.Hardware.InstallationValidator do
     end
   end
 
-  defp maybe_warn_broadcast_frame_size(_panels, _panel_registry, _mode, _installation_opts), do: :ok
+  defp maybe_warn_broadcast_frame_size(_panel_slots, _controller_registry, _mode), do: :ok
 end

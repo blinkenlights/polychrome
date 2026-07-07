@@ -5,9 +5,14 @@ defmodule Octopus.Installation do
   @type pixel :: {integer(), integer()}
 
   @doc """
-  Returns ordered panel ids for this installation (logical slots 0..N-1).
+  Returns ordered controller ids for this installation (logical slots 0..N-1).
   """
   @callback panels() :: [atom()]
+
+  @doc """
+  Returns ordered panel slots (controller + wiring) for this installation.
+  """
+  @callback panel_slots() :: [Octopus.Hardware.PanelSlot.t()]
 
   @doc """
   Returns the `{width, height}` layout shape for each panel.
@@ -89,9 +94,10 @@ defmodule Octopus.Installation do
   @options_schema NimbleOptions.new!(
                     arrangement: [type: {:in, [:linear, :circular]}, required: true],
                     panels: [
-                      type: {:list, :atom},
-                      required: false,
-                      doc: "Ordered panel ids from the hardware catalog (logical slots 0..N-1)."
+                      type: {:list, :keyword_list},
+                      required: true,
+                      doc:
+                        "Ordered panel slots. Each entry must be `[controller: id, wiring: id]`."
                     ],
                     panel_layout: [
                       type: {:tuple, [:pos_integer, :pos_integer]},
@@ -181,6 +187,16 @@ defmodule Octopus.Installation do
 
   Supported options:\n#{NimbleOptions.docs(@options_schema)}
   """
+
+  @doc """
+  Builds explicit panel slots for controllers using standard horizontal serpentine 8×8 wiring.
+  """
+  @spec standard_8x8_slots([atom()]) :: [[controller: atom(), wiring: atom()]]
+  def standard_8x8_slots(controller_ids) do
+    Enum.map(controller_ids, fn id ->
+      [controller: id, wiring: :serpentine_8x8_bottom_left]
+    end)
+  end
 
   # Helper function for generating image-based layouts (existing logic)
   def generate_image_layout(name, num_panels, panel_width, panel_height, _panel_gap, layout_opts) do
@@ -283,13 +299,16 @@ defmodule Octopus.Installation do
     opts =
       opts
       |> Keyword.put_new(:panel_layout, {8, 8})
-      |> derive_panel_fields!()
+      |> pre_derive_panel_dimensions!()
+      |> NimbleOptions.validate!(@options_schema)
+      |> parse_panel_slots!()
+      |> derive_panel_network_targets!()
       |> validate_panels!()
 
-    opts = NimbleOptions.validate!(opts, @options_schema)
+    panel_slots = Keyword.fetch!(opts, :panel_slots)
+    controller_ids = Keyword.fetch!(opts, :panels)
 
     arrangement = Keyword.fetch!(opts, :arrangement)
-    panels = Keyword.get(opts, :panels, [])
     panel_layout = Keyword.fetch!(opts, :panel_layout)
     num_panels = Keyword.fetch!(opts, :num_panels)
     num_buttons = Keyword.fetch!(opts, :num_buttons)
@@ -349,7 +368,9 @@ defmodule Octopus.Installation do
       @behaviour Octopus.Installation
 
       @impl Octopus.Installation
-      def panels, do: unquote(Macro.escape(panels))
+      def panels, do: unquote(Macro.escape(controller_ids))
+      @impl Octopus.Installation
+      def panel_slots, do: unquote(Macro.escape(panel_slots))
       @impl Octopus.Installation
       def panel_layout, do: unquote(panel_layout)
       @impl Octopus.Installation
@@ -385,41 +406,60 @@ defmodule Octopus.Installation do
     end
   end
 
-  defp derive_panel_fields!(opts) do
-    case Keyword.get(opts, :panels) do
-      nil ->
-        opts
+  defp pre_derive_panel_dimensions!(opts) do
+    panels = Keyword.fetch!(opts, :panels)
+    {panel_width, panel_height} = Keyword.fetch!(opts, :panel_layout)
 
-      panels ->
-        {panel_width, panel_height} = Keyword.fetch!(opts, :panel_layout)
-
-        opts
-        |> Keyword.put(:num_panels, length(panels))
-        |> Keyword.put(:panel_width, panel_width)
-        |> Keyword.put(:panel_height, panel_height)
-        |> Keyword.update(:network_config, derive_panel_network_config(panels, []), fn nc ->
-          derive_panel_network_config(panels, nc)
-        end)
-    end
+    opts
+    |> Keyword.put(:num_panels, length(panels))
+    |> Keyword.put(:panel_width, panel_width)
+    |> Keyword.put(:panel_height, panel_height)
   end
 
-  defp derive_panel_network_config(panels, network_config) do
+  defp parse_panel_slots!(opts) do
+    entries = Keyword.fetch!(opts, :panels)
+
+    {panel_slots, controller_ids} =
+      Enum.map(entries, &parse_panel_entry!/1)
+      |> Enum.unzip()
+
+    opts
+    |> Keyword.put(:panel_slots, panel_slots)
+    |> Keyword.put(:panels, controller_ids)
+  end
+
+  defp parse_panel_entry!([controller: controller_id, wiring: wiring_id])
+       when is_atom(controller_id) and is_atom(wiring_id) do
+    {%Octopus.Hardware.PanelSlot{controller_id: controller_id, wiring_id: wiring_id}, controller_id}
+  end
+
+  defp parse_panel_entry!(entry) do
+    raise ArgumentError,
+          "invalid panel slot #{inspect(entry)}; expected [controller: id, wiring: id], not bare atoms"
+  end
+
+  defp derive_panel_network_targets!(opts) do
+    controller_ids = Keyword.fetch!(opts, :panels)
+
+    Keyword.update!(opts, :network_config, fn network_config ->
+      derive_panel_network_config(controller_ids, network_config)
+    end)
+  end
+
+  defp derive_panel_network_config(controller_ids, network_config) do
     registry = Octopus.Hardware.registry()
 
     panel_targets =
-      Enum.map(panels, fn id ->
-        panel = Map.fetch!(registry, id)
-        [address: panel.hostname, panel_index: panel.firmware_panel_index]
+      Enum.map(controller_ids, fn id ->
+        controller = Map.fetch!(registry, id)
+        [address: controller.hostname, panel_index: controller.firmware_panel_index]
       end)
 
     Keyword.put(network_config, :panels, panel_targets)
   end
 
   defp validate_panels!(opts) do
-    if Keyword.has_key?(opts, :panels) do
-      Octopus.Hardware.InstallationValidator.validate!(opts)
-    end
-
+    Octopus.Hardware.InstallationValidator.validate!(opts)
     opts
   end
 
@@ -433,6 +473,8 @@ defmodule Octopus.Installation do
   def arrangement, do: installation().arrangement()
   @impl __MODULE__
   def panels, do: installation().panels()
+  @impl __MODULE__
+  def panel_slots, do: installation().panel_slots()
   @impl __MODULE__
   def panel_layout, do: installation().panel_layout()
   @impl __MODULE__

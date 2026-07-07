@@ -30,3 +30,4 @@ config :phoenix, :plug_init_mode, :runtime
 config :octopus, :env, :test
 config :octopus, :firmware_broadcaster_local_port, 0
 config :octopus, :controller_interface_port, 0
+config :octopus, :osc_server_port, 0

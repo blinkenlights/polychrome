@@ -4,7 +4,7 @@ defmodule Octopus.Hardware.Untangle do
   """
 
   alias Octopus.Hardware
-  alias Octopus.Hardware.{Panel, WireMap}
+  alias Octopus.Hardware.{PanelSlot, WireMap}
   alias Octopus.Installation
   alias Octopus.Protobuf.{RGBFrame, WFrame}
 
@@ -29,9 +29,9 @@ defmodule Octopus.Hardware.Untangle do
   """
   @spec encode_rgb_data(binary()) :: binary()
   def encode_rgb_data(data) when is_binary(data) do
-    panel_ids = Installation.panels()
+    panel_slots = Installation.panel_slots()
 
-    if panel_ids == [] do
+    if panel_slots == [] do
       data
     else
       pixels_per_panel = Installation.panel_width() * Installation.panel_height()
@@ -40,33 +40,32 @@ defmodule Octopus.Hardware.Untangle do
 
       case encode_mode() do
         :individual_single ->
-          panel_id = hd(panel_ids)
-          panel = Hardware.fetch!(panel_id)
+          slot = hd(panel_slots)
           source = binary_part(data, 0, min(bytes_per_panel, byte_size(data)))
 
           source
           |> split_panel_rgb(pixels_per_panel)
-          |> encode_panel_pixels(panel, layout)
+          |> encode_panel_pixels(slot, layout)
           |> pixels_to_rgb_binary()
 
         :broadcast ->
-          max_index = max_firmware_panel_index(panel_ids)
+          max_index = max_firmware_panel_index(panel_slots)
           buffer = :binary.copy(<<0>>, max_index * 64 * 3)
 
-          panel_ids
+          panel_slots
           |> Enum.with_index()
-          |> Enum.reduce(buffer, fn {panel_id, logical_slot}, acc ->
-            panel = Hardware.fetch!(panel_id)
+          |> Enum.reduce(buffer, fn {slot, logical_slot}, acc ->
             source_offset = logical_slot * bytes_per_panel
             slice = binary_part(data, source_offset, bytes_per_panel)
 
             encoded =
               slice
               |> split_panel_rgb(pixels_per_panel)
-              |> encode_panel_pixels(panel, layout)
+              |> encode_panel_pixels(slot, layout)
               |> pixels_to_rgb_binary()
 
-            dest_offset = (panel.firmware_panel_index - 1) * 64 * 3
+            controller = Hardware.fetch!(slot.controller_id)
+            dest_offset = (controller.firmware_panel_index - 1) * 64 * 3
             place_binary(acc, dest_offset, encoded)
           end)
       end
@@ -78,9 +77,9 @@ defmodule Octopus.Hardware.Untangle do
   """
   @spec encode_w_data(binary()) :: binary()
   def encode_w_data(data) when is_binary(data) do
-    panel_ids = Installation.panels()
+    panel_slots = Installation.panel_slots()
 
-    if panel_ids == [] do
+    if panel_slots == [] do
       data
     else
       pixels_per_panel = Installation.panel_width() * Installation.panel_height()
@@ -88,33 +87,32 @@ defmodule Octopus.Hardware.Untangle do
 
       case encode_mode() do
         :individual_single ->
-          panel_id = hd(panel_ids)
-          panel = Hardware.fetch!(panel_id)
+          slot = hd(panel_slots)
           source = binary_part(data, 0, min(pixels_per_panel, byte_size(data)))
 
           source
           |> split_panel_w(pixels_per_panel)
-          |> encode_panel_pixels(panel, layout)
+          |> encode_panel_pixels(slot, layout)
           |> IO.iodata_to_binary()
 
         :broadcast ->
-          max_index = max_firmware_panel_index(panel_ids)
+          max_index = max_firmware_panel_index(panel_slots)
           buffer = :binary.copy(<<0>>, max_index * 64)
 
-          panel_ids
+          panel_slots
           |> Enum.with_index()
-          |> Enum.reduce(buffer, fn {panel_id, logical_slot}, acc ->
-            panel = Hardware.fetch!(panel_id)
+          |> Enum.reduce(buffer, fn {slot, logical_slot}, acc ->
             source_offset = logical_slot * pixels_per_panel
             slice = binary_part(data, source_offset, pixels_per_panel)
 
             encoded =
               slice
               |> split_panel_w(pixels_per_panel)
-              |> encode_panel_pixels(panel, layout)
+              |> encode_panel_pixels(slot, layout)
               |> IO.iodata_to_binary()
 
-            dest_offset = panel.firmware_panel_index - 1
+            controller = Hardware.fetch!(slot.controller_id)
+            dest_offset = controller.firmware_panel_index - 1
             place_binary(acc, dest_offset, encoded)
           end)
       end
@@ -139,18 +137,18 @@ defmodule Octopus.Hardware.Untangle do
   @spec logical_panel_id(module() | keyword(), pos_integer()) :: non_neg_integer() | nil
   def logical_panel_id(installation \\ Installation, firmware_panel_index)
       when is_integer(firmware_panel_index) and firmware_panel_index > 0 do
-    panels =
+    slots =
       case installation do
-        module when is_atom(module) -> module.panels()
-        opts when is_list(opts) -> Keyword.fetch!(opts, :panels)
+        module when is_atom(module) -> module.panel_slots()
+        opts when is_list(opts) -> Keyword.fetch!(opts, :panel_slots)
       end
 
-    panels
+    slots
     |> Enum.with_index()
-    |> Enum.find_value(fn {panel_id, logical_slot} ->
-      panel = Hardware.fetch!(panel_id)
+    |> Enum.find_value(fn {%PanelSlot{controller_id: controller_id}, logical_slot} ->
+      controller = Hardware.fetch!(controller_id)
 
-      if panel.firmware_panel_index == firmware_panel_index do
+      if controller.firmware_panel_index == firmware_panel_index do
         logical_slot
       end
     end)
@@ -167,19 +165,10 @@ defmodule Octopus.Hardware.Untangle do
     end
   end
 
-  defp encode_panel_pixels(values, %Panel{wire_map: :identity}, _layout), do: values
-
-  defp encode_panel_pixels(values, %Panel{pixel_count: pixel_count, matrix: {w, h}}, {width, 1})
-       when width == pixel_count do
-    WireMap.apply_strip_inverse(values, pixel_count, w, h)
-  end
-
-  defp encode_panel_pixels(values, %Panel{pixel_count: pixel_count, matrix: {w, h}} = _panel, layout) do
-    if layout == {8, 8} or layout == {w, h} do
-      WireMap.apply_inverse(values, pixel_count, w, h)
-    else
-      values
-    end
+  defp encode_panel_pixels(values, %PanelSlot{controller_id: controller_id, wiring_id: wiring_id}, layout) do
+    controller = Hardware.fetch!(controller_id)
+    wiring = Hardware.fetch_wiring!(wiring_id)
+    WireMap.encode_to_firmware(values, layout, wiring, controller)
   end
 
   defp split_panel_rgb(data, pixel_count) do
@@ -208,9 +197,9 @@ defmodule Octopus.Hardware.Untangle do
     prefix <> slice <> suffix
   end
 
-  defp max_firmware_panel_index(panel_ids) do
-    panel_ids
-    |> Enum.map(&Hardware.fetch!(&1).firmware_panel_index)
+  defp max_firmware_panel_index(panel_slots) do
+    panel_slots
+    |> Enum.map(fn %PanelSlot{controller_id: id} -> Hardware.fetch!(id).firmware_panel_index end)
     |> Enum.max()
   end
 end

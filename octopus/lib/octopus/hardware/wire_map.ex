@@ -1,11 +1,13 @@
 defmodule Octopus.Hardware.WireMap do
   @moduledoc """
-  Maps between panel layout indices and firmware logical pixel indices.
+  Maps between panel layout indices, physical strip positions, and firmware buffer indices.
 
   Ports the serpentine matrix cell assignment from `Display.cpp` `map_index/1`
   (excluding `SKIP_LEDS` ×2). Layout indices use top-left row-major order
   (mixer / canvas convention).
   """
+
+  alias Octopus.Hardware.{Controller, Wiring}
 
   @default_width 8
   @default_height 8
@@ -27,7 +29,8 @@ defmodule Octopus.Hardware.WireMap do
   end
 
   @doc """
-  Maps a top-left row-major layout index to the firmware logical index.
+  Maps a top-left row-major layout index to the firmware logical index
+  for horizontal serpentine wiring.
   """
   @spec layout_to_firmware_index(non_neg_integer(), pos_integer(), pos_integer()) ::
           non_neg_integer()
@@ -39,7 +42,8 @@ defmodule Octopus.Hardware.WireMap do
   end
 
   @doc """
-  Maps a firmware logical index to top-left row-major layout index.
+  Maps a firmware logical index to top-left row-major layout index
+  for horizontal serpentine wiring.
   """
   @spec firmware_to_layout_index(non_neg_integer(), pos_integer(), pos_integer()) ::
           non_neg_integer()
@@ -48,6 +52,44 @@ defmodule Octopus.Hardware.WireMap do
     y_bottom = div(i, width)
     y_top = height - 1 - y_bottom
     x + y_top * width
+  end
+
+  @doc """
+  Maps a top-left row-major layout index to physical strip position
+  for the given wiring type.
+  """
+  @spec layout_to_strip(non_neg_integer(), Wiring.t(), pos_integer(), pos_integer()) ::
+          non_neg_integer()
+  def layout_to_strip(u, %Wiring{type: type}, width, height) do
+    case type do
+      :serpentine_8x8_bottom_left ->
+        layout_to_firmware_index(u, width, height)
+
+      :serpentine_8x8_vertical_bottom_left ->
+        vertical_layout_to_strip(u, width, height)
+
+      :linear_strip ->
+        u
+    end
+  end
+
+  @doc """
+  Maps a physical strip position to top-left row-major layout index
+  for the given wiring type.
+  """
+  @spec strip_to_layout(non_neg_integer(), Wiring.t(), pos_integer(), pos_integer()) ::
+          non_neg_integer()
+  def strip_to_layout(strip, %Wiring{type: type}, width, height) do
+    case type do
+      :serpentine_8x8_bottom_left ->
+        firmware_to_layout_index(strip, width, height)
+
+      :serpentine_8x8_vertical_bottom_left ->
+        vertical_strip_to_layout(strip, width, height)
+
+      :linear_strip ->
+        strip
+    end
   end
 
   @doc """
@@ -74,7 +116,8 @@ defmodule Octopus.Hardware.WireMap do
   end
 
   @doc """
-  Reorders `values` from layout order into firmware logical index order.
+  Reorders `values` from layout order into firmware logical index order
+  for horizontal serpentine wiring.
   """
   @spec apply_inverse([term()], pos_integer(), pos_integer(), pos_integer()) :: [term()]
   def apply_inverse(values, pixel_count \\ 64, width \\ @default_width, height \\ @default_height) do
@@ -82,6 +125,50 @@ defmodule Octopus.Hardware.WireMap do
       layout_u = firmware_to_layout_index(i, width, height)
       Enum.at(values, layout_u)
     end
+  end
+
+  @doc """
+  Encodes layout-ordered pixel values for a controller and panel wiring setup.
+
+  For each firmware buffer index `i`, looks up the physical strip position on
+  the controller, then the layout index for that strip position on the panel.
+  """
+  @spec encode_to_firmware([term()], {pos_integer(), pos_integer()}, Wiring.t(), Controller.t()) ::
+          [term()]
+  def encode_to_firmware(values, {width, height}, %Wiring{} = wiring, %Controller{} = controller) do
+    pixel_count = width * height
+    {fw_w, fw_h} = controller.firmware_matrix
+
+    cond do
+      wiring.type == :serpentine_8x8_bottom_left and {width, height} == {8, 8} ->
+        apply_inverse(values, pixel_count, fw_w, fw_h)
+
+      wiring.type == :linear_strip and {width, height} == {64, 1} ->
+        apply_strip_inverse(values, pixel_count, fw_w, fw_h)
+
+      true ->
+        for i <- 0..(pixel_count - 1) do
+          strip = strip_index(i, fw_w, fw_h)
+          layout_u = strip_to_layout(strip, wiring, width, height)
+          Enum.at(values, layout_u)
+        end
+    end
+  end
+
+  @doc """
+  Returns the firmware buffer index that lights a given layout coordinate.
+  """
+  @spec firmware_index_for_layout(
+          non_neg_integer(),
+          non_neg_integer(),
+          {pos_integer(), pos_integer()},
+          Wiring.t(),
+          Controller.t()
+        ) :: non_neg_integer() | nil
+  def firmware_index_for_layout(x, y, {width, height}, wiring, controller) do
+    layout_u = x + y * width
+    strip = layout_to_strip(layout_u, wiring, width, height)
+    firmware_index_for_strip(strip, width * height, elem(controller.firmware_matrix, 0), elem(controller.firmware_matrix, 1))
   end
 
   @doc """
@@ -113,5 +200,30 @@ defmodule Octopus.Hardware.WireMap do
     bytes
     |> apply_inverse(pixel_count, width, height)
     |> IO.iodata_to_binary()
+  end
+
+  defp vertical_layout_to_strip(u, width, height) do
+    x = rem(u, width)
+    y_top = div(u, width)
+
+    if rem(x, 2) == 0 do
+      x * height + (height - 1 - y_top)
+    else
+      x * height + y_top
+    end
+  end
+
+  defp vertical_strip_to_layout(strip, width, height) do
+    x = div(strip, height)
+    offset = rem(strip, height)
+
+    y_top =
+      if rem(x, 2) == 0 do
+        height - 1 - offset
+      else
+        offset
+      end
+
+    x + y_top * width
   end
 end

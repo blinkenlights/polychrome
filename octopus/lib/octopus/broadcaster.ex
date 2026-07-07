@@ -331,6 +331,8 @@ defmodule Octopus.Broadcaster do
 
     opts = [
       panels: installation_module.panels(),
+      panel_slots: installation_module.panel_slots(),
+      panel_layout: installation_module.panel_layout(),
       network_config: installation_module.network_config()
     ]
 
