@@ -1,12 +1,12 @@
 defmodule Octopus.Apps.Collective.Animations.Storm do
   @moduledoc """
   Tempest — movement triggers lightning; crossing into the installation ring
-  (18 m diameter = 9 m radius, matching aframe `panelDiameter`) triggers a
+  (20 m diameter = 10 m radius, matching aframe `panelDiameter`) triggers a
   shooting star on the opposite panel.
 
   Each person maps to a column on the ring (angular position). Fast movement
   spawns fading lightning bolts at their column. When someone crosses inward
-  through the 9 m ring radius, a pale-yellow meteor streaks across the panel
+  through the 10 m ring radius, a pale-yellow meteor streaks across the panel
   opposite their entry position.
 
   Background: `:deep_dark` (black) or `:still_stars` (static starfield).
@@ -21,8 +21,8 @@ defmodule Octopus.Apps.Collective.Animations.Storm do
   @center_dead_zone 3.0
   @bolt_ttl 0.2
 
-  # Installation ring radius (m): aframe panelDiameter 18 → 9 m radius.
-  @entry_radius 9.0
+  # Installation ring radius (m): aframe panelDiameter 20 → 10 m radius.
+  @entry_radius 10.0
 
   @meteor_ttl 1.6
   @meteor_trail_len 12

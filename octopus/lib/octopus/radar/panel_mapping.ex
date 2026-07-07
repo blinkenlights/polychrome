@@ -14,8 +14,8 @@ defmodule Octopus.Radar.PanelMapping do
   """
 
   @default_panel_width 8
-  # aframe panelDiameter 18 m → 9 m ring radius
-  @ring_radius_m 9.0
+  # aframe panelDiameter 20 m → 10 m ring radius
+  @ring_radius_m 10.0
 
   @type track :: %{required(:x) => float(), required(:y) => float(), optional(atom()) => any()}
 

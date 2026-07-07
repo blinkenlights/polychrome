@@ -3,7 +3,7 @@ defmodule Octopus.Params.Sim3d do
 
   def topic, do: "sim_3d"
 
-  def diameter, do: param(:diameter, 18.0)
+  def diameter, do: param(:diameter, 20.0)
   def move, do: param(:move, [0.0, 0.0])
   def position, do: param(:position, [0.0, 0.0])
   def height, do: param(:height, 0.4)
@@ -29,7 +29,7 @@ defmodule Octopus.Params.Sim3d do
   def config_schema do
     [
       diameter:
-        {"Durchmesser (m)", :float, %{default: 18.0, min: 10.0, max: 20.0, step: 0.1, group: "Panels"}},
+        {"Durchmesser (m)", :float, %{default: 20.0, min: 10.0, max: 20.0, step: 0.1, group: "Panels"}},
       radar_count: {"Anzahl Sensoren", :int, %{default: 6, min: 4, max: 12, step: 2, group: "Radar"}},
       radar_height:
         {"Höhe (m)", :float, %{default: 4.5, min: 0.5, max: 12.0, step: 0.05, group: "Radar"}},

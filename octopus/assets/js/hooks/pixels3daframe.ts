@@ -123,7 +123,7 @@ const skyFragmentShader = `
   }
 `;
 
-let panelDiameter = 18;
+let panelDiameter = 20;
 const PANEL_DIAMETER_MIN = 10;
 const PANEL_DIAMETER_MAX = 20;
 

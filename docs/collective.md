@@ -42,7 +42,7 @@ Jede Animation implementiert das `Octopus.Apps.Collective.Animation`-Behaviour
 - **Tempest** (`Kollektiv`, vormals „Bewegungs-Sturm") — Bewegung der Personen löst
   Blitze an ihrer Ring-Position aus (Wahrscheinlichkeit ∝ Geschwindigkeit). Stehen =
   ruhig, laufen = Blitze. Personen näher als 3 m zur Mitte (`@center_dead_zone`)
-  lösen keine Blitze aus. **Eintritt in den 18-m-Durchmesser-Ring** (9 m Radius,
+  lösen keine Blitze aus. **Eintritt in den 20-m-Durchmesser-Ring** (10 m Radius,
   = aframe `panelDiameter`; von außen nach innen) → blass-gelbe Sternschnuppe auf
   dem gegenüberliegenden Panel. Config:
   `Background` (Deep Dark / Still Stars) und `Storm Sensitivity`.
@@ -50,6 +50,10 @@ Jede Animation implementiert das `Octopus.Apps.Collective.Animation`-Behaviour
   (r ≥ 2 m). Layout **Canopy**: untere Hälfte = Ring-Wasser (Palette), obere Hälfte
   = komplementärer Himmel (Palette +180° Hue), getrieben von Leuten im 2 m Center.
   Config: Liveliness, Palette, Hue Shift, Layout (Wave / Canopy).
+- **Orbital** (`Kollektiv`) — Crowd als Sonnensystem: Center-Chiller = Sonne (obere
+  Strip-Hälfte), Ring-Walker = Kometen (untere Hälfte, x = Winkel, y = Radius).
+  Gruppen ab 3 Personen / ~2,5 m verschmelzen zu größeren Planeten. Sterne driften
+  leicht mit dem angular Schwerpunkt der Ring-Crowd. Config: Liveliness, Sun Gain.
 
 ### Backlog
 

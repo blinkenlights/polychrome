@@ -26,7 +26,12 @@ defmodule Octopus.Apps.Collective do
   @track_stale_ms 1500
 
   # Maps the :select config value to the animation module.
-  @animations %{storm: Animations.Storm, breath: Animations.Breath, dots: Animations.Dots}
+  @animations %{
+    storm: Animations.Storm,
+    breath: Animations.Breath,
+    dots: Animations.Dots,
+    orbital: Animations.Orbital
+  }
 
   def name, do: "Collective"
 
@@ -43,6 +48,8 @@ defmodule Octopus.Apps.Collective do
     breath_hue_shift = Map.get(config, :breath_hue_shift, 0.0)
     breath_layout = Map.get(config, :breath_layout, :wave)
     dots_smoothing = Map.get(config, :dots_smoothing, 0.35)
+    orbital_liveliness = Map.get(config, :orbital_liveliness, 0.35)
+    orbital_sun_gain = Map.get(config, :orbital_sun_gain, 1.0)
     background = Map.get(config, :background, :deep_dark)
     animation = Map.get(config, :animation, :storm)
     anim_mod = Map.fetch!(@animations, animation)
@@ -59,6 +66,8 @@ defmodule Octopus.Apps.Collective do
       breath_hue_shift: breath_hue_shift,
       breath_layout: breath_layout,
       dots_smoothing: dots_smoothing,
+      orbital_liveliness: orbital_liveliness,
+      orbital_sun_gain: orbital_sun_gain,
       background: background,
       animation: animation,
       anim_mod: anim_mod,
@@ -109,6 +118,8 @@ defmodule Octopus.Apps.Collective do
       breath_hue_shift: state.breath_hue_shift,
       breath_layout: state.breath_layout,
       dots_smoothing: state.dots_smoothing,
+      orbital_liveliness: state.orbital_liveliness,
+      orbital_sun_gain: state.orbital_sun_gain,
       background: state.background,
       display_info: state.display_info
     }
@@ -131,7 +142,15 @@ defmodule Octopus.Apps.Collective do
     [
       animation:
         {"Animation", :select,
-         %{default: 0, options: [{"Tempest", :storm}, {"Crowd Breath", :breath}, {"Crowd Dots", :dots}]}},
+         %{
+           default: 0,
+           options: [
+             {"Tempest", :storm},
+             {"Crowd Breath", :breath},
+             {"Crowd Dots", :dots},
+             {"Orbital", :orbital}
+           ]
+         }},
       background:
         {"Background", :select,
          %{
@@ -188,6 +207,24 @@ defmodule Octopus.Apps.Collective do
            default: 0.35,
            step: 0.05,
            visible_when: {:animation, [:dots]}
+         }},
+      orbital_liveliness:
+        {"Orbital Liveliness", :float,
+         %{
+           min: 0.0,
+           max: 1.0,
+           default: 0.35,
+           step: 0.05,
+           visible_when: {:animation, [:orbital]}
+         }},
+      orbital_sun_gain:
+        {"Sun Gain", :float,
+         %{
+           min: 0.2,
+           max: 2.5,
+           default: 1.0,
+           step: 0.05,
+           visible_when: {:animation, [:orbital]}
          }}
     ]
   end
@@ -198,7 +235,7 @@ defmodule Octopus.Apps.Collective do
     """
     Tempest — per-person lightning + entry meteors.
     Reads POSITION and VELOCITY. Fast movement → bolts at that column. Someone
-    crossing inward into the 18 m-diameter ring (9 m radius, = aframe panel ring)
+    crossing inward into the 20 m-diameter ring (10 m radius, = aframe panel ring)
     → a pale yellow shooting star on the opposite panel. Not on new track IDs /
     spawns already inside.
     • Storm Sensitivity — scales bolt probability for a given speed (higher = more).
@@ -230,7 +267,21 @@ defmodule Octopus.Apps.Collective do
     X = angular position on the ring (dot wanders horizontally with the person).
     Y = distance from centre: at the ring / near the panels → bottom row;
     at the centre → top row. Stable colour per track id.
+    After 3 s without movement, a soft ring pulse expands over ~3–4 panels and fades.
     • Dot Smoothing — low = snappy, high = soft follow (EMA on position).
+    """
+  end
+
+  def config_info(%{animation: :orbital}) do
+    """
+    Orbital — crowd as a solar system.
+    Center chillers (r < 2 m) drive a warm sun in the upper sky; more people and
+    movement = brighter sun + downward rays. Ring walkers (r ≥ 2 m) appear as
+    coloured comets on the lower strip (x = angle, y = radius). Groups of 3+
+    within ~2.5 m merge into one larger planet. Background stars drift slightly
+    with the ring crowd's angular balance.
+    • Orbital Liveliness — low = slow/smooth follow, high = snappier motion + sun pulse.
+    • Sun Gain — scales center brightness (higher = hotter sun).
     """
   end
 
@@ -245,7 +296,9 @@ defmodule Octopus.Apps.Collective do
       breath_palette: state.breath_palette,
       breath_hue_shift: state.breath_hue_shift,
       breath_layout: state.breath_layout,
-      dots_smoothing: state.dots_smoothing
+      dots_smoothing: state.dots_smoothing,
+      orbital_liveliness: state.orbital_liveliness,
+      orbital_sun_gain: state.orbital_sun_gain
     }
   end
 
@@ -272,7 +325,9 @@ defmodule Octopus.Apps.Collective do
          breath_palette: Map.get(config, :breath_palette, state.breath_palette),
          breath_hue_shift: Map.get(config, :breath_hue_shift, state.breath_hue_shift),
          breath_layout: Map.get(config, :breath_layout, state.breath_layout),
-         dots_smoothing: Map.get(config, :dots_smoothing, state.dots_smoothing)
+         dots_smoothing: Map.get(config, :dots_smoothing, state.dots_smoothing),
+         orbital_liveliness: Map.get(config, :orbital_liveliness, state.orbital_liveliness),
+         orbital_sun_gain: Map.get(config, :orbital_sun_gain, state.orbital_sun_gain)
      }}
   end
 
