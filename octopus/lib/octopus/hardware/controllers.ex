@@ -46,7 +46,7 @@ defmodule Octopus.Hardware.Controllers do
       mac: mac,
       max_pixel_count: 64,
       firmware_matrix: {8, 8},
-      firmware_wire_map: :serpentine_8x8_bottom_left,
+      firmware_wire_map: :serpentine_horizontal_bottom_left,
       firmware_version: nil
     }
   end

@@ -2,7 +2,7 @@ defmodule Octopus.Installation.Prototype do
   use Octopus.Installation,
     arrangement: :linear,
     panels: [
-      [controller: :polychrome_panel_prototype, wiring: :serpentine_8x8_bottom_left]
+      [controller: :polychrome_panel_prototype, wiring: :serpentine_horizontal_bottom_left]
     ],
     panel_layout: {8, 8},
     num_buttons: 1,

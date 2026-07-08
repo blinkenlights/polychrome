@@ -7,9 +7,8 @@ defmodule Octopus.Hardware.Wiring do
   defstruct [:id, :matrix, :type]
 
   @type type ::
-          :serpentine_8x8_bottom_left
-          | :serpentine_8x8_vertical_bottom_left
-          | :linear_strip
+          :serpentine_horizontal_bottom_left
+          | :serpentine_vertical_bottom_left
 
   @type t :: %__MODULE__{
           id: atom(),

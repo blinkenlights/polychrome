@@ -2,7 +2,7 @@ defmodule Octopus.TestInstallations.HorizontalStrip64 do
   use Octopus.Installation,
     arrangement: :linear,
     panels: [
-      [controller: :polychrome_panel_prototype, wiring: :linear_strip]
+      [controller: :polychrome_panel_prototype, wiring: :serpentine_horizontal_bottom_left]
     ],
     panel_layout: {64, 1},
     num_buttons: 0,

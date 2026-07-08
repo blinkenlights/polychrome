@@ -189,12 +189,12 @@ defmodule Octopus.Installation do
   """
 
   @doc """
-  Builds explicit panel slots for controllers using standard horizontal serpentine 8×8 wiring.
+  Builds explicit panel slots for controllers using horizontal serpentine wiring on 8×8 panels.
   """
   @spec standard_8x8_slots([atom()]) :: [[controller: atom(), wiring: atom()]]
   def standard_8x8_slots(controller_ids) do
     Enum.map(controller_ids, fn id ->
-      [controller: id, wiring: :serpentine_8x8_bottom_left]
+      [controller: id, wiring: :serpentine_horizontal_bottom_left]
     end)
   end
 

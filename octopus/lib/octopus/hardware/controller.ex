@@ -32,7 +32,7 @@ defmodule Octopus.Hardware.Controller do
           mac: String.t() | nil,
           max_pixel_count: pos_integer(),
           firmware_matrix: {pos_integer(), pos_integer()},
-          firmware_wire_map: :serpentine_8x8_bottom_left,
+          firmware_wire_map: :serpentine_horizontal_bottom_left,
           firmware_version: String.t() | nil
         }
 end
