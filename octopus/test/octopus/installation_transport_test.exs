@@ -167,6 +167,23 @@ defmodule Octopus.InstallationTransportTest do
       InstallationTransport.queue_move(0, "down")
       assert Enum.at(state().queue, 0).mode_id == @classic
     end
+
+    test "keeps cycle_index on the live entry after reorder" do
+      InstallationTransport.set_queue([
+        %{app: PixelFun, mode_id: @classic},
+        %{app: PixelFun, mode_id: @cross}
+      ])
+
+      InstallationTransport.play_now(PixelFun, @classic)
+      assert state().cycle_index == 0
+
+      InstallationTransport.queue_move(0, "down")
+
+      s = state()
+      assert s.cycle_index == 1
+      assert s.live.mode_id == @classic
+      assert Enum.at(s.queue, rem(s.cycle_index + 1, 2)).mode_id == @cross
+    end
   end
 
   describe "play_now" do

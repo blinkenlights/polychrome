@@ -53,10 +53,10 @@ defmodule Octopus.InstallationTransport do
   end
 
   def queue_remove(index) when is_integer(index),
-    do: GenServer.cast(__MODULE__, {:queue_remove, index})
+    do: GenServer.call(__MODULE__, {:queue_remove, index})
 
   def queue_move(index, dir) when is_integer(index),
-    do: GenServer.cast(__MODULE__, {:queue_move, index, dir})
+    do: GenServer.call(__MODULE__, {:queue_move, index, dir})
 
   def set_queue(entries) when is_list(entries),
     do: GenServer.cast(__MODULE__, {:set_queue, Enum.map(entries, &normalize_entry/1)})
@@ -94,6 +94,15 @@ defmodule Octopus.InstallationTransport do
 
   @impl true
   def handle_call(:get_state, _from, state), do: {:reply, public_state(state), state}
+
+  def handle_call({:queue_remove, index}, _from, state) do
+    new_queue = List.delete_at(state.queue, index)
+    {:reply, :ok, state |> put_queue(new_queue) |> broadcast()}
+  end
+
+  def handle_call({:queue_move, index, dir}, _from, state) do
+    {:reply, :ok, state |> move_queue(index, dir) |> broadcast()}
+  end
 
   @impl true
   def handle_cast(:toggle_play, %State{playing: true} = state) do
@@ -135,15 +144,6 @@ defmodule Octopus.InstallationTransport do
       end
 
     {:noreply, state |> put_queue(new_queue) |> broadcast()}
-  end
-
-  def handle_cast({:queue_remove, index}, state) do
-    new_queue = List.delete_at(state.queue, index)
-    {:noreply, state |> put_queue(new_queue) |> broadcast()}
-  end
-
-  def handle_cast({:queue_move, index, dir}, state) do
-    {:noreply, state |> move_queue(index, dir) |> broadcast()}
   end
 
   def handle_cast({:set_queue, entries}, state) do
@@ -220,7 +220,18 @@ defmodule Octopus.InstallationTransport do
   # -- Queue / transport helpers ----------------------------------------------
 
   defp put_queue(%State{} = state, queue) do
-    index = clamp_index(state.cycle_index, queue)
+    index =
+      case state.live_entry do
+        live when is_map(live) ->
+          case Enum.find_index(queue, &(&1 == live)) do
+            nil -> clamp_index(state.cycle_index, queue)
+            idx -> idx
+          end
+
+        _ ->
+          clamp_index(state.cycle_index, queue)
+      end
+
     %State{state | queue: queue, cycle_index: index} |> schedule_change()
   end
 
