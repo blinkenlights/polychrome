@@ -5,9 +5,8 @@ defmodule Octopus.Hardware.WireMapTest do
   alias Octopus.Hardware.WireMap
 
   @controller Hardware.fetch!(:polychrome_panel_prototype)
-  @horizontal Hardware.fetch_wiring!(:serpentine_8x8_bottom_left)
-  @vertical Hardware.fetch_wiring!(:serpentine_8x8_vertical_bottom_left)
-  @linear_strip Hardware.fetch_wiring!(:linear_strip)
+  @horizontal Hardware.fetch_wiring!(:serpentine_horizontal_bottom_left)
+  @vertical Hardware.fetch_wiring!(:serpentine_vertical_bottom_left)
 
   test "layout and firmware indices are mutual inverses on 0..63" do
     for u <- 0..63 do
@@ -79,41 +78,6 @@ defmodule Octopus.Hardware.WireMapTest do
 
     assert WireMap.encode_to_firmware(values, {8, 8}, @horizontal, @controller) ==
              WireMap.apply_inverse(values)
-  end
-
-  test "encode_to_firmware linear strip wiring matches apply_strip_inverse" do
-    values = Enum.to_list(0..63)
-
-    assert WireMap.encode_to_firmware(values, {64, 1}, @linear_strip, @controller) ==
-             WireMap.apply_strip_inverse(values)
-  end
-
-  test "encode_to_firmware linear strip wiring works with vertical panel_layout" do
-    values = Enum.to_list(0..63)
-
-    assert WireMap.encode_to_firmware(values, {1, 64}, @linear_strip, @controller) ==
-             WireMap.apply_strip_inverse(values)
-  end
-
-  test "encode_to_firmware linear strip wiring uses panel pixel count" do
-    values = Enum.to_list(0..23)
-
-    encoded = WireMap.encode_to_firmware(values, {1, 24}, @linear_strip, @controller)
-
-    assert length(encoded) == 64
-
-    for strip <- 0..23 do
-      firmware_i = WireMap.firmware_index_for_strip(strip, 64, 8, 8)
-      assert Enum.at(encoded, firmware_i) == strip
-    end
-
-    for i <- 0..63 do
-      strip = WireMap.strip_index(i)
-
-      if strip >= 24 do
-        assert Enum.at(encoded, i) == 0
-      end
-    end
   end
 
   test "encode_to_firmware vertical wiring differs from horizontal for corner pixels" do

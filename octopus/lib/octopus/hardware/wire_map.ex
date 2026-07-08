@@ -62,14 +62,11 @@ defmodule Octopus.Hardware.WireMap do
           non_neg_integer()
   def layout_to_strip(u, %Wiring{type: type}, width, height) do
     case type do
-      :serpentine_8x8_bottom_left ->
+      :serpentine_horizontal_bottom_left ->
         layout_to_firmware_index(u, width, height)
 
-      :serpentine_8x8_vertical_bottom_left ->
+      :serpentine_vertical_bottom_left ->
         vertical_layout_to_strip(u, width, height)
-
-      :linear_strip ->
-        u
     end
   end
 
@@ -81,14 +78,11 @@ defmodule Octopus.Hardware.WireMap do
           non_neg_integer()
   def strip_to_layout(strip, %Wiring{type: type}, width, height) do
     case type do
-      :serpentine_8x8_bottom_left ->
+      :serpentine_horizontal_bottom_left ->
         firmware_to_layout_index(strip, width, height)
 
-      :serpentine_8x8_vertical_bottom_left ->
+      :serpentine_vertical_bottom_left ->
         vertical_strip_to_layout(strip, width, height)
-
-      :linear_strip ->
-        strip
     end
   end
 
@@ -140,38 +134,17 @@ defmodule Octopus.Hardware.WireMap do
     {fw_w, fw_h} = controller.firmware_matrix
 
     case wiring.type do
-      :serpentine_8x8_bottom_left ->
+      :serpentine_horizontal_bottom_left ->
         apply_inverse(values, pixel_count, width, height)
 
-      :serpentine_8x8_vertical_bottom_left ->
+      :serpentine_vertical_bottom_left ->
         for i <- 0..(pixel_count - 1) do
           strip = strip_index(i, fw_w, fw_h)
           layout_u = strip_to_layout(strip, wiring, width, height)
           Enum.at(values, layout_u)
         end
-
-      :linear_strip ->
-        max_pixels = controller.max_pixel_count
-        off = linear_strip_off(values)
-
-        for i <- 0..(max_pixels - 1) do
-          strip = strip_index(i, fw_w, fw_h)
-
-          if strip < pixel_count do
-            Enum.at(values, strip)
-          else
-            off
-          end
-        end
     end
   end
-
-  defp linear_strip_off([]), do: 0
-
-  defp linear_strip_off([sample | _]), do: linear_strip_off(sample)
-
-  defp linear_strip_off(sample) when is_integer(sample), do: 0
-  defp linear_strip_off({_r, _g, _b}), do: {0, 0, 0}
 
   @doc """
   Returns the firmware buffer index that lights a given layout coordinate.

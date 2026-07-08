@@ -12,8 +12,14 @@ defmodule Octopus.Hardware.InstallationValidatorTest do
              InstallationValidator.validate!(
                [
                  panel_slots: [
-                   %PanelSlot{controller_id: :polychrome_panel_1, wiring_id: :serpentine_8x8_bottom_left},
-                   %PanelSlot{controller_id: :polychrome_panel_2, wiring_id: :serpentine_8x8_bottom_left}
+                   %PanelSlot{
+                     controller_id: :polychrome_panel_1,
+                     wiring_id: :serpentine_horizontal_bottom_left
+                   },
+                   %PanelSlot{
+                     controller_id: :polychrome_panel_2,
+                     wiring_id: :serpentine_horizontal_bottom_left
+                   }
                  ],
                  panels: [:polychrome_panel_1, :polychrome_panel_2],
                  panel_layout: {8, 8},
@@ -28,7 +34,10 @@ defmodule Octopus.Hardware.InstallationValidatorTest do
       InstallationValidator.validate!(
         [
           panel_slots: [
-            %PanelSlot{controller_id: :not_a_real_panel, wiring_id: :serpentine_8x8_bottom_left}
+            %PanelSlot{
+              controller_id: :not_a_real_panel,
+              wiring_id: :serpentine_horizontal_bottom_left
+            }
           ],
           panels: [:not_a_real_panel],
           panel_layout: {8, 8},
@@ -60,7 +69,7 @@ defmodule Octopus.Hardware.InstallationValidatorTest do
       Map.put(
         Hardware.wiring_registry(),
         :fixed_8x8,
-        %Wiring{id: :fixed_8x8, matrix: {8, 8}, type: :serpentine_8x8_bottom_left}
+        %Wiring{id: :fixed_8x8, matrix: {8, 8}, type: :serpentine_horizontal_bottom_left}
       )
 
     assert_raise Error, ~r/does not match installation panel_layout/, fn ->
@@ -84,7 +93,10 @@ defmodule Octopus.Hardware.InstallationValidatorTest do
       InstallationValidator.validate!(
         [
           panel_slots: [
-            %PanelSlot{controller_id: :polychrome_panel_prototype, wiring_id: :linear_strip}
+            %PanelSlot{
+              controller_id: :polychrome_panel_prototype,
+              wiring_id: :serpentine_vertical_bottom_left
+            }
           ],
           panels: [:polychrome_panel_prototype],
           panel_layout: {8, 9},
@@ -100,7 +112,10 @@ defmodule Octopus.Hardware.InstallationValidatorTest do
              InstallationValidator.validate!(
                [
                  panel_slots: [
-                   %PanelSlot{controller_id: :polychrome_panel_prototype, wiring_id: :linear_strip}
+                   %PanelSlot{
+                     controller_id: :polychrome_panel_prototype,
+                     wiring_id: :serpentine_vertical_bottom_left
+                   }
                  ],
                  panels: [:polychrome_panel_prototype],
                  panel_layout: {1, 24},
@@ -110,12 +125,15 @@ defmodule Octopus.Hardware.InstallationValidatorTest do
              )
   end
 
-  test "accepts linear strip with vertical panel_layout" do
+  test "accepts vertical serpentine with vertical panel_layout" do
     assert :ok =
              InstallationValidator.validate!(
                [
                  panel_slots: [
-                   %PanelSlot{controller_id: :polychrome_panel_prototype, wiring_id: :linear_strip}
+                   %PanelSlot{
+                     controller_id: :polychrome_panel_prototype,
+                     wiring_id: :serpentine_vertical_bottom_left
+                   }
                  ],
                  panels: [:polychrome_panel_prototype],
                  panel_layout: {1, 64},
@@ -130,8 +148,14 @@ defmodule Octopus.Hardware.InstallationValidatorTest do
       InstallationValidator.validate!(
         [
           panel_slots: [
-            %PanelSlot{controller_id: :polychrome_panel_1, wiring_id: :serpentine_8x8_bottom_left},
-            %PanelSlot{controller_id: :polychrome_panel_prototype, wiring_id: :serpentine_8x8_bottom_left}
+            %PanelSlot{
+              controller_id: :polychrome_panel_1,
+              wiring_id: :serpentine_horizontal_bottom_left
+            },
+            %PanelSlot{
+              controller_id: :polychrome_panel_prototype,
+              wiring_id: :serpentine_horizontal_bottom_left
+            }
           ],
           panels: [:polychrome_panel_1, :polychrome_panel_prototype],
           panel_layout: {8, 8},
@@ -149,7 +173,7 @@ defmodule Octopus.Hardware.InstallationValidatorTest do
                  panel_slots: [
                    %PanelSlot{
                      controller_id: :polychrome_panel_prototype,
-                     wiring_id: :serpentine_8x8_bottom_left
+                     wiring_id: :serpentine_horizontal_bottom_left
                    }
                  ],
                  panels: [:polychrome_panel_prototype],

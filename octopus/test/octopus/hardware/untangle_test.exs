@@ -8,9 +8,9 @@ defmodule Octopus.Hardware.UntangleTest do
 
   @installation_opts [
     panel_slots: [
-      %PanelSlot{controller_id: :polychrome_panel_1, wiring_id: :serpentine_8x8_bottom_left},
-      %PanelSlot{controller_id: :polychrome_panel_3, wiring_id: :serpentine_8x8_bottom_left},
-      %PanelSlot{controller_id: :polychrome_panel_2, wiring_id: :serpentine_8x8_bottom_left}
+      %PanelSlot{controller_id: :polychrome_panel_1, wiring_id: :serpentine_horizontal_bottom_left},
+      %PanelSlot{controller_id: :polychrome_panel_3, wiring_id: :serpentine_horizontal_bottom_left},
+      %PanelSlot{controller_id: :polychrome_panel_2, wiring_id: :serpentine_horizontal_bottom_left}
     ],
     panels: [:polychrome_panel_1, :polychrome_panel_3, :polychrome_panel_2],
     network_config: [mode: :broadcast]
@@ -46,7 +46,7 @@ defmodule Octopus.Hardware.UntangleTest do
           0,
           7,
           {8, 8},
-          Hardware.fetch_wiring!(:serpentine_8x8_vertical_bottom_left),
+          Hardware.fetch_wiring!(:serpentine_vertical_bottom_left),
           Hardware.fetch!(:polychrome_panel_prototype)
         )
 
