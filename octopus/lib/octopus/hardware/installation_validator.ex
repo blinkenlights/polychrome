@@ -20,12 +20,11 @@ defmodule Octopus.Hardware.InstallationValidator do
   Raises `InstallationValidator.Error` on invalid configuration.
   Logs warnings for broadcast frame size limits.
   """
-  @spec validate!(keyword(), %{atom() => Controller.t()}) :: :ok
-  def validate!(installation_opts, controller_registry \\ Hardware.registry()) do
+  @spec validate!(keyword(), %{atom() => Controller.t()}, %{atom() => Wiring.t()}) :: :ok
+  def validate!(installation_opts, controller_registry \\ Hardware.registry(), wiring_registry \\ Hardware.wiring_registry()) do
     panel_slots = Keyword.get(installation_opts, :panel_slots)
 
     if panel_slots do
-      wiring_registry = Hardware.wiring_registry()
       validate_panel_slots!(panel_slots, installation_opts, controller_registry, wiring_registry)
     end
 
@@ -48,14 +47,26 @@ defmodule Octopus.Hardware.InstallationValidator do
     end
 
     panel_layout = Keyword.get(installation_opts, :panel_layout, {8, 8})
+    {panel_width, panel_height} = panel_layout
+    panel_pixel_count = panel_width * panel_height
 
-    for %PanelSlot{wiring_id: wiring_id} <- panel_slots do
+    for %PanelSlot{controller_id: controller_id, wiring_id: wiring_id} <- panel_slots do
       %Wiring{matrix: wiring_matrix} = Map.fetch!(wiring_registry, wiring_id)
+      %Controller{max_pixel_count: controller_max_pixel_count} =
+        Map.fetch!(controller_registry, controller_id)
 
-      unless wiring_matrix == panel_layout do
+      if wiring_matrix do
+        unless wiring_matrix == panel_layout do
+          raise Error,
+                message:
+                  "wiring #{inspect(wiring_id)} matrix #{inspect(wiring_matrix)} does not match installation panel_layout #{inspect(panel_layout)}"
+        end
+      end
+
+      if panel_pixel_count > controller_max_pixel_count do
         raise Error,
               message:
-                "wiring #{inspect(wiring_id)} matrix #{inspect(wiring_matrix)} does not match installation panel_layout #{inspect(panel_layout)}"
+                "installation panel_layout #{inspect(panel_layout)} (#{panel_pixel_count} pixels) exceeds controller #{inspect(controller_id)} max_pixel_count #{controller_max_pixel_count}"
       end
     end
 
@@ -106,17 +117,17 @@ defmodule Octopus.Hardware.InstallationValidator do
       |> Enum.map(fn %PanelSlot{controller_id: id} -> Map.fetch!(controller_registry, id).firmware_panel_index end)
       |> Enum.max(fn -> 0 end)
 
-    pixel_count =
+    controller_max_pixel_count =
       panel_slots
-      |> Enum.map(fn %PanelSlot{controller_id: id} -> Map.fetch!(controller_registry, id).pixel_count end)
+      |> Enum.map(fn %PanelSlot{controller_id: id} -> Map.fetch!(controller_registry, id).max_pixel_count end)
       |> Enum.max(fn -> 64 end)
 
-    required_pixels = max_index * pixel_count
+    required_pixels = max_index * controller_max_pixel_count
 
     if required_pixels > @broadcast_pixel_limit do
       Logger.warning(
         "Installation broadcast frame requires #{required_pixels} pixels " <>
-          "(max firmware_panel_index #{max_index} × #{pixel_count}) " <>
+          "(max firmware_panel_index #{max_index} × #{controller_max_pixel_count}) " <>
           "but protocol limit is #{@broadcast_pixel_limit} pixels (12 panels). " <>
           "Use individual mode or reduce panel count."
       )

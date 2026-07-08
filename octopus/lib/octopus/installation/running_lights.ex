@@ -4,7 +4,7 @@ defmodule Octopus.Installation.RunningLights do
     panels: [
       [controller: :polychrome_panel_prototype, wiring: :linear_strip]
     ],
-    panel_layout: {64, 1},
+    panel_layout: {1, 24},
     num_buttons: 1,
     num_joysticks: 0,
     panel_gap: 0,

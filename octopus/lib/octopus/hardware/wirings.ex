@@ -6,9 +6,9 @@ defmodule Octopus.Hardware.Wirings do
   alias Octopus.Hardware.Wiring
 
   @wirings [
-    {:serpentine_8x8_bottom_left, {8, 8}, :serpentine_8x8_bottom_left},
-    {:serpentine_8x8_vertical_bottom_left, {8, 8}, :serpentine_8x8_vertical_bottom_left},
-    {:linear_strip, {64, 1}, :linear_strip}
+    {:serpentine_8x8_bottom_left, nil, :serpentine_8x8_bottom_left},
+    {:serpentine_8x8_vertical_bottom_left, nil, :serpentine_8x8_vertical_bottom_left},
+    {:linear_strip, nil, :linear_strip}
   ]
 
   @doc """

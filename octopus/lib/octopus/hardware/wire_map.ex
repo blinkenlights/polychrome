@@ -139,21 +139,39 @@ defmodule Octopus.Hardware.WireMap do
     pixel_count = width * height
     {fw_w, fw_h} = controller.firmware_matrix
 
-    cond do
-      wiring.type == :serpentine_8x8_bottom_left and {width, height} == {8, 8} ->
-        apply_inverse(values, pixel_count, fw_w, fw_h)
+    case wiring.type do
+      :serpentine_8x8_bottom_left ->
+        apply_inverse(values, pixel_count, width, height)
 
-      wiring.type == :linear_strip and {width, height} == {64, 1} ->
-        apply_strip_inverse(values, pixel_count, fw_w, fw_h)
-
-      true ->
+      :serpentine_8x8_vertical_bottom_left ->
         for i <- 0..(pixel_count - 1) do
           strip = strip_index(i, fw_w, fw_h)
           layout_u = strip_to_layout(strip, wiring, width, height)
           Enum.at(values, layout_u)
         end
+
+      :linear_strip ->
+        max_pixels = controller.max_pixel_count
+        off = linear_strip_off(values)
+
+        for i <- 0..(max_pixels - 1) do
+          strip = strip_index(i, fw_w, fw_h)
+
+          if strip < pixel_count do
+            Enum.at(values, strip)
+          else
+            off
+          end
+        end
     end
   end
+
+  defp linear_strip_off([]), do: 0
+
+  defp linear_strip_off([sample | _]), do: linear_strip_off(sample)
+
+  defp linear_strip_off(sample) when is_integer(sample), do: 0
+  defp linear_strip_off({_r, _g, _b}), do: {0, 0, 0}
 
   @doc """
   Returns the firmware buffer index that lights a given layout coordinate.

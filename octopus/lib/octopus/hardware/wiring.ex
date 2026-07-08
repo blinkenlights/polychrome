@@ -13,7 +13,7 @@ defmodule Octopus.Hardware.Wiring do
 
   @type t :: %__MODULE__{
           id: atom(),
-          matrix: {pos_integer(), pos_integer()},
+          matrix: {pos_integer(), pos_integer()} | nil,
           type: type()
         }
 end
