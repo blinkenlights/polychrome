@@ -150,20 +150,19 @@ defmodule Octopus.InstallationTransport do
     {:noreply, state |> put_queue(entries) |> broadcast()}
   end
 
-  def handle_cast({:set_interval, seconds}, state) do
+  def handle_cast({:set_interval, seconds}, %State{} = state) do
     {:noreply, %State{state | cycle_interval_seconds: normalize_interval(seconds)} |> broadcast()}
   end
 
-  def handle_cast({:pause_rotation_for_takeover, app_id}, state) do
-    state =
-      state
-      |> pause()
-      |> then(fn s -> %State{s | rotation_paused: true, takeover_app_id: app_id} end)
+  def handle_cast({:pause_rotation_for_takeover, app_id}, %State{} = state) do
+    %State{} = paused = pause(state)
+
+    state = %State{paused | rotation_paused: true, takeover_app_id: app_id}
 
     {:noreply, broadcast(state)}
   end
 
-  def handle_cast(:resume_rotation_after_takeover, state) do
+  def handle_cast(:resume_rotation_after_takeover, %State{} = state) do
     state =
       %State{state | rotation_paused: false, takeover_app_id: nil}
       |> resume()
@@ -171,17 +170,15 @@ defmodule Octopus.InstallationTransport do
     {:noreply, broadcast(state)}
   end
 
-  def handle_cast({:launch_app, module}, state) do
+  def handle_cast({:launch_app, module}, %State{} = state) do
     cond do
       not App.rotation_eligible?(module) ->
         case AppSupervisor.start_or_select_app(module) do
           {:ok, app_id} ->
             AppManager.select_app(app_id)
 
-            state =
-              state
-              |> pause()
-              |> then(fn s -> %State{s | rotation_paused: true, takeover_app_id: app_id} end)
+            %State{} = paused = pause(state)
+            state = %State{paused | rotation_paused: true, takeover_app_id: app_id}
 
             {:noreply, broadcast(state)}
 
