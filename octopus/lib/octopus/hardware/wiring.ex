@@ -10,6 +10,7 @@ defmodule Octopus.Hardware.Wiring do
           :serpentine_8x8_bottom_left
           | :serpentine_8x8_vertical_bottom_left
           | :linear_strip
+          | :linear_strip_bottom_up
 
   @type t :: %__MODULE__{
           id: atom(),

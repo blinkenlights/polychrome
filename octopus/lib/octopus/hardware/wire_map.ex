@@ -70,6 +70,9 @@ defmodule Octopus.Hardware.WireMap do
 
       :linear_strip ->
         u
+
+      :linear_strip_bottom_up ->
+        layout_to_firmware_index(u, width, height)
     end
   end
 
@@ -89,6 +92,9 @@ defmodule Octopus.Hardware.WireMap do
 
       :linear_strip ->
         strip
+
+      :linear_strip_bottom_up ->
+        firmware_to_layout_index(strip, width, height)
     end
   end
 
@@ -145,6 +151,17 @@ defmodule Octopus.Hardware.WireMap do
 
       wiring.type == :linear_strip and {width, height} == {64, 1} ->
         apply_strip_inverse(values, pixel_count, fw_w, fw_h)
+
+      wiring.type == :linear_strip ->
+        # Straight strip: layout order equals firmware buffer order.
+        values
+
+      wiring.type == :linear_strip_bottom_up ->
+        # Straight strip, data-in at the bottom: firmware buffer position p maps
+        # to the layout pixel at that strip position (bottom-first, no serpentine).
+        for p <- 0..(pixel_count - 1) do
+          Enum.at(values, strip_to_layout(p, wiring, width, height))
+        end
 
       true ->
         for i <- 0..(pixel_count - 1) do

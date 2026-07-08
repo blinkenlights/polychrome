@@ -8,7 +8,9 @@ defmodule Octopus.Hardware.Wirings do
   @wirings [
     {:serpentine_8x8_bottom_left, {8, 8}, :serpentine_8x8_bottom_left},
     {:serpentine_8x8_vertical_bottom_left, {8, 8}, :serpentine_8x8_vertical_bottom_left},
-    {:linear_strip, {64, 1}, :linear_strip}
+    {:linear_strip, {64, 1}, :linear_strip},
+    {:linear_strip_24, {24, 1}, :linear_strip},
+    {:linear_strip_24_vertical, {1, 24}, :linear_strip_bottom_up}
   ]
 
   @doc """
