@@ -35,15 +35,18 @@ defmodule Octopus.Apps.PixelFun do
       :buttons,
       :panel_interaction_factors,
       :panel_proximities,
-      :speed
+      :speed,
+      :display_info
     ]
   end
 
   def name(), do: "Pixel Fun"
 
   def compatible?() do
-    installation_info = Octopus.App.get_installation_info()
-    installation_info.panel_width == 8 and installation_info.panel_height == 8
+    info = Octopus.App.get_installation_info()
+
+    (info.panel_width == 8 and info.panel_height == 8) or
+      info.panel_width == 1 or info.panel_height == 1
   end
 
   def config_schema() do
@@ -116,10 +119,11 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   def app_init(config) do
-    # Configure display using new unified API - adjacent layout (was Canvas.to_frame())
-    Octopus.App.configure_display(layout: :adjacent_panels)
+    Octopus.App.configure_display(layout: :gapped_panels)
     Octopus.App.subscribe_to_button_events()
     Octopus.Params.Global.subscribe()
+
+    display_info = Octopus.App.get_display_info()
 
     {:ok, program} = config.program |> Program.parse()
 
@@ -151,7 +155,8 @@ defmodule Octopus.Apps.PixelFun do
       buttons: %{},
       panel_interaction_factors: panel_interaction_factors,
       panel_proximities: Map.new(0..(Installation.num_panels() - 1), fn i -> {i, 0.0} end),
-      speed: Octopus.Params.Global.speed()
+      speed: Octopus.Params.Global.speed(),
+      display_info: display_info
     }
 
     {:ok, state}
@@ -325,7 +330,12 @@ defmodule Octopus.Apps.PixelFun do
     {:noreply, state}
   end
 
-  defp render(%State{program: program} = state) do
+  @doc false
+  def build_canvas(%State{} = state), do: render_canvas(state)
+
+  defp render(%State{} = state), do: render_canvas(state)
+
+  defp render_canvas(%State{display_info: display_info} = state) do
     {offset_x, offset_y} = translate_offset(state)
     zoom = zoom_factor(state)
     rotation = state.seconds * state.rotate_scale
@@ -333,9 +343,11 @@ defmodule Octopus.Apps.PixelFun do
     center_x = Installation.width() / 2 - 0.5
     center_y = Installation.height() / 2 - 0.5
 
+    canvas = Canvas.new(display_info.width, display_info.height)
+
     Installation.virtual_pixel_positions_per_panel()
     |> Enum.with_index()
-    |> Enum.map(fn {panel, index} ->
+    |> Enum.reduce(canvas, fn {panel, index}, canvas ->
       proximity = Map.get(state.panel_proximities, index, 0.0)
       hue_shift = proximity * 180 * 5
       interaction_factor = Map.get(state.panel_interaction_factors, index, 0.0)
@@ -347,10 +359,7 @@ defmodule Octopus.Apps.PixelFun do
         %Chameleon.HSV{(%Chameleon.HSV{} = color_b) | h: rem(trunc(color_b.h + hue_shift), 360)}
       }
 
-      for {{x, y}, i} <- Enum.with_index(panel), into: Canvas.new(8, 8) do
-        local_x = rem(i, 8)
-        local_y = div(i, 8)
-
+      Enum.reduce(Enum.with_index(panel), canvas, fn {{x, y}, i}, canvas ->
         x_translated = x - offset_x - center_x
         y_translated = y - offset_y - center_y
 
@@ -360,22 +369,23 @@ defmodule Octopus.Apps.PixelFun do
         x_scaled = x_rotated * zoom
         y_scaled = y_rotated * zoom
 
-        {{local_x, local_y},
-         pixels(
-           program,
-           x_scaled,
-           y_scaled,
-           i,
-           state.seconds + interaction_factor * 5,
-           state.audio_input.low,
-           state.audio_input.mid,
-           state.audio_input.high,
-           colors,
-           &interpolate_colors_with_black/3
-         )}
-      end
+        color =
+          pixels(
+            state.program,
+            x_scaled,
+            y_scaled,
+            i,
+            state.seconds + interaction_factor * 5,
+            state.audio_input.low,
+            state.audio_input.mid,
+            state.audio_input.high,
+            colors,
+            &interpolate_colors_with_black/3
+          )
+
+        Canvas.put_pixel(canvas, {x, y}, color)
+      end)
     end)
-    |> Enum.reduce(&Canvas.join(&2, &1))
   end
 
   @default_env %{~c"pi" => :math.pi(), ~c"tau" => :math.pi() * 2}
