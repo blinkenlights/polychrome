@@ -47,16 +47,18 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
       <%!-- Main console (wide) --%>
       <div class="hidden min-[700px]:block space-y-6 pb-8">
-        <.transport_bar {transport_bar_assigns(assigns)} target={@myself} />
+        <div class="grid gap-6 min-[1100px]:grid-cols-2 min-[1100px]:items-start">
+          <.transport_bar {transport_bar_assigns(assigns)} target={@myself} />
+          <.global_params_card />
+        </div>
 
-        <div class="grid gap-6 min-[1100px]:grid-cols-[1.2fr_1fr] min-[1100px]:items-start">
+        <div class="grid gap-6 min-[1100px]:grid-cols-2 min-[1100px]:items-start">
           <div class="min-[1100px]:col-start-1 space-y-6 order-2 min-[1100px]:order-none">
             <.mode_library sections={@library_sections} target={@myself} transport={@transport} show_all_pixel_fun={@show_all_pixel_fun} />
           </div>
           <div class="min-[1100px]:col-start-2 space-y-6 order-1 min-[1100px]:order-none">
             <.queue_card {queue_assigns(assigns)} target={@myself} />
             <.running_now_strip running_apps={@running_apps} target={@myself} />
-            <.global_settings />
             <.browse_apps apps={@browse_apps} target={@myself} />
           </div>
         </div>
@@ -65,6 +67,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       <%!-- Mobile --%>
       <div class="min-[700px]:hidden space-y-4">
         <.mini_transport {mini_transport_assigns(assigns)} target={@myself} />
+        <.global_params_card mobile />
 
         <div role="tablist" class="tabs tabs-boxed">
           <button
@@ -94,6 +97,21 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       <.console_footer />
 
       <.custom_interval_modal show={@show_custom_interval} target={@myself} />
+    </div>
+    """
+  end
+
+  attr :mobile, :boolean, default: false
+
+  defp global_params_card(assigns) do
+    ~H"""
+    <div class="card bg-base-200 border border-base-300 shadow-sm">
+      <div class="card-body p-4">
+        <.live_component
+          id={if(@mobile, do: "global-params-mobile", else: "global-params-desktop")}
+          module={OctopusWeb.GlobalParamsComponent}
+        />
+      </div>
     </div>
     """
   end
@@ -192,18 +210,6 @@ defmodule OctopusWeb.InstallationConsoleComponent do
           Browse all apps →
         </button>
       </p>
-    </div>
-    """
-  end
-
-  defp global_settings(assigns) do
-    ~H"""
-    <div tabindex="0" class="collapse collapse-arrow bg-base-200 border border-base-300">
-      <input type="checkbox" />
-      <div class="collapse-title font-semibold">Global settings</div>
-      <div class="collapse-content">
-        <.live_component id="global-params-console" module={OctopusWeb.GlobalParamsComponent} />
-      </div>
     </div>
     """
   end

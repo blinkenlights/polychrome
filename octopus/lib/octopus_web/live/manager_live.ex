@@ -3,6 +3,7 @@ defmodule OctopusWeb.ManagerLive do
 
   alias Octopus.Installation
   alias Octopus.InstallationTransport
+  alias Octopus.Params.Global
   alias OctopusWeb.PixelsLive
 
   def mount(_params, _session, socket) do
@@ -10,6 +11,7 @@ defmodule OctopusWeb.ManagerLive do
       InstallationTransport.subscribe()
       Octopus.AppSupervisor.subscribe()
       Octopus.AppManager.subscribe()
+      Global.subscribe()
       :timer.send_interval(1000, :console_tick)
     end
 
@@ -59,7 +61,16 @@ defmodule OctopusWeb.ManagerLive do
 
   def render(assigns) do
     ~H"""
-    <div id="console-page" phx-hook="ConsoleTheme" class="w-full relative">
+    <div
+      id="console-page"
+      phx-hook="ConsoleTheme"
+      data-sim-preview={@show_sim_preview}
+      class={[
+        "w-full",
+        @show_sim_preview && "fixed inset-0 z-20 flex flex-col overflow-hidden",
+        !@show_sim_preview && "relative"
+      ]}
+    >
       <button
         type="button"
         class="fixed top-3 right-3 z-50 btn btn-sm btn-circle shadow-lg border border-base-300 bg-base-100"
@@ -71,7 +82,7 @@ defmodule OctopusWeb.ManagerLive do
       </button>
 
       <%= if @show_sim_preview do %>
-        <div class="w-full bg-black shrink-0 border-b border-base-300">
+        <div id="sim-preview" class="shrink-0 z-30 w-full max-h-[42dvh] bg-black border-b border-base-300 overflow-hidden">
           {live_render(@socket, PixelsLive, id: "main", session: %{"embedded" => true})}
         </div>
       <% end %>
@@ -80,6 +91,7 @@ defmodule OctopusWeb.ManagerLive do
         data-theme={@console_theme}
         class={[
           "min-h-0",
+          @show_sim_preview && "flex-1 overflow-y-auto overscroll-y-contain",
           @console_theme == "dark" && "bg-[#0f1318] text-base-content",
           @console_theme == "light" && "bg-base-200 text-base-content"
         ]}
@@ -138,5 +150,19 @@ defmodule OctopusWeb.ManagerLive do
 
     {:noreply, socket}
   end
+
+  def handle_info({:param_updated, key, value}, socket)
+      when key in [:speed, :brightness, :auto_brightness] do
+    for id <- ["global-params-desktop", "global-params-mobile"] do
+      send_update(OctopusWeb.GlobalParamsComponent,
+        id: id,
+        param_key: key,
+        param_value: value
+      )
+    end
+
+    {:noreply, socket}
+  end
+
   def handle_info({:mixer, _}, socket), do: {:noreply, socket}
 end

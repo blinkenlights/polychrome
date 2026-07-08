@@ -1,17 +1,47 @@
 defmodule Octopus.Params.Global do
   use Octopus.Params, prefix: :global
 
+  @speed_min 0.01
+  @speed_max 10.0
+  @speed_slider_steps 1000
+
   def brightness, do: param(:brightness, 128)
   def speed, do: param(:speed, 1.0)
   def auto_brightness, do: param(:auto_brightness, false)
+
+  def speed_min, do: @speed_min
+  def speed_max, do: @speed_max
+  def speed_slider_steps, do: @speed_slider_steps
+
+  def speed_to_slider(speed) when is_number(speed) do
+    speed = clamp_speed(speed)
+    ratio = :math.log(speed / @speed_min) / :math.log(@speed_max / @speed_min)
+    round(ratio * @speed_slider_steps)
+  end
+
+  def slider_to_speed(slider) when is_number(slider) do
+    t = slider |> max(0) |> min(@speed_slider_steps)
+    @speed_min * :math.pow(@speed_max / @speed_min, t / @speed_slider_steps) |> clamp_speed()
+  end
+
+  def format_speed(speed) when is_number(speed) do
+    speed = clamp_speed(speed)
+
+    cond do
+      speed >= 10 -> "10"
+      speed >= 1 -> speed |> Float.round(2) |> trim_trailing_zeros()
+      speed >= 0.1 -> speed |> Float.round(2) |> trim_trailing_zeros()
+      true -> speed |> Float.round(3) |> trim_trailing_zeros()
+    end
+  end
 
   @doc """
   Config schema for web UI - similar to app config schemas
   """
   def config_schema do
     %{
-      brightness: {"Global Brightness", :int, %{default: 128, min: 0, max: 255}},
-      speed: {"Animation Speed", :float, %{default: 1.0, min: 0.1, max: 2.0, step: 0.1}},
+      brightness: {"Brightness", :int, %{default: 128, min: 0, max: 255}},
+      speed: {"Speed", :exp_float, %{default: 1.0, min: @speed_min, max: @speed_max}},
       auto_brightness: {"Auto Brightness", :boolean, %{default: false}}
     }
   end
@@ -71,7 +101,7 @@ defmodule Octopus.Params.Global do
   end
 
   def handle_param("speed", [value]) when is_number(value) do
-    clamped_value = value |> min(2.0) |> max(0.1)
+    clamped_value = clamp_speed(value)
     # Speed parameter stored - could be used by animations for time scaling
     # Value is automatically stored in params system via put_param_and_reply
 
@@ -108,5 +138,14 @@ defmodule Octopus.Params.Global do
 
   def handle_param(_key, _value) do
     # ignore
+  end
+
+  defp clamp_speed(speed), do: speed |> max(@speed_min) |> min(@speed_max)
+
+  defp trim_trailing_zeros(value) when is_float(value) do
+    value
+    |> :erlang.float_to_binary(decimals: 6)
+    |> String.trim_trailing("0")
+    |> String.trim_trailing(".")
   end
 end

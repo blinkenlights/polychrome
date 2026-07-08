@@ -60,6 +60,30 @@ const ConsoleTheme = {
     this.handleEvent("store-console-theme", ({ theme }) => {
       localStorage.setItem("console-theme", theme);
     });
+
+    this.syncScrollLock();
+  },
+
+  updated() {
+    this.syncScrollLock();
+  },
+
+  destroyed() {
+    this.unlockScroll();
+  },
+
+  syncScrollLock() {
+    if (this.el.dataset.simPreview === "true") {
+      document.documentElement.classList.add("overflow-hidden");
+      document.body.classList.add("overflow-hidden");
+    } else {
+      this.unlockScroll();
+    }
+  },
+
+  unlockScroll() {
+    document.documentElement.classList.remove("overflow-hidden");
+    document.body.classList.remove("overflow-hidden");
   },
 };
 
