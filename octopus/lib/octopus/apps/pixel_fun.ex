@@ -11,8 +11,6 @@ defmodule Octopus.Apps.PixelFun do
   alias Octopus.Apps.PixelFun.ScenePresets
   alias Octopus.Installation
 
-  @default_cycle_interval_seconds 300.0
-
   @fps 60
   @frame_time_ms trunc(1000 / @fps)
 
@@ -28,17 +26,6 @@ defmodule Octopus.Apps.PixelFun do
       :rotate_scale,
       :zoom_scale,
       :color_interval,
-      # Ordered playlist of scene ids the wall rotates through (any length).
-      :cycle_preset_ids,
-      # Interval between scene changes, in seconds.
-      :cycle_interval_seconds,
-      # Current position within the queue.
-      :cycle_index,
-      :cycle_timer_ref,
-      # Transport state.
-      :playing,
-      :paused_remaining_ms,
-      :next_change_at_ms,
       # Id of the scene currently rendered on the wall.
       :live_scene_id,
       :offset,
@@ -66,9 +53,7 @@ defmodule Octopus.Apps.PixelFun do
         {"Palette crossfade (s)", :float, %{default: 5, min: 1, max: 20, step: 0.5}},
       translate_scale: {"Drift strength", :float, %{default: 0.0, min: 0, max: 20, step: 0.1}},
       rotate_scale: {"Rotation speed", :float, %{default: 0.0, min: 0, max: 4, step: 0.01}},
-      zoom_scale: {"Zoom pulse strength", :float, %{default: 1.0, min: 0, max: 10, step: 0.1}},
-      cycle_preset_ids: {"", :internal, %{default: []}},
-      cycle_interval_seconds: {"", :internal, %{default: @default_cycle_interval_seconds}}
+      zoom_scale: {"Zoom pulse strength", :float, %{default: 1.0, min: 0, max: 10, step: 0.1}}
     }
   end
 
@@ -100,15 +85,34 @@ defmodule Octopus.Apps.PixelFun do
     }
 
     Map.merge(scene, %{
-      cycle_preset_ids: state.cycle_preset_ids,
-      cycle_interval_seconds: state.cycle_interval_seconds,
-      cycle_index: state.cycle_index,
-      playing: state.playing,
-      next_change_at_ms: state.next_change_at_ms,
-      paused_remaining_ms: state.paused_remaining_ms,
       live_scene_id: live_scene_id(state, scene),
       active_preset_id: running_preset_id(state, scene)
     })
+  end
+
+  def list_modes do
+    ScenePresets.list_all()
+    |> Enum.map(fn preset ->
+      %{
+        id: preset.id,
+        name: preset.name,
+        accent_color: preset.accent_color,
+        summary: ScenePresets.summary(preset),
+        formula: preset.formula,
+        builtin: preset.builtin
+      }
+    end)
+  end
+
+  def mode_config(mode_id) do
+    case ScenePresets.get(mode_id) do
+      nil -> %{}
+      preset -> ScenePresets.to_config(preset)
+    end
+  end
+
+  def apply_mode(app_id, mode_id) do
+    cast(app_id, {:apply_mode, to_string(mode_id)})
   end
 
   def app_init(config) do
@@ -128,11 +132,6 @@ defmodule Octopus.Apps.PixelFun do
     panel_interaction_factors =
       0..(Installation.num_panels() - 1) |> Enum.map(fn i -> {i, 0.0} end) |> Map.new()
 
-    cycle_preset_ids = normalize_cycle_ids(Map.get(config, :cycle_preset_ids, []))
-
-    cycle_interval_seconds =
-      Map.get(config, :cycle_interval_seconds, @default_cycle_interval_seconds)
-
     state = %State{
       program: program,
       source: config.program,
@@ -144,14 +143,7 @@ defmodule Octopus.Apps.PixelFun do
       translate_scale: config.translate_scale,
       rotate_scale: config.rotate_scale,
       zoom_scale: config.zoom_scale,
-      cycle_preset_ids: cycle_preset_ids,
-      cycle_interval_seconds: cycle_interval_seconds,
-      cycle_index: 0,
-      cycle_timer_ref: nil,
-      playing: true,
-      paused_remaining_ms: nil,
-      next_change_at_ms: nil,
-      live_scene_id: nil,
+      live_scene_id: ScenePresets.id_for_config(config),
       offset: {0, 0},
       move: {0, 0},
       audio_input: %{low: 0.0, mid: 0.0, high: 0.0},
@@ -162,53 +154,14 @@ defmodule Octopus.Apps.PixelFun do
       speed: Octopus.Params.Global.speed()
     }
 
-    state = apply_queue_head_on_init(state)
-
     {:ok, state}
   end
 
-  # `handle_config` handles scene-editor changes (formula + sliders). Queue,
-  # interval and transport are driven through the dedicated casts below so the
-  # running countdown is never disturbed by an editor keystroke.
   def handle_config(config, %State{} = state) do
-    new_state = apply_scene_fields(state, config)
-
-    new_state =
-      case Map.fetch(config, :cycle_preset_ids) do
-        {:ok, ids} -> apply_queue(new_state, normalize_cycle_ids(ids))
-        :error -> new_state
-      end
-
-    new_state =
-      case Map.fetch(config, :cycle_interval_seconds) do
-        # Interval change only swaps the stored value — the scheduled change
-        # keeps its deadline; the new value is used the next time we schedule.
-        {:ok, seconds} -> %State{new_state | cycle_interval_seconds: normalize_interval(seconds)}
-        :error -> new_state
-      end
-
-    {:noreply, new_state}
+    state = apply_scene_fields(state, config)
+    broadcast_config(state)
+    {:noreply, state}
   end
-
-  # -- Transport / queue API -------------------------------------------------
-
-  @doc "Toggles play/pause on the running app."
-  def toggle_play(app_id), do: cast(app_id, :toggle_play)
-
-  @doc "Advances to the next queued scene and restarts the countdown."
-  def next_scene(app_id), do: cast(app_id, :next_scene)
-
-  @doc "Returns to the previous queued scene and restarts the countdown."
-  def prev_scene(app_id), do: cast(app_id, :prev_scene)
-
-  @doc "Plays the given scene immediately, jumping the queue position if queued."
-  def play_now(app_id, scene_id), do: cast(app_id, {:play_now, scene_id})
-
-  @doc "Replaces the queue with the given ordered list of scene ids."
-  def set_queue(app_id, ids), do: cast(app_id, {:set_queue, ids})
-
-  @doc "Sets the rotation interval in seconds (does not reset the countdown)."
-  def set_interval(app_id, seconds), do: cast(app_id, {:set_interval, seconds})
 
   defp cast(app_id, message) do
     case AppSupervisor.lookup_app(app_id) do
@@ -231,32 +184,11 @@ defmodule Octopus.Apps.PixelFun do
     {:noreply, %{state | program: program}}
   end
 
-  def handle_cast(:toggle_play, %State{playing: true} = state) do
-    {:noreply, state |> pause() |> broadcast()}
-  end
-
-  def handle_cast(:toggle_play, %State{playing: false} = state) do
-    {:noreply, state |> resume() |> broadcast()}
-  end
-
-  def handle_cast(:next_scene, %State{} = state) do
-    {:noreply, state |> step_scene(+1) |> broadcast()}
-  end
-
-  def handle_cast(:prev_scene, %State{} = state) do
-    {:noreply, state |> step_scene(-1) |> broadcast()}
-  end
-
-  def handle_cast({:play_now, scene_id}, %State{} = state) do
-    {:noreply, state |> do_play_now(to_string(scene_id)) |> broadcast()}
-  end
-
-  def handle_cast({:set_queue, ids}, %State{} = state) do
-    {:noreply, state |> apply_queue(normalize_cycle_ids(ids)) |> broadcast()}
-  end
-
-  def handle_cast({:set_interval, seconds}, %State{} = state) do
-    {:noreply, %State{state | cycle_interval_seconds: normalize_interval(seconds)} |> broadcast()}
+  def handle_cast({:apply_mode, scene_id}, %State{} = state) do
+    state = apply_scene_by_id(state, scene_id)
+    state = %State{state | live_scene_id: scene_id}
+    broadcast_config(state)
+    {:noreply, state}
   end
 
   defp apply_scene_fields(%State{} = state, config) do
@@ -281,149 +213,11 @@ defmodule Octopus.Apps.PixelFun do
     }
   end
 
-  defp normalize_cycle_ids(nil), do: []
-
-  defp normalize_cycle_ids(ids) when is_list(ids) do
-    ids
-    |> Enum.map(&to_string/1)
-    |> Enum.uniq()
-  end
-
-  defp normalize_cycle_ids(_), do: []
-
-  defp normalize_interval(seconds) when is_number(seconds), do: seconds * 1.0 |> max(1.0)
-  defp normalize_interval(_), do: @default_cycle_interval_seconds
-
-  defp now_ms, do: System.os_time(:millisecond)
-
-  defp interval_ms(%State{cycle_interval_seconds: seconds}) do
-    seconds |> normalize_interval() |> Kernel.*(1000) |> trunc() |> max(1)
-  end
-
-  # Applies the first queued scene (if any) and starts the countdown on boot.
-  defp apply_queue_head_on_init(%State{cycle_preset_ids: []} = state) do
-    schedule_change(state)
-  end
-
-  defp apply_queue_head_on_init(%State{cycle_preset_ids: [id | _]} = state) do
-    state = apply_scene_by_id(state, id)
-    %State{state | cycle_index: 0, live_scene_id: id} |> schedule_change()
-  end
-
-  # Replaces the queue, clamps the current index, and (re)schedules the timer
-  # only when membership/order actually changed. Applying a new queue also
-  # loads its head scene when the queue was previously empty.
-  defp apply_queue(%State{cycle_preset_ids: same} = state, same), do: state
-
-  defp apply_queue(%State{} = state, ids) do
-    index = clamp_index(state.cycle_index, ids)
-
-    %State{state | cycle_preset_ids: ids, cycle_index: index}
-    |> schedule_change()
-  end
-
-  defp clamp_index(_index, []), do: 0
-  defp clamp_index(index, ids), do: index |> max(0) |> min(length(ids) - 1)
-
-  # Schedules the next scene change. No timer when holding (0/1 queued) or
-  # paused. Preserves an already-running deadline unless we're (re)starting.
-  defp schedule_change(%State{playing: false} = state), do: cancel_cycle_timer(state)
-
-  defp schedule_change(%State{cycle_preset_ids: ids} = state) when length(ids) < 2 do
-    %State{cancel_cycle_timer(state) | next_change_at_ms: nil}
-  end
-
-  defp schedule_change(%State{next_change_at_ms: deadline} = state)
-       when is_integer(deadline) and deadline > 0 do
-    # Already counting down — keep the existing deadline (used on interval and
-    # membership tweaks that must not reset the running countdown).
-    remaining = max(deadline - now_ms(), 1)
-    arm_timer(state, remaining, deadline)
-  end
-
-  defp schedule_change(%State{} = state), do: restart_countdown(state)
-
-  # Cancels any timer and arms a fresh full-interval countdown.
-  defp restart_countdown(%State{cycle_preset_ids: ids} = state) when length(ids) < 2 do
-    %State{cancel_cycle_timer(state) | next_change_at_ms: nil}
-  end
-
-  defp restart_countdown(%State{playing: false} = state) do
-    %State{cancel_cycle_timer(state) | next_change_at_ms: nil}
-  end
-
-  defp restart_countdown(%State{} = state) do
-    ms = interval_ms(state)
-    arm_timer(state, ms, now_ms() + ms)
-  end
-
-  defp arm_timer(%State{} = state, remaining_ms, deadline_ms) do
-    state = cancel_cycle_timer(state)
-    ref = Process.send_after(self(), :cycle_presets, remaining_ms)
-    %State{state | cycle_timer_ref: ref, next_change_at_ms: deadline_ms, paused_remaining_ms: nil}
-  end
-
-  defp cancel_cycle_timer(%State{cycle_timer_ref: nil} = state), do: state
-
-  defp cancel_cycle_timer(%State{cycle_timer_ref: ref} = state) do
-    Process.cancel_timer(ref)
-    %State{state | cycle_timer_ref: nil}
-  end
-
-  defp pause(%State{} = state) do
-    remaining =
-      case state.next_change_at_ms do
-        deadline when is_integer(deadline) -> max(deadline - now_ms(), 0)
-        _ -> nil
-      end
-
-    %State{cancel_cycle_timer(state) | playing: false, paused_remaining_ms: remaining, next_change_at_ms: nil}
-  end
-
-  defp resume(%State{cycle_preset_ids: ids} = state) when length(ids) < 2 do
-    %State{state | playing: true, paused_remaining_ms: nil, next_change_at_ms: nil}
-  end
-
-  defp resume(%State{paused_remaining_ms: remaining} = state) when is_integer(remaining) do
-    remaining = max(remaining, 1)
-    arm_timer(%State{state | playing: true}, remaining, now_ms() + remaining)
-  end
-
-  defp resume(%State{} = state) do
-    restart_countdown(%State{state | playing: true})
-  end
-
-  # Advance/retreat by one queue position, load the scene, restart countdown.
-  defp step_scene(%State{cycle_preset_ids: ids} = state, _dir) when length(ids) < 2, do: state
-
-  defp step_scene(%State{cycle_preset_ids: ids, cycle_index: index} = state, dir) do
-    next_index = Integer.mod(index + dir, length(ids))
-    id = Enum.at(ids, next_index)
-    state = apply_scene_by_id(state, id)
-
-    %State{state | cycle_index: next_index, live_scene_id: id} |> restart_countdown()
-  end
-
-  defp do_play_now(%State{cycle_preset_ids: ids} = state, scene_id) do
-    state = apply_scene_by_id(state, scene_id)
-    state = %State{state | live_scene_id: scene_id}
-
-    case Enum.find_index(ids, &(&1 == scene_id)) do
-      nil -> state
-      index -> %State{state | cycle_index: index} |> restart_countdown()
-    end
-  end
-
   defp apply_scene_by_id(%State{} = state, scene_id) do
     case ScenePresets.get(scene_id) do
       nil -> state
       preset -> apply_scene_fields(state, ScenePresets.to_config(preset))
     end
-  end
-
-  defp broadcast(%State{} = state) do
-    broadcast_config(state)
-    state
   end
 
   defp broadcast_config(%State{} = state) do
@@ -498,24 +292,6 @@ defmodule Octopus.Apps.PixelFun do
     Octopus.App.update_display(canvas, :rgb, easing_interval: trunc(param(:easing_interval, 200)))
 
     {:noreply, state}
-  end
-
-  def handle_info(:cycle_presets, %State{cycle_preset_ids: ids} = state) when length(ids) >= 2 do
-    next_index = rem(state.cycle_index + 1, length(ids))
-    preset_id = Enum.at(ids, next_index)
-
-    applied = apply_scene_by_id(state, preset_id)
-
-    new_state =
-      %State{applied | cycle_index: next_index, live_scene_id: preset_id}
-      |> restart_countdown()
-
-    broadcast_config(new_state)
-    {:noreply, new_state}
-  end
-
-  def handle_info(:cycle_presets, %State{} = state) do
-    {:noreply, restart_countdown(state)}
   end
 
   def handle_event(%AudioEvent{bass: low, mid: mid, high: high}, %State{} = state) do

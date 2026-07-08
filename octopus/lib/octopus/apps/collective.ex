@@ -37,6 +37,47 @@ defmodule Octopus.Apps.Collective do
 
   def name, do: "Collective"
 
+  @mode_labels %{
+    storm: "Storm",
+    breath: "Breath",
+    dots: "Dots",
+    orbital: "Orbital drift",
+    lava_lamp: "Lava lamp",
+    ring_noise: "Ring noise"
+  }
+
+  @mode_accents %{
+    storm: "#E74C3C",
+    breath: "#3498DB",
+    dots: "#F1C40F",
+    orbital: "#9B59B6",
+    lava_lamp: "#E67E22",
+    ring_noise: "#1ABC9C"
+  }
+
+  def list_modes do
+    Enum.map(@animations, fn {key, _mod} ->
+      %{
+        id: Atom.to_string(key),
+        name: Map.fetch!(@mode_labels, key),
+        accent_color: Map.fetch!(@mode_accents, key),
+        summary: "",
+        builtin: true
+      }
+    end)
+  end
+
+  def mode_config(mode_id) do
+    animation = String.to_existing_atom(mode_id)
+    %{animation: animation}
+  rescue
+    ArgumentError -> %{}
+  end
+
+  def apply_mode(app_id, mode_id) do
+    Octopus.AppSupervisor.update_config(app_id, mode_config(mode_id))
+  end
+
   def app_init(config) do
     # Instant panel updates — easing on the firmware side never completes when every
     # pixel changes every frame (Lava Lamp / Ring Noise) and can freeze the panel.

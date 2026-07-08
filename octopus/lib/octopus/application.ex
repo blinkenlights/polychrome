@@ -42,6 +42,7 @@ defmodule Octopus.Application do
         Octopus.Events.Event.Proximity.Processor,
         Octopus.InputAdapter,
         Octopus.PlaylistScheduler,
+        Octopus.InstallationTransport,
         Octopus.KioskModeManager,
         Octopus.Mixer,
         Octopus.ButtonServer,
