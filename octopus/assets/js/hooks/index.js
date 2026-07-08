@@ -50,9 +50,23 @@ function flash(btn, message) {
   }, 2000);
 }
 
+const ConsoleTheme = {
+  mounted() {
+    const saved = localStorage.getItem("console-theme");
+    if (saved === "light" || saved === "dark") {
+      this.pushEvent("set_console_theme", { theme: saved });
+    }
+
+    this.handleEvent("store-console-theme", ({ theme }) => {
+      localStorage.setItem("console-theme", theme);
+    });
+  },
+};
+
 export const Hooks = {
   Pixels: PixelsHook,
   ProximityChart: ProximityChartHook,
   CodeEditorHook: CodeEditorHook,
   CopyDump: CopyDump,
+  ConsoleTheme: ConsoleTheme,
 };

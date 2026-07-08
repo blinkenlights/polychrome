@@ -19,7 +19,8 @@ defmodule OctopusWeb.InstallationConsoleComponent do
        show_custom_interval: false,
        show_all_pixel_fun: false,
        running_apps: [],
-       browse_apps: []
+       browse_apps: [],
+       console_theme: "light"
      )}
   end
 
@@ -37,10 +38,14 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   def render(assigns) do
     ~H"""
     <div class="console-root space-y-6">
-      <.console_header installation_label={@installation_label} panel_hint={@panel_hint} />
+      <.console_header
+        installation_label={@installation_label}
+        panel_hint={@panel_hint}
+        target={@myself}
+      />
 
-      <%!-- Desktop / narrow --%>
-      <div class="hidden min-[700px]:block space-y-6">
+      <%!-- Main console (wide) --%>
+      <div class="hidden min-[700px]:block space-y-6 pb-8">
         <.transport_bar {transport_bar_assigns(assigns)} target={@myself} />
 
         <div class="grid gap-6 min-[1100px]:grid-cols-[1.2fr_1fr] min-[1100px]:items-start">
@@ -93,6 +98,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
   attr :installation_label, :string, required: true
   attr :panel_hint, :string, required: true
+  attr :target, :any, required: true
 
   defp console_header(assigns) do
     ~H"""

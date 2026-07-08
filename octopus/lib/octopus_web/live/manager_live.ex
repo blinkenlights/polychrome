@@ -22,9 +22,28 @@ defmodule OctopusWeb.ManagerLive do
     socket =
       socket
       |> setup_preview(Application.fetch_env!(:octopus, :show_sim_preview))
-      |> assign(installation_label: installation_label, panel_hint: panel_hint, now_ms: System.os_time(:millisecond))
+      |> assign(
+        installation_label: installation_label,
+        panel_hint: panel_hint,
+        now_ms: System.os_time(:millisecond),
+        console_theme: "light"
+      )
 
     {:ok, socket}
+  end
+
+  def handle_event("set_console_theme", %{"theme" => theme}, socket)
+      when theme in ["dark", "light"] do
+    {:noreply, assign(socket, console_theme: theme)}
+  end
+
+  def handle_event("toggle_console_theme", _params, socket) do
+    theme = if socket.assigns.console_theme == "dark", do: "light", else: "dark"
+
+    {:noreply,
+     socket
+     |> assign(console_theme: theme)
+     |> push_event("store-console-theme", %{theme: theme})}
   end
 
   defp setup_preview(socket, true) do
@@ -40,14 +59,31 @@ defmodule OctopusWeb.ManagerLive do
 
   def render(assigns) do
     ~H"""
-    <div class="w-full">
+    <div id="console-page" phx-hook="ConsoleTheme" class="w-full relative">
+      <button
+        type="button"
+        class="fixed top-3 right-3 z-50 btn btn-sm btn-circle shadow-lg border border-base-300 bg-base-100"
+        phx-click="toggle_console_theme"
+        aria-label={if @console_theme == "dark", do: "Light mode", else: "Dark mode"}
+        title={if @console_theme == "dark", do: "Light mode", else: "Dark mode"}
+      >
+        {if @console_theme == "dark", do: "☀", else: "☾"}
+      </button>
+
       <%= if @show_sim_preview do %>
-        <div class="flex w-full h-full justify-center bg-black">
-          {live_render(@socket, PixelsLive, id: "main")}
+        <div class="w-full bg-black shrink-0 border-b border-base-300">
+          {live_render(@socket, PixelsLive, id: "main", session: %{"embedded" => true})}
         </div>
       <% end %>
 
-      <div data-theme="dark" class="bg-[#0f1318] min-h-screen text-base-content">
+      <div
+        data-theme={@console_theme}
+        class={[
+          "min-h-0",
+          @console_theme == "dark" && "bg-[#0f1318] text-base-content",
+          @console_theme == "light" && "bg-base-200 text-base-content"
+        ]}
+      >
         <style>
           .console-root{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif}
           .console-mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,monospace}
@@ -59,6 +95,7 @@ defmodule OctopusWeb.ManagerLive do
             installation_label={@installation_label}
             panel_hint={@panel_hint}
             now_ms={@now_ms}
+            console_theme={@console_theme}
           />
         </div>
       </div>
