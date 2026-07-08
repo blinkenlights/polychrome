@@ -96,13 +96,13 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
     test "maps preset fields to app config" do
       preset = ScenePresets.get("builtin:classic_ripple")
 
-      assert %{
+      assert ScenePresets.to_config(preset) == %{
                program: preset.formula,
                color_interval: preset.color_interval,
                translate_scale: preset.translate_scale,
                rotate_scale: preset.rotate_scale,
                zoom_scale: preset.zoom_scale
-             } = ScenePresets.to_config(preset)
+             }
     end
 
     test "detects matching live config" do

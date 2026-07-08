@@ -9,6 +9,8 @@ defmodule OctopusWeb.AppLive do
       {_pid, module} ->
         if connected?(socket) do
           AppSupervisor.subscribe()
+          # Drives the Pixel Fun transport countdown ring once per second.
+          if module == PixelFun, do: :timer.send_interval(1000, self(), :pixelfun_tick)
         end
 
         socket =
@@ -87,6 +89,15 @@ defmodule OctopusWeb.AppLive do
     else
       {:noreply, socket}
     end
+  end
+
+  def handle_info(:pixelfun_tick, socket) do
+    send_update(OctopusWeb.PixelFunConfigComponent,
+      id: "app-config-#{socket.assigns.app_id}",
+      now_ms: System.os_time(:millisecond)
+    )
+
+    {:noreply, socket}
   end
 
   def handle_info(_, socket) do
