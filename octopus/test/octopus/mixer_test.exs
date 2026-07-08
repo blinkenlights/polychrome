@@ -70,4 +70,16 @@ defmodule Octopus.MixerTest do
     assert display_info.panel_at_coord.(-1, 0) == :not_found
     assert display_info.panel_at_coord.(0, -1) == :not_found
   end
+
+  test "panel_to_global_coords uses range start for y" do
+    display_info = Mixer.get_display_info()
+
+    assert display_info.panel_to_global_coords.(0, 0, 0) == {0, 0}
+
+    assert display_info.panel_to_global_coords.(0, display_info.panel_width - 1, 0) ==
+             {display_info.panel_width - 1, 0}
+
+    assert display_info.panel_to_global_coords.(0, 0, display_info.panel_height - 1) ==
+             {0, display_info.panel_height - 1}
+  end
 end

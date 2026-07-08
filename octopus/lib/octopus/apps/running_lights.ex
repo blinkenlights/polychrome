@@ -4,10 +4,10 @@ defmodule Octopus.Apps.RunningLights do
   alias Octopus.Canvas
   alias Octopus.Events.Event.Lifecycle, as: LifecycleEvent
 
-  # One panel pixel every 100ms — same overall speed as before.
-  @column_duration_ms 100
+  # One strip pixel every 100ms — same overall speed as before.
+  @strip_duration_ms 100
   @tick_ms 10
-  @position_step @tick_ms / @column_duration_ms
+  @position_step @tick_ms / @strip_duration_ms
 
   # Virtual light radius in panel pixels — controls how far brightness spreads.
   @light_radius 5.0
@@ -25,7 +25,8 @@ defmodule Octopus.Apps.RunningLights do
   def compatible?() do
     installation = Octopus.App.get_installation_info()
 
-    installation.panel_count >= 1 and installation.panel_height == 1
+    installation.panel_count >= 1 and
+      (installation.panel_width == 1 or installation.panel_height == 1)
   end
 
   def app_init(_args) do
@@ -64,7 +65,7 @@ defmodule Octopus.Apps.RunningLights do
   def handle_info({:param_updated, _, _}, %State{} = state), do: {:noreply, state}
 
   def handle_info(:tick, %State{} = state) do
-    last = max(state.display_info.panel_width - 1, 0)
+    last = strip_length(state.display_info) - 1
     position_step = @position_step * state.global_speed
     hue_step = @hue_step * state.global_speed
     next_position = state.position + state.direction * position_step
@@ -101,20 +102,22 @@ defmodule Octopus.Apps.RunningLights do
     canvas = Canvas.new(state.display_info.width, state.display_info.height)
     {r, g, b} = hue_to_rgb(state.hue)
     radius = ceil(@light_radius)
+    last = strip_length(state.display_info) - 1
     first = max(trunc(state.position) - radius, 0)
-    last = min(trunc(state.position) + radius, state.display_info.panel_width - 1)
+    last = min(trunc(state.position) + radius, last)
 
     canvas =
       for panel_id <- 0..(state.display_info.num_panels - 1),
-          local_x <- first..last,
+          local_coord <- first..last,
           reduce: canvas do
         canvas ->
-          intensity = falloff(abs(local_x - state.position))
+          intensity = falloff(abs(local_coord - state.position))
 
           if intensity > 0 do
             color = {trunc(r * intensity), trunc(g * intensity), trunc(b * intensity)}
+            {local_x, local_y} = strip_coords(state.display_info, local_coord)
 
-            case state.display_info.panel_to_global_coords.(panel_id, local_x, 0) do
+            case state.display_info.panel_to_global_coords.(panel_id, local_x, local_y) do
               :invalid_panel -> canvas
               {x, y} -> Canvas.put_pixel(canvas, {x, y}, color)
             end
@@ -124,6 +127,18 @@ defmodule Octopus.Apps.RunningLights do
       end
 
     Octopus.App.update_display(canvas)
+  end
+
+  defp strip_length(%{panel_width: panel_width, panel_height: panel_height}) do
+    max(panel_width, panel_height)
+  end
+
+  defp strip_coords(%{panel_width: panel_width, panel_height: panel_height}, coord) do
+    if panel_width >= panel_height do
+      {coord, 0}
+    else
+      {0, coord}
+    end
   end
 
   defp falloff(distance) when distance >= @light_radius, do: 0.0

@@ -100,8 +100,20 @@ defmodule Octopus.Hardware.WireMapTest do
 
     encoded = WireMap.encode_to_firmware(values, {1, 24}, @linear_strip, @controller)
 
-    assert length(encoded) == 24
-    assert encoded == for i <- 0..23, do: Enum.at(values, WireMap.strip_index(i))
+    assert length(encoded) == 64
+
+    for strip <- 0..23 do
+      firmware_i = WireMap.firmware_index_for_strip(strip, 64, 8, 8)
+      assert Enum.at(encoded, firmware_i) == strip
+    end
+
+    for i <- 0..63 do
+      strip = WireMap.strip_index(i)
+
+      if strip >= 24 do
+        assert Enum.at(encoded, i) == 0
+      end
+    end
   end
 
   test "encode_to_firmware vertical wiring differs from horizontal for corner pixels" do

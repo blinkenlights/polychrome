@@ -665,7 +665,7 @@ defmodule Octopus.Mixer do
 
       if panel_id >= 0 and panel_id < num_panels do
         {x_offset, _} = panel_range_fn.(panel_id, :x)
-        {_, y_offset} = panel_range_fn.(panel_id, :y)
+        {y_offset, _} = panel_range_fn.(panel_id, :y)
         {x_offset + local_x, y_offset + local_y}
       else
         :invalid_panel
