@@ -197,7 +197,7 @@ defmodule OctopusWeb.AppConfigComponent do
         {_name, value} = Enum.at(options, i)
         value
 
-      type when type in [:string] ->
+      type when type in [:string, :color] ->
         value
     end
   end
@@ -245,6 +245,29 @@ defmodule OctopusWeb.AppConfigComponent do
       class="range range-primary range-sm"
       {@rest}
     />
+    """
+  end
+
+  defp config_input(%{type: :color} = assigns) do
+    ~H"""
+    <div class="flex items-center gap-3">
+      <input
+        type="color"
+        name={@key}
+        id={"#{@app_id}-#{@key}"}
+        phx-debounce={@debounce}
+        value={@value}
+        class="h-12 w-16 cursor-pointer rounded border border-base-300 bg-transparent p-1"
+        {@rest}
+      />
+      <input
+        type="text"
+        value={@value}
+        readonly
+        class="input input-bordered input-sm w-28 font-mono"
+        tabindex="-1"
+      />
+    </div>
     """
   end
 

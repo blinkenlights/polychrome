@@ -5,9 +5,10 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   import OctopusWeb.ConsoleComponents
 
   alias Octopus.{App, AppManager, AppSupervisor, InstallationTransport}
-  alias Octopus.Apps.{Collective, DoomFire, PixelFun}
+  alias Octopus.Apps.{Collective, DoomFire, PixelFun, Wood}
 
   @wired_apps [PixelFun, Collective, DoomFire]
+  @experiment_apps [Wood]
   @pixel_fun_preview 6
 
   def mount(socket) do
@@ -56,6 +57,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
             <.queue_card {queue_assigns(assigns)} target={@myself} />
             <.running_now_strip running_apps={@running_apps} target={@myself} />
             <.global_settings />
+            <.browse_apps apps={@browse_apps} target={@myself} />
           </div>
         </div>
       </div>
@@ -492,15 +494,35 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       end
 
     stub_sections = stub_app_sections(transport)
+    experiment_sections = experiment_app_sections(transport)
 
-    assign(socket, library_sections: [pixel_section | more_sections] ++ stub_sections)
+    assign(socket,
+      library_sections: experiment_sections ++ [pixel_section | more_sections] ++ stub_sections
+    )
+  end
+
+  defp experiment_app_sections(transport) do
+    for app <- @experiment_apps, apply(app, :compatible?, []) do
+      %{
+        title: App.name(app),
+        app: app,
+        new_scene_path: nil,
+        show_more_count: 0,
+        soon: [],
+        tiles: tile_list(app, App.list_modes(app), transport)
+      }
+    end
   end
 
   defp stub_app_sections(_transport) do
     wired = MapSet.new(@wired_apps)
+    experiments = MapSet.new(@experiment_apps)
 
     AppSupervisor.available_apps()
-    |> Enum.filter(&(App.rotation_eligible?(&1) and &1 not in wired and App.category(&1) == :animation))
+    |> Enum.filter(
+      &(App.rotation_eligible?(&1) and &1 not in wired and &1 not in experiments and
+          App.category(&1) == :animation)
+    )
     |> Enum.group_by(&App.name/1)
     |> Enum.map(fn {name, modules} ->
       %{

@@ -2,7 +2,7 @@ defmodule OctopusWeb.AppLive do
   use OctopusWeb, :live_view
 
   alias Octopus.AppSupervisor
-  alias Octopus.Apps.PixelFun
+  alias Octopus.Apps.{PixelFun, Wood}
 
   def mount(%{"id" => app_id}, _session, socket) do
     case AppSupervisor.lookup_app(app_id) do
@@ -41,21 +41,30 @@ defmodule OctopusWeb.AppLive do
       ]}>
         <div class="card-body">
           <h1 class="card-title text-3xl justify-center">{@name}</h1>
-          <%= if @module == PixelFun do %>
-            <.live_component
-              id={"app-config-#{@app_id}"}
-              module={OctopusWeb.PixelFunConfigComponent}
-              app_id={@app_id}
-              app_module={@module}
-              config={@app_config}
-            />
-          <% else %>
-            <.live_component
-              id={"app-config-#{@app_id}"}
-              module={OctopusWeb.AppConfigComponent}
-              app_id={@app_id}
-              app_module={@module}
-            />
+          <%= cond do %>
+            <% @module == PixelFun -> %>
+              <.live_component
+                id={"app-config-#{@app_id}"}
+                module={OctopusWeb.PixelFunConfigComponent}
+                app_id={@app_id}
+                app_module={@module}
+                config={@app_config}
+              />
+            <% @module == Wood -> %>
+              <.live_component
+                id={"app-config-#{@app_id}"}
+                module={OctopusWeb.WoodConfigComponent}
+                app_id={@app_id}
+                app_module={@module}
+                config={@app_config}
+              />
+            <% true -> %>
+              <.live_component
+                id={"app-config-#{@app_id}"}
+                module={OctopusWeb.AppConfigComponent}
+                app_id={@app_id}
+                app_module={@module}
+              />
           <% end %>
         </div>
       </div>
@@ -94,6 +103,7 @@ defmodule OctopusWeb.AppLive do
   end
 
   defp config_component_module(PixelFun), do: OctopusWeb.PixelFunConfigComponent
+  defp config_component_module(Wood), do: OctopusWeb.WoodConfigComponent
   defp config_component_module(_), do: OctopusWeb.AppConfigComponent
 
   defp assign_playlist_config(socket) do
