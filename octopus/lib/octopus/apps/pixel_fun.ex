@@ -279,8 +279,6 @@ defmodule Octopus.Apps.PixelFun do
     zoom = zoom_factor(state)
     rotation = state.seconds * state.rotate_scale
 
-    {color_a, color_b} = state.colors
-
     center_x = Installation.width() / 2 - 0.5
     center_y = Installation.height() / 2 - 0.5
 
