@@ -138,9 +138,16 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         <div class="card-body p-4 gap-3">
           <div class="flex items-center justify-between gap-2">
             <h2 class="text-base font-semibold">{section.title}</h2>
-            <.link :if={section.configure_path} navigate={section.configure_path} class="text-sm link link-primary">
+            <button
+              :if={section.app}
+              type="button"
+              class="text-sm link link-primary"
+              phx-click="configure_app"
+              phx-value-module={section.app}
+              phx-target={@target}
+            >
               Configure {section.title} →
-            </.link>
+            </button>
           </div>
 
           <div class={[
@@ -238,6 +245,18 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   end
 
   # ---------------------------------------------------------------- events ---
+
+  def handle_event("configure_app", %{"module" => module_string}, socket) do
+    module = parse_app_module(module_string)
+
+    case AppSupervisor.start_or_select_app(module) do
+      {:ok, app_id} ->
+        {:noreply, push_navigate(socket, to: ~p"/app/#{app_id}")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Could not open #{App.name(module)} configuration")}
+    end
+  end
 
   def handle_event("select_tab", %{"tab" => tab}, socket), do: {:noreply, assign(socket, active_tab: tab)}
 
@@ -453,7 +472,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
     pixel_section = %{
       title: "Pixel Fun",
-      configure_path: if(pixel_fun_app_id, do: ~p"/app/#{pixel_fun_app_id}", else: nil),
+      app: PixelFun,
       new_scene_path: if(pixel_fun_app_id, do: ~p"/app/#{pixel_fun_app_id}", else: nil),
       show_more_count: if(socket.assigns.show_all_pixel_fun, do: 0, else: show_more),
       soon: [],
@@ -464,7 +483,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       for app <- [Collective, DoomFire] do
         %{
           title: App.name(app),
-          configure_path: nil,
+          app: app,
           new_scene_path: nil,
           show_more_count: 0,
           soon: [],
@@ -483,10 +502,10 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     AppSupervisor.available_apps()
     |> Enum.filter(&(App.rotation_eligible?(&1) and &1 not in wired and App.category(&1) == :animation))
     |> Enum.group_by(&App.name/1)
-    |> Enum.map(fn {name, _modules} ->
+    |> Enum.map(fn {name, modules} ->
       %{
         title: name,
-        configure_path: nil,
+        app: hd(modules),
         new_scene_path: nil,
         show_more_count: 0,
         soon: [name],
