@@ -35,7 +35,7 @@ defmodule Octopus.Apps.Collective.Animations.RingNoise do
   def init(_display_info), do: %{start_ms: :erlang.monotonic_time(:millisecond)}
 
   @impl true
-  def render(canvas, _people, ctx, state) do
+  def render(%Canvas{} = canvas, _people, ctx, state) do
     width = canvas.width
     height = canvas.height
     t = elapsed_seconds(state)

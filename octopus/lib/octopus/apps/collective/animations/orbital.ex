@@ -380,8 +380,6 @@ defmodule Octopus.Apps.Collective.Animations.Orbital do
     hsl_to_rgb(hue, sat, lit)
   end
 
-  defp avg_speed([]), do: 0.0
-
   defp avg_speed(people) do
     {sum, n} =
       Enum.reduce(people, {0.0, 0}, fn p, {s, c} ->
