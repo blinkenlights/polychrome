@@ -3,8 +3,10 @@ defmodule Octopus.Hardware.WireMapTest do
 
   alias Octopus.Hardware
   alias Octopus.Hardware.WireMap
+  alias Octopus.WireMapAssertions
 
   @controller Hardware.fetch!(:polychrome_panel_prototype)
+  @panel_1 Hardware.fetch!(:polychrome_panel_1)
   @horizontal Hardware.fetch_wiring!(:serpentine_horizontal_bottom_left)
   @vertical Hardware.fetch_wiring!(:serpentine_vertical_bottom_left)
 
@@ -73,11 +75,32 @@ defmodule Octopus.Hardware.WireMapTest do
     end
   end
 
-  test "encode_to_firmware horizontal wiring matches apply_inverse" do
+  test "encode_to_firmware round-trips all pixels for horizontal 8x8 on catalog controller" do
+    values = Enum.to_list(0..63)
+    WireMapAssertions.assert_encode_roundtrip!(values, {8, 8}, @horizontal, @panel_1)
+  end
+
+  test "encode_to_firmware round-trips all pixels for vertical 8x8 on catalog controller" do
+    values = Enum.to_list(0..63)
+    WireMapAssertions.assert_encode_roundtrip!(values, {8, 8}, @vertical, @panel_1)
+  end
+
+  test "encode_to_firmware round-trips all pixels for vertical 1x24 partial panel" do
+    values = Enum.to_list(0..23)
+    WireMapAssertions.assert_encode_roundtrip!(values, {1, 24}, @vertical, @controller)
+    WireMapAssertions.assert_unused_strips_off!(values, {1, 24}, @vertical, @controller)
+  end
+
+  test "encode_to_firmware is identical across catalog controllers with same firmware matrix" do
     values = Enum.to_list(0..63)
 
-    assert WireMap.encode_to_firmware(values, {8, 8}, @horizontal, @controller) ==
-             WireMap.apply_inverse(values)
+    prototype =
+      WireMap.encode_to_firmware(values, {8, 8}, @horizontal, @controller)
+
+    panel =
+      WireMap.encode_to_firmware(values, {8, 8}, @horizontal, @panel_1)
+
+    assert prototype == panel
   end
 
   test "encode_to_firmware vertical wiring differs from horizontal for corner pixels" do

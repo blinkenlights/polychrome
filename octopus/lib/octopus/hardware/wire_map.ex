@@ -124,27 +124,37 @@ defmodule Octopus.Hardware.WireMap do
   @doc """
   Encodes layout-ordered pixel values for a controller and panel wiring setup.
 
-  For each firmware buffer index `i`, looks up the physical strip position on
-  the controller, then the layout index for that strip position on the panel.
+  Two-step pipeline:
+
+  1. **Wiring** — map each layout index to a physical strip position via the panel
+     wiring (`layout_to_strip/4`).
+  2. **Untangle** — reorder strip-indexed values into firmware buffer order via
+     `apply_strip_inverse/4`, inverting the controller's `strip_index/3` map.
   """
   @spec encode_to_firmware([term()], {pos_integer(), pos_integer()}, Wiring.t(), Controller.t()) ::
           [term()]
   def encode_to_firmware(values, {width, height}, %Wiring{} = wiring, %Controller{} = controller) do
     pixel_count = width * height
+    max_pixels = controller.max_pixel_count
     {fw_w, fw_h} = controller.firmware_matrix
+    off = off_value(values)
 
-    case wiring.type do
-      :serpentine_horizontal_bottom_left ->
-        apply_inverse(values, pixel_count, width, height)
+    strip_values =
+      for _ <- 0..(max_pixels - 1), do: off
 
-      :serpentine_vertical_bottom_left ->
-        for i <- 0..(pixel_count - 1) do
-          strip = strip_index(i, fw_w, fw_h)
-          layout_u = strip_to_layout(strip, wiring, width, height)
-          Enum.at(values, layout_u)
-        end
-    end
+    strip_values =
+      Enum.reduce(0..(pixel_count - 1), strip_values, fn u, acc ->
+        strip = layout_to_strip(u, wiring, width, height)
+        List.replace_at(acc, strip, Enum.at(values, u))
+      end)
+
+    apply_strip_inverse(strip_values, max_pixels, fw_w, fw_h)
   end
+
+  defp off_value([]), do: 0
+  defp off_value([sample | _]), do: off_value(sample)
+  defp off_value(sample) when is_integer(sample), do: 0
+  defp off_value({_r, _g, _b}), do: {0, 0, 0}
 
   @doc """
   Returns the firmware buffer index that lights a given layout coordinate.
@@ -159,7 +169,9 @@ defmodule Octopus.Hardware.WireMap do
   def firmware_index_for_layout(x, y, {width, height}, wiring, controller) do
     layout_u = x + y * width
     strip = layout_to_strip(layout_u, wiring, width, height)
-    firmware_index_for_strip(strip, width * height, elem(controller.firmware_matrix, 0), elem(controller.firmware_matrix, 1))
+    {fw_w, fw_h} = controller.firmware_matrix
+
+    firmware_index_for_strip(strip, controller.max_pixel_count, fw_w, fw_h)
   end
 
   @doc """
