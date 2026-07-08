@@ -6,8 +6,12 @@ defmodule Octopus.Apps.PixelFun do
   alias Octopus.Events.Event.Audio, as: AudioEvent
   alias Octopus.Events.Event.Input, as: InputEvent
   alias Octopus.Events.Event.Proximity, as: ProximityEvent
+  alias Octopus.AppSupervisor
   alias Octopus.Apps.PixelFun.Program
+  alias Octopus.Apps.PixelFun.ScenePresets
   alias Octopus.Installation
+
+  @default_cycle_interval_minutes 5.0
 
   @fps 60
   @frame_time_ms trunc(1000 / @fps)
@@ -24,8 +28,10 @@ defmodule Octopus.Apps.PixelFun do
       :rotate_scale,
       :zoom_scale,
       :color_interval,
-      :cycle_functions,
-      :cycle_functions_interval,
+      :cycle_preset_ids,
+      :cycle_interval_minutes,
+      :cycle_index,
+      :cycle_timer_ref,
       :offset,
       :move,
       :audio_input,
@@ -46,27 +52,14 @@ defmodule Octopus.Apps.PixelFun do
 
   def config_schema() do
     %{
-      program:
-        {"Formula", :formula_preset,
-         %{
-           default: "sin(10*t-hypot(x,y))",
-           presets_module: Octopus.Apps.PixelFun.FormulaPresets
-         }},
+      program: {"Formula", :string, %{default: "sin(10*t-hypot(x,y))"}},
       color_interval:
         {"Palette crossfade (s)", :float, %{default: 5, min: 1, max: 20, step: 0.5}},
       translate_scale: {"Drift strength", :float, %{default: 0.0, min: 0, max: 20, step: 0.1}},
       rotate_scale: {"Rotation speed", :float, %{default: 0.0, min: 0, max: 4, step: 0.01}},
       zoom_scale: {"Zoom pulse strength", :float, %{default: 1.0, min: 0, max: 10, step: 0.1}},
-      cycle_functions: {"Cycle presets", :boolean, %{default: false}},
-      cycle_functions_interval:
-        {"Preset interval (s)", :float,
-         %{
-           default: 30,
-           min: 1,
-           max: 60 * 60,
-           step: 1,
-           visible_when: {:cycle_functions, [true]}
-         }}
+      cycle_preset_ids: {"", :internal, %{default: []}},
+      cycle_interval_minutes: {"", :internal, %{default: @default_cycle_interval_minutes}}
     }
   end
 
@@ -74,7 +67,7 @@ defmodule Octopus.Apps.PixelFun do
     """
     Pixel Fun draws a math formula per pixel. Result −1…1 maps to two palette colours; zero renders black.
 
-    Formula — expression evaluated per pixel. Pick a preset or type your own; saved presets persist across restarts. Variables: x, y (position), t (time, scaled by global Speed), i (pixel index), l/m/h (audio bass/mid/high if present), pi, tau.
+    Formula — expression evaluated per pixel. Pick a scene preset tile or type your own; saved scenes persist across restarts. Variables: x, y (position), t (time, scaled by global Speed), i (pixel index), l/m/h (audio bass/mid/high if present), pi, tau.
 
     Palette crossfade — seconds between new random colour pairs; the transition is smooth over the same duration.
 
@@ -84,20 +77,25 @@ defmodule Octopus.Apps.PixelFun do
 
     Zoom pulse strength — breathing zoom; actual zoom oscillates between ~0 and this value (0 forces zoom 1×).
 
-    Cycle presets / Preset interval — reserved for rotating through preset formulas (not active yet).
+    Scene presets — click a tile to load formula and sliders. Enable loop on two or more tiles to auto-rotate every N minutes.
     """
   end
 
   def get_config(state) do
-    %{
+    scene = %{
       program: state.source,
       color_interval: state.color_interval,
-      cycle_functions: state.cycle_functions,
-      cycle_functions_interval: state.cycle_functions_interval,
       translate_scale: state.translate_scale,
       rotate_scale: state.rotate_scale,
       zoom_scale: state.zoom_scale
     }
+
+    Map.merge(scene, %{
+      cycle_preset_ids: state.cycle_preset_ids,
+      cycle_interval_minutes: state.cycle_interval_minutes,
+      cycle_index: state.cycle_index,
+      active_preset_id: running_preset_id(state, scene)
+    })
   end
 
   def app_init(config) do
@@ -117,62 +115,60 @@ defmodule Octopus.Apps.PixelFun do
     panel_interaction_factors =
       0..(Installation.num_panels() - 1) |> Enum.map(fn i -> {i, 0.0} end) |> Map.new()
 
-    {:ok,
-     %State{
-       program: program,
-       source: config.program,
-       colors: generate_random_colors(),
-       last_colors: generate_random_colors(),
-       target_colors: generate_random_colors(),
-       lerp_time: config.color_interval,
-       color_interval: config.color_interval,
-       cycle_functions: config.cycle_functions,
-       cycle_functions_interval: config.cycle_functions_interval,
-       translate_scale: config.translate_scale,
-       rotate_scale: config.rotate_scale,
-       zoom_scale: config.zoom_scale,
-       offset: {0, 0},
-       move: {0, 0},
-       audio_input: %{low: 0.0, mid: 0.0, high: 0.0},
-       seconds: seconds,
-       buttons: %{},
-       panel_interaction_factors: panel_interaction_factors,
-       panel_proximities: Map.new(0..(Installation.num_panels() - 1), fn i -> {i, 0.0} end),
-       speed: Octopus.Params.Global.speed()
-     }}
+    cycle_preset_ids = normalize_cycle_ids(Map.get(config, :cycle_preset_ids, []))
+
+    cycle_interval_minutes =
+      Map.get(config, :cycle_interval_minutes, @default_cycle_interval_minutes)
+
+    state = %State{
+      program: program,
+      source: config.program,
+      colors: generate_random_colors(),
+      last_colors: generate_random_colors(),
+      target_colors: generate_random_colors(),
+      lerp_time: config.color_interval,
+      color_interval: config.color_interval,
+      translate_scale: config.translate_scale,
+      rotate_scale: config.rotate_scale,
+      zoom_scale: config.zoom_scale,
+      cycle_preset_ids: cycle_preset_ids,
+      cycle_interval_minutes: cycle_interval_minutes,
+      cycle_index: 0,
+      cycle_timer_ref: nil,
+      offset: {0, 0},
+      move: {0, 0},
+      audio_input: %{low: 0.0, mid: 0.0, high: 0.0},
+      seconds: seconds,
+      buttons: %{},
+      panel_interaction_factors: panel_interaction_factors,
+      panel_proximities: Map.new(0..(Installation.num_panels() - 1), fn i -> {i, 0.0} end),
+      speed: Octopus.Params.Global.speed()
+    }
+
+    state =
+      state
+      |> sync_cycle_timer()
+      |> maybe_apply_cycle_preset_on_init()
+
+    {:ok, state}
   end
 
-  def handle_config(
-        %{
-          program: program,
-          cycle_functions: cycle_functions,
-          translate_scale: translate_scale,
-          rotate_scale: rotate_scale,
-          zoom_scale: zoom_scale
-        } = config,
-        %State{} = state
-      ) do
-    source = program
+  def handle_config(config, %State{} = state) do
+    cycle_preset_ids = cycle_preset_ids_from_config(config, state)
+    cycle_interval_minutes = cycle_interval_from_config(config, state)
 
-    program =
-      case Program.parse(program) do
-        {:ok, program} -> program
-        _ -> 0
+    new_state =
+      case apply_scene_fields(state, config) do
+        %State{} = updated ->
+          %State{
+            updated
+            | cycle_preset_ids: cycle_preset_ids,
+              cycle_interval_minutes: cycle_interval_minutes
+          }
       end
+      |> sync_cycle_timer()
 
-    color_interval = Map.get(config, :color_interval, state.color_interval)
-
-    new_state = %State{
-      state
-      | program: program,
-        source: source,
-        cycle_functions: cycle_functions,
-        cycle_functions_interval: Map.get(config, :cycle_functions_interval, state.cycle_functions_interval),
-        translate_scale: translate_scale,
-        rotate_scale: rotate_scale,
-        zoom_scale: zoom_scale,
-        color_interval: color_interval
-    }
+    {new_state, _rebroadcast?} = maybe_apply_cycle_preset(state, new_state)
 
     {:noreply, new_state}
   end
@@ -190,6 +186,136 @@ defmodule Octopus.Apps.PixelFun do
   def handle_cast({:update_program, program}, %State{} = state) do
     {:noreply, %{state | program: program}}
   end
+
+  defp apply_scene_fields(%State{} = state, config) do
+    program_source = Map.get(config, :program, state.source)
+
+    program =
+      case Program.parse(program_source) do
+        {:ok, program} -> program
+        _ -> state.program
+      end
+
+    color_interval = Map.get(config, :color_interval, state.color_interval)
+
+    %State{
+      state
+      | program: program,
+        source: program_source,
+        translate_scale: Map.get(config, :translate_scale, state.translate_scale),
+        rotate_scale: Map.get(config, :rotate_scale, state.rotate_scale),
+        zoom_scale: Map.get(config, :zoom_scale, state.zoom_scale),
+        color_interval: color_interval
+    }
+  end
+
+  defp normalize_cycle_ids(nil), do: []
+
+  defp normalize_cycle_ids(ids) when is_list(ids) do
+    ids
+    |> Enum.map(&to_string/1)
+    |> Enum.uniq()
+  end
+
+  defp normalize_cycle_ids(_), do: []
+
+  defp cycle_preset_ids_from_config(config, %State{} = state) do
+    case Map.fetch(config, :cycle_preset_ids) do
+      {:ok, ids} -> normalize_cycle_ids(ids)
+      :error -> normalize_cycle_ids(state.cycle_preset_ids)
+    end
+  end
+
+  defp cycle_interval_from_config(config, %State{} = state) do
+    case Map.fetch(config, :cycle_interval_minutes) do
+      {:ok, minutes} -> minutes
+      :error -> state.cycle_interval_minutes
+    end
+  end
+
+  defp sync_cycle_timer(%State{} = state) do
+    state = cancel_cycle_timer(state)
+
+    if length(state.cycle_preset_ids) >= 2 do
+      ref = Process.send_after(self(), :cycle_presets, cycle_interval_ms(state.cycle_interval_minutes))
+      %State{state | cycle_timer_ref: ref}
+    else
+      %State{state | cycle_timer_ref: nil, cycle_index: 0}
+    end
+  end
+
+  defp cancel_cycle_timer(%State{cycle_timer_ref: nil} = state), do: state
+
+  defp cancel_cycle_timer(%State{cycle_timer_ref: ref} = state) do
+    Process.cancel_timer(ref)
+    %State{state | cycle_timer_ref: nil}
+  end
+
+  defp cycle_interval_ms(minutes) when is_number(minutes) do
+    minutes
+    |> max(1.0)
+    |> Kernel.*(60_000)
+    |> trunc()
+    |> max(1)
+  end
+
+  defp broadcast_config(%State{} = state) do
+    case AppSupervisor.lookup_app_id(self()) do
+      nil ->
+        :ok
+
+      app_id ->
+        Phoenix.PubSub.broadcast(
+          Octopus.PubSub,
+          "apps",
+          {:apps, {:config_updated, app_id, get_config(state)}}
+        )
+    end
+  end
+
+  defp maybe_apply_cycle_preset_on_init(%State{cycle_preset_ids: []} = state), do: state
+
+  defp maybe_apply_cycle_preset_on_init(%State{} = state) do
+    {applied, _} = maybe_apply_cycle_preset(%State{state | cycle_preset_ids: []}, state)
+    applied
+  end
+
+  defp maybe_apply_cycle_preset(%State{} = old_state, %State{} = new_state) do
+    old_ids = old_state.cycle_preset_ids
+    new_ids = new_state.cycle_preset_ids
+
+    if new_ids == old_ids do
+      {new_state, false}
+    else
+      case new_ids do
+        [id] ->
+          {apply_cycle_preset(new_state, id), true}
+
+        ids when length(ids) >= 2 ->
+          id = Enum.at(ids, 0)
+          {apply_cycle_preset(%State{new_state | cycle_index: 0}, id), true}
+
+        _ ->
+          {new_state, false}
+      end
+    end
+  end
+
+  defp apply_cycle_preset(%State{} = state, preset_id) do
+    case ScenePresets.get(preset_id) do
+      nil -> state
+      preset -> apply_scene_fields(state, ScenePresets.to_config(preset))
+    end
+  end
+
+  defp running_preset_id(%State{cycle_preset_ids: [id]}, _scene), do: id
+
+  defp running_preset_id(%State{cycle_preset_ids: ids, cycle_index: index}, _scene)
+       when length(ids) >= 2 do
+    Enum.at(ids, index)
+  end
+
+  defp running_preset_id(_state, scene), do: ScenePresets.id_for_config(scene)
 
   defp color_interval_s(%State{} = state), do: color_interval_ms(state.color_interval) / 1000.0
   defp color_interval_ms(interval) when is_number(interval), do: max(trunc(interval * 1000), 1)
@@ -243,6 +369,29 @@ defmodule Octopus.Apps.PixelFun do
     {:noreply, state}
   end
 
+  def handle_info(:cycle_presets, %State{cycle_preset_ids: ids} = state) when length(ids) >= 2 do
+    next_index = rem(state.cycle_index + 1, length(ids))
+    preset_id = Enum.at(ids, next_index)
+
+    new_state =
+      case ScenePresets.get(preset_id) do
+        nil ->
+          %State{state | cycle_index: next_index}
+
+        preset ->
+          updated = apply_scene_fields(state, ScenePresets.to_config(preset))
+          %State{updated | cycle_index: next_index}
+      end
+      |> sync_cycle_timer()
+
+    broadcast_config(new_state)
+    {:noreply, new_state}
+  end
+
+  def handle_info(:cycle_presets, %State{} = state) do
+    {:noreply, sync_cycle_timer(state)}
+  end
+
   def handle_event(%AudioEvent{bass: low, mid: mid, high: high}, %State{} = state) do
     {:noreply, %State{state | audio_input: %{low: low, mid: mid, high: high}}}
   end
@@ -278,8 +427,6 @@ defmodule Octopus.Apps.PixelFun do
     {offset_x, offset_y} = translate_offset(state)
     zoom = zoom_factor(state)
     rotation = state.seconds * state.rotate_scale
-
-    {color_a, color_b} = state.colors
 
     center_x = Installation.width() / 2 - 0.5
     center_y = Installation.height() / 2 - 0.5
