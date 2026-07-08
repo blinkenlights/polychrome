@@ -139,18 +139,20 @@ defmodule Octopus.Hardware.WireMap do
     pixel_count = width * height
     {fw_w, fw_h} = controller.firmware_matrix
 
-    cond do
-      wiring.type == :serpentine_8x8_bottom_left and {width, height} == {8, 8} ->
-        apply_inverse(values, pixel_count, fw_w, fw_h)
+    case wiring.type do
+      :serpentine_8x8_bottom_left ->
+        apply_inverse(values, pixel_count, width, height)
 
-      wiring.type == :linear_strip and {width, height} == {64, 1} ->
-        apply_strip_inverse(values, pixel_count, fw_w, fw_h)
-
-      true ->
+      :serpentine_8x8_vertical_bottom_left ->
         for i <- 0..(pixel_count - 1) do
           strip = strip_index(i, fw_w, fw_h)
           layout_u = strip_to_layout(strip, wiring, width, height)
           Enum.at(values, layout_u)
+        end
+
+      :linear_strip ->
+        for i <- 0..(pixel_count - 1) do
+          Enum.at(values, strip_index(i, fw_w, fw_h))
         end
     end
   end

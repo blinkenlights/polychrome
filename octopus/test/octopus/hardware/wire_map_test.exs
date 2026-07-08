@@ -88,6 +88,22 @@ defmodule Octopus.Hardware.WireMapTest do
              WireMap.apply_strip_inverse(values)
   end
 
+  test "encode_to_firmware linear strip wiring works with vertical panel_layout" do
+    values = Enum.to_list(0..63)
+
+    assert WireMap.encode_to_firmware(values, {1, 64}, @linear_strip, @controller) ==
+             WireMap.apply_strip_inverse(values)
+  end
+
+  test "encode_to_firmware linear strip wiring uses panel pixel count" do
+    values = Enum.to_list(0..23)
+
+    encoded = WireMap.encode_to_firmware(values, {1, 24}, @linear_strip, @controller)
+
+    assert length(encoded) == 24
+    assert encoded == for i <- 0..23, do: Enum.at(values, WireMap.strip_index(i))
+  end
+
   test "encode_to_firmware vertical wiring differs from horizontal for corner pixels" do
     values = Enum.to_list(0..63)
 

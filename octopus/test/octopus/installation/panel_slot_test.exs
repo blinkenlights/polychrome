@@ -25,5 +25,7 @@ defmodule Octopus.Installation.PanelSlotTest do
     assert Octopus.Installation.RunningLights.panel_slots() == [
              %PanelSlot{controller_id: :polychrome_panel_prototype, wiring_id: :linear_strip}
            ]
+
+    assert Octopus.Installation.RunningLights.panel_layout() == {1, 24}
   end
 end
