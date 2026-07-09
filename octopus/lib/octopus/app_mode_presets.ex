@@ -1,6 +1,6 @@
 defmodule Octopus.AppModePresets do
   @moduledoc """
-  DB-backed mode presets for foyer apps (Pixel Fun, Collective, Matrix, Perlin Noise, Ocean, Sand).
+  DB-backed mode presets for foyer apps (Pixel Fun, Collective, Matrix, Perlin Noise, Ocean, Sand, Sparkle Mist).
 
   Mode ids use `app_key:slug`, e.g. `pixelfun:classic_ripple`, `collective:storm`.
   Legacy Pixel Fun ids (`builtin:…`, `user:…`) and bare Collective slugs are
@@ -11,11 +11,11 @@ defmodule Octopus.AppModePresets do
 
   alias Octopus.App
   alias Octopus.AppModePreset
-  alias Octopus.Apps.{Collective, Matrix, Ocean, PerlinNoise, PixelFun, Sand}
+  alias Octopus.Apps.{Collective, Matrix, Ocean, PerlinNoise, PixelFun, Sand, SparkleMist}
   alias Octopus.Apps.PixelFun.Program
   alias Octopus.Repo
 
-  @persistable [PixelFun, Collective, Matrix, PerlinNoise, Ocean, Sand]
+  @persistable [PixelFun, Collective, Matrix, PerlinNoise, Ocean, Sand, SparkleMist]
 
   @app_keys %{
     PixelFun => "pixelfun",
@@ -23,7 +23,8 @@ defmodule Octopus.AppModePresets do
     Matrix => "matrix",
     PerlinNoise => "perlinnoise",
     Ocean => "ocean",
-    Sand => "sand"
+    Sand => "sand",
+    SparkleMist => "sparklemist"
   }
 
   @doc false
@@ -92,6 +93,9 @@ defmodule Octopus.AppModePresets do
 
       app == Sand and mode_id in ["sand", "default"] ->
         mode_id(app, "sand")
+
+      app == SparkleMist and mode_id in ["mist", "default"] ->
+        mode_id(app, "mist")
 
       true ->
         mode_id
@@ -330,6 +334,10 @@ defmodule Octopus.AppModePresets do
         lines = App.now_playing_meta(Sand, Sand.mode_config(preset.id))
         Enum.join(lines, " · ")
 
+      SparkleMist ->
+        lines = App.now_playing_meta(SparkleMist, SparkleMist.mode_config(preset.id))
+        Enum.join(lines, " · ")
+
       _ ->
         ""
     end
@@ -482,6 +490,7 @@ defmodule Octopus.AppModePresets do
       PerlinNoise -> PerlinNoise.legacy_mode_config(slug)
       Ocean -> Ocean.legacy_mode_config(slug)
       Sand -> Sand.legacy_mode_config(slug)
+      SparkleMist -> SparkleMist.legacy_mode_config(slug)
       PixelFun -> PixelFun.legacy_mode_config(slug)
       _ -> %{}
     end

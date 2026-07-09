@@ -2,6 +2,7 @@ defmodule Octopus.Apps.SparkleMist do
   use Octopus.App, category: :interactive
   use Octopus.Params, prefix: :sparkle_mist
 
+  alias Octopus.AppModePresets
   alias Octopus.Installation
   alias Octopus.Canvas
   alias Octopus.Particles
@@ -19,6 +20,109 @@ defmodule Octopus.Apps.SparkleMist do
   @burst_count 25
 
   def name, do: "✨ Sparkle Mist ✨"
+
+  def list_modes do
+    AppModePresets.list_modes(__MODULE__)
+  end
+
+  def mode_config(mode_id) do
+    AppModePresets.config_for(__MODULE__, mode_id) ||
+      legacy_mode_config(AppModePresets.mode_slug(mode_id))
+  end
+
+  def builtin_presets do
+    [
+      %{
+        slug: "mist",
+        name: "Sparkle Mist",
+        accent_color: "#9B59B6",
+        config: legacy_mode_config("mist")
+      }
+    ]
+  end
+
+  def legacy_mode_config("mist") do
+    %{
+      foreground_hue: 25,
+      background_hue_a: 200,
+      background_hue_b: 170,
+      background_sat_a: 100,
+      background_sat_b: 85,
+      expr: "noise(sin(x/26-t+y/40),x*0.01,y*0.01)",
+      particle_speed_scale: 1.0,
+      background_speed: 5.0
+    }
+  end
+
+  def legacy_mode_config(_), do: %{}
+
+  def mode_tweakables(mode_id) do
+    mode_tweakables_for(AppModePresets.mode_slug(mode_id))
+  end
+
+  def mode_tweakables_for("mist") do
+    [
+      %{
+        key: :foreground_hue,
+        label: "Spark hue",
+        type: :slider,
+        min: 0,
+        max: 359,
+        step: 1,
+        default: 25
+      },
+      %{
+        key: :background_speed,
+        label: "Mist speed",
+        type: :slider,
+        min: 0.1,
+        max: 10.0,
+        step: 0.1,
+        default: 5.0
+      },
+      %{
+        key: :particle_speed_scale,
+        label: "Spark intensity",
+        type: :slider,
+        min: 0.1,
+        max: 5.0,
+        step: 0.1,
+        default: 1.0
+      },
+      %{
+        key: :background_hue_a,
+        label: "Background hue",
+        type: :slider,
+        min: 0,
+        max: 359,
+        step: 1,
+        default: 200
+      }
+    ]
+  end
+
+  def mode_tweakables_for(_), do: []
+
+  def now_playing_meta(config) do
+    foreground_hue = Map.get(config, :foreground_hue, 25)
+    background_speed = Map.get(config, :background_speed, 5.0)
+    particle_speed_scale = Map.get(config, :particle_speed_scale, 1.0)
+    background_hue_a = Map.get(config, :background_hue_a, 200)
+
+    [
+      "spark hue #{foreground_hue}",
+      "mist speed #{format_num(background_speed)}",
+      "intensity #{format_num(particle_speed_scale)}",
+      "bg hue #{background_hue_a}",
+      "Walk the ring for sparkles"
+    ]
+  end
+
+  def compatible? do
+    installation = Octopus.App.get_installation_info()
+
+    installation.panel_width >= 8 and installation.panel_height >= 8
+  end
 
   defmodule State do
     defstruct [
@@ -69,29 +173,7 @@ defmodule Octopus.Apps.SparkleMist do
   end
 
   def handle_config(config, %State{} = state) do
-    {color_a, color_b} = background_colors(config)
-
-    parsed_expr =
-      case Octopus.Apps.PixelFun.Program.parse(config.expr) do
-        {:ok, expr} -> expr
-        {:error, _} -> state.parsed_expr
-      end
-
-    {:noreply,
-     %State{
-       state
-       | foreground_hue: config.foreground_hue,
-         background_hue_a: config.background_hue_a,
-         background_hue_b: config.background_hue_b,
-         background_sat_a: config.background_sat_a,
-         background_sat_b: config.background_sat_b,
-         expr: config.expr,
-         parsed_expr: parsed_expr,
-         particle_speed_scale: config.particle_speed_scale,
-         background_speed: config.background_speed,
-         color_a: color_a,
-         color_b: color_b
-     }}
+    {:noreply, apply_config(state, config)}
   end
 
   def app_init(config) do
@@ -108,35 +190,24 @@ defmodule Octopus.Apps.SparkleMist do
     panel_width = Installation.panel_width()
     panel_height = Installation.panel_height()
 
+    merged = Map.merge(legacy_mode_config("mist"), Map.new(config))
+    foreground_hue = Map.get(merged, :foreground_hue, 25)
+
     particles =
       for panel <- 0..(panel_count - 1), into: %{} do
-        {panel, new_panel_particles(config.foreground_hue, panel_width, panel_height)}
+        {panel, new_panel_particles(foreground_hue, panel_width, panel_height)}
       end
-
-    {color_a, color_b} = background_colors(config)
-    {:ok, parsed_expr} = Octopus.Apps.PixelFun.Program.parse(config.expr)
 
     state = %State{
       particles: particles,
       last_update: System.os_time(:millisecond),
-      parsed_expr: parsed_expr,
-      color_a: color_a,
-      color_b: color_b,
-      foreground_hue: config.foreground_hue,
-      background_hue_a: config.background_hue_a,
-      background_hue_b: config.background_hue_b,
-      background_sat_a: config.background_sat_a,
-      background_sat_b: config.background_sat_b,
-      expr: config.expr,
-      particle_speed_scale: config.particle_speed_scale,
-      background_speed: config.background_speed,
       track_registry: %{},
       track_motion: %{},
       last_trickle: %{}
     }
 
     :timer.send_interval(@frame_time_ms, :tick)
-    {:ok, state}
+    {:ok, apply_config(state, config)}
   end
 
   def handle_info({:radar_frame, _device_id, %Frame{tracks: tracks}}, state) do
@@ -355,11 +426,94 @@ defmodule Octopus.Apps.SparkleMist do
     )
   end
 
+  defp apply_config(%State{} = state, config) do
+    config = coerce_config_atoms(config)
+    defaults = legacy_mode_config("mist")
+
+    foreground_hue =
+      Map.get(config, :foreground_hue, Map.get(state, :foreground_hue) || defaults.foreground_hue)
+
+    background_hue_a =
+      Map.get(config, :background_hue_a, Map.get(state, :background_hue_a) || defaults.background_hue_a)
+
+    background_hue_b =
+      Map.get(config, :background_hue_b, Map.get(state, :background_hue_b) || defaults.background_hue_b)
+
+    background_sat_a =
+      Map.get(config, :background_sat_a, Map.get(state, :background_sat_a) || defaults.background_sat_a)
+
+    background_sat_b =
+      Map.get(config, :background_sat_b, Map.get(state, :background_sat_b) || defaults.background_sat_b)
+
+    expr = Map.get(config, :expr, Map.get(state, :expr) || defaults.expr)
+
+    particle_speed_scale =
+      Map.get(
+        config,
+        :particle_speed_scale,
+        Map.get(state, :particle_speed_scale) || defaults.particle_speed_scale
+      )
+
+    background_speed =
+      Map.get(config, :background_speed, Map.get(state, :background_speed) || defaults.background_speed)
+
+    effective = %{
+      foreground_hue: foreground_hue,
+      background_hue_a: background_hue_a,
+      background_hue_b: background_hue_b,
+      background_sat_a: background_sat_a,
+      background_sat_b: background_sat_b,
+      expr: expr,
+      particle_speed_scale: particle_speed_scale,
+      background_speed: background_speed
+    }
+
+    parsed_expr =
+      if expr != state.expr || is_nil(state.parsed_expr) do
+        case Octopus.Apps.PixelFun.Program.parse(expr) do
+          {:ok, parsed} -> parsed
+          {:error, _} -> state.parsed_expr
+        end
+      else
+        state.parsed_expr
+      end
+
+    {color_a, color_b} = background_colors(effective)
+
+    %State{
+      state
+      | foreground_hue: foreground_hue,
+        background_hue_a: background_hue_a,
+        background_hue_b: background_hue_b,
+        background_sat_a: background_sat_a,
+        background_sat_b: background_sat_b,
+        expr: expr,
+        parsed_expr: parsed_expr,
+        particle_speed_scale: particle_speed_scale,
+        background_speed: background_speed,
+        color_a: color_a,
+        color_b: color_b
+    }
+  end
+
+  defp coerce_config_atoms(config) when is_map(config) do
+    Map.new(config, fn
+      {k, v} when is_binary(k) -> {String.to_existing_atom(k), v}
+      {k, v} -> {k, v}
+    end)
+  rescue
+    ArgumentError ->
+      Map.new(config, fn {k, v} -> {String.to_atom(k), v} end)
+  end
+
   defp background_colors(config) do
     color_a = Chameleon.HSV.new(config.background_hue_a, config.background_sat_a, 100)
     color_b = Chameleon.HSV.new(config.background_hue_b, config.background_sat_b, 100)
     {color_a, color_b}
   end
+
+  defp format_num(n) when is_float(n), do: :erlang.float_to_binary(n, decimals: 1)
+  defp format_num(n) when is_integer(n), do: Integer.to_string(n)
 
   defp update_particles(%State{} = state) do
     now = System.os_time(:millisecond)

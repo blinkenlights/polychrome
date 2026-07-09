@@ -2,7 +2,7 @@ defmodule Octopus.AppModePresetsTest do
   use Octopus.DataCase, async: true
 
   alias Octopus.AppModePresets
-  alias Octopus.Apps.{Collective, Matrix, PixelFun, Sand}
+  alias Octopus.Apps.{Collective, Matrix, PixelFun, Sand, SparkleMist}
 
   setup do
     AppModePresets.sync_all!()
@@ -15,6 +15,7 @@ defmodule Octopus.AppModePresetsTest do
       assert length(AppModePresets.list_presets(Collective)) == 6
       assert length(AppModePresets.list_presets(Matrix)) == 1
       assert length(AppModePresets.list_presets(Sand)) == 1
+      assert length(AppModePresets.list_presets(SparkleMist)) == 1
 
       AppModePresets.sync_all!()
 
@@ -79,6 +80,7 @@ defmodule Octopus.AppModePresetsTest do
       assert AppModePresets.normalize_mode_id(Collective, "storm") == "collective:storm"
       assert AppModePresets.normalize_mode_id(Matrix, "matrix") == "matrix:matrix"
       assert AppModePresets.normalize_mode_id(Sand, "sand") == "sand:sand"
+      assert AppModePresets.normalize_mode_id(SparkleMist, "mist") == "sparklemist:mist"
     end
   end
 
@@ -100,6 +102,40 @@ defmodule Octopus.AppModePresetsTest do
       assert mode.summary != ""
       assert mode.deletable
       assert mode.renamable
+    end
+
+    test "returns sparkle mist tiles with summaries" do
+      [mode] = AppModePresets.list_modes(SparkleMist)
+
+      assert mode.id == "sparklemist:mist"
+      assert mode.summary != ""
+      assert mode.deletable
+      assert mode.renamable
+    end
+  end
+
+  describe "sparkle mist presets" do
+    test "create, rename, and archive sparkle mist preset" do
+      assert {:ok, preset} =
+               AppModePresets.create(SparkleMist, "Violet haze", %{
+                 foreground_hue: 280,
+                 background_hue_a: 220,
+                 background_hue_b: 190,
+                 background_sat_a: 100,
+                 background_sat_b: 85,
+                 expr: "noise(sin(x/26-t+y/40),x*0.01,y*0.01)",
+                 particle_speed_scale: 1.5,
+                 background_speed: 4.0
+               })
+
+      assert preset.origin == :user
+      assert preset.config[:foreground_hue] == 280
+
+      assert {:ok, renamed} = AppModePresets.rename(SparkleMist, preset.id, "Purple mist")
+      assert renamed.name == "Purple mist"
+
+      assert :ok = AppModePresets.archive(SparkleMist, preset.id)
+      assert AppModePresets.get(SparkleMist, preset.id) == nil
     end
   end
 

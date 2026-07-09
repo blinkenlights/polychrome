@@ -2,7 +2,7 @@ defmodule Octopus.InstallationTransportTest do
   use ExUnit.Case, async: false
 
   alias Octopus.{AppModePresets, AppSupervisor, InstallationTransport}
-  alias Octopus.Apps.{Collective, Matrix, Ocean, PerlinNoise, PixelFun, PixieDebug, Sand, Wood}
+  alias Octopus.Apps.{Collective, Matrix, Ocean, PerlinNoise, PixelFun, PixieDebug, Sand, SparkleMist, Wood}
 
   @classic "pixelfun:classic_ripple"
   @cross "pixelfun:cross_waves"
@@ -10,6 +10,7 @@ defmodule Octopus.InstallationTransportTest do
   @perlin "perlinnoise:perlin"
   @ocean "ocean:ocean"
   @sand "sand:sand"
+  @sparkle_mist "sparklemist:mist"
   @orbital "collective:orbital"
 
   setup do
@@ -673,6 +674,50 @@ defmodule Octopus.InstallationTransportTest do
 
       preset = AppModePresets.get(Sand, @sand)
       assert preset.config[:button_force] == 55
+    end
+
+    test "sparkle mist tweak applies foreground_hue and background_speed live" do
+      InstallationTransport.play_now(SparkleMist, @sparkle_mist)
+
+      playing = state().now_playing
+      assert playing.effective[:foreground_hue] == 25
+      assert playing.effective[:background_speed] == 5.0
+      assert playing.effective[:particle_speed_scale] == 1.0
+      assert playing.effective[:background_hue_a] == 200
+      assert length(playing.tweakables) == 4
+      assert playing.persistable
+      assert playing.renamable
+
+      InstallationTransport.set_tweakable(:foreground_hue, 140)
+      InstallationTransport.set_tweakable(:background_speed, 3.5)
+
+      tweaked = state().now_playing
+      assert tweaked.dirty == true
+      assert tweaked.effective[:foreground_hue] == 140
+      assert tweaked.effective[:background_speed] == 3.5
+
+      {:ok, app_id} = AppSupervisor.find_running_app(SparkleMist)
+      config = AppSupervisor.config(app_id)
+      assert config[:foreground_hue] == 140
+      assert config[:background_speed] == 3.5
+    end
+
+    test "save and overwrite sparkle mist builtin" do
+      InstallationTransport.play_now(SparkleMist, @sparkle_mist)
+      InstallationTransport.set_tweakable(:particle_speed_scale, 2.5)
+
+      np = state().now_playing
+      assert np.persistable
+      assert np.overwriteable
+      assert np.deletable
+      assert np.renamable
+
+      assert :ok = InstallationTransport.overwrite_now_playing_mode()
+      assert state().now_playing.effective[:particle_speed_scale] == 2.5
+      assert state().now_playing.dirty == false
+
+      preset = AppModePresets.get(SparkleMist, @sparkle_mist)
+      assert preset.config[:particle_speed_scale] == 2.5
     end
   end
 end
