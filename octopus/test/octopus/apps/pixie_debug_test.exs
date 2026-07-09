@@ -1,10 +1,11 @@
 defmodule Octopus.Apps.PixieDebugTest do
   use ExUnit.Case, async: false
 
-  alias Octopus.Apps.PixieDebug
   alias Octopus.Apps.PixieDebug.State
   alias Octopus.Canvas
   alias Octopus.Installation
+
+  @pixie_debug Module.concat(["Octopus", "Apps", "PixieDebug"])
 
   setup do
     original_installation = Application.get_env(:octopus, :installation)
@@ -48,18 +49,18 @@ defmodule Octopus.Apps.PixieDebugTest do
 
   test "compatible?/0 only on single 8x8 panel" do
     with_installation(Octopus.Installation.Pixie, fn ->
-      assert PixieDebug.compatible?()
+      assert pixie_compatible?()
     end)
 
     with_installation(Octopus.Installation.RunningLights, fn ->
-      refute PixieDebug.compatible?()
+      refute pixie_compatible?()
     end)
   end
 
   test "handle_config/2 updates layout_index" do
     with_installation(Octopus.Installation.Pixie, fn ->
       {:ok, app_id} =
-        Octopus.AppSupervisor.start_app(PixieDebug,
+        Octopus.AppSupervisor.start_app(@pixie_debug,
           config: %{mode_id: "pixel_walk", layout_index: 0}
         )
 
@@ -71,7 +72,7 @@ defmodule Octopus.Apps.PixieDebugTest do
 
   test "debug_info/1 returns wiring metadata on Pixie installation" do
     with_installation(Octopus.Installation.Pixie, fn ->
-      info = PixieDebug.debug_info(5)
+      info = pixie_debug_info(5)
 
       assert info.x == 5
       assert info.y == 0
@@ -83,7 +84,7 @@ defmodule Octopus.Apps.PixieDebugTest do
   test "now_playing_meta/1 returns wiring lines for pixel walk" do
     with_installation(Octopus.Installation.Pixie, fn ->
       [line1, line2, line3] =
-        PixieDebug.now_playing_meta(%{mode_id: "pixel_walk", layout_index: 5})
+        pixie_now_playing_meta(%{mode_id: "pixel_walk", layout_index: 5})
 
       assert line1 =~ "Layout (5, 0)"
       assert line2 =~ "Strip position:"
@@ -93,13 +94,13 @@ defmodule Octopus.Apps.PixieDebugTest do
 
   test "now_playing_meta/1 returns fill summary for full panel" do
     assert ["Panel fill · white"] ==
-             PixieDebug.now_playing_meta(%{
+             pixie_now_playing_meta(%{
                mode_id: "full_panel",
                color_channel: :white
              })
 
     assert ["Panel fill · #ff00aa (RGB)"] ==
-             PixieDebug.now_playing_meta(%{
+             pixie_now_playing_meta(%{
                mode_id: "full_panel",
                color_channel: :rgb,
                color: "#ff00aa"
@@ -107,15 +108,15 @@ defmodule Octopus.Apps.PixieDebugTest do
   end
 
   test "list_modes/0 exposes pixel_walk and full_panel" do
-    mode_ids = PixieDebug.list_modes() |> Enum.map(& &1.id)
+    mode_ids = pixie_list_modes() |> Enum.map(& &1.id)
     assert mode_ids == ["pixel_walk", "full_panel"]
-    assert PixieDebug.mode_tweakables("pixel_walk") != []
-    assert PixieDebug.mode_tweakables("full_panel") != []
+    assert pixie_mode_tweakables("pixel_walk") != []
+    assert pixie_mode_tweakables("full_panel") != []
   end
 
   test "full_panel white fills grayscale canvas" do
     with_installation(Octopus.Installation.Pixie, fn ->
-      canvas = PixieDebug.build_canvas(base_state(%{mode_id: "full_panel", color_channel: :white}))
+      canvas = pixie_build_canvas(base_state(%{mode_id: "full_panel", color_channel: :white}))
 
       assert canvas.mode == :grayscale
 
@@ -129,7 +130,7 @@ defmodule Octopus.Apps.PixieDebugTest do
   test "full_panel rgb fills canvas with chosen color" do
     with_installation(Octopus.Installation.Pixie, fn ->
       canvas =
-        PixieDebug.build_canvas(
+        pixie_build_canvas(
           base_state(%{mode_id: "full_panel", color_channel: :rgb, color: "#ff0000"})
         )
 
@@ -141,11 +142,11 @@ defmodule Octopus.Apps.PixieDebugTest do
   test "apply_mode/2 switches to full panel config" do
     with_installation(Octopus.Installation.Pixie, fn ->
       {:ok, app_id} =
-        Octopus.AppSupervisor.start_app(PixieDebug,
+        Octopus.AppSupervisor.start_app(@pixie_debug,
           config: %{mode_id: "pixel_walk", layout_index: 7}
         )
 
-      :ok = PixieDebug.apply_mode(app_id, "full_panel")
+      :ok = pixie_apply_mode(app_id, "full_panel")
 
       config = Octopus.AppSupervisor.config(app_id)
       assert config[:mode_id] == "full_panel"
@@ -153,4 +154,12 @@ defmodule Octopus.Apps.PixieDebugTest do
       assert config[:color] == "#ffffff"
     end)
   end
+
+  defp pixie_compatible?, do: apply(@pixie_debug, :compatible?, [])
+  defp pixie_debug_info(index), do: apply(@pixie_debug, :debug_info, [index])
+  defp pixie_now_playing_meta(config), do: apply(@pixie_debug, :now_playing_meta, [config])
+  defp pixie_list_modes, do: apply(@pixie_debug, :list_modes, [])
+  defp pixie_mode_tweakables(mode_id), do: apply(@pixie_debug, :mode_tweakables, [mode_id])
+  defp pixie_build_canvas(state), do: apply(@pixie_debug, :build_canvas, [state])
+  defp pixie_apply_mode(app_id, mode_id), do: apply(@pixie_debug, :apply_mode, [app_id, mode_id])
 end

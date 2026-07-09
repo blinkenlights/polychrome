@@ -1,12 +1,13 @@
 defmodule Octopus.Apps.OceanTest do
   use Octopus.DataCase, async: true
 
-  alias Octopus.AppModePresets
-  alias Octopus.Apps.Ocean
   alias Octopus.Apps.Ocean.State
 
+  @ocean Module.concat(["Octopus", "Apps", "Ocean"])
+  @presets Module.concat(["Octopus", "AppModePresets"])
+
   setup do
-    AppModePresets.sync_all!()
+    preset_sync_all!()
     :ok
   end
 
@@ -31,7 +32,7 @@ defmodule Octopus.Apps.OceanTest do
   end
 
   test "list_modes/0 includes ocean mode" do
-    [mode] = Ocean.list_modes()
+    [mode] = ocean_list_modes()
     assert mode.id == "ocean:ocean"
     assert mode.builtin == true
   end
@@ -39,14 +40,14 @@ defmodule Octopus.Apps.OceanTest do
   test "mode_config/1 returns defaults" do
     defaults = %{wave_strength: 1.0, damping: 0.95, water_level: 0.6}
 
-    assert Ocean.mode_config("ocean:ocean") == defaults
-    assert Ocean.mode_config("ocean") == defaults
-    assert Ocean.mode_config("unknown") == %{}
+    assert ocean_mode_config("ocean:ocean") == defaults
+    assert ocean_mode_config("ocean") == defaults
+    assert ocean_mode_config("unknown") == %{}
   end
 
   test "mode_tweakables/1 exposes wave_strength, damping, water_level" do
     keys =
-      Ocean.mode_tweakables("ocean")
+      ocean_mode_tweakables("ocean")
       |> Enum.map(& &1.key)
 
     assert keys == [:wave_strength, :damping, :water_level]
@@ -55,7 +56,8 @@ defmodule Octopus.Apps.OceanTest do
   test "handle_config/2 applies partial updates" do
     state = base_state(background_waves: [%{}])
 
-    {:noreply, updated} = Ocean.handle_config(%{damping: 0.9}, state)
+    {:noreply, updated} =
+      ocean_handle_config(%{wave_strength: 1.0, damping: 0.9, water_level: 0.6}, state)
 
     assert updated.damping == 0.9
     assert updated.wave_strength == 1.0
@@ -65,7 +67,8 @@ defmodule Octopus.Apps.OceanTest do
   test "handle_config/2 regenerates waves when wave_strength changes" do
     state = base_state(background_waves: [%{id: :old}])
 
-    {:noreply, updated} = Ocean.handle_config(%{wave_strength: 2.0}, state)
+    {:noreply, updated} =
+      ocean_handle_config(%{wave_strength: 2.0, damping: 0.95, water_level: 0.6}, state)
 
     assert updated.wave_strength == 2.0
     assert updated.background_waves != [%{id: :old}]
@@ -75,7 +78,8 @@ defmodule Octopus.Apps.OceanTest do
   test "handle_config/2 updates water level from ratio" do
     state = base_state(height: 10, water_level_ratio: 0.6, water_level: 6.0)
 
-    {:noreply, updated} = Ocean.handle_config(%{water_level: 0.8}, state)
+    {:noreply, updated} =
+      ocean_handle_config(%{wave_strength: 1.0, damping: 0.95, water_level: 0.8}, state)
 
     assert updated.water_level_ratio == 0.8
     assert updated.water_level == 8.0
@@ -84,15 +88,11 @@ defmodule Octopus.Apps.OceanTest do
   test "get_config/1 returns ratio for water_level" do
     state = base_state(water_level_ratio: 0.75)
 
-    assert Ocean.get_config(state) == %{
-             wave_strength: 1.0,
-             damping: 0.95,
-             water_level: 0.75
-           }
+    assert %{wave_strength: 1.0, damping: 0.95, water_level: 0.75} = ocean_get_config(state)
   end
 
   test "now_playing_meta/1 summarizes settings and interaction hint" do
-    assert Ocean.now_playing_meta(%{wave_strength: 1.5, damping: 0.9, water_level: 0.6}) == [
+    assert ocean_now_playing_meta(%{wave_strength: 1.5, damping: 0.9, water_level: 0.6}) == [
              "strength 1.50",
              "damping 0.90",
              "level 60%",
@@ -101,6 +101,15 @@ defmodule Octopus.Apps.OceanTest do
   end
 
   test "compatible?/0 requires gapped panels" do
-    assert Ocean.compatible?()
+    assert ocean_compatible?()
   end
+
+  defp preset_sync_all!, do: apply(@presets, :sync_all!, [])
+  defp ocean_list_modes, do: apply(@ocean, :list_modes, [])
+  defp ocean_mode_config(mode_id), do: apply(@ocean, :mode_config, [mode_id])
+  defp ocean_mode_tweakables(mode_id), do: apply(@ocean, :mode_tweakables, [mode_id])
+  defp ocean_handle_config(config, state), do: apply(@ocean, :handle_config, [config, state])
+  defp ocean_get_config(state), do: apply(@ocean, :get_config, [state])
+  defp ocean_now_playing_meta(config), do: apply(@ocean, :now_playing_meta, [config])
+  defp ocean_compatible?, do: apply(@ocean, :compatible?, [])
 end

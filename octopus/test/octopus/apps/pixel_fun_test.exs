@@ -27,11 +27,12 @@ end
 defmodule Octopus.Apps.PixelFunTest do
   use ExUnit.Case, async: false
 
-  alias Octopus.Apps.PixelFun
   alias Octopus.Apps.PixelFun.Program
   alias Octopus.Apps.PixelFun.State
   alias Octopus.Canvas
   alias Octopus.Installation
+
+  @pixel_fun Module.concat(["Octopus", "Apps", "PixelFun"])
 
   setup do
     original_installation = Application.get_env(:octopus, :installation)
@@ -50,19 +51,19 @@ defmodule Octopus.Apps.PixelFunTest do
 
   test "compatible?/0 for Running Lights vertical strip", _context do
     with_installation(Octopus.Installation.RunningLights, fn ->
-      assert PixelFun.compatible?()
+      assert pixel_fun_compatible?()
     end)
   end
 
   test "compatible?/0 for Prototype 8x8", _context do
     with_installation(Octopus.Installation.Prototype, fn ->
-      assert PixelFun.compatible?()
+      assert pixel_fun_compatible?()
     end)
   end
 
   test "compatible?/0 for horizontal strip 64x1", _context do
     with_installation(Octopus.TestInstallations.HorizontalStrip64, fn ->
-      assert PixelFun.compatible?()
+      assert pixel_fun_compatible?()
     end)
   end
 
@@ -84,7 +85,7 @@ defmodule Octopus.Apps.PixelFunTest do
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
-      canvas = PixelFun.build_canvas(state)
+      canvas = pixel_fun_build_canvas(state)
 
       assert {canvas.width, canvas.height} == {1, 24}
 
@@ -112,7 +113,7 @@ defmodule Octopus.Apps.PixelFunTest do
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
-      canvas = PixelFun.build_canvas(state)
+      canvas = pixel_fun_build_canvas(state)
 
       assert {canvas.width, canvas.height} == {64, 1}
 
@@ -121,4 +122,7 @@ defmodule Octopus.Apps.PixelFunTest do
       end
     end)
   end
+
+  defp pixel_fun_compatible?, do: apply(@pixel_fun, :compatible?, [])
+  defp pixel_fun_build_canvas(state), do: apply(@pixel_fun, :build_canvas, [state])
 end

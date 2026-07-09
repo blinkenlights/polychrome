@@ -1,45 +1,46 @@
 defmodule Octopus.AppModePresetsTest do
   use Octopus.DataCase, async: true
 
-  alias Octopus.AppModePresets
   alias Octopus.Apps.{Collective, Matrix, PixelFun, Sand, SparkleMist}
 
+  @presets Module.concat(["Octopus", "AppModePresets"])
+
   setup do
-    AppModePresets.sync_all!()
+    preset_sync_all!()
     :ok
   end
 
   describe "sync_builtins/1" do
     test "is idempotent and seeds all apps" do
-      assert length(AppModePresets.list_presets(PixelFun)) == 7
-      assert length(AppModePresets.list_presets(Collective)) == 6
-      assert length(AppModePresets.list_presets(Matrix)) == 1
-      assert length(AppModePresets.list_presets(Sand)) == 1
-      assert length(AppModePresets.list_presets(SparkleMist)) == 1
+      assert length(preset_list(PixelFun)) == 7
+      assert length(preset_list(Collective)) == 6
+      assert length(preset_list(Matrix)) == 1
+      assert length(preset_list(Sand)) == 1
+      assert length(preset_list(SparkleMist)) == 1
 
-      AppModePresets.sync_all!()
+      preset_sync_all!()
 
-      assert length(AppModePresets.list_presets(PixelFun)) == 7
+      assert length(preset_list(PixelFun)) == 7
     end
 
     test "does not overwrite existing rows" do
-      storm_id = AppModePresets.mode_id(Collective, "storm")
+      storm_id = preset_mode_id(Collective, "storm")
 
       assert {:ok, _} =
-               AppModePresets.update(Collective, storm_id, %{
+               preset_update(Collective, storm_id, %{
                  config: %{animation: :storm, background: :deep_dark, sensitivity: 9.0}
                })
 
-      AppModePresets.sync_builtins(Collective)
+      preset_sync_builtins(Collective)
 
-      assert %{config: %{sensitivity: 9.0}} = AppModePresets.get(Collective, storm_id)
+      assert %{config: %{sensitivity: 9.0}} = preset_get(Collective, storm_id)
     end
   end
 
   describe "create/3 and archive/2" do
     test "creates user preset and archives it" do
       assert {:ok, preset} =
-               AppModePresets.create(Collective, "My storm", %{
+               preset_create(Collective, "My storm", %{
                  animation: :storm,
                  background: :deep_dark,
                  sensitivity: 1.5
@@ -48,25 +49,25 @@ defmodule Octopus.AppModePresetsTest do
       assert preset.origin == :user
       assert String.starts_with?(preset.id, "collective:")
 
-      assert :ok = AppModePresets.archive(Collective, preset.id)
-      assert AppModePresets.get(Collective, preset.id) == nil
+      assert :ok = preset_archive(Collective, preset.id)
+      assert preset_get(Collective, preset.id) == nil
     end
 
     test "rejects invalid pixel fun formulas" do
       assert {:error, :invalid_formula} =
-               AppModePresets.create(PixelFun, "Bad", %{program: "sin(+"})
+               preset_create(PixelFun, "Bad", %{program: "sin(+"})
     end
   end
 
   describe "rename/3 and update/3" do
     test "renames and overwrites builtins" do
-      id = AppModePresets.mode_id(Matrix, "matrix")
+      id = preset_mode_id(Matrix, "matrix")
 
-      assert {:ok, renamed} = AppModePresets.rename(Matrix, id, "Code rain")
+      assert {:ok, renamed} = preset_rename(Matrix, id, "Code rain")
       assert renamed.name == "Code rain"
 
       assert {:ok, updated} =
-               AppModePresets.update(Matrix, id, %{config: %{speed: 2.0, density: 4, max_particles: 100}})
+               preset_update(Matrix, id, %{config: %{speed: 2.0, density: 4, max_particles: 100}})
 
       assert updated.config[:speed] == 2.0
     end
@@ -74,19 +75,19 @@ defmodule Octopus.AppModePresetsTest do
 
   describe "normalize_mode_id/2" do
     test "maps legacy pixel fun and bare collective ids" do
-      assert AppModePresets.normalize_mode_id(PixelFun, "builtin:classic_ripple") ==
+      assert preset_normalize_mode_id(PixelFun, "builtin:classic_ripple") ==
                "pixelfun:classic_ripple"
 
-      assert AppModePresets.normalize_mode_id(Collective, "storm") == "collective:storm"
-      assert AppModePresets.normalize_mode_id(Matrix, "matrix") == "matrix:matrix"
-      assert AppModePresets.normalize_mode_id(Sand, "sand") == "sand:sand"
-      assert AppModePresets.normalize_mode_id(SparkleMist, "mist") == "sparklemist:mist"
+      assert preset_normalize_mode_id(Collective, "storm") == "collective:storm"
+      assert preset_normalize_mode_id(Matrix, "matrix") == "matrix:matrix"
+      assert preset_normalize_mode_id(Sand, "sand") == "sand:sand"
+      assert preset_normalize_mode_id(SparkleMist, "mist") == "sparklemist:mist"
     end
   end
 
   describe "list_modes/1" do
     test "returns foyer tiles with summaries" do
-      modes = AppModePresets.list_modes(Collective)
+      modes = preset_list_modes(Collective)
       storm = Enum.find(modes, &(&1.id == "collective:storm"))
 
       assert storm.name == "Storm"
@@ -96,7 +97,7 @@ defmodule Octopus.AppModePresetsTest do
     end
 
     test "returns sand tiles with summaries" do
-      [mode] = AppModePresets.list_modes(Sand)
+      [mode] = preset_list_modes(Sand)
 
       assert mode.id == "sand:sand"
       assert mode.summary != ""
@@ -105,7 +106,7 @@ defmodule Octopus.AppModePresetsTest do
     end
 
     test "returns sparkle mist tiles with summaries" do
-      [mode] = AppModePresets.list_modes(SparkleMist)
+      [mode] = preset_list_modes(SparkleMist)
 
       assert mode.id == "sparklemist:mist"
       assert mode.summary != ""
@@ -117,7 +118,7 @@ defmodule Octopus.AppModePresetsTest do
   describe "sparkle mist presets" do
     test "create, rename, and archive sparkle mist preset" do
       assert {:ok, preset} =
-               AppModePresets.create(SparkleMist, "Violet haze", %{
+               preset_create(SparkleMist, "Violet haze", %{
                  foreground_hue: 280,
                  background_hue_a: 220,
                  background_hue_b: 190,
@@ -131,18 +132,18 @@ defmodule Octopus.AppModePresetsTest do
       assert preset.origin == :user
       assert preset.config[:foreground_hue] == 280
 
-      assert {:ok, renamed} = AppModePresets.rename(SparkleMist, preset.id, "Purple mist")
+      assert {:ok, renamed} = preset_rename(SparkleMist, preset.id, "Purple mist")
       assert renamed.name == "Purple mist"
 
-      assert :ok = AppModePresets.archive(SparkleMist, preset.id)
-      assert AppModePresets.get(SparkleMist, preset.id) == nil
+      assert :ok = preset_archive(SparkleMist, preset.id)
+      assert preset_get(SparkleMist, preset.id) == nil
     end
   end
 
   describe "sand presets" do
     test "create, rename, and archive sand preset" do
       assert {:ok, preset} =
-               AppModePresets.create(Sand, "Heavy rain", %{
+               preset_create(Sand, "Heavy rain", %{
                  spawn_rate: 0.6,
                  button_force: 60,
                  auto_drain: true,
@@ -152,11 +153,23 @@ defmodule Octopus.AppModePresetsTest do
       assert preset.origin == :user
       assert preset.config[:spawn_rate] == 0.6
 
-      assert {:ok, renamed} = AppModePresets.rename(Sand, preset.id, "Downpour")
+      assert {:ok, renamed} = preset_rename(Sand, preset.id, "Downpour")
       assert renamed.name == "Downpour"
 
-      assert :ok = AppModePresets.archive(Sand, preset.id)
-      assert AppModePresets.get(Sand, preset.id) == nil
+      assert :ok = preset_archive(Sand, preset.id)
+      assert preset_get(Sand, preset.id) == nil
     end
   end
+
+  defp preset_sync_all!, do: apply(@presets, :sync_all!, [])
+  defp preset_sync_builtins(app), do: apply(@presets, :sync_builtins, [app])
+  defp preset_list(app), do: apply(@presets, :list_presets, [app])
+  defp preset_list_modes(app), do: apply(@presets, :list_modes, [app])
+  defp preset_mode_id(app, slug), do: apply(@presets, :mode_id, [app, slug])
+  defp preset_normalize_mode_id(app, mode_id), do: apply(@presets, :normalize_mode_id, [app, mode_id])
+  defp preset_get(app, mode_id), do: apply(@presets, :get, [app, mode_id])
+  defp preset_create(app, name, config), do: apply(@presets, :create, [app, name, config])
+  defp preset_update(app, mode_id, attrs), do: apply(@presets, :update, [app, mode_id, attrs])
+  defp preset_rename(app, mode_id, name), do: apply(@presets, :rename, [app, mode_id, name])
+  defp preset_archive(app, mode_id), do: apply(@presets, :archive, [app, mode_id])
 end

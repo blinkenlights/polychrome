@@ -1,11 +1,12 @@
 defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
   use Octopus.DataCase, async: false
 
-  alias Octopus.AppModePresets
   alias Octopus.Apps.PixelFun.ScenePresets
 
+  @presets Module.concat(["Octopus", "AppModePresets"])
+
   setup do
-    AppModePresets.sync_all!()
+    preset_sync_all!()
     :ok
   end
 
@@ -155,4 +156,6 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
       assert :error = ScenePresets.validate_formula("(((")
     end
   end
+
+  defp preset_sync_all!, do: apply(@presets, :sync_all!, [])
 end

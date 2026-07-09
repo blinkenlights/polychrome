@@ -1,10 +1,11 @@
 defmodule Octopus.Apps.WoodTest do
   use ExUnit.Case, async: false
 
-  alias Octopus.Apps.Wood
   alias Octopus.Apps.Wood.State
   alias Octopus.Canvas
   alias Octopus.Installation
+
+  @wood Module.concat(["Octopus", "Apps", "Wood"])
 
   setup do
     original_installation = Application.get_env(:octopus, :installation)
@@ -75,13 +76,13 @@ defmodule Octopus.Apps.WoodTest do
 
   test "compatible?/0 for Running Lights vertical strip", _context do
     with_installation(Octopus.Installation.RunningLights, fn ->
-      assert Wood.compatible?()
+      assert wood_compatible?()
     end)
   end
 
   test "build_canvas/1 lights bottom pixel when static at position 0", _context do
     with_installation(Octopus.Installation.RunningLights, fn ->
-      canvas = Wood.build_canvas(base_state())
+      canvas = wood_build_canvas(base_state())
 
       assert canvas.mode == :grayscale
       assert {canvas.width, canvas.height} == {1, 24}
@@ -91,7 +92,7 @@ defmodule Octopus.Apps.WoodTest do
 
   test "build_canvas/1 fullcolor fills entire strip white", _context do
     with_installation(Octopus.Installation.RunningLights, fn ->
-      canvas = Wood.build_canvas(base_state(%{mode: :fullcolor, color_channel: :white}))
+      canvas = wood_build_canvas(base_state(%{mode: :fullcolor, color_channel: :white}))
 
       assert canvas.mode == :grayscale
       assert length(lit_grayscale_pixels(canvas)) == 24
@@ -101,7 +102,7 @@ defmodule Octopus.Apps.WoodTest do
   test "build_canvas/1 fullcolor fills entire strip with rgb color", _context do
     with_installation(Octopus.Installation.RunningLights, fn ->
       canvas =
-        Wood.build_canvas(base_state(%{mode: :fullcolor, color_channel: :rgb, color: "#ff0000"}))
+        wood_build_canvas(base_state(%{mode: :fullcolor, color_channel: :rgb, color: "#ff0000"}))
 
       assert canvas.mode == :rgb
       assert Canvas.get_pixel(canvas, {0, 0}) == {255, 0, 0}
@@ -112,7 +113,7 @@ defmodule Octopus.Apps.WoodTest do
   test "build_canvas/1 chains multiple blobs in endless mode", _context do
     with_installation(Octopus.Installation.RunningLights, fn ->
       canvas =
-        Wood.build_canvas(
+        wood_build_canvas(
           base_state(%{
             mode: :endless_up,
             blob_count: 2,
@@ -129,7 +130,7 @@ defmodule Octopus.Apps.WoodTest do
   test "build_canvas/1 chains blobs only in up and down mode", _context do
     with_installation(Octopus.Installation.RunningLights, fn ->
       canvas =
-        Wood.build_canvas(
+        wood_build_canvas(
           base_state(%{
             mode: :up_and_down,
             blob_count: 2,
@@ -146,7 +147,7 @@ defmodule Octopus.Apps.WoodTest do
   test "build_canvas/1 wraps blob pixels seamlessly at strip edge", _context do
     with_installation(Octopus.Installation.RunningLights, fn ->
       canvas =
-        Wood.build_canvas(
+        wood_build_canvas(
           base_state(%{
             mode: :endless_up,
             blob_size: 3,
@@ -161,7 +162,7 @@ defmodule Octopus.Apps.WoodTest do
   test "build_canvas/1 wraps trail seamlessly at strip edge", _context do
     with_installation(Octopus.Installation.RunningLights, fn ->
       canvas =
-        Wood.build_canvas(
+        wood_build_canvas(
           base_state(%{
             mode: :endless_up,
             position: 1.0,
@@ -177,7 +178,7 @@ defmodule Octopus.Apps.WoodTest do
 
   test "build_canvas/1 uses rgb for rgb channel with picked color", _context do
     with_installation(Octopus.Installation.RunningLights, fn ->
-      canvas = Wood.build_canvas(base_state(%{color_channel: :rgb, color: "#ff0000"}))
+      canvas = wood_build_canvas(base_state(%{color_channel: :rgb, color: "#ff0000"}))
 
       assert canvas.mode == :rgb
       assert Canvas.get_pixel(canvas, {0, 23}) == {255, 0, 0}
@@ -185,32 +186,38 @@ defmodule Octopus.Apps.WoodTest do
   end
 
   test "wrap_coord/2 loops across strip length", _context do
-    assert Wood.wrap_coord(24.0, 24) == 0.0
-    assert Wood.wrap_coord(-0.5, 24) == 23.5
+    assert wood_wrap_coord(24.0, 24) == 0.0
+    assert wood_wrap_coord(-0.5, 24) == 23.5
   end
 
   test "loop_step/3 keeps moving upward through wrap", _context do
     state = base_state(%{mode: :endless_up, speed: 1.0})
-    {pos, _v, dir} = Wood.loop_step(state, 1.0, 24, :endless_up)
+    {pos, _v, dir} = wood_loop_step(state, 1.0, 24, :endless_up)
     assert pos == 1.0
     assert dir == 1.0
 
     state = %{state | position: 23.5}
-    {pos, _v, _dir} = Wood.loop_step(state, 1.0, 24, :endless_up)
+    {pos, _v, _dir} = wood_loop_step(state, 1.0, 24, :endless_up)
     assert pos == 0.5
   end
 
   test "loop_step/3 keeps moving downward through wrap", _context do
     state = base_state(%{mode: :endless_down, position: 0.2, speed: 1.0})
-    {pos, _v, dir} = Wood.loop_step(state, 0.5, 24, :endless_down)
+    {pos, _v, dir} = wood_loop_step(state, 0.5, 24, :endless_down)
     assert pos == 23.7
     assert dir == -1.0
   end
 
   test "ping_pong_step/3 reflects at ends", _context do
     state = base_state(%{mode: :up_and_down, position: 22.8, direction: 1.0, speed: 2.0})
-    {pos, _velocity, direction} = Wood.ping_pong_step(state, 1.0, 23)
+    {pos, _velocity, direction} = wood_ping_pong_step(state, 1.0, 23)
     assert pos < 23.0
     assert direction == -1.0
   end
+
+  defp wood_compatible?, do: apply(@wood, :compatible?, [])
+  defp wood_build_canvas(state), do: apply(@wood, :build_canvas, [state])
+  defp wood_wrap_coord(coord, length), do: apply(@wood, :wrap_coord, [coord, length])
+  defp wood_loop_step(state, dt, length, mode), do: apply(@wood, :loop_step, [state, dt, length, mode])
+  defp wood_ping_pong_step(state, dt, max_pos), do: apply(@wood, :ping_pong_step, [state, dt, max_pos])
 end

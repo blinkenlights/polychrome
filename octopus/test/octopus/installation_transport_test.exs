@@ -1,8 +1,10 @@
 defmodule Octopus.InstallationTransportTest do
   use ExUnit.Case, async: false
 
-  alias Octopus.{AppModePresets, AppSupervisor, InstallationTransport}
+  alias Octopus.{AppSupervisor, InstallationTransport}
   alias Octopus.Apps.{Collective, Matrix, Ocean, PerlinNoise, PixelFun, PixieDebug, Sand, SparkleMist, Wood}
+
+  @presets Module.concat(["Octopus", "AppModePresets"])
 
   @classic "pixelfun:classic_ripple"
   @cross "pixelfun:cross_waves"
@@ -25,7 +27,7 @@ defmodule Octopus.InstallationTransportTest do
 
     InstallationTransport.reset!()
     InstallationTransport.set_interval(300)
-    AppModePresets.sync_all!()
+    preset_sync_all!()
 
     on_exit(fn ->
       for {_, app_id} <- AppSupervisor.running_apps(), do: AppSupervisor.stop_app(app_id)
@@ -504,7 +506,7 @@ defmodule Octopus.InstallationTransportTest do
       assert state().now_playing.dirty == false
 
       user_modes =
-        AppModePresets.list_presets(Collective)
+        preset_list(Collective)
         |> Enum.filter(&(&1.origin == :user))
 
       assert Enum.any?(user_modes, &(&1.name == "Hot storm"))
@@ -545,7 +547,7 @@ defmodule Octopus.InstallationTransportTest do
       assert state().now_playing.effective[:speed] == 2.5
       assert state().now_playing.dirty == false
 
-      preset = AppModePresets.get(Matrix, @matrix)
+      preset = preset_get(Matrix, @matrix)
       assert preset.config[:speed] == 2.5
     end
 
@@ -672,7 +674,7 @@ defmodule Octopus.InstallationTransportTest do
       assert state().now_playing.effective[:button_force] == 55
       assert state().now_playing.dirty == false
 
-      preset = AppModePresets.get(Sand, @sand)
+      preset = preset_get(Sand, @sand)
       assert preset.config[:button_force] == 55
     end
 
@@ -716,8 +718,12 @@ defmodule Octopus.InstallationTransportTest do
       assert state().now_playing.effective[:particle_speed_scale] == 2.5
       assert state().now_playing.dirty == false
 
-      preset = AppModePresets.get(SparkleMist, @sparkle_mist)
+      preset = preset_get(SparkleMist, @sparkle_mist)
       assert preset.config[:particle_speed_scale] == 2.5
     end
   end
+
+  defp preset_sync_all!, do: apply(@presets, :sync_all!, [])
+  defp preset_list(app), do: apply(@presets, :list_presets, [app])
+  defp preset_get(app, mode_id), do: apply(@presets, :get, [app, mode_id])
 end
