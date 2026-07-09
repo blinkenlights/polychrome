@@ -10,7 +10,11 @@ defmodule Octopus.InstallationTransport do
   use GenServer
   require Logger
 
-  alias Octopus.{App, AppManager, AppSupervisor, AppModePresets}
+  alias Octopus.{AppManager, AppSupervisor}
+
+  # Runtime module refs avoid compile-time cycles with AppModePresets and app modules.
+  @app Module.concat(["Octopus", "App"])
+  @app_mode_presets Module.concat(["Octopus", "AppModePresets"])
 
   @topic "installation_transport"
   @default_interval_seconds 300.0
@@ -308,7 +312,7 @@ defmodule Octopus.InstallationTransport do
 
   def handle_cast({:launch_app, module}, %State{} = state) do
     cond do
-      not App.rotation_eligible?(module) ->
+      not app_rotation_eligible?(module) ->
         case AppSupervisor.start_or_select_app(module) do
           {:ok, app_id} ->
             AppManager.select_app(app_id)
@@ -439,7 +443,7 @@ defmodule Octopus.InstallationTransport do
   end
 
   defp apply_entry(%State{} = state, %{app: app, mode_id: mode_id} = entry) do
-    mode_config = App.mode_config(app, mode_id)
+    mode_config = app_mode_config(app, mode_id)
 
     app_id =
       case AppSupervisor.find_running_app(app) do
@@ -464,7 +468,7 @@ defmodule Octopus.InstallationTransport do
       stored = stored_config_for(app, mode_id, app_id)
 
       AppManager.select_app(app_id)
-      App.apply_mode(app_id, app, mode_id)
+      app_apply_mode(app_id, app, mode_id)
 
       %State{
         state
@@ -516,12 +520,12 @@ defmodule Octopus.InstallationTransport do
   defp save_now_playing_as_new(%State{live_entry: nil}, _name), do: {:error, :nothing_playing}
 
   defp save_now_playing_as_new(%State{live_entry: %{app: app}} = state, name) do
-    if AppModePresets.persistable?(app) do
+    if preset_persistable?(app) do
       %{app: app, mode_id: mode_id} = state.live_entry
       effective = effective_config(state)
-      attrs = AppModePresets.attrs_from_effective(app, mode_id, effective)
+      attrs = preset_attrs_from_effective(app, mode_id, effective)
 
-      case AppModePresets.create(app, name, attrs.config, accent_color: attrs[:accent_color]) do
+      case preset_create(app, name, attrs.config, accent_color: attrs[:accent_color]) do
         {:ok, _preset} ->
           {:ok, clear_now_playing_overrides(state)}
 
@@ -534,11 +538,11 @@ defmodule Octopus.InstallationTransport do
   end
 
   defp overwrite_now_playing_mode(%State{live_entry: %{app: app, mode_id: mode_id}} = state) do
-    if AppModePresets.persistable?(app) do
+    if preset_persistable?(app) do
       effective = effective_config(state)
-      attrs = AppModePresets.attrs_from_effective(app, mode_id, effective)
+      attrs = preset_attrs_from_effective(app, mode_id, effective)
 
-      case AppModePresets.update(app, mode_id, %{config: attrs.config}) do
+      case preset_update(app, mode_id, %{config: attrs.config}) do
         {:ok, preset} ->
           stored = preset.config
           cleared = clear_now_playing_overrides(state)
@@ -554,8 +558,8 @@ defmodule Octopus.InstallationTransport do
   end
 
   defp rename_now_playing_preset(%State{live_entry: %{app: app, mode_id: mode_id}} = state, name) do
-    if AppModePresets.persistable?(app) do
-      case AppModePresets.rename(app, mode_id, name) do
+    if preset_persistable?(app) do
+      case preset_rename(app, mode_id, name) do
         {:ok, _preset} -> {:ok, state}
         error -> error
       end
@@ -565,10 +569,10 @@ defmodule Octopus.InstallationTransport do
   end
 
   defp archive_now_playing_mode(%State{live_entry: %{app: app, mode_id: mode_id}} = state) do
-    if AppModePresets.persistable?(app) do
-      case AppModePresets.archive(app, mode_id) do
+    if preset_persistable?(app) do
+      case preset_archive(app, mode_id) do
         :ok ->
-          new_queue = AppModePresets.filter_queue(state.queue, app, mode_id)
+          new_queue = preset_filter_queue(state.queue, app, mode_id)
           {:ok, put_queue(state, new_queue)}
 
         error ->
@@ -584,7 +588,7 @@ defmodule Octopus.InstallationTransport do
   end
 
   defp stored_config_for(app, mode_id, app_id \\ nil) do
-    mode_config = App.mode_config(app, mode_id)
+    mode_config = app_mode_config(app, mode_id)
     defaults = tweakable_defaults(app, mode_id)
     base = Map.merge(defaults, mode_config)
 
@@ -607,13 +611,13 @@ defmodule Octopus.InstallationTransport do
 
   defp tweakable_keys(app, mode_id) do
     app
-    |> App.mode_tweakables(mode_id)
+    |> app_mode_tweakables(mode_id)
     |> Enum.map(& &1.key)
   end
 
   defp tweakable_defaults(app, mode_id) do
     app
-    |> App.mode_tweakables(mode_id)
+    |> app_mode_tweakables(mode_id)
     |> Enum.map(fn %{key: key, default: default} -> {key, default} end)
     |> Map.new()
   end
@@ -625,9 +629,9 @@ defmodule Octopus.InstallationTransport do
     stored = state.now_playing_stored_config
     overrides = state.now_playing_overrides
     effective = effective_config(state)
-    tweakables = App.mode_tweakables(app, mode_id)
+    tweakables = app_mode_tweakables(app, mode_id)
 
-    preset = AppModePresets.get(app, mode_id)
+    preset = preset_get(app, mode_id)
 
     %{
       app: app,
@@ -639,12 +643,12 @@ defmodule Octopus.InstallationTransport do
       effective: effective,
       dirty: now_playing_dirty?(stored, overrides, tweakables),
       tweakables: tweakables,
-      meta: App.now_playing_meta(app, effective),
-      persistable: AppModePresets.persistable?(app),
-      overwriteable: AppModePresets.persistable?(app) and not is_nil(preset),
-      deletable: AppModePresets.persistable?(app) and not is_nil(preset),
-      renamable: AppModePresets.persistable?(app) and not is_nil(preset),
-      preset_label: AppModePresets.preset_label(app)
+      meta: app_now_playing_meta(app, effective),
+      persistable: preset_persistable?(app),
+      overwriteable: preset_persistable?(app) and not is_nil(preset),
+      deletable: preset_persistable?(app) and not is_nil(preset),
+      renamable: preset_persistable?(app) and not is_nil(preset),
+      preset_label: preset_label(app)
     }
   end
 
@@ -658,7 +662,7 @@ defmodule Octopus.InstallationTransport do
   defp parse_tweak_value(%State{live_entry: %{app: app, mode_id: mode_id}}, key, value) do
     spec =
       app
-      |> App.mode_tweakables(mode_id)
+      |> app_mode_tweakables(mode_id)
       |> Enum.find(&(&1.key == key))
 
     case spec do
@@ -858,7 +862,7 @@ defmodule Octopus.InstallationTransport do
     mode = find_mode(app, mode_id)
 
     Map.merge(entry, %{
-      app_name: App.name(app),
+      app_name: app_name(app),
       mode_name: mode && mode.name || mode_id,
       accent_color: mode && mode.accent_color || "#6d7cff",
       summary: mode && Map.get(mode, :summary) || "",
@@ -867,12 +871,12 @@ defmodule Octopus.InstallationTransport do
   end
 
   defp find_mode(app, mode_id) do
-    normalized = AppModePresets.normalize_mode_id(app, mode_id)
+    normalized = preset_normalize_mode_id(app, mode_id)
 
-    case AppModePresets.get(app, normalized) do
+    case preset_get(app, normalized) do
       nil ->
-        Enum.find(App.list_modes(app), fn mode ->
-          AppModePresets.normalize_mode_id(app, mode.id) == normalized
+        Enum.find(app_list_modes(app), fn mode ->
+          preset_normalize_mode_id(app, mode.id) == normalized
         end)
 
       preset ->
@@ -880,7 +884,7 @@ defmodule Octopus.InstallationTransport do
           id: preset.id,
           name: preset.name,
           accent_color: preset.accent_color,
-          summary: AppModePresets.summary(app, preset),
+          summary: preset_summary(app, preset),
           builtin: preset.builtin
         }
     end
@@ -890,7 +894,7 @@ defmodule Octopus.InstallationTransport do
 
   defp takeover_name(app_id) do
     case AppSupervisor.lookup_app(app_id) do
-      {_pid, module} -> App.name(module)
+      {_pid, module} -> app_name(module)
       _ -> nil
     end
   end
@@ -902,8 +906,8 @@ defmodule Octopus.InstallationTransport do
     id = to_string(id)
 
     mode_id =
-      if AppModePresets.persistable?(app) do
-        AppModePresets.normalize_mode_id(app, id)
+      if preset_persistable?(app) do
+        preset_normalize_mode_id(app, id)
       else
         id
       end
@@ -945,4 +949,38 @@ defmodule Octopus.InstallationTransport do
   defp clamp_index(index, queue), do: index |> max(0) |> min(length(queue) - 1)
 
   defp now_ms, do: System.os_time(:millisecond)
+
+  defp app_rotation_eligible?(module), do: apply(@app, :rotation_eligible?, [module])
+  defp app_mode_config(app, mode_id), do: apply(@app, :mode_config, [app, mode_id])
+  defp app_apply_mode(app_id, app, mode_id), do: apply(@app, :apply_mode, [app_id, app, mode_id])
+  defp app_mode_tweakables(app, mode_id), do: apply(@app, :mode_tweakables, [app, mode_id])
+  defp app_now_playing_meta(app, config), do: apply(@app, :now_playing_meta, [app, config])
+  defp app_name(app), do: apply(@app, :name, [app])
+  defp app_list_modes(app), do: apply(@app, :list_modes, [app])
+
+  defp preset_persistable?(app), do: apply(@app_mode_presets, :persistable?, [app])
+  defp preset_attrs_from_effective(app, mode_id, effective),
+    do: apply(@app_mode_presets, :attrs_from_effective, [app, mode_id, effective])
+
+  defp preset_create(app, name, config, opts),
+    do: apply(@app_mode_presets, :create, [app, name, config, opts])
+
+  defp preset_update(app, mode_id, attrs),
+    do: apply(@app_mode_presets, :update, [app, mode_id, attrs])
+
+  defp preset_rename(app, mode_id, name),
+    do: apply(@app_mode_presets, :rename, [app, mode_id, name])
+
+  defp preset_archive(app, mode_id), do: apply(@app_mode_presets, :archive, [app, mode_id])
+
+  defp preset_filter_queue(queue, app, mode_id),
+    do: apply(@app_mode_presets, :filter_queue, [queue, app, mode_id])
+
+  defp preset_get(app, mode_id), do: apply(@app_mode_presets, :get, [app, mode_id])
+  defp preset_label(app), do: apply(@app_mode_presets, :preset_label, [app])
+
+  defp preset_normalize_mode_id(app, mode_id),
+    do: apply(@app_mode_presets, :normalize_mode_id, [app, mode_id])
+
+  defp preset_summary(app, preset), do: apply(@app_mode_presets, :summary, [app, preset])
 end

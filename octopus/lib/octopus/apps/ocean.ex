@@ -1,7 +1,8 @@
 defmodule Octopus.Apps.Ocean do
   use Octopus.App, category: :animation
 
-  alias Octopus.AppModePresets
+  @mode_presets Module.concat(["Octopus", "AppModePresets"])
+
   alias Octopus.Events.Event.Input, as: InputEvent
   alias Octopus.{Canvas, WebP}
 
@@ -61,12 +62,12 @@ defmodule Octopus.Apps.Ocean do
   def icon(), do: WebP.load("ocean")
 
   def list_modes do
-    AppModePresets.list_modes(__MODULE__)
+    apply(@mode_presets, :list_modes, [__MODULE__])
   end
 
   def mode_config(mode_id) do
-    AppModePresets.config_for(__MODULE__, mode_id) ||
-      legacy_mode_config(AppModePresets.mode_slug(mode_id))
+    (apply(@mode_presets, :config_for, [__MODULE__, mode_id]) ||
+       legacy_mode_config(apply(@mode_presets, :mode_slug, [mode_id])))
   end
 
   def builtin_presets do
@@ -87,7 +88,7 @@ defmodule Octopus.Apps.Ocean do
   def legacy_mode_config(_), do: %{}
 
   def mode_tweakables(mode_id) do
-    mode_tweakables_for(AppModePresets.mode_slug(mode_id))
+    mode_tweakables_for(apply(@mode_presets, :mode_slug, [mode_id]))
   end
 
   def mode_tweakables_for("ocean") do

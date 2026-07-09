@@ -4,8 +4,11 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
   import OctopusWeb.ConsoleComponents
 
-  alias Octopus.{App, AppManager, AppModePresets, AppSupervisor, InstallationTransport}
+  alias Octopus.{AppManager, AppSupervisor, InstallationTransport}
   alias Octopus.Apps.{PixelFun, PixieDebug}
+
+  @app Module.concat(["Octopus", "App"])
+  @app_mode_presets Module.concat(["Octopus", "AppModePresets"])
 
   @debug_apps [PixieDebug]
   @pixel_fun_preview 6
@@ -268,7 +271,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   defp console_footer(assigns) do
     ~H"""
     <div class="text-center py-4">
-      <.link navigate={~p"/playlists"} class="text-sm opacity-50 hover:opacity-80 link">
+      <.link navigate="/playlists" class="text-sm opacity-50 hover:opacity-80 link">
         Advanced: playlist scheduler & raw config →
       </.link>
     </div>
@@ -393,7 +396,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         {:noreply, push_navigate(socket, to: ~p"/app/#{app_id}")}
 
       {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Could not open #{App.name(module)} configuration")}
+        {:noreply, put_flash(socket, :error, "Could not open #{app_name(module)} configuration")}
     end
   end
 
@@ -430,11 +433,11 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
         {:error, :incompatible} ->
           refresh_transport(socket)
-          "#{App.name(module)} is not compatible with this installation"
+          "#{app_name(module)} is not compatible with this installation"
 
         {:error, _} ->
           refresh_transport(socket)
-          "Could not play #{App.name(module)} · #{mode_id}"
+          "Could not play #{app_name(module)} · #{mode_id}"
       end
 
     socket = if message, do: put_flash(socket, :error, message), else: socket
@@ -808,12 +811,12 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     pixel_fun_app_id = AppSupervisor.find_running_app(PixelFun) |> elem_or_nil()
 
     pixel_modes =
-      PixelFun.list_modes()
+      app_list_modes(PixelFun)
       |> then(fn modes ->
         if socket.assigns.show_all_pixel_fun, do: modes, else: Enum.take(modes, @pixel_fun_preview)
       end)
 
-    show_more = max(length(PixelFun.list_modes()) - @pixel_fun_preview, 0)
+    show_more = max(length(app_list_modes(PixelFun)) - @pixel_fun_preview, 0)
 
     pixel_section = %{
       title: "Pixel Fun",
@@ -825,14 +828,14 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     }
 
     more_sections =
-      for app <- AppModePresets.persistable_apps(), app != PixelFun do
+      for app <- persistable_apps(), app != PixelFun do
         %{
-          title: App.name(app),
+          title: app_name(app),
           app: app,
           new_scene_path: nil,
           show_more_count: 0,
           soon: [],
-          tiles: tile_list(app, App.list_modes(app), transport)
+          tiles: tile_list(app, app_list_modes(app), transport)
         }
       end
 
@@ -870,7 +873,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         %{
           module: module,
           app_id: app_id,
-          name: App.name(module),
+          name: app_name(module),
           selected: app_id == selected,
           masked: app_id == mask
         }
@@ -882,9 +885,9 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       |> Enum.map(fn module ->
         %{
           module: module,
-          name: App.name(module),
+          name: app_name(module),
           compatible: apply(module, :compatible?, []),
-          category: App.category(module)
+          category: app_category(module)
         }
       end)
 
@@ -896,6 +899,11 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     socket
     |> assign(running_apps: running, browse_apps: browse, browse_app_count: length(browse_apps))
   end
+
+  defp app_name(module), do: apply(@app, :name, [module])
+  defp app_list_modes(module), do: apply(@app, :list_modes, [module])
+  defp app_category(module), do: apply(@app, :category, [module])
+  defp persistable_apps, do: apply(@app_mode_presets, :persistable_apps, [])
 
   defp category_order(:animation), do: 0
   defp category_order(:interactive), do: 1

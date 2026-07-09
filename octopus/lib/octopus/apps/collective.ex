@@ -15,7 +15,6 @@ defmodule Octopus.Apps.Collective do
 
   use Octopus.App, category: :animation
 
-  alias Octopus.AppModePresets
   alias Octopus.Canvas
   alias Octopus.Radar
   alias Octopus.Radar.Frame
@@ -56,18 +55,20 @@ defmodule Octopus.Apps.Collective do
     ring_noise: "#1ABC9C"
   }
 
+  @mode_presets Module.concat(["Octopus", "AppModePresets"])
+
   def list_modes do
-    AppModePresets.list_modes(__MODULE__)
+    apply(@mode_presets, :list_modes, [__MODULE__])
   end
 
   def mode_config(mode_id) do
-    (AppModePresets.config_for(__MODULE__, mode_id) ||
-       legacy_mode_config(AppModePresets.mode_slug(mode_id)))
+    (apply(@mode_presets, :config_for, [__MODULE__, mode_id]) ||
+       legacy_mode_config(apply(@mode_presets, :mode_slug, [mode_id])))
     |> coerce_config_atoms()
   end
 
   def mode_tweakables(mode_id) do
-    mode_tweakables_for(AppModePresets.mode_slug(mode_id))
+    mode_tweakables_for(apply(@mode_presets, :mode_slug, [mode_id]))
   end
 
   def builtin_presets do

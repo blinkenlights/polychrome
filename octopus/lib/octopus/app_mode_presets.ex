@@ -9,38 +9,36 @@ defmodule Octopus.AppModePresets do
 
   import Ecto.Query, only: [order_by: 2, where: 3]
 
-  alias Octopus.App
-  alias Octopus.AppModePreset
-  alias Octopus.Apps.{Collective, Matrix, Ocean, PerlinNoise, PixelFun, Sand, SparkleMist}
-  alias Octopus.Apps.PixelFun.Program
   alias Octopus.Repo
 
-  @persistable [PixelFun, Collective, Matrix, PerlinNoise, Ocean, Sand, SparkleMist]
+  @installation_transport Module.concat(["Octopus", "InstallationTransport"])
+  @pixel_fun_program Module.concat(["Octopus", "Apps", "PixelFun", "Program"])
+  @preset_schema Module.concat(["Octopus", "AppModePreset"])
 
+  # String module names avoid compile-time deps on app modules that call back into this module.
   @app_keys %{
-    PixelFun => "pixelfun",
-    Collective => "collective",
-    Matrix => "matrix",
-    PerlinNoise => "perlinnoise",
-    Ocean => "ocean",
-    Sand => "sand",
-    SparkleMist => "sparklemist"
+    "Elixir.Octopus.Apps.PixelFun" => "pixelfun",
+    "Elixir.Octopus.Apps.Collective" => "collective",
+    "Elixir.Octopus.Apps.Matrix" => "matrix",
+    "Elixir.Octopus.Apps.PerlinNoise" => "perlinnoise",
+    "Elixir.Octopus.Apps.Ocean" => "ocean",
+    "Elixir.Octopus.Apps.Sand" => "sand",
+    "Elixir.Octopus.Apps.SparkleMist" => "sparklemist"
   }
 
   @doc false
-  def persistable_apps, do: @persistable
+  def persistable_apps do
+    @app_keys
+    |> Map.keys()
+    |> Enum.map(&String.to_existing_atom/1)
+  end
 
   @doc false
-  def persistable?(app) when app in @persistable, do: true
+  def persistable?(app) when is_atom(app), do: Map.has_key?(@app_keys, Atom.to_string(app))
   def persistable?(_), do: false
 
   @doc false
-  def app_key(app) when is_atom(app) do
-    case Map.fetch(@app_keys, app) do
-      {:ok, key} -> key
-      :error -> nil
-    end
-  end
+  def app_key(app) when is_atom(app), do: Map.get(@app_keys, Atom.to_string(app))
 
   @doc false
   def mode_id(app, slug) when is_atom(app) and is_binary(slug), do: "#{app_key(app)}:#{slug}"
@@ -69,32 +67,32 @@ defmodule Octopus.AppModePresets do
       String.starts_with?(mode_id, key <> ":") ->
         mode_id
 
-      app == PixelFun and String.starts_with?(mode_id, "builtin:") ->
+      key == "pixelfun" and String.starts_with?(mode_id, "builtin:") ->
         slug = String.replace_prefix(mode_id, "builtin:", "")
         mode_id(app, slug)
 
-      app == PixelFun and String.starts_with?(mode_id, "user:") ->
+      key == "pixelfun" and String.starts_with?(mode_id, "user:") ->
         case Integer.parse(String.replace_prefix(mode_id, "user:", "")) do
           {id, ""} -> mode_id(app, "user_#{id}")
           _ -> mode_id
         end
 
-      app == Collective and not String.contains?(mode_id, ":") ->
+      key == "collective" and not String.contains?(mode_id, ":") ->
         mode_id(app, mode_id)
 
-      app == Matrix and mode_id in ["matrix", "default"] ->
+      key == "matrix" and mode_id in ["matrix", "default"] ->
         mode_id(app, "matrix")
 
-      app == PerlinNoise and mode_id in ["perlin", "default"] ->
+      key == "perlinnoise" and mode_id in ["perlin", "default"] ->
         mode_id(app, "perlin")
 
-      app == Ocean and mode_id in ["ocean", "default"] ->
+      key == "ocean" and mode_id in ["ocean", "default"] ->
         mode_id(app, "ocean")
 
-      app == Sand and mode_id in ["sand", "default"] ->
+      key == "sand" and mode_id in ["sand", "default"] ->
         mode_id(app, "sand")
 
-      app == SparkleMist and mode_id in ["mist", "default"] ->
+      key == "sparklemist" and mode_id in ["mist", "default"] ->
         mode_id(app, "mist")
 
       true ->
@@ -123,13 +121,13 @@ defmodule Octopus.AppModePresets do
   def remove_from_queue(app, mode_id) do
     normalized = normalize_mode_id(app, mode_id)
 
-    transport = Octopus.InstallationTransport.get_state()
+    transport = apply(@installation_transport, :get_state, [])
 
     new_queue = filter_queue(transport.queue, app, normalized)
 
-    Octopus.InstallationTransport.set_queue(
+    apply(@installation_transport, :set_queue, [
       Enum.map(new_queue, fn e -> %{app: e.app, mode_id: e.mode_id} end)
-    )
+    ])
   end
 
   @doc false
@@ -174,8 +172,8 @@ defmodule Octopus.AppModePresets do
     with :ok <- validate_config(app, config) do
       slug = unique_slug(app, slugify(name))
 
-      %AppModePreset{}
-      |> AppModePreset.changeset(%{
+      struct(@preset_schema)
+      |> preset_changeset(%{
         app: module_name(app),
         slug: slug,
         name: String.trim(name),
@@ -195,7 +193,7 @@ defmodule Octopus.AppModePresets do
   def update(app, mode_id, attrs) when is_atom(app) and is_binary(mode_id) do
     mode_id = normalize_mode_id(app, mode_id)
 
-    with %AppModePreset{} = record <- fetch_record(app, mode_id) do
+    with %{__struct__: @preset_schema} = record <- fetch_record(app, mode_id) do
       attrs = normalize_update_attrs(app, attrs)
 
       config =
@@ -207,7 +205,7 @@ defmodule Octopus.AppModePresets do
 
       with :ok <- validate_config(app, config) do
         record
-        |> AppModePreset.changeset(attrs)
+        |> preset_changeset(attrs)
         |> Repo.update()
         |> case do
           {:ok, updated} -> {:ok, to_preset(app, updated)}
@@ -234,7 +232,7 @@ defmodule Octopus.AppModePresets do
 
       record ->
         record
-        |> AppModePreset.changeset(%{archived_at: DateTime.utc_now() |> DateTime.truncate(:second)})
+        |> preset_changeset(%{archived_at: DateTime.utc_now() |> DateTime.truncate(:second)})
         |> Repo.update()
         |> case do
           {:ok, _} -> :ok
@@ -252,8 +250,8 @@ defmodule Octopus.AppModePresets do
 
       case fetch_record_by_slug(app, slug) do
         nil ->
-          %AppModePreset{}
-          |> AppModePreset.changeset(%{
+          struct(@preset_schema)
+          |> preset_changeset(%{
             app: module_name(app),
             slug: slug,
             name: builtin.name,
@@ -273,7 +271,7 @@ defmodule Octopus.AppModePresets do
 
   @doc false
   def sync_all! do
-    Enum.each(@persistable, &sync_builtins/1)
+    persistable_apps() |> Enum.each(&sync_builtins/1)
     :ok
   end
 
@@ -286,7 +284,7 @@ defmodule Octopus.AppModePresets do
     base =
       app
       |> legacy_mode_config(slug)
-      |> Map.merge(App.mode_config(app, mode_id))
+      |> Map.merge(apply(app, :mode_config, [mode_id]))
 
     keys =
       (Map.keys(base) ++ tweakable_keys(app, mode_id))
@@ -294,58 +292,37 @@ defmodule Octopus.AppModePresets do
 
     config = Map.take(effective, keys)
 
-    case app do
-      PixelFun ->
-        %{
-          config: config,
-          name: nil,
-          accent_color: random_accent_color(),
-          formula: config[:program]
-        }
-
-      _ ->
-        %{config: config, name: nil, accent_color: random_accent_color()}
+    if app_key(app) == "pixelfun" do
+      %{
+        config: config,
+        name: nil,
+        accent_color: random_accent_color(),
+        formula: config[:program]
+      }
+    else
+      %{config: config, name: nil, accent_color: random_accent_color()}
     end
   end
 
   @doc false
   def summary(app, preset) when is_atom(app) do
-    case app do
-      PixelFun ->
-        PixelFun.summary_for_preset(preset)
+    case app_key(app) do
+      "pixelfun" ->
+        apply(app, :summary_for_preset, [preset])
 
-      Collective ->
-        lines = App.now_playing_meta(Collective, Collective.mode_config(preset.id))
-        Enum.join(lines, " · ")
-
-      Matrix ->
-        lines = App.now_playing_meta(Matrix, Matrix.mode_config(preset.id))
-        Enum.join(lines, " · ")
-
-      PerlinNoise ->
-        lines = App.now_playing_meta(PerlinNoise, PerlinNoise.mode_config(preset.id))
-        Enum.join(lines, " · ")
-
-      Ocean ->
-        lines = App.now_playing_meta(Ocean, Ocean.mode_config(preset.id))
-        Enum.join(lines, " · ")
-
-      Sand ->
-        lines = App.now_playing_meta(Sand, Sand.mode_config(preset.id))
-        Enum.join(lines, " · ")
-
-      SparkleMist ->
-        lines = App.now_playing_meta(SparkleMist, SparkleMist.mode_config(preset.id))
-        Enum.join(lines, " · ")
-
-      _ ->
+      nil ->
         ""
+
+      _key ->
+        lines = apply(app, :now_playing_meta, [apply(app, :mode_config, [preset.id])])
+        Enum.join(lines, " · ")
     end
   end
 
   @doc false
-  def preset_label(PixelFun), do: "scene"
-  def preset_label(_), do: "preset"
+  def preset_label(app) when is_atom(app) do
+    if app_key(app) == "pixelfun", do: "scene", else: "preset"
+  end
 
   @doc false
   def random_accent_color do
@@ -366,7 +343,7 @@ defmodule Octopus.AppModePresets do
   end
 
   defp list_records(app) do
-    AppModePreset
+    @preset_schema
     |> where([p], p.app == ^module_name(app) and is_nil(p.archived_at))
     |> order_by(asc: :name)
     |> Repo.all()
@@ -377,7 +354,7 @@ defmodule Octopus.AppModePresets do
   end
 
   defp fetch_record_by_slug(app, slug) do
-    AppModePreset
+    @preset_schema
     |> where([p], p.app == ^module_name(app) and p.slug == ^slug and is_nil(p.archived_at))
     |> Repo.one()
   end
@@ -396,13 +373,14 @@ defmodule Octopus.AppModePresets do
       renamable: true
     }
 
-    case app do
-      PixelFun -> Map.put(tile, :formula, preset.config[:program] || "")
-      _ -> tile
+    if app_key(app) == "pixelfun" do
+      Map.put(tile, :formula, preset.config[:program] || "")
+    else
+      tile
     end
   end
 
-  defp to_preset(app, %AppModePreset{} = record) do
+  defp to_preset(app, %{__struct__: @preset_schema} = record) do
     %{
       id: mode_id(app, record.slug),
       slug: record.slug,
@@ -423,16 +401,14 @@ defmodule Octopus.AppModePresets do
         attrs
       end
 
-    case app do
-      PixelFun ->
-        config = Map.get(attrs, :config, %{})
+    if app_key(app) == "pixelfun" do
+      config = Map.get(attrs, :config, %{})
 
-        attrs
-        |> Map.put(:config, maybe_put_program_from_formula(config, attrs))
-        |> Map.drop([:formula, :program])
-
-      _ ->
-        Map.drop(attrs, [:formula, :program])
+      attrs
+      |> Map.put(:config, maybe_put_program_from_formula(config, attrs))
+      |> Map.drop([:formula, :program])
+    else
+      Map.drop(attrs, [:formula, :program])
     end
   end
 
@@ -455,17 +431,19 @@ defmodule Octopus.AppModePresets do
     if fetch_record_by_slug(app, slug), do: next_slug(app, base, n + 1), else: slug
   end
 
-  defp validate_config(PixelFun, config) do
-    case validate_formula(Map.get(config, :program, "")) do
-      :ok -> :ok
-      :error -> {:error, :invalid_formula}
+  defp validate_config(app, config) do
+    if app_key(app) == "pixelfun" do
+      case validate_formula(Map.get(config, :program, "")) do
+        :ok -> :ok
+        :error -> {:error, :invalid_formula}
+      end
+    else
+      :ok
     end
   end
 
-  defp validate_config(_app, _config), do: :ok
-
   defp validate_formula(formula) when is_binary(formula) do
-    case Program.parse(formula) do
+    case apply(@pixel_fun_program, :parse, [formula]) do
       {:ok, _} -> :ok
       _ -> :error
     end
@@ -473,26 +451,25 @@ defmodule Octopus.AppModePresets do
 
   defp tweakable_keys(app, mode_id) do
     app
-    |> App.mode_tweakables(mode_id)
+    |> apply(:mode_tweakables, [mode_id])
     |> Enum.map(& &1.key)
   end
 
   defp module_name(app), do: Atom.to_string(app)
+
+  defp preset_changeset(record, attrs) do
+    apply(@preset_schema, :changeset, [record, attrs])
+  end
 
   defp builtin_presets(app) do
     apply(app, :builtin_presets, [])
   end
 
   defp legacy_mode_config(app, slug) do
-    case app do
-      Collective -> Collective.legacy_mode_config(slug)
-      Matrix -> Matrix.legacy_mode_config(slug)
-      PerlinNoise -> PerlinNoise.legacy_mode_config(slug)
-      Ocean -> Ocean.legacy_mode_config(slug)
-      Sand -> Sand.legacy_mode_config(slug)
-      SparkleMist -> SparkleMist.legacy_mode_config(slug)
-      PixelFun -> PixelFun.legacy_mode_config(slug)
-      _ -> %{}
+    if function_exported?(app, :legacy_mode_config, 1) do
+      apply(app, :legacy_mode_config, [slug])
+    else
+      %{}
     end
   end
 
@@ -528,15 +505,15 @@ defmodule Octopus.AppModePresets do
       end)
   end
 
-  defp config_matches?(PixelFun, config, preset_config) do
-    Enum.all?(
-      [:program, :color_interval, :translate_scale, :rotate_scale, :zoom_scale],
-      fn key -> float_eq?(Map.get(config, key), Map.get(preset_config, key)) end
-    )
-  end
-
-  defp config_matches?(_app, config, preset_config) do
-    float_eq_maps?(config, preset_config)
+  defp config_matches?(app, config, preset_config) do
+    if app_key(app) == "pixelfun" do
+      Enum.all?(
+        [:program, :color_interval, :translate_scale, :rotate_scale, :zoom_scale],
+        fn key -> float_eq?(Map.get(config, key), Map.get(preset_config, key)) end
+      )
+    else
+      float_eq_maps?(config, preset_config)
+    end
   end
 
   defp float_eq_maps?(left, right) do
