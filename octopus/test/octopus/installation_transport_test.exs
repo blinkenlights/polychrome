@@ -2,11 +2,12 @@ defmodule Octopus.InstallationTransportTest do
   use ExUnit.Case, async: false
 
   alias Octopus.{AppModePresets, AppSupervisor, InstallationTransport}
-  alias Octopus.Apps.{Collective, Matrix, PixelFun, PixieDebug, Wood}
+  alias Octopus.Apps.{Collective, Matrix, PerlinNoise, PixelFun, PixieDebug, Wood}
 
   @classic "pixelfun:classic_ripple"
   @cross "pixelfun:cross_waves"
   @matrix "matrix:matrix"
+  @perlin "perlinnoise:perlin"
   @orbital "collective:orbital"
 
   setup do
@@ -524,6 +525,44 @@ defmodule Octopus.InstallationTransportTest do
 
       assert :ok = InstallationTransport.save_now_playing_as_new("Drifty ripple")
       assert state().now_playing.dirty == false
+    end
+
+    test "perlin noise tweak applies scale and speed live" do
+      InstallationTransport.play_now(PerlinNoise, @perlin)
+
+      playing = state().now_playing
+      assert playing.effective[:scale] == 0.1
+      assert playing.effective[:octaves] == 4
+      assert playing.effective[:speed] == 1.0
+      assert playing.effective[:seed] == 42
+      assert length(playing.tweakables) == 5
+      assert playing.persistable
+      assert playing.renamable
+
+      InstallationTransport.set_tweakable(:scale, 0.25)
+      InstallationTransport.set_tweakable(:speed, 2.0)
+
+      tweaked = state().now_playing
+      assert tweaked.dirty == true
+      assert tweaked.effective[:scale] == 0.25
+      assert tweaked.effective[:speed] == 2.0
+
+      {:ok, app_id} = AppSupervisor.find_running_app(PerlinNoise)
+      config = AppSupervisor.config(app_id)
+      assert config[:scale] == 0.25
+      assert config[:speed] == 2.0
+    end
+
+    test "save and rename perlin preset" do
+      InstallationTransport.play_now(PerlinNoise, @perlin)
+      InstallationTransport.set_tweakable(:octaves, 6)
+
+      assert :ok = InstallationTransport.save_now_playing_as_new("Chunky clouds")
+      assert :ok = InstallationTransport.rename_now_playing_preset("Soft drift")
+
+      s = state()
+      assert s.now_playing.preset_name == "Soft drift"
+      assert s.live.mode_name == "Soft drift"
     end
   end
 end

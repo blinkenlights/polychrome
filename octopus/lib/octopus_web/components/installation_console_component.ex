@@ -5,9 +5,9 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   import OctopusWeb.ConsoleComponents
 
   alias Octopus.{App, AppManager, AppSupervisor, InstallationTransport}
-  alias Octopus.Apps.{Collective, DoomFire, Matrix, PixelFun, PixieDebug, Wood}
+  alias Octopus.Apps.{Collective, DoomFire, Matrix, PerlinNoise, PixelFun, PixieDebug, Wood}
 
-  @wired_apps [PixelFun, Collective, DoomFire, Matrix]
+  @wired_apps [PixelFun, Collective, DoomFire, Matrix, PerlinNoise]
   @experiment_apps [Wood]
   @debug_apps [PixieDebug]
   @pixel_fun_preview 6
@@ -734,7 +734,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     }
 
     more_sections =
-      for app <- [Collective, DoomFire, Matrix] do
+      for app <- [Collective, DoomFire, Matrix, PerlinNoise] do
         %{
           title: App.name(app),
           app: app,
