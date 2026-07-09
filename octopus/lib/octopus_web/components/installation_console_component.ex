@@ -21,6 +21,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
        show_custom_interval: false,
        show_all_pixel_fun: false,
        show_all_apps: false,
+       show_running_now: false,
        show_now_playing_save_modal: false,
        now_playing_save_name: "",
        show_now_playing_rename_modal: false,
@@ -55,19 +56,14 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
       <%!-- Main console (wide) --%>
       <div class="hidden min-[700px]:block space-y-6 pb-8">
-        <div class="grid gap-6 min-[1100px]:grid-cols-2 min-[1100px]:items-start">
-          <.transport_bar {transport_bar_assigns(assigns)} target={@myself} />
-          <.global_params_card />
-        </div>
+        <.transport_bar {transport_bar_assigns(assigns)} target={@myself} />
 
-        <div class="grid gap-6 min-[1100px]:grid-cols-2 min-[1100px]:items-start">
-          <div class="min-[1100px]:col-start-1 space-y-6 order-2 min-[1100px]:order-none">
-            <.mode_library sections={@library_sections} target={@myself} transport={@transport} show_all_pixel_fun={@show_all_pixel_fun} />
-          </div>
-          <div class="min-[1100px]:col-start-2 space-y-6 order-1 min-[1100px]:order-none">
-            <.now_playing_card {now_playing_assigns(assigns)} target={@myself} />
+        <div class="grid gap-6 min-[900px]:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] min-[900px]:items-start">
+          <.mode_library sections={@library_sections} target={@myself} transport={@transport} show_all_pixel_fun={@show_all_pixel_fun} />
+          <div class="space-y-6">
+            <.global_params_card />
             <.queue_card {queue_assigns(assigns)} target={@myself} />
-            <.running_now_strip running_apps={@running_apps} target={@myself} />
+            <.now_playing_card {now_playing_assigns(assigns)} target={@myself} />
           </div>
         </div>
       </div>
@@ -79,7 +75,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
         <div role="tablist" class="tabs tabs-boxed">
           <button
-            :for={{id, label} <- [{"queue", "Queue"}, {"library", "Library"}, {"running", "Running"}]}
+            :for={{id, label} <- [{"queue", "Queue"}, {"library", "Library"}]}
             role="tab"
             class={["tab min-h-11", @active_tab == id && "tab-active"]}
             phx-click="select_tab"
@@ -93,6 +89,12 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         <div class={@active_tab != "queue" && "hidden"}>
           <.now_playing_card {now_playing_assigns(assigns)} target={@myself} />
           <.queue_card {queue_assigns(assigns)} target={@myself} />
+          <.running_now_panel
+            running_apps={@running_apps}
+            expanded={@show_running_now}
+            target={@myself}
+            class="mt-4"
+          />
         </div>
         <div class={@active_tab != "library" && "hidden"}>
           <.mode_library sections={@library_sections} target={@myself} transport={@transport} compact show_all_pixel_fun={@show_all_pixel_fun} />
@@ -104,12 +106,15 @@ defmodule OctopusWeb.InstallationConsoleComponent do
             class="mt-4"
           />
         </div>
-        <div class={@active_tab != "running" && "hidden"}>
-          <.running_now_strip running_apps={@running_apps} target={@myself} />
-        </div>
       </div>
 
-      <div class="hidden min-[700px]:block">
+      <div class="hidden min-[700px]:block space-y-4">
+        <.running_now_panel
+          running_apps={@running_apps}
+          expanded={@show_running_now}
+          target={@myself}
+          dom_id="running-now-desktop"
+        />
         <.browse_apps
           apps={@browse_apps}
           count={@browse_app_count}
@@ -215,7 +220,10 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
           <div class={[
             "grid gap-3",
-            if(@compact, do: "grid-cols-1", else: "grid-cols-1 min-[700px]:grid-cols-2")
+            if(@compact,
+              do: "grid-cols-1",
+              else: "grid-cols-2 min-[900px]:grid-cols-3 min-[1280px]:grid-cols-4 min-[1600px]:grid-cols-5"
+            )
           ]}>
             <.mode_tile
               :for={tile <- section.tiles}
@@ -264,6 +272,57 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       <.link navigate={~p"/playlists"} class="text-sm opacity-50 hover:opacity-80 link">
         Advanced: playlist scheduler & raw config →
       </.link>
+    </div>
+    """
+  end
+
+  attr :running_apps, :list, required: true
+  attr :expanded, :boolean, required: true
+  attr :target, :any, required: true
+  attr :class, :string, default: nil
+  attr :dom_id, :string, default: "running-now"
+
+  defp running_now_panel(assigns) do
+    panel_id = "#{assigns.dom_id}-panel"
+    toggle_id = "#{assigns.dom_id}-toggle"
+    count = length(assigns.running_apps)
+
+    subtitle =
+      case count do
+        0 -> "No apps running — Show, Mask & Stop for games and test apps."
+        1 -> "1 app running — Only one app is Active at a time."
+        n -> "#{n} apps running — Only one app is Active at a time."
+      end
+
+    assigns =
+      assigns
+      |> assign(panel_id: panel_id, toggle_id: toggle_id, subtitle: subtitle)
+
+    ~H"""
+    <div id={@dom_id} class={["card bg-base-200 border border-base-300", @class]}>
+      <div class="card-body p-4 gap-0">
+        <button
+          type="button"
+          id={@toggle_id}
+          class="flex w-full items-center justify-between gap-3 text-left min-h-11"
+          phx-click="toggle_running_now"
+          phx-target={@target}
+          aria-expanded={to_string(@expanded)}
+          aria-controls={@panel_id}
+        >
+          <div>
+            <h2 class="text-base font-semibold">Running now</h2>
+            <p class="text-xs opacity-60">{@subtitle}</p>
+          </div>
+          <span class={["text-lg opacity-50 shrink-0 transition-transform", @expanded && "rotate-180"]}>
+            ▾
+          </span>
+        </button>
+
+        <div :if={@expanded} id={@panel_id} class="pt-4 border-t border-base-300 mt-3">
+          <.running_now_rows running_apps={@running_apps} target={@target} />
+        </div>
+      </div>
     </div>
     """
   end
@@ -429,6 +488,9 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
   def handle_event("toggle_all_apps", _params, socket),
     do: {:noreply, assign(socket, show_all_apps: !socket.assigns.show_all_apps)}
+
+  def handle_event("toggle_running_now", _params, socket),
+    do: {:noreply, assign(socket, show_running_now: !socket.assigns.show_running_now)}
 
   def handle_event("open_all_apps", _params, socket) do
     {:noreply, assign(socket, show_all_apps: true, active_tab: "library")}

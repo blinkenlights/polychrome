@@ -396,50 +396,43 @@ defmodule OctopusWeb.ConsoleComponents do
   attr :running_apps, :list, required: true
   attr :target, :any, default: nil
 
-  def running_now_strip(assigns) do
+  def running_now_rows(assigns) do
     ~H"""
-    <div class="card bg-base-200 border border-base-300">
-      <div class="card-body p-4 gap-3">
-        <div class="flex items-center justify-between">
-          <h2 class="text-base font-semibold">Running now</h2>
-          <span class="text-xs opacity-60">Only one app is Active at a time.</span>
-        </div>
+    <div class="space-y-0">
+      <div :if={@running_apps == []} class="text-sm opacity-60 text-center py-4">
+        No apps running.
+      </div>
 
-        <div :if={@running_apps == []} class="text-sm opacity-60 text-center py-4">
-          No apps running.
-        </div>
-
-        <div :for={app <- @running_apps} class="flex flex-wrap items-center gap-2 py-2 border-b border-base-300 last:border-0">
-          <span class={["w-2 h-2 rounded-full", app.selected && "bg-[#00d390]", !app.selected && "bg-base-content/30"]} />
-          <span class="font-medium flex-1 min-w-[8rem]">{app.name}</span>
-          <span :if={app.selected} class="badge badge-sm bg-[#00d390] text-black border-0">Active</span>
-          <span :if={app.masked} class="badge badge-neutral badge-sm">Masked</span>
-          <div class="flex gap-1 ml-auto">
-            <button
-              class={["btn btn-sm", app.selected && "btn-success", !app.selected && "btn-outline"]}
-              phx-click="select_app"
-              phx-value-app-id={app.app_id}
-              phx-target={@target}
-            >
-              Show
-            </button>
-            <button
-              class={["btn btn-sm", app.masked && "btn-neutral", !app.masked && "btn-outline"]}
-              phx-click="mask_app"
-              phx-value-app-id={app.app_id}
-              phx-target={@target}
-            >
-              Mask
-            </button>
-            <button
-              class="btn btn-sm btn-error"
-              phx-click="stop_app"
-              phx-value-app-id={app.app_id}
-              phx-target={@target}
-            >
-              Stop
-            </button>
-          </div>
+      <div :for={app <- @running_apps} class="flex flex-wrap items-center gap-2 py-2 border-b border-base-300 last:border-0">
+        <span class={["w-2 h-2 rounded-full", app.selected && "bg-[#00d390]", !app.selected && "bg-base-content/30"]} />
+        <span class="font-medium flex-1 min-w-[8rem]">{app.name}</span>
+        <span :if={app.selected} class="badge badge-sm bg-[#00d390] text-black border-0">Active</span>
+        <span :if={app.masked} class="badge badge-neutral badge-sm">Masked</span>
+        <div class="flex gap-1 ml-auto">
+          <button
+            class={["btn btn-sm", app.selected && "btn-success", !app.selected && "btn-outline"]}
+            phx-click="select_app"
+            phx-value-app-id={app.app_id}
+            phx-target={@target}
+          >
+            Show
+          </button>
+          <button
+            class={["btn btn-sm", app.masked && "btn-neutral", !app.masked && "btn-outline"]}
+            phx-click="mask_app"
+            phx-value-app-id={app.app_id}
+            phx-target={@target}
+          >
+            Mask
+          </button>
+          <button
+            class="btn btn-sm btn-error"
+            phx-click="stop_app"
+            phx-value-app-id={app.app_id}
+            phx-target={@target}
+          >
+            Stop
+          </button>
         </div>
       </div>
     </div>

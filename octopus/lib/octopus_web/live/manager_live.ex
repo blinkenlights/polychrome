@@ -103,7 +103,7 @@ defmodule OctopusWeb.ManagerLive do
           .console-root{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif}
           .console-mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,monospace}
         </style>
-        <div class="container mx-auto max-w-6xl px-4 py-6">
+        <div class="w-full px-4 sm:px-6 lg:px-8 py-6">
           <.live_component
             id="installation-console"
             module={OctopusWeb.InstallationConsoleComponent}
