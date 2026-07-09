@@ -15,6 +15,7 @@ defmodule Octopus.Apps.Collective do
 
   use Octopus.App, category: :animation
 
+  alias Octopus.AppModePresets
   alias Octopus.Canvas
   alias Octopus.Radar
   alias Octopus.Radar.Frame
@@ -36,6 +37,242 @@ defmodule Octopus.Apps.Collective do
   }
 
   def name, do: "Collective"
+
+  @mode_labels %{
+    storm: "Storm",
+    breath: "Breath",
+    dots: "Dots",
+    orbital: "Orbital drift",
+    lava_lamp: "Lava lamp",
+    ring_noise: "Ring noise"
+  }
+
+  @mode_accents %{
+    storm: "#E74C3C",
+    breath: "#3498DB",
+    dots: "#F1C40F",
+    orbital: "#9B59B6",
+    lava_lamp: "#E67E22",
+    ring_noise: "#1ABC9C"
+  }
+
+  def list_modes do
+    AppModePresets.list_modes(__MODULE__)
+  end
+
+  def mode_config(mode_id) do
+    (AppModePresets.config_for(__MODULE__, mode_id) ||
+       legacy_mode_config(AppModePresets.mode_slug(mode_id)))
+    |> coerce_config_atoms()
+  end
+
+  def mode_tweakables(mode_id) do
+    mode_tweakables_for(AppModePresets.mode_slug(mode_id))
+  end
+
+  def builtin_presets do
+    Enum.map(@animations, fn {key, _mod} ->
+      slug = Atom.to_string(key)
+
+      %{
+        slug: slug,
+        name: Map.fetch!(@mode_labels, key),
+        accent_color: Map.fetch!(@mode_accents, key),
+        config: legacy_mode_config(slug)
+      }
+    end)
+  end
+
+  def legacy_mode_config(slug) do
+    case slug do
+      "storm" ->
+        %{animation: :storm, background: :deep_dark, sensitivity: 1.0}
+
+      "breath" ->
+        %{
+          animation: :breath,
+          breath_liveliness: 0.25,
+          breath_layout: :wave,
+          breath_palette: :ocean,
+          breath_hue_shift: 0.0
+        }
+
+      "dots" ->
+        %{animation: :dots, dots_smoothing: 0.35}
+
+      "orbital" ->
+        %{animation: :orbital, orbital_liveliness: 0.35, orbital_sun_gain: 1.0}
+
+      "lava_lamp" ->
+        %{
+          animation: :lava_lamp,
+          lava_blob_count: 7,
+          lava_speed: 1.0,
+          lava_size_mul: 1.25,
+          lava_thresh: 0.9,
+          lava_palette: :classic
+        }
+
+      "ring_noise" ->
+        %{
+          animation: :ring_noise,
+          ring_noise_speed: 1.0,
+          ring_noise_pulse_period: 24.0,
+          ring_noise_pulse_amount: 0.65,
+          ring_noise_counter_wave: true,
+          ring_noise_palette: :lava
+        }
+
+      _ ->
+        %{}
+    end
+  end
+
+  def mode_tweakables_for("storm") do
+    [
+      %{
+        key: :sensitivity,
+        label: "Storm sensitivity",
+        type: :slider,
+        min: 0.2,
+        max: 3.0,
+        step: 0.1,
+        default: 1.0
+      },
+      %{
+        key: :background,
+        label: "Background",
+        type: :choice,
+        default: :deep_dark,
+        options: [{:deep_dark, "Deep dark"}, {:still_stars, "Still stars"}]
+      }
+    ]
+  end
+
+  def mode_tweakables_for("breath") do
+    [
+      %{
+        key: :breath_liveliness,
+        label: "Liveliness",
+        type: :slider,
+        min: 0.0,
+        max: 1.0,
+        step: 0.05,
+        default: 0.25
+      },
+      %{
+        key: :breath_layout,
+        label: "Layout",
+        type: :choice,
+        default: :wave,
+        options: [{:wave, "Wave"}, {:canopy, "Canopy"}]
+      },
+      %{
+        key: :breath_palette,
+        label: "Palette",
+        type: :choice,
+        default: :ocean,
+        options: [
+          {:ocean, "Ocean"},
+          {:ember, "Ember"},
+          {:aurora, "Aurora"},
+          {:violet, "Violet"},
+          {:mono, "Mono"}
+        ]
+      }
+    ]
+  end
+
+  def mode_tweakables_for("dots") do
+    [
+      %{
+        key: :dots_smoothing,
+        label: "Dot smoothing",
+        type: :slider,
+        min: 0.0,
+        max: 1.0,
+        step: 0.05,
+        default: 0.35
+      }
+    ]
+  end
+
+  def mode_tweakables_for("orbital") do
+    [
+      %{
+        key: :orbital_liveliness,
+        label: "Liveliness",
+        type: :slider,
+        min: 0.0,
+        max: 1.0,
+        step: 0.05,
+        default: 0.35
+      },
+      %{
+        key: :orbital_sun_gain,
+        label: "Sun gain",
+        type: :slider,
+        min: 0.2,
+        max: 2.5,
+        step: 0.05,
+        default: 1.0
+      }
+    ]
+  end
+
+  def mode_tweakables_for("lava_lamp") do
+    [
+      %{
+        key: :lava_speed,
+        label: "Speed",
+        type: :slider,
+        min: 0.2,
+        max: 3.0,
+        step: 0.05,
+        default: 1.0
+      },
+      %{
+        key: :lava_palette,
+        label: "Palette",
+        type: :choice,
+        default: :classic,
+        options: [{:classic, "Classic"}, {:magenta, "Magenta"}, {:slime, "Slime"}]
+      }
+    ]
+  end
+
+  def mode_tweakables_for("ring_noise") do
+    [
+      %{
+        key: :ring_noise_speed,
+        label: "Noise speed",
+        type: :slider,
+        min: 0.0,
+        max: 3.0,
+        step: 0.05,
+        default: 1.0
+      },
+      %{
+        key: :ring_noise_palette,
+        label: "Palette",
+        type: :choice,
+        default: :lava,
+        options: [{:lava, "Lava"}, {:ocean, "Ocean"}, {:aurora, "Aurora"}]
+      },
+      %{
+        key: :ring_noise_counter_wave,
+        label: "Counter wave",
+        type: :toggle,
+        default: true
+      }
+    ]
+  end
+
+  def mode_tweakables_for(_mode_id), do: []
+
+  def apply_mode(app_id, mode_id) do
+    Octopus.AppSupervisor.update_config(app_id, mode_config(mode_id))
+  end
 
   def app_init(config) do
     # Instant panel updates — easing on the firmware side never completes when every
@@ -64,8 +301,8 @@ defmodule Octopus.Apps.Collective do
     ring_noise_pulse_amount = Map.get(config, :ring_noise_pulse_amount, 0.65)
     ring_noise_counter_wave = Map.get(config, :ring_noise_counter_wave, true)
     ring_noise_palette = Map.get(config, :ring_noise_palette, :lava)
-    background = Map.get(config, :background, :deep_dark)
-    animation = Map.get(config, :animation, :storm)
+    background = Map.get(config, :background, :deep_dark) |> coerce_atom(:deep_dark)
+    animation = Map.get(config, :animation, :storm) |> coerce_atom(:storm)
     anim_mod = Map.fetch!(@animations, animation)
 
     Process.send_after(self(), :tick, 0)
@@ -438,6 +675,18 @@ defmodule Octopus.Apps.Collective do
 
   def config_info(_config), do: nil
 
+  def now_playing_meta(config) do
+    case config_info(config) do
+      nil ->
+        []
+
+      text ->
+        text
+        |> String.split("\n", trim: true)
+        |> Enum.take(2)
+    end
+  end
+
   def get_config(state) do
     %{
       animation: state.animation,
@@ -464,6 +713,7 @@ defmodule Octopus.Apps.Collective do
   end
 
   def handle_config(config, state) do
+    config = coerce_config_atoms(config)
     animation = Map.get(config, :animation, state.animation)
 
     {anim_mod, anim_state, last_update} =
@@ -561,4 +811,31 @@ defmodule Octopus.Apps.Collective do
     speed = Octopus.Installation.global_speed() |> max(0.1)
     trunc(1000 / (@fps * speed))
   end
+
+  defp coerce_config_atoms(config) when is_map(config) do
+    config
+    |> Map.new(fn {k, v} -> {k, coerce_config_value(k, v)} end)
+  end
+
+  defp coerce_config_value(:animation, value), do: coerce_atom(value, :storm)
+  defp coerce_config_value(:background, value), do: coerce_atom(value, :deep_dark)
+  defp coerce_config_value(:breath_palette, value), do: coerce_atom(value, :ocean)
+  defp coerce_config_value(:breath_layout, value), do: coerce_atom(value, :wave)
+  defp coerce_config_value(:lava_palette, value), do: coerce_atom(value, :classic)
+  defp coerce_config_value(:ring_noise_palette, value), do: coerce_atom(value, :lava)
+  defp coerce_config_value(_key, value), do: value
+
+  defp coerce_atom(value, _default) when is_atom(value), do: value
+
+  defp coerce_atom(value, default) when is_binary(value) do
+    case value do
+      "true" -> true
+      "false" -> false
+      other -> String.to_existing_atom(other)
+    end
+  rescue
+    ArgumentError -> default
+  end
+
+  defp coerce_atom(_value, default), do: default
 end

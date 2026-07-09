@@ -118,6 +118,39 @@ defmodule Octopus.App do
   """
   @callback handle_config(config :: any(), state :: any()) :: {:noreply, state :: any()}
 
+  @doc """
+  Optional callback returning mode catalog entries for the installation console.
+  Each mode is `%{id: String.t(), name: String.t(), accent_color: String.t(), summary: String.t(), builtin: boolean()}`.
+  """
+  @callback list_modes() :: [map()]
+
+  @doc """
+  Optional callback returning config to apply when a mode is selected.
+  """
+  @callback mode_config(mode_id :: String.t()) :: map()
+
+  @doc """
+  Optional callback returning tweakable parameters for a mode on the console
+  "Now playing" panel. Each entry is a map with `:key`, `:label`, `:type`
+  (`:slider`, `:toggle`, or `:choice`), plus type-specific options.
+  """
+  @callback mode_tweakables(mode_id :: String.t()) :: [map()]
+
+  @doc """
+  Optional callback invoked after an app instance is selected for a mode.
+  """
+  @callback apply_mode(app_id :: String.t(), mode_id :: String.t()) :: :ok
+
+  @doc """
+  Whether this app participates in the installation rotation queue.
+  """
+  @callback rotation_eligible?() :: boolean()
+
+  @doc """
+  Optional read-only lines for the console "Now playing" panel (e.g. wiring debug info).
+  """
+  @callback now_playing_meta(config :: map()) :: [String.t()]
+
   defmacro __using__(opts) do
     category = Keyword.get(opts, :category, :misc)
     output_type = Keyword.get(opts, :output_type, :rgb)
@@ -182,6 +215,20 @@ defmodule Octopus.App do
         %{}
       end
 
+      def list_modes, do: []
+
+      def mode_config(_mode_id), do: %{}
+
+      def mode_tweakables(_mode_id), do: []
+
+      def apply_mode(_app_id, _mode_id), do: :ok
+
+      def rotation_eligible? do
+        unquote(category) != :game
+      end
+
+      def now_playing_meta(_config), do: []
+
       defoverridable output_type: 0
       defoverridable icon: 0
       defoverridable app_init: 1
@@ -190,8 +237,36 @@ defmodule Octopus.App do
       defoverridable config_schema: 0
       defoverridable handle_config: 2
       defoverridable get_config: 1
+      defoverridable list_modes: 0
+      defoverridable mode_config: 1
+      defoverridable mode_tweakables: 1
+      defoverridable apply_mode: 2
+      defoverridable rotation_eligible?: 0
+      defoverridable now_playing_meta: 1
     end
   end
+
+  def name(module) when is_atom(module), do: apply(module, :name, [])
+
+  def list_modes(module) when is_atom(module), do: apply(module, :list_modes, [])
+
+  def mode_config(module, mode_id) when is_atom(module),
+    do: apply(module, :mode_config, [mode_id])
+
+  def mode_tweakables(module, mode_id) when is_atom(module),
+    do: apply(module, :mode_tweakables, [mode_id])
+
+  def now_playing_meta(module, config) when is_atom(module),
+    do: apply(module, :now_playing_meta, [config])
+
+  def apply_mode(app_id, module, mode_id) when is_atom(module) do
+    apply(module, :apply_mode, [app_id, mode_id])
+  end
+
+  def rotation_eligible?(module) when is_atom(module),
+    do: apply(module, :rotation_eligible?, [])
+
+  def category(module) when is_atom(module), do: apply(module, :category, [])
 
   def play_sample(sample_path, channel) do
     send_audio_event(%AudioFrame{uri: Path.join("file://", sample_path), channel: channel})

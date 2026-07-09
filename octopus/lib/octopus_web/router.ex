@@ -21,6 +21,7 @@ defmodule OctopusWeb.Router do
       live "/sim", PixelsLive
       live "/app/:id", AppLive
       live "/", ManagerLive
+      live "/playlists", PlaylistsLive
       live "/playlist/:id", PlaylistLive
       live "/presence", PresenceLive
       live "/firmware-info", FirmwareInfoLive

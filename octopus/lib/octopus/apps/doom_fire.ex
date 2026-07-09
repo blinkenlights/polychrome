@@ -61,6 +61,21 @@ defmodule Octopus.Apps.DoomFire do
   def name, do: "Doom Fire"
   def icon, do: WebP.load("doom-fire")
 
+  def list_modes do
+    [
+      %{
+        id: "default",
+        name: "default",
+        accent_color: "#E74C3C",
+        summary: "Classic doom fire",
+        builtin: true
+      }
+    ]
+  end
+
+  def mode_config("default"), do: %{}
+  def mode_config(_), do: %{}
+
   def app_init(_) do
     # Configure display using new unified API - adjacent layout (was Canvas.to_frame())
     Octopus.App.configure_display(layout: :adjacent_panels)

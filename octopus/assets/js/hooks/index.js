@@ -50,9 +50,56 @@ function flash(btn, message) {
   }, 2000);
 }
 
+const ConsoleTheme = {
+  mounted() {
+    const saved = localStorage.getItem("console-theme");
+    if (saved === "light" || saved === "dark") {
+      this.pushEvent("set_console_theme", { theme: saved });
+    }
+
+    const savedLayout = localStorage.getItem("console-sim-layout");
+    if (savedLayout === "top" || savedLayout === "left") {
+      this.pushEvent("set_sim_layout", { layout: savedLayout });
+    }
+
+    this.handleEvent("store-console-theme", ({ theme }) => {
+      localStorage.setItem("console-theme", theme);
+    });
+
+    this.handleEvent("store-console-sim-layout", ({ layout }) => {
+      localStorage.setItem("console-sim-layout", layout);
+    });
+
+    this.syncScrollLock();
+  },
+
+  updated() {
+    this.syncScrollLock();
+  },
+
+  destroyed() {
+    this.unlockScroll();
+  },
+
+  syncScrollLock() {
+    if (this.el.dataset.simPreview === "true") {
+      document.documentElement.classList.add("overflow-hidden");
+      document.body.classList.add("overflow-hidden");
+    } else {
+      this.unlockScroll();
+    }
+  },
+
+  unlockScroll() {
+    document.documentElement.classList.remove("overflow-hidden");
+    document.body.classList.remove("overflow-hidden");
+  },
+};
+
 export const Hooks = {
   Pixels: PixelsHook,
   ProximityChart: ProximityChartHook,
   CodeEditorHook: CodeEditorHook,
   CopyDump: CopyDump,
+  ConsoleTheme: ConsoleTheme,
 };
