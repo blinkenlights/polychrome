@@ -6,17 +6,18 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
   used by the full editor and existing tests.
   """
 
-  alias Octopus.AppModePresets
-  alias Octopus.Apps.PixelFun
   alias Octopus.Apps.PixelFun.Program
+
+  @app_mode_presets "Elixir.Octopus.AppModePresets"
+  @pixel_fun "Elixir.Octopus.Apps.PixelFun"
 
   @type preset :: map()
 
   @doc "Returns user-facing presets (legacy shape)."
   @spec list_all() :: [preset()]
   def list_all do
-    PixelFun
-    |> AppModePresets.list_presets()
+    pixel_fun()
+    |> presets().list_presets()
     |> Enum.map(&to_legacy/1)
   end
 
@@ -34,7 +35,7 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
 
   @spec get(String.t()) :: preset() | nil
   def get(mode_id) do
-    case AppModePresets.get(PixelFun, mode_id) do
+    case presets().get(pixel_fun(), mode_id) do
       nil -> nil
       preset -> to_legacy(preset)
     end
@@ -52,9 +53,9 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
       zoom_scale: Map.get(attrs, :zoom_scale, 1.0)
     }
 
-    opts = [accent_color: Map.get(attrs, :accent_color, AppModePresets.random_accent_color())]
+    opts = [accent_color: Map.get(attrs, :accent_color, presets().random_accent_color())]
 
-    case AppModePresets.create(PixelFun, name, config, opts) do
+    case presets().create(pixel_fun(), name, config, opts) do
       {:ok, preset} -> {:ok, to_legacy(preset)}
       {:error, :invalid_formula} -> {:error, invalid_formula_changeset(Map.get(attrs, :formula, ""))}
       error -> error
@@ -63,7 +64,7 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
 
   @spec update(String.t(), map()) :: {:ok, preset()} | {:error, Ecto.Changeset.t() | atom()}
   def update(mode_id, attrs) do
-    preset = AppModePresets.get(PixelFun, mode_id)
+    preset = presets().get(pixel_fun(), mode_id)
     base_config = normalize_config_keys((preset && preset.config) || %{})
 
     config =
@@ -74,7 +75,7 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
       %{config: config}
       |> maybe_put_name(attrs)
 
-    case AppModePresets.update(PixelFun, mode_id, update_attrs) do
+    case presets().update(pixel_fun(), mode_id, update_attrs) do
       {:ok, preset} -> {:ok, to_legacy(preset)}
       error -> error
     end
@@ -82,7 +83,7 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
 
   @spec delete(String.t()) :: :ok | {:error, atom()}
   def delete(mode_id) do
-    case AppModePresets.archive(PixelFun, mode_id) do
+    case presets().archive(pixel_fun(), mode_id) do
       :ok -> :ok
       {:error, :not_found} -> {:error, :not_found}
       _ -> {:error, :failed}
@@ -133,12 +134,12 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
 
   @spec id_for_config(map()) :: String.t()
   def id_for_config(config) do
-    case AppModePresets.id_for_config(PixelFun, config) do
+    case presets().id_for_config(pixel_fun(), config) do
       "custom" ->
         "custom"
 
       id ->
-        case AppModePresets.get(PixelFun, id) do
+        case presets().get(pixel_fun(), id) do
           nil -> id
           preset -> to_legacy(preset).id
         end
@@ -147,10 +148,13 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
 
   @spec summary(preset()) :: String.t()
   def summary(%{} = preset) do
-    PixelFun.summary_for_preset(%{config: to_config(preset)})
+    apply(pixel_fun(), :summary_for_preset, [%{config: to_config(preset)}])
   end
 
-  def random_accent_color, do: AppModePresets.random_accent_color()
+  def random_accent_color, do: presets().random_accent_color()
+
+  defp presets, do: String.to_existing_atom(@app_mode_presets)
+  defp pixel_fun, do: String.to_existing_atom(@pixel_fun)
 
   defp to_legacy(%{} = preset) do
     config = preset.config

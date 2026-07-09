@@ -8,9 +8,9 @@ defmodule Octopus.Apps.PixelFun do
   alias Octopus.Events.Event.Proximity, as: ProximityEvent
   alias Octopus.AppSupervisor
   alias Octopus.Apps.PixelFun.Program
-  alias Octopus.AppModePresets
-  alias Octopus.Apps.PixelFun.ScenePresets
   alias Octopus.Installation
+
+  @app_mode_presets "Elixir.Octopus.AppModePresets"
 
   @default_scene %{
     color_interval: 5.0,
@@ -148,11 +148,11 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   def list_modes do
-    AppModePresets.list_modes(__MODULE__)
+    presets().list_modes(__MODULE__)
   end
 
   def mode_config(mode_id) do
-    AppModePresets.config_for(__MODULE__, mode_id) || %{}
+    presets().config_for(__MODULE__, mode_id) || %{}
   end
 
   def builtin_presets do
@@ -272,7 +272,7 @@ defmodule Octopus.Apps.PixelFun do
       translate_scale: config.translate_scale,
       rotate_scale: config.rotate_scale,
       zoom_scale: config.zoom_scale,
-      live_scene_id: ScenePresets.id_for_config(config),
+      live_scene_id: scene_presets().id_for_config(config),
       offset: {0, 0},
       move: {0, 0},
       audio_input: %{low: 0.0, mid: 0.0, high: 0.0},
@@ -362,9 +362,11 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   defp apply_scene_by_id(%State{} = state, scene_id) do
-    case ScenePresets.get(scene_id) do
+    mod = scene_presets()
+
+    case apply(mod, :get, [scene_id]) do
       nil -> state
-      preset -> apply_scene_fields(state, ScenePresets.to_config(preset))
+      preset -> apply_scene_fields(state, apply(mod, :to_config, [preset]))
     end
   end
 
@@ -385,10 +387,14 @@ defmodule Octopus.Apps.PixelFun do
   # Id of the scene currently on the wall. Prefers the explicitly tracked id
   # (set whenever a scene is loaded) and falls back to an exact scene match.
   defp live_scene_id(%State{live_scene_id: id}, _scene) when is_binary(id), do: id
-  defp live_scene_id(_state, scene), do: ScenePresets.id_for_config(scene)
+  defp live_scene_id(_state, scene), do: scene_presets().id_for_config(scene)
 
   defp running_preset_id(%State{live_scene_id: id}, _scene) when is_binary(id), do: id
-  defp running_preset_id(_state, scene), do: ScenePresets.id_for_config(scene)
+  defp running_preset_id(_state, scene), do: scene_presets().id_for_config(scene)
+
+  defp scene_presets, do: String.to_existing_atom("Elixir.Octopus.Apps.PixelFun.ScenePresets")
+
+  defp presets, do: String.to_existing_atom(@app_mode_presets)
 
   defp color_interval_s(%State{} = state), do: color_interval_ms(state.color_interval) / 1000.0
   defp color_interval_ms(interval) when is_number(interval), do: max(trunc(interval * 1000), 1)

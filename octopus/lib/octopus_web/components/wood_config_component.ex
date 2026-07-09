@@ -129,7 +129,10 @@ defmodule OctopusWeb.WoodConfigComponent do
     tweakable_keys =
       case InstallationTransport.get_state().now_playing do
         %{app_id: app_id, mode_id: mode_id} when app_id == socket.assigns.app_id ->
-          Wood.mode_tweakables(mode_id) |> Enum.map(& &1.key) |> MapSet.new()
+          Wood
+          |> apply(:mode_tweakables, [mode_id])
+          |> Enum.map(& &1.key)
+          |> MapSet.new()
 
         _ ->
           MapSet.new()

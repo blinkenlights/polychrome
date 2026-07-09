@@ -1,7 +1,8 @@
 defmodule Octopus.Apps.Sand do
   use Octopus.App, category: :interactive
 
-  alias Octopus.AppModePresets
+  @mode_presets Module.concat(["Octopus", "AppModePresets"])
+
   alias Octopus.Installation
   alias Octopus.Canvas
   alias Octopus.Apps.Sand.Sim
@@ -17,12 +18,12 @@ defmodule Octopus.Apps.Sand do
   def name, do: "🏖️ Sand"
 
   def list_modes do
-    AppModePresets.list_modes(__MODULE__)
+    apply(@mode_presets, :list_modes, [__MODULE__])
   end
 
   def mode_config(mode_id) do
-    (AppModePresets.config_for(__MODULE__, mode_id) ||
-       legacy_mode_config(AppModePresets.mode_slug(mode_id)))
+    (apply(@mode_presets, :config_for, [__MODULE__, mode_id]) ||
+       legacy_mode_config(apply(@mode_presets, :mode_slug, [mode_id])))
     |> normalize_mode_config()
   end
 
@@ -51,7 +52,7 @@ defmodule Octopus.Apps.Sand do
   def legacy_mode_config(_), do: %{}
 
   def mode_tweakables(mode_id) do
-    mode_tweakables_for(AppModePresets.mode_slug(mode_id))
+    mode_tweakables_for(apply(@mode_presets, :mode_slug, [mode_id]))
   end
 
   def mode_tweakables_for("sand") do

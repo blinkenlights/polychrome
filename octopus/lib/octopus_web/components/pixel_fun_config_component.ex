@@ -140,7 +140,7 @@ defmodule OctopusWeb.PixelFunConfigComponent do
               <label class="label-text font-semibold" for={"#{@app_id}-#{key}"}>{name}</label>
               <span class="pf-mono text-sm opacity-80">{format_slider(@config[key])}</span>
             </div>
-            <.slider_input app_id={@app_id} key={key} type={type} opts={opts} value={@config[key]} myself={@myself} />
+            <.slider_input app_id={@app_id} key={key} type={type} opts={opts} value={@config[key]} />
           </div>
         </form>
 
@@ -237,7 +237,6 @@ defmodule OctopusWeb.PixelFunConfigComponent do
   attr :type, :atom, required: true
   attr :opts, :map, required: true
   attr :value, :any, required: true
-  attr :myself, :any, required: true
 
   defp slider_input(assigns) do
     ~H"""
@@ -462,7 +461,7 @@ defmodule OctopusWeb.PixelFunConfigComponent do
     tweakable_keys =
       case InstallationTransport.get_state().now_playing do
         %{app_id: app_id, mode_id: mode_id} when app_id == socket.assigns.app_id ->
-          PixelFun.mode_tweakables(mode_id) |> Enum.map(& &1.key) |> MapSet.new()
+          apply(PixelFun, :mode_tweakables, [mode_id]) |> Enum.map(& &1.key) |> MapSet.new()
 
         _ ->
           MapSet.new()
