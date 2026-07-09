@@ -10,6 +10,7 @@ defmodule Octopus.InstallationTransport do
   use GenServer
 
   alias Octopus.{App, AppManager, AppSupervisor}
+  alias Octopus.Apps.PixelFun
   alias Octopus.Apps.PixelFun.ScenePresets
 
   @topic "installation_transport"
@@ -27,7 +28,10 @@ defmodule Octopus.InstallationTransport do
       :next_change_at_ms,
       :live_entry,
       :rotation_paused,
-      :takeover_app_id
+      :takeover_app_id,
+      :now_playing_stored_config,
+      :now_playing_overrides,
+      :now_playing_app_id
     ]
   end
 
@@ -72,6 +76,21 @@ defmodule Octopus.InstallationTransport do
   def launch_app(module) when is_atom(module),
     do: GenServer.cast(__MODULE__, {:launch_app, module})
 
+  def set_tweakable(key, value) when is_atom(key),
+    do: GenServer.call(__MODULE__, {:set_tweakable, key, value})
+
+  def set_tweakables(changes) when is_map(changes),
+    do: GenServer.call(__MODULE__, {:set_tweakables, changes})
+
+  def discard_now_playing_overrides,
+    do: GenServer.call(__MODULE__, :discard_now_playing_overrides)
+
+  def save_now_playing_as_new(name) when is_binary(name),
+    do: GenServer.call(__MODULE__, {:save_now_playing_as_new, name})
+
+  def overwrite_now_playing_mode,
+    do: GenServer.call(__MODULE__, :overwrite_now_playing_mode)
+
   # -- Callbacks --------------------------------------------------------------
 
   @impl true
@@ -86,7 +105,10 @@ defmodule Octopus.InstallationTransport do
       next_change_at_ms: nil,
       live_entry: nil,
       rotation_paused: false,
-      takeover_app_id: nil
+      takeover_app_id: nil,
+      now_playing_stored_config: %{},
+      now_playing_overrides: %{},
+      now_playing_app_id: nil
     }
 
     {:ok, state}
@@ -102,6 +124,37 @@ defmodule Octopus.InstallationTransport do
 
   def handle_call({:queue_move, index, dir}, _from, state) do
     {:reply, :ok, state |> move_queue(index, dir) |> broadcast()}
+  end
+
+  def handle_call({:set_tweakable, key, value}, _from, state) do
+    {:reply, :ok, state |> apply_tweak(key, value) |> broadcast()}
+  end
+
+  def handle_call({:set_tweakables, changes}, _from, state) do
+    state =
+      Enum.reduce(changes, state, fn {key, value}, acc ->
+        apply_tweak(acc, key, value)
+      end)
+
+    {:reply, :ok, broadcast(state)}
+  end
+
+  def handle_call(:discard_now_playing_overrides, _from, state) do
+    {:reply, :ok, state |> clear_now_playing_overrides() |> apply_now_playing_config() |> broadcast()}
+  end
+
+  def handle_call({:save_now_playing_as_new, name}, _from, state) do
+    case save_now_playing_as_new(state, name) do
+      {:ok, new_state} -> {:reply, :ok, broadcast(new_state)}
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call(:overwrite_now_playing_mode, _from, state) do
+    case overwrite_now_playing_mode(state) do
+      {:ok, new_state} -> {:reply, :ok, broadcast(new_state)}
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
   end
 
   @impl true
@@ -270,27 +323,287 @@ defmodule Octopus.InstallationTransport do
   end
 
   defp apply_entry(%State{} = state, %{app: app, mode_id: mode_id} = entry) do
-    config = App.mode_config(app, mode_id)
+    mode_config = App.mode_config(app, mode_id)
 
     app_id =
       case AppSupervisor.find_running_app(app) do
         {:ok, id} ->
-          if map_size(config) > 0, do: AppSupervisor.update_config(id, config)
+          if map_size(mode_config) > 0, do: AppSupervisor.update_config(id, mode_config)
           id
 
         :not_found ->
-          case AppSupervisor.start_app(app, config: config) do
+          stored = stored_config_for(app, mode_id)
+
+          case AppSupervisor.start_app(app, config: stored) do
             {:ok, id} -> id
             _ -> nil
           end
       end
 
     if app_id do
+      stored = stored_config_for(app, mode_id, app_id)
+
       AppManager.select_app(app_id)
       App.apply_mode(app_id, app, mode_id)
-      %State{state | live_entry: entry}
+
+      %State{
+        state
+        | live_entry: entry,
+          now_playing_stored_config: stored,
+          now_playing_overrides: %{},
+          now_playing_app_id: app_id
+      }
     else
       state
+    end
+  end
+
+  defp apply_tweak(%State{live_entry: nil} = state, _key, _value), do: state
+
+  defp apply_tweak(%State{} = state, key, value) do
+    key = normalize_tweak_key(key)
+    stored = state.now_playing_stored_config
+    parsed = parse_tweak_value(state, key, value)
+
+    overrides =
+      if value_eq?(parsed, Map.get(stored, key)) do
+        Map.delete(state.now_playing_overrides, key)
+      else
+        Map.put(state.now_playing_overrides, key, parsed)
+      end
+
+    state = %State{state | now_playing_overrides: overrides}
+    apply_now_playing_config(state)
+  end
+
+  defp apply_now_playing_config(%State{now_playing_app_id: nil} = state), do: state
+
+  defp apply_now_playing_config(%State{} = state) do
+    effective = effective_config(state)
+
+    if state.now_playing_app_id do
+      current = AppSupervisor.config(state.now_playing_app_id) || %{}
+      AppSupervisor.update_config(state.now_playing_app_id, Map.merge(current, effective))
+    end
+
+    state
+  end
+
+  defp clear_now_playing_overrides(%State{} = state) do
+    %State{state | now_playing_overrides: %{}}
+  end
+
+  defp save_now_playing_as_new(%State{live_entry: %{app: PixelFun}} = state, name) do
+    attrs = pixel_fun_preset_attrs(state, String.trim(name))
+
+    case ScenePresets.create(attrs) do
+      {:ok, _preset} ->
+        {:ok, clear_now_playing_overrides(state)}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  defp save_now_playing_as_new(_state, _name), do: {:error, :unsupported}
+
+  defp overwrite_now_playing_mode(%State{live_entry: %{app: PixelFun, mode_id: mode_id}} = state) do
+    if mode_builtin?(mode_id) do
+      {:error, :builtin}
+    else
+      attrs = pixel_fun_preset_attrs(state, preset_name(mode_id))
+
+      case ScenePresets.update(mode_id, attrs) do
+        {:ok, preset} ->
+          stored = ScenePresets.to_config(preset)
+          cleared = clear_now_playing_overrides(state)
+          new_state = %State{cleared | now_playing_stored_config: stored} |> apply_now_playing_config()
+          {:ok, new_state}
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+    end
+  end
+
+  defp overwrite_now_playing_mode(_state), do: {:error, :unsupported}
+
+  defp pixel_fun_preset_attrs(%State{} = state, name) do
+    effective = effective_config(state)
+
+    %{
+      name: name,
+      formula: effective[:program],
+      color_interval: effective[:color_interval],
+      translate_scale: effective[:translate_scale],
+      rotate_scale: effective[:rotate_scale],
+      zoom_scale: effective[:zoom_scale],
+      accent_color: ScenePresets.random_accent_color()
+    }
+  end
+
+  defp effective_config(%State{} = state) do
+    Map.merge(state.now_playing_stored_config, state.now_playing_overrides)
+  end
+
+  defp stored_config_for(app, mode_id, app_id \\ nil) do
+    mode_config = App.mode_config(app, mode_id)
+    defaults = tweakable_defaults(app, mode_id)
+    base = Map.merge(defaults, mode_config)
+
+    case app_id || running_app_id(app) do
+      nil ->
+        base
+
+      id ->
+        current = AppSupervisor.config(id) || %{}
+        Map.merge(base, Map.take(current, tweakable_keys(app, mode_id)))
+    end
+  end
+
+  defp running_app_id(app) do
+    case AppSupervisor.find_running_app(app) do
+      {:ok, id} -> id
+      :not_found -> nil
+    end
+  end
+
+  defp tweakable_keys(app, mode_id) do
+    app
+    |> App.mode_tweakables(mode_id)
+    |> Enum.map(& &1.key)
+  end
+
+  defp tweakable_defaults(app, mode_id) do
+    app
+    |> App.mode_tweakables(mode_id)
+    |> Enum.map(fn %{key: key, default: default} -> {key, default} end)
+    |> Map.new()
+  end
+
+  defp build_now_playing(%State{live_entry: nil}), do: nil
+
+  defp build_now_playing(%State{} = state) do
+    %{app: app, mode_id: mode_id} = state.live_entry
+    stored = state.now_playing_stored_config
+    overrides = state.now_playing_overrides
+    effective = effective_config(state)
+    tweakables = App.mode_tweakables(app, mode_id)
+
+    %{
+      app: app,
+      mode_id: mode_id,
+      app_id: state.now_playing_app_id,
+      stored: stored,
+      overrides: overrides,
+      effective: effective,
+      dirty: now_playing_dirty?(stored, overrides, tweakables),
+      tweakables: tweakables,
+      persistable: app == PixelFun,
+      overwriteable: app == PixelFun and not mode_builtin?(mode_id)
+    }
+  end
+
+  defp now_playing_dirty?(stored, overrides, tweakables) do
+    map_size(overrides) > 0 and
+      Enum.any?(tweakables, fn %{key: key} ->
+        Map.has_key?(overrides, key) and not value_eq?(Map.get(stored, key), Map.get(overrides, key))
+      end)
+  end
+
+  defp parse_tweak_value(%State{live_entry: %{app: app, mode_id: mode_id}}, key, value) do
+    spec =
+      app
+      |> App.mode_tweakables(mode_id)
+      |> Enum.find(&(&1.key == key))
+
+    case spec do
+      %{type: :slider, step: step} = s when is_integer(step) and step >= 1 ->
+        parse_number(value)
+        |> clamp_number(s.min, s.max)
+        |> maybe_round_step(step)
+        |> trunc()
+
+      %{type: :slider} = s ->
+        parse_number(value) |> clamp_number(s.min, s.max) |> maybe_round_step(s.step)
+
+      %{type: :toggle} ->
+        value in [true, "true", "1", 1]
+
+      %{type: :choice, options: options} ->
+        parse_choice(value, options)
+
+      _ ->
+        value
+    end
+  end
+
+  defp parse_choice(value, options) when is_binary(value) do
+    case Integer.parse(value) do
+      {index, _} ->
+        options |> Enum.at(index) |> elem_or_key(0)
+
+      :error ->
+        String.to_existing_atom(value)
+    end
+  rescue
+    ArgumentError -> value
+  end
+
+  defp parse_choice(value, _options) when is_atom(value), do: value
+  defp parse_choice(value, _options), do: value
+
+  defp elem_or_key({key, _label}, _), do: key
+  defp elem_or_key(key, _), do: key
+
+  defp parse_number(value) when is_binary(value) do
+    case Float.parse(value) do
+      {n, _} -> n
+      :error -> 0
+    end
+  end
+
+  defp parse_number(value) when is_integer(value), do: value * 1.0
+  defp parse_number(value) when is_float(value), do: value
+  defp parse_number(value) when is_boolean(value), do: value
+  defp parse_number(_), do: 0
+
+  defp clamp_number(value, min, max) when is_number(value) do
+    value |> max(min) |> min(max)
+  end
+
+  defp clamp_number(value, _min, _max), do: value
+
+  defp maybe_round_step(value, step) when is_number(value) and is_number(step) and step >= 1 do
+    round(value / step) * step
+  end
+
+  defp maybe_round_step(value, step) when is_number(value) and is_number(step) do
+    Float.round(value / step) * step
+  end
+
+  defp maybe_round_step(value, _), do: value
+
+  defp normalize_tweak_key(key) when is_atom(key), do: key
+
+  defp normalize_tweak_key(key) when is_binary(key) do
+    String.to_existing_atom(key)
+  end
+
+  defp value_eq?(a, b) when is_number(a) and is_number(b), do: abs(a - b) < 0.001
+  defp value_eq?(a, b), do: a == b
+
+  defp mode_builtin?(mode_id) do
+    case ScenePresets.get(mode_id) do
+      %{builtin: true} -> true
+      _ -> false
+    end
+  end
+
+  defp preset_name(mode_id) do
+    case ScenePresets.get(mode_id) do
+      %{name: name} -> name
+      _ -> "Scene"
     end
   end
 
@@ -385,7 +698,8 @@ defmodule Octopus.InstallationTransport do
       live: live,
       rotation_paused: state.rotation_paused,
       takeover_app_id: state.takeover_app_id,
-      takeover_app_name: takeover_name(state.takeover_app_id)
+      takeover_app_name: takeover_name(state.takeover_app_id),
+      now_playing: build_now_playing(state)
     }
   end
 

@@ -2,6 +2,7 @@ defmodule OctopusWeb.AppLive do
   use OctopusWeb, :live_view
 
   alias Octopus.AppSupervisor
+  alias Octopus.InstallationTransport
   alias Octopus.Apps.{PixelFun, Wood}
 
   def mount(%{"id" => app_id}, _session, socket) do
@@ -9,6 +10,7 @@ defmodule OctopusWeb.AppLive do
       {_pid, module} ->
         if connected?(socket) do
           AppSupervisor.subscribe()
+          InstallationTransport.subscribe()
         end
 
         socket =
@@ -79,6 +81,25 @@ defmodule OctopusWeb.AppLive do
       </div>
     </div>
     """
+  end
+
+  def handle_info({:installation_transport, transport}, socket) do
+    case transport.now_playing do
+      %{app_id: app_id, effective: effective} when app_id == socket.assigns.app_id ->
+        config = Map.merge(AppSupervisor.config(app_id), effective)
+
+        send_update(config_component_module(socket.assigns.module),
+          id: "app-config-#{app_id}",
+          app_id: app_id,
+          app_module: socket.assigns.module,
+          config: config
+        )
+
+        {:noreply, assign(socket, app_config: config)}
+
+      _ ->
+        {:noreply, socket}
+    end
   end
 
   def handle_info({:apps, {:config_updated, app_id, config}}, socket) do

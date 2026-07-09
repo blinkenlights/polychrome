@@ -130,6 +130,13 @@ defmodule Octopus.App do
   @callback mode_config(mode_id :: String.t()) :: map()
 
   @doc """
+  Optional callback returning tweakable parameters for a mode on the console
+  "Now playing" panel. Each entry is a map with `:key`, `:label`, `:type`
+  (`:slider`, `:toggle`, or `:choice`), plus type-specific options.
+  """
+  @callback mode_tweakables(mode_id :: String.t()) :: [map()]
+
+  @doc """
   Optional callback invoked after an app instance is selected for a mode.
   """
   @callback apply_mode(app_id :: String.t(), mode_id :: String.t()) :: :ok
@@ -207,6 +214,8 @@ defmodule Octopus.App do
 
       def mode_config(_mode_id), do: %{}
 
+      def mode_tweakables(_mode_id), do: []
+
       def apply_mode(_app_id, _mode_id), do: :ok
 
       def rotation_eligible? do
@@ -223,6 +232,7 @@ defmodule Octopus.App do
       defoverridable get_config: 1
       defoverridable list_modes: 0
       defoverridable mode_config: 1
+      defoverridable mode_tweakables: 1
       defoverridable apply_mode: 2
       defoverridable rotation_eligible?: 0
     end
@@ -234,6 +244,9 @@ defmodule Octopus.App do
 
   def mode_config(module, mode_id) when is_atom(module),
     do: apply(module, :mode_config, [mode_id])
+
+  def mode_tweakables(module, mode_id) when is_atom(module),
+    do: apply(module, :mode_tweakables, [mode_id])
 
   def apply_mode(app_id, module, mode_id) when is_atom(module) do
     apply(module, :apply_mode, [app_id, mode_id])

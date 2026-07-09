@@ -114,6 +114,48 @@ defmodule Octopus.Apps.PixelFun do
     end
   end
 
+  def mode_tweakables(_mode_id) do
+    [
+      %{
+        key: :color_interval,
+        label: "Palette crossfade",
+        type: :slider,
+        min: 1.0,
+        max: 20.0,
+        step: 0.5,
+        unit: "s",
+        default: 5.0
+      },
+      %{
+        key: :translate_scale,
+        label: "Drift",
+        type: :slider,
+        min: 0.0,
+        max: 20.0,
+        step: 0.1,
+        default: 0.0
+      },
+      %{
+        key: :rotate_scale,
+        label: "Rotation",
+        type: :slider,
+        min: 0.0,
+        max: 4.0,
+        step: 0.01,
+        default: 0.0
+      },
+      %{
+        key: :zoom_scale,
+        label: "Zoom pulse",
+        type: :slider,
+        min: 0.0,
+        max: 10.0,
+        step: 0.1,
+        default: 1.0
+      }
+    ]
+  end
+
   def apply_mode(app_id, mode_id) do
     cast(app_id, {:apply_mode, to_string(mode_id)})
   end

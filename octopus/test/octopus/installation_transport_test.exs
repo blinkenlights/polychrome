@@ -2,7 +2,7 @@ defmodule Octopus.InstallationTransportTest do
   use ExUnit.Case, async: false
 
   alias Octopus.{AppSupervisor, InstallationTransport}
-  alias Octopus.Apps.{Collective, PixelFun}
+  alias Octopus.Apps.{Collective, PixelFun, Wood}
 
   @classic "builtin:classic_ripple"
   @cross "builtin:cross_waves"
@@ -220,6 +220,87 @@ defmodule Octopus.InstallationTransportTest do
       assert resumed.rotation_paused == false
       assert resumed.takeover_app_id == nil
       assert resumed.playing
+    end
+  end
+
+  describe "now_playing" do
+    test "tweak applies live and marks dirty without changing stored mode" do
+      InstallationTransport.play_now(PixelFun, @classic)
+
+      before = state().now_playing
+      assert before.dirty == false
+      stored_drift = before.stored[:translate_scale]
+
+      InstallationTransport.set_tweakable(:translate_scale, 4.0)
+
+      tweaked = state().now_playing
+      assert tweaked.dirty == true
+      assert tweaked.stored[:translate_scale] == stored_drift
+      assert tweaked.effective[:translate_scale] == 4.0
+
+      {:ok, app_id} = AppSupervisor.find_running_app(PixelFun)
+      assert AppSupervisor.config(app_id)[:translate_scale] == 4.0
+    end
+
+    test "discard restores stored values" do
+      InstallationTransport.play_now(PixelFun, @classic)
+      stored = state().now_playing.stored[:translate_scale]
+
+      InstallationTransport.set_tweakable(:translate_scale, 4.0)
+      InstallationTransport.discard_now_playing_overrides()
+
+      after_discard = state().now_playing
+      assert after_discard.dirty == false
+      assert after_discard.effective[:translate_scale] == stored
+
+      {:ok, app_id} = AppSupervisor.find_running_app(PixelFun)
+      assert AppSupervisor.config(app_id)[:translate_scale] == stored
+    end
+
+    test "queue advance drops overrides" do
+      InstallationTransport.set_queue([
+        %{app: PixelFun, mode_id: @classic},
+        %{app: PixelFun, mode_id: @cross}
+      ])
+
+      InstallationTransport.play_now(PixelFun, @classic)
+      InstallationTransport.set_tweakable(:translate_scale, 4.0)
+      InstallationTransport.next()
+
+      advanced = state().now_playing
+      assert advanced.mode_id == @cross
+      assert advanced.dirty == false
+      assert advanced.overrides == %{}
+    end
+
+    test "wood tweak keeps running config and applies speed live" do
+      original_installation = Application.get_env(:octopus, :installation)
+      Application.put_env(:octopus, :installation, Octopus.Installation.RunningLights)
+
+      on_exit(fn ->
+        Application.put_env(:octopus, :installation, original_installation)
+      end)
+
+      {:ok, app_id} =
+        AppSupervisor.start_app(Wood, config: %{mode: :endless_up, speed: 2.0, blob_size: 3})
+
+      InstallationTransport.play_now(Wood, "experiment")
+
+      playing = state().now_playing
+      assert playing.stored[:speed] == 2.0
+      assert playing.stored[:blob_size] == 3
+      assert playing.effective[:speed] == 2.0
+
+      InstallationTransport.set_tweakable(:speed, 3.5)
+
+      tweaked = state().now_playing
+      assert tweaked.dirty == true
+      assert tweaked.effective[:speed] == 3.5
+
+      config = AppSupervisor.config(app_id)
+      assert config[:speed] == 3.5
+      assert config[:mode] == :endless_up
+      assert config[:blob_size] == 3
     end
   end
 end

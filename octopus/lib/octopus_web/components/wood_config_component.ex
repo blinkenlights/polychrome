@@ -4,6 +4,7 @@ defmodule OctopusWeb.WoodConfigComponent do
 
   alias Octopus.AppSupervisor
   alias Octopus.Apps.Wood
+  alias Octopus.InstallationTransport
 
   def mount(socket) do
     {:ok, assign(socket, config_info: nil)}
@@ -108,10 +109,33 @@ defmodule OctopusWeb.WoodConfigComponent do
 
     new_config = Map.merge(socket.assigns.config, config)
 
-    AppSupervisor.update_config(socket.assigns.app_id, new_config)
+    if route_tweakables_to_transport?(socket, changed_keys) do
+      InstallationTransport.set_tweakables(Map.take(new_config, changed_keys))
 
-    {:noreply,
-     assign(socket, config: new_config, config_info: Wood.config_info(new_config))}
+      {:noreply,
+       assign(socket,
+         config: AppSupervisor.config(socket.assigns.app_id),
+         config_info: Wood.config_info(AppSupervisor.config(socket.assigns.app_id))
+       )}
+    else
+      AppSupervisor.update_config(socket.assigns.app_id, new_config)
+
+      {:noreply,
+       assign(socket, config: new_config, config_info: Wood.config_info(new_config))}
+    end
+  end
+
+  defp route_tweakables_to_transport?(socket, keys) do
+    tweakable_keys =
+      case InstallationTransport.get_state().now_playing do
+        %{app_id: app_id, mode_id: mode_id} when app_id == socket.assigns.app_id ->
+          Wood.mode_tweakables(mode_id) |> Enum.map(& &1.key) |> MapSet.new()
+
+        _ ->
+          MapSet.new()
+      end
+
+    keys != [] and Enum.all?(keys, &MapSet.member?(tweakable_keys, &1))
   end
 
   attr :app_id, :string, required: true

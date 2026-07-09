@@ -450,6 +450,222 @@ defmodule OctopusWeb.ConsoleComponents do
     """
   end
 
+  attr :now_playing, :map, default: nil
+  attr :live, :map, default: nil
+  attr :rotating?, :boolean, default: false
+  attr :playing, :boolean, default: true
+  attr :countdown_percent, :integer, default: 0
+  attr :countdown_label, :string, default: "--:--"
+  attr :target, :any, required: true
+
+  def now_playing_card(assigns) do
+    assigns =
+      assign(assigns,
+        has_tweakables: assigns.now_playing && assigns.now_playing.tweakables != [],
+        show_countdown: assigns.rotating?
+      )
+
+    ~H"""
+    <div :if={@now_playing && @live} id="now-playing" class="card bg-base-200 border border-base-300 shadow-sm">
+      <div class="card-body p-4 gap-3">
+        <div class="flex items-center justify-between gap-3">
+          <h2 class="text-base font-semibold">Now playing</h2>
+          <.countdown_ring
+            :if={@show_countdown}
+            playing={@playing}
+            countdown_percent={@countdown_percent}
+            countdown_label={@countdown_label}
+          />
+        </div>
+
+        <div class="flex items-start gap-3">
+          <span
+            class="w-1 self-stretch rounded-full shrink-0"
+            style={"background:#{@live.accent_color}"}
+          />
+          <div class="flex-1 min-w-0">
+            <div class="text-xs opacity-60">{@live.app_name}</div>
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="font-semibold">{@live.mode_name}</span>
+              <.live_badge />
+              <span
+                :if={@now_playing.dirty}
+                class="badge badge-sm gap-1 border-[#fcb700] text-[#fcb700] bg-transparent"
+              >
+                <span class="w-2 h-2 rounded-full bg-[#fcb700]" /> Unsaved
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <form
+          :if={@has_tweakables}
+          id="now-playing-tweaks"
+          phx-change="now_playing_change"
+          phx-target={@target}
+          class="space-y-4"
+        >
+          <div :for={spec <- @now_playing.tweakables} class="space-y-1">
+            <div class="flex items-baseline justify-between gap-2">
+              <label class="text-sm" for={"now-playing-#{spec.key}"}>{spec.label}</label>
+              <span class={[
+                "console-mono text-xs tabular-nums",
+                now_playing_value_dirty?(@now_playing, spec.key) && "text-[#fcb700]",
+                !now_playing_value_dirty?(@now_playing, spec.key) && "opacity-70"
+              ]}>
+                {format_tweakable_value(spec, Map.get(@now_playing.effective, spec.key))}
+              </span>
+            </div>
+            <%= cond do %>
+              <% spec.type == :slider -> %>
+                <input
+                  type="range"
+                  id={"now-playing-#{spec.key}"}
+                  name={Atom.to_string(spec.key)}
+                  min={spec.min}
+                  max={spec.max}
+                  step={spec.step}
+                  value={Map.get(@now_playing.effective, spec.key)}
+                  phx-debounce="100"
+                  class="range range-primary range-sm w-full min-h-11"
+                />
+              <% spec.type == :toggle -> %>
+                <input
+                  type="hidden"
+                  name={Atom.to_string(spec.key)}
+                  value="false"
+                />
+                <input
+                  type="checkbox"
+                  id={"now-playing-#{spec.key}"}
+                  name={Atom.to_string(spec.key)}
+                  value="true"
+                  checked={Map.get(@now_playing.effective, spec.key) == true}
+                  class="toggle toggle-primary"
+                />
+              <% spec.type == :choice -> %>
+                <div class="join flex-wrap">
+                  <button
+                    :for={{option, idx} <- Enum.with_index(spec.options)}
+                    type="button"
+                    class={[
+                      "btn btn-sm join-item min-h-11",
+                      Map.get(@now_playing.effective, spec.key) == elem(option, 0) && "btn-primary"
+                    ]}
+                    phx-click="now_playing_choice"
+                    phx-value-key={spec.key}
+                    phx-value-index={idx}
+                    phx-target={@target}
+                  >
+                    {elem(option, 1)}
+                  </button>
+                </div>
+              <% true -> %>
+            <% end %>
+          </div>
+        </form>
+
+        <div :if={@has_tweakables} class="flex flex-wrap gap-2 pt-3 border-t border-base-300">
+          <button
+            :if={@now_playing.persistable}
+            type="button"
+            class="btn btn-primary btn-sm min-h-11 bg-[#6d7cff] border-[#6d7cff]"
+            phx-click="open_now_playing_save_modal"
+            phx-target={@target}
+          >
+            Save as new…
+          </button>
+          <button
+            :if={@now_playing.persistable && @now_playing.overwriteable}
+            type="button"
+            class="btn btn-sm min-h-11"
+            phx-click="now_playing_overwrite"
+            phx-target={@target}
+            disabled={!@now_playing.dirty}
+          >
+            Overwrite
+          </button>
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm min-h-11"
+            phx-click="now_playing_discard"
+            phx-target={@target}
+            disabled={!@now_playing.dirty}
+          >
+            Discard
+          </button>
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm min-h-11 ml-auto link link-primary"
+            phx-click="now_playing_full_editor"
+            phx-target={@target}
+          >
+            Full editor →
+          </button>
+        </div>
+
+        <p :if={@has_tweakables} class="text-xs opacity-60">
+          Changes apply immediately. If the queue moves on, unsaved values are dropped.
+        </p>
+      </div>
+    </div>
+    """
+  end
+
+  attr :show, :boolean, required: true
+  attr :target, :any, required: true
+  attr :name, :string, default: ""
+
+  def now_playing_save_modal(assigns) do
+    ~H"""
+    <div :if={@show} class="modal modal-open" role="dialog">
+      <div class="modal-box bg-base-200">
+        <h3 class="font-bold text-lg">Save as new scene</h3>
+        <form phx-submit="now_playing_save_as_new" phx-target={@target} class="space-y-4 mt-2">
+          <input
+            type="text"
+            name="name"
+            value={@name}
+            placeholder="Scene name"
+            class="input input-bordered w-full"
+            autofocus
+          />
+          <div class="modal-action mt-0">
+            <button type="button" class="btn btn-ghost" phx-click="close_now_playing_save_modal" phx-target={@target}>
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary bg-[#6d7cff] border-[#6d7cff]">Save</button>
+          </div>
+        </form>
+      </div>
+      <button type="button" class="modal-backdrop" phx-click="close_now_playing_save_modal" phx-target={@target} />
+    </div>
+    """
+  end
+
+  defp now_playing_value_dirty?(now_playing, key) do
+    Map.has_key?(now_playing.overrides, key)
+  end
+
+  defp format_tweakable_value(%{type: :slider, unit: unit}, value) when is_binary(unit),
+    do: "#{format_tweak_number(value)} #{unit}"
+
+  defp format_tweakable_value(%{type: :slider}, value), do: format_tweak_number(value)
+  defp format_tweakable_value(%{type: :choice, options: options}, value) do
+    case Enum.find(options, fn {k, _} -> k == value end) do
+      {_, label} -> label
+      _ -> to_string(value)
+    end
+  end
+
+  defp format_tweakable_value(%{type: :toggle}, true), do: "On"
+  defp format_tweakable_value(%{type: :toggle}, _), do: "Off"
+  defp format_tweakable_value(_, value), do: to_string(value)
+
+  defp format_tweak_number(n) when is_float(n), do: :erlang.float_to_binary(n, decimals: 1)
+  defp format_tweak_number(n) when is_integer(n), do: Integer.to_string(n)
+  defp format_tweak_number(n), do: to_string(n)
+
   attr :show, :boolean, required: true
   attr :target, :any, default: nil
 

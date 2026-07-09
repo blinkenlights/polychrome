@@ -20,6 +20,8 @@ defmodule OctopusWeb.InstallationConsoleComponent do
        show_custom_interval: false,
        show_all_pixel_fun: false,
        show_all_apps: false,
+       show_now_playing_save_modal: false,
+       now_playing_save_name: "",
        running_apps: [],
        browse_apps: [],
        browse_app_count: 0,
@@ -59,6 +61,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
             <.mode_library sections={@library_sections} target={@myself} transport={@transport} show_all_pixel_fun={@show_all_pixel_fun} />
           </div>
           <div class="min-[1100px]:col-start-2 space-y-6 order-1 min-[1100px]:order-none">
+            <.now_playing_card {now_playing_assigns(assigns)} target={@myself} />
             <.queue_card {queue_assigns(assigns)} target={@myself} />
             <.running_now_strip running_apps={@running_apps} target={@myself} />
           </div>
@@ -84,6 +87,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         </div>
 
         <div class={@active_tab != "queue" && "hidden"}>
+          <.now_playing_card {now_playing_assigns(assigns)} target={@myself} />
           <.queue_card {queue_assigns(assigns)} target={@myself} />
         </div>
         <div class={@active_tab != "library" && "hidden"}>
@@ -114,6 +118,11 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       <.console_footer />
 
       <.custom_interval_modal show={@show_custom_interval} target={@myself} />
+      <.now_playing_save_modal
+        show={@show_now_playing_save_modal}
+        name={@now_playing_save_name}
+        target={@myself}
+      />
     </div>
     """
   end
@@ -389,6 +398,80 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     {:noreply, assign(socket, show_all_apps: true, active_tab: "library")}
   end
 
+  def handle_event("now_playing_change", params, socket) do
+    changes = now_playing_changes(params, socket.assigns.transport.now_playing)
+
+    if map_size(changes) > 0 do
+      InstallationTransport.set_tweakables(changes)
+    end
+
+    {:noreply, refresh_transport(socket, refresh_library: false)}
+  end
+
+  def handle_event("now_playing_choice", %{"key" => key, "index" => index}, socket) do
+    np = socket.assigns.transport.now_playing
+    key = String.to_existing_atom(key)
+    spec = Enum.find(np.tweakables, &(&1.key == key))
+
+    if spec && spec.type == :choice do
+      {value, _} = Enum.at(spec.options, String.to_integer(index))
+      InstallationTransport.set_tweakable(key, value)
+    end
+
+    {:noreply, refresh_transport(socket, refresh_library: false)}
+  end
+
+  def handle_event("now_playing_discard", _params, socket) do
+    InstallationTransport.discard_now_playing_overrides()
+    {:noreply, refresh_transport(socket, refresh_library: false)}
+  end
+
+  def handle_event("open_now_playing_save_modal", _params, socket),
+    do: {:noreply, assign(socket, show_now_playing_save_modal: true)}
+
+  def handle_event("close_now_playing_save_modal", _params, socket),
+    do: {:noreply, assign(socket, show_now_playing_save_modal: false, now_playing_save_name: "")}
+
+  def handle_event("now_playing_save_as_new", %{"name" => name}, socket) do
+    case InstallationTransport.save_now_playing_as_new(name) do
+      :ok ->
+        {:noreply,
+         socket
+         |> assign(show_now_playing_save_modal: false, now_playing_save_name: "")
+         |> refresh_transport()
+         |> assign_library()}
+
+      {:error, _} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Could not save scene")
+         |> assign(now_playing_save_name: name)}
+    end
+  end
+
+  def handle_event("now_playing_overwrite", _params, socket) do
+    case InstallationTransport.overwrite_now_playing_mode() do
+      :ok ->
+        {:noreply, refresh_transport(socket) |> assign_library()}
+
+      {:error, :builtin} ->
+        {:noreply, put_flash(socket, :error, "Built-in scenes can't be overwritten")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Could not overwrite scene")}
+    end
+  end
+
+  def handle_event("now_playing_full_editor", _params, socket) do
+    case socket.assigns.transport.now_playing do
+      %{app_id: app_id} when is_binary(app_id) ->
+        {:noreply, push_navigate(socket, to: ~p"/app/#{app_id}")}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
   def handle_event("select_app", %{"app-id" => app_id}, socket) do
     AppManager.select_app(app_id)
     {:noreply, socket}
@@ -415,11 +498,19 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     {:noreply, refresh_transport(socket) |> assign_running()}
   end
 
-  defp refresh_transport(socket) do
+  defp refresh_transport(socket, opts \\ []) do
     socket
     |> assign(transport: InstallationTransport.get_state())
     |> assign_transport_view()
-    |> assign_library()
+    |> maybe_assign_library(opts)
+  end
+
+  defp maybe_assign_library(socket, opts) do
+    if Keyword.get(opts, :refresh_library, true) do
+      assign_library(socket)
+    else
+      socket
+    end
   end
 
   defp parse_app_module(str) when is_binary(str) do
@@ -671,6 +762,59 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       :countdown_percent,
       :countdown_label
     ])
+  end
+
+  defp now_playing_assigns(assigns) do
+    %{
+      now_playing: assigns.transport.now_playing,
+      live: assigns.transport.live,
+      rotating?: assigns.rotating?,
+      playing: assigns.playing,
+      countdown_percent: assigns.countdown_percent,
+      countdown_label: assigns.countdown_label
+    }
+  end
+
+  defp now_playing_changes(_params, nil), do: %{}
+
+  defp now_playing_changes(params, now_playing) do
+    keys = now_playing_target_keys(params, now_playing)
+
+    params
+    |> Map.drop(["_target"])
+    |> Enum.filter(fn {key, _} -> tweakable_param_key?(key, keys) end)
+    |> Map.new(fn {key, value} -> {String.to_existing_atom(key), value} end)
+  end
+
+  defp now_playing_target_keys(%{"_target" => target}, _now_playing) when is_list(target) do
+    Enum.flat_map(target, &now_playing_schema_key/1)
+  end
+
+  defp now_playing_target_keys(%{"_target" => target}, _now_playing) when is_binary(target) do
+    now_playing_schema_key(target)
+  end
+
+  defp now_playing_target_keys(params, now_playing) do
+    tweakable_keys = Enum.map(now_playing.tweakables, & &1.key)
+
+    params
+    |> Map.drop(["_target"])
+    |> Map.keys()
+    |> Enum.flat_map(&now_playing_schema_key/1)
+    |> Enum.filter(&(&1 in tweakable_keys))
+  end
+
+  defp now_playing_schema_key(key) do
+    [String.to_existing_atom(key)]
+  rescue
+    ArgumentError -> []
+  end
+
+  defp tweakable_param_key?(key, keys) do
+    case now_playing_schema_key(key) do
+      [atom] -> atom in keys
+      _ -> false
+    end
   end
 
   defp queue_assigns(assigns) do

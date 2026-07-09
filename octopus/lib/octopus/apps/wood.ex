@@ -46,6 +46,41 @@ defmodule Octopus.Apps.Wood do
 
   def mode_config("experiment"), do: %{}
 
+  def mode_tweakables("experiment") do
+    [
+      %{key: :speed, label: "Speed (LEDs/s)", type: :slider, min: 0.0, max: 5.0, step: 0.1, default: 0.0},
+      %{key: :blob_size, label: "Blob size (LEDs)", type: :slider, min: 1, max: 12, step: 1, default: 1},
+      %{key: :blob_count, label: "Blob count", type: :slider, min: 1, max: 8, step: 1, default: 1},
+      %{
+        key: :blob_spacing,
+        label: "Blob spacing (LEDs)",
+        type: :slider,
+        min: 0,
+        max: 12,
+        step: 1,
+        default: 1
+      },
+      %{
+        key: :trail_length,
+        label: "Trail length (LEDs)",
+        type: :slider,
+        min: 0,
+        max: 12,
+        step: 1,
+        default: 0
+      },
+      %{
+        key: :color_channel,
+        label: "Color channel",
+        type: :choice,
+        default: :white,
+        options: [{:white, "White"}, {:rgb, "RGB"}]
+      }
+    ]
+  end
+
+  def mode_tweakables(_), do: []
+
   def compatible? do
     installation = Octopus.App.get_installation_info()
 
@@ -136,7 +171,18 @@ defmodule Octopus.Apps.Wood do
       state
       |> apply_config(config)
       |> Map.put(:position, Map.get(config, :position, state.position) * 1.0)
-      |> reset_motion()
+
+    new_state =
+      cond do
+        Map.has_key?(config, :mode) or Map.has_key?(config, :bounce) or Map.has_key?(config, :position) ->
+          reset_motion(new_state)
+
+        Map.has_key?(config, :speed) ->
+          adapt_speed(new_state)
+
+        true ->
+          new_state
+      end
 
     render(new_state)
     maybe_schedule_tick(new_state)
@@ -334,6 +380,12 @@ defmodule Octopus.Apps.Wood do
         trail_length: Map.get(config, :trail_length, state.trail_length)
     }
   end
+
+  defp adapt_speed(%State{mode: :up_and_down, bounce: true} = state) do
+    %{state | velocity: ping_pong_speed(state)}
+  end
+
+  defp adapt_speed(%State{} = state), do: state
 
   defp reset_motion(%State{mode: :up_and_down, bounce: true} = state) do
     %{state | velocity: ping_pong_speed(state), direction: state.direction || 1.0}

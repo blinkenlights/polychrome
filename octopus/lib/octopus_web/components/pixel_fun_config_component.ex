@@ -286,12 +286,21 @@ defmodule OctopusWeb.PixelFunConfigComponent do
         end
       end)
 
-    AppSupervisor.update_config(socket.assigns.app_id, config)
+    if route_tweakables_to_transport?(socket, keys) do
+      InstallationTransport.set_tweakables(Map.take(config, keys))
 
-    {:noreply,
-     socket
-     |> assign(config: AppSupervisor.config(socket.assigns.app_id))
-     |> assign_editor_view()}
+      {:noreply,
+       socket
+       |> assign(config: AppSupervisor.config(socket.assigns.app_id))
+       |> assign_editor_view()}
+    else
+      AppSupervisor.update_config(socket.assigns.app_id, config)
+
+      {:noreply,
+       socket
+       |> assign(config: AppSupervisor.config(socket.assigns.app_id))
+       |> assign_editor_view()}
+    end
   end
 
   def handle_event("open_save_preset_modal", _params, socket),
@@ -450,6 +459,19 @@ defmodule OctopusWeb.PixelFunConfigComponent do
       rotate_scale: config[:rotate_scale],
       zoom_scale: config[:zoom_scale]
     }
+  end
+
+  defp route_tweakables_to_transport?(socket, keys) do
+    tweakable_keys =
+      case InstallationTransport.get_state().now_playing do
+        %{app_id: app_id, mode_id: mode_id} when app_id == socket.assigns.app_id ->
+          PixelFun.mode_tweakables(mode_id) |> Enum.map(& &1.key) |> MapSet.new()
+
+        _ ->
+          MapSet.new()
+      end
+
+    keys != [] and Enum.all?(keys, &MapSet.member?(tweakable_keys, &1))
   end
 
   defp scene_entries(config_schema) do
