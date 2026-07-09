@@ -463,10 +463,13 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   end
 
   def handle_event("open_now_playing_save_modal", _params, socket),
-    do: {:noreply, assign(socket, show_now_playing_save_modal: true)}
+    do: {:noreply, assign(socket, show_now_playing_save_modal: true, now_playing_save_name: "")}
 
   def handle_event("close_now_playing_save_modal", _params, socket),
     do: {:noreply, assign(socket, show_now_playing_save_modal: false, now_playing_save_name: "")}
+
+  def handle_event("now_playing_save_name_change", %{"name" => name}, socket),
+    do: {:noreply, assign(socket, now_playing_save_name: name)}
 
   def handle_event("now_playing_save_as_new", %{"name" => name}, socket) do
     label = preset_label(socket)
@@ -509,22 +512,30 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   def handle_event("close_now_playing_rename_modal", _params, socket),
     do: {:noreply, assign(socket, show_now_playing_rename_modal: false, now_playing_rename_name: "")}
 
+  def handle_event("now_playing_rename_change", %{"name" => name}, socket),
+    do: {:noreply, assign(socket, now_playing_rename_name: name)}
+
   def handle_event("now_playing_rename", %{"name" => name}, socket) do
     label = preset_label(socket)
+    name = String.trim(name)
 
-    case InstallationTransport.rename_now_playing_preset(name) do
-      :ok ->
-        {:noreply,
-         socket
-         |> assign(show_now_playing_rename_modal: false, now_playing_rename_name: "")
-         |> refresh_transport()
-         |> assign_library()}
+    if name == "" do
+      {:noreply, put_flash(socket, :error, "Enter a #{label} name")}
+    else
+      case InstallationTransport.rename_now_playing_preset(name) do
+        :ok ->
+          {:noreply,
+           socket
+           |> assign(show_now_playing_rename_modal: false, now_playing_rename_name: "")
+           |> refresh_transport()
+           |> assign_library()}
 
-      {:error, _} ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "Could not rename #{label}")
-         |> assign(now_playing_rename_name: name)}
+        {:error, _} ->
+          {:noreply,
+           socket
+           |> put_flash(:error, "Could not rename #{label}")
+           |> assign(now_playing_rename_name: name)}
+      end
     end
   end
 

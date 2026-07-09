@@ -719,7 +719,12 @@ defmodule OctopusWeb.ConsoleComponents do
     <div :if={@show} class="modal modal-open" role="dialog">
       <div class="modal-box bg-base-200">
         <h3 class="font-bold text-lg">Save as new {@label}</h3>
-        <form phx-submit="now_playing_save_as_new" phx-target={@target} class="space-y-4 mt-2">
+        <form
+          phx-change="now_playing_save_name_change"
+          phx-submit="now_playing_save_as_new"
+          phx-target={@target}
+          class="space-y-4 mt-2"
+        >
           <input
             type="text"
             name="name"
@@ -754,7 +759,12 @@ defmodule OctopusWeb.ConsoleComponents do
     <div :if={@show} class="modal modal-open" role="dialog">
       <div class="modal-box bg-base-200">
         <h3 class="font-bold text-lg">Rename {@label}</h3>
-        <form phx-submit="now_playing_rename" phx-target={@target} class="space-y-4 mt-2">
+        <form
+          phx-change="now_playing_rename_change"
+          phx-submit="now_playing_rename"
+          phx-target={@target}
+          class="space-y-4 mt-2"
+        >
           <input
             type="text"
             name="name"

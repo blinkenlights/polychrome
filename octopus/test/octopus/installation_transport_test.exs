@@ -483,7 +483,10 @@ defmodule Octopus.InstallationTransportTest do
       assert state().now_playing.effective[:sensitivity] == 3.0
 
       assert :ok = InstallationTransport.rename_now_playing_preset("Stormier")
-      assert state().now_playing.preset_name == "Stormier"
+
+      s = state()
+      assert s.now_playing.preset_name == "Stormier"
+      assert s.live.mode_name == "Stormier"
 
       InstallationTransport.set_queue([
         %{app: Collective, mode_id: "collective:storm"},
