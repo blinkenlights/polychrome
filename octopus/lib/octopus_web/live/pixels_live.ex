@@ -126,7 +126,7 @@ defmodule OctopusWeb.PixelsLive do
     <div
       class={[
         "flex w-full justify-center bg-black",
-        @embedded && "flex-col items-stretch",
+        @embedded && "sim-embedded-root flex-col items-stretch min-h-0",
         !@embedded && "h-full min-h-screen"
       ]}
       phx-window-keydown="keydown"
@@ -152,7 +152,7 @@ defmodule OctopusWeb.PixelsLive do
       </div>
 
       <%= if @embedded do %>
-        <div class="flex-1 min-h-[12rem] max-h-[38vh] w-full flex items-center justify-center px-4 pt-14">
+        <div class="sim-embedded-canvas flex-1 min-h-[12rem] max-h-[38vh] w-full flex items-center justify-center px-4 pt-14">
           <canvas
             id={"#{@id_prefix}-#{@id}"}
             phx-hook="Pixels"

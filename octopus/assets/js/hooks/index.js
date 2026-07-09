@@ -57,8 +57,17 @@ const ConsoleTheme = {
       this.pushEvent("set_console_theme", { theme: saved });
     }
 
+    const savedLayout = localStorage.getItem("console-sim-layout");
+    if (savedLayout === "top" || savedLayout === "left") {
+      this.pushEvent("set_sim_layout", { layout: savedLayout });
+    }
+
     this.handleEvent("store-console-theme", ({ theme }) => {
       localStorage.setItem("console-theme", theme);
+    });
+
+    this.handleEvent("store-console-sim-layout", ({ layout }) => {
+      localStorage.setItem("console-sim-layout", layout);
     });
 
     this.syncScrollLock();
