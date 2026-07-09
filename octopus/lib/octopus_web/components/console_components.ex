@@ -662,6 +662,24 @@ defmodule OctopusWeb.ConsoleComponents do
             Overwrite
           </button>
           <button
+            :if={@now_playing.renamable}
+            type="button"
+            class="btn btn-sm min-h-11"
+            phx-click="open_now_playing_rename_modal"
+            phx-target={@target}
+          >
+            Rename…
+          </button>
+          <button
+            :if={@now_playing.deletable}
+            type="button"
+            class="btn btn-sm min-h-11 text-error"
+            phx-click="open_now_playing_delete_modal"
+            phx-target={@target}
+          >
+            Delete…
+          </button>
+          <button
             type="button"
             class="btn btn-ghost btn-sm min-h-11"
             phx-click="now_playing_discard"
@@ -691,18 +709,22 @@ defmodule OctopusWeb.ConsoleComponents do
   attr :show, :boolean, required: true
   attr :target, :any, required: true
   attr :name, :string, default: ""
+  attr :preset_label, :string, default: "preset"
 
   def now_playing_save_modal(assigns) do
+    label = String.capitalize(assigns.preset_label)
+    assigns = assign(assigns, :label, label)
+
     ~H"""
     <div :if={@show} class="modal modal-open" role="dialog">
       <div class="modal-box bg-base-200">
-        <h3 class="font-bold text-lg">Save as new scene</h3>
+        <h3 class="font-bold text-lg">Save as new {@label}</h3>
         <form phx-submit="now_playing_save_as_new" phx-target={@target} class="space-y-4 mt-2">
           <input
             type="text"
             name="name"
             value={@name}
-            placeholder="Scene name"
+            placeholder={"#{@label} name"}
             class="input input-bordered w-full"
             autofocus
           />
@@ -715,6 +737,71 @@ defmodule OctopusWeb.ConsoleComponents do
         </form>
       </div>
       <button type="button" class="modal-backdrop" phx-click="close_now_playing_save_modal" phx-target={@target} />
+    </div>
+    """
+  end
+
+  attr :show, :boolean, required: true
+  attr :target, :any, required: true
+  attr :name, :string, default: ""
+  attr :preset_label, :string, default: "preset"
+
+  def now_playing_rename_modal(assigns) do
+    label = String.capitalize(assigns.preset_label)
+    assigns = assign(assigns, :label, label)
+
+    ~H"""
+    <div :if={@show} class="modal modal-open" role="dialog">
+      <div class="modal-box bg-base-200">
+        <h3 class="font-bold text-lg">Rename {@label}</h3>
+        <form phx-submit="now_playing_rename" phx-target={@target} class="space-y-4 mt-2">
+          <input
+            type="text"
+            name="name"
+            value={@name}
+            placeholder={"#{@label} name"}
+            class="input input-bordered w-full"
+            autofocus
+          />
+          <div class="modal-action mt-0">
+            <button type="button" class="btn btn-ghost" phx-click="close_now_playing_rename_modal" phx-target={@target}>
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary bg-[#6d7cff] border-[#6d7cff]">Rename</button>
+          </div>
+        </form>
+      </div>
+      <button type="button" class="modal-backdrop" phx-click="close_now_playing_rename_modal" phx-target={@target} />
+    </div>
+    """
+  end
+
+  attr :show, :boolean, required: true
+  attr :target, :any, required: true
+  attr :preset_name, :string, default: ""
+  attr :preset_label, :string, default: "preset"
+
+  def now_playing_delete_modal(assigns) do
+    label = String.capitalize(assigns.preset_label)
+    assigns = assign(assigns, :label, label)
+
+    ~H"""
+    <div :if={@show} class="modal modal-open" role="dialog">
+      <div class="modal-box bg-base-200">
+        <h3 class="font-bold text-lg">Delete {@label}?</h3>
+        <p class="py-2">
+          Remove <span class="font-semibold">{@preset_name}</span> from the library. The queue will be updated.
+        </p>
+        <div class="modal-action">
+          <button type="button" class="btn btn-ghost" phx-click="close_now_playing_delete_modal" phx-target={@target}>
+            Cancel
+          </button>
+          <button type="button" class="btn text-[#ff6266]" phx-click="now_playing_delete" phx-target={@target}>
+            Delete
+          </button>
+        </div>
+      </div>
+      <button type="button" class="modal-backdrop" phx-click="close_now_playing_delete_modal" phx-target={@target} />
     </div>
     """
   end

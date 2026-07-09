@@ -23,6 +23,9 @@ defmodule OctopusWeb.InstallationConsoleComponent do
        show_all_apps: false,
        show_now_playing_save_modal: false,
        now_playing_save_name: "",
+       show_now_playing_rename_modal: false,
+       now_playing_rename_name: "",
+       show_now_playing_delete_modal: false,
        running_apps: [],
        browse_apps: [],
        browse_app_count: 0,
@@ -122,6 +125,19 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       <.now_playing_save_modal
         show={@show_now_playing_save_modal}
         name={@now_playing_save_name}
+        preset_label={now_playing_preset_label(@transport)}
+        target={@myself}
+      />
+      <.now_playing_rename_modal
+        show={@show_now_playing_rename_modal}
+        name={@now_playing_rename_name}
+        preset_label={now_playing_preset_label(@transport)}
+        target={@myself}
+      />
+      <.now_playing_delete_modal
+        show={@show_now_playing_delete_modal}
+        preset_name={now_playing_preset_name(@transport)}
+        preset_label={now_playing_preset_label(@transport)}
         target={@myself}
       />
     </div>
@@ -453,6 +469,8 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     do: {:noreply, assign(socket, show_now_playing_save_modal: false, now_playing_save_name: "")}
 
   def handle_event("now_playing_save_as_new", %{"name" => name}, socket) do
+    label = preset_label(socket)
+
     case InstallationTransport.save_now_playing_as_new(name) do
       :ok ->
         {:noreply,
@@ -464,21 +482,74 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       {:error, _} ->
         {:noreply,
          socket
-         |> put_flash(:error, "Could not save scene")
+         |> put_flash(:error, "Could not save #{label}")
          |> assign(now_playing_save_name: name)}
     end
   end
 
   def handle_event("now_playing_overwrite", _params, socket) do
+    label = preset_label(socket)
+
     case InstallationTransport.overwrite_now_playing_mode() do
       :ok ->
         {:noreply, refresh_transport(socket) |> assign_library()}
 
-      {:error, :builtin} ->
-        {:noreply, put_flash(socket, :error, "Built-in scenes can't be overwritten")}
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Could not overwrite #{label}")}
+    end
+  end
+
+  def handle_event("open_now_playing_rename_modal", _params, socket) do
+    name = socket.assigns.transport.now_playing && socket.assigns.transport.now_playing.preset_name || ""
+
+    {:noreply,
+     assign(socket, show_now_playing_rename_modal: true, now_playing_rename_name: name)}
+  end
+
+  def handle_event("close_now_playing_rename_modal", _params, socket),
+    do: {:noreply, assign(socket, show_now_playing_rename_modal: false, now_playing_rename_name: "")}
+
+  def handle_event("now_playing_rename", %{"name" => name}, socket) do
+    label = preset_label(socket)
+
+    case InstallationTransport.rename_now_playing_preset(name) do
+      :ok ->
+        {:noreply,
+         socket
+         |> assign(show_now_playing_rename_modal: false, now_playing_rename_name: "")
+         |> refresh_transport()
+         |> assign_library()}
 
       {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Could not overwrite scene")}
+        {:noreply,
+         socket
+         |> put_flash(:error, "Could not rename #{label}")
+         |> assign(now_playing_rename_name: name)}
+    end
+  end
+
+  def handle_event("open_now_playing_delete_modal", _params, socket),
+    do: {:noreply, assign(socket, show_now_playing_delete_modal: true)}
+
+  def handle_event("close_now_playing_delete_modal", _params, socket),
+    do: {:noreply, assign(socket, show_now_playing_delete_modal: false)}
+
+  def handle_event("now_playing_delete", _params, socket) do
+    label = preset_label(socket)
+
+    case InstallationTransport.archive_now_playing_mode() do
+      :ok ->
+        {:noreply,
+         socket
+         |> assign(show_now_playing_delete_modal: false)
+         |> refresh_transport()
+         |> assign_library()}
+
+      {:error, _} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Could not delete #{label}")
+         |> assign(show_now_playing_delete_modal: false)}
     end
   end
 
@@ -812,6 +883,19 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       countdown_percent: assigns.countdown_percent,
       countdown_label: assigns.countdown_label
     }
+  end
+
+  defp now_playing_preset_label(%{now_playing: %{preset_label: label}}) when is_binary(label), do: label
+  defp now_playing_preset_label(_), do: "preset"
+
+  defp now_playing_preset_name(%{now_playing: %{preset_name: name}}) when is_binary(name), do: name
+  defp now_playing_preset_name(_), do: ""
+
+  defp preset_label(socket) do
+    case socket.assigns.transport.now_playing do
+      %{preset_label: label} when is_binary(label) -> label
+      _ -> "preset"
+    end
   end
 
   defp now_playing_changes(_params, nil), do: %{}

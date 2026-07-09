@@ -1,11 +1,13 @@
 defmodule Octopus.InstallationTransportTest do
   use ExUnit.Case, async: false
 
-  alias Octopus.{AppSupervisor, InstallationTransport}
+  alias Octopus.{AppModePresets, AppSupervisor, InstallationTransport}
   alias Octopus.Apps.{Collective, Matrix, PixelFun, PixieDebug, Wood}
 
-  @classic "builtin:classic_ripple"
-  @cross "builtin:cross_waves"
+  @classic "pixelfun:classic_ripple"
+  @cross "pixelfun:cross_waves"
+  @matrix "matrix:matrix"
+  @orbital "collective:orbital"
 
   setup do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Octopus.Repo, shared: true)
@@ -19,6 +21,7 @@ defmodule Octopus.InstallationTransportTest do
 
     InstallationTransport.reset!()
     InstallationTransport.set_interval(300)
+    AppModePresets.sync_all!()
 
     on_exit(fn ->
       for {_, app_id} <- AppSupervisor.running_apps(), do: AppSupervisor.stop_app(app_id)
@@ -95,7 +98,7 @@ defmodule Octopus.InstallationTransportTest do
     test "next advances mixed queue" do
       InstallationTransport.set_queue([
         %{app: PixelFun, mode_id: @classic},
-        %{app: Collective, mode_id: "orbital"}
+        %{app: Collective, mode_id: @orbital}
       ])
 
       InstallationTransport.play_now(PixelFun, @classic)
@@ -103,7 +106,7 @@ defmodule Octopus.InstallationTransportTest do
 
       s = state()
       assert s.cycle_index == 1
-      assert s.live.mode_id == "orbital"
+      assert s.live.mode_id == @orbital
       assert s.live.app == Collective
     end
 
@@ -202,11 +205,11 @@ defmodule Octopus.InstallationTransportTest do
         %{app: PixelFun, mode_id: @cross}
       ])
 
-      InstallationTransport.play_now(Matrix, "matrix")
+      InstallationTransport.play_now(Matrix, @matrix)
 
       s = state()
       assert s.live.app == Matrix
-      assert s.live.mode_id == "matrix"
+      assert s.live.mode_id == @matrix
       assert s.rotation_paused
       assert s.playing
       assert s.takeover_app_id != nil
@@ -216,11 +219,11 @@ defmodule Octopus.InstallationTransportTest do
     test "queue toggle starts first entry when nothing is live" do
       assert InstallationTransport.get_state().live == nil
 
-      InstallationTransport.queue_toggle(Matrix, "matrix")
+      InstallationTransport.queue_toggle(Matrix, @matrix)
 
       s = state()
       assert s.live.app == Matrix
-      assert s.live.mode_id == "matrix"
+      assert s.live.mode_id == @matrix
       assert length(s.queue) == 1
     end
 
@@ -230,7 +233,7 @@ defmodule Octopus.InstallationTransportTest do
         %{app: PixelFun, mode_id: @cross}
       ])
 
-      InstallationTransport.play_now(Matrix, "matrix")
+      InstallationTransport.play_now(Matrix, @matrix)
       assert state().rotation_paused
 
       InstallationTransport.toggle_play()
@@ -401,7 +404,7 @@ defmodule Octopus.InstallationTransportTest do
     end
 
     test "collective storm tweak applies sensitivity live" do
-      InstallationTransport.play_now(Collective, "storm")
+      InstallationTransport.play_now(Collective, "collective:storm")
 
       playing = state().now_playing
       assert playing.effective[:animation] == :storm
@@ -420,7 +423,7 @@ defmodule Octopus.InstallationTransportTest do
     end
 
     test "collective lava lamp tweak applies palette live" do
-      InstallationTransport.play_now(Collective, "lava_lamp")
+      InstallationTransport.play_now(Collective, "collective:lava_lamp")
 
       playing = state().now_playing
       assert playing.effective[:animation] == :lava_lamp
@@ -437,7 +440,7 @@ defmodule Octopus.InstallationTransportTest do
     end
 
     test "matrix tweak applies speed and density live" do
-      InstallationTransport.play_now(Matrix, "matrix")
+      InstallationTransport.play_now(Matrix, @matrix)
 
       playing = state().now_playing
       assert playing.effective[:speed] == 1.0
@@ -458,6 +461,66 @@ defmodule Octopus.InstallationTransportTest do
       config = AppSupervisor.config(app_id)
       assert config[:speed] == 2.0
       assert config[:density] == 6
+    end
+  end
+
+  describe "preset persistence" do
+    test "save, overwrite, rename, and archive collective preset" do
+      InstallationTransport.play_now(Collective, "collective:storm")
+      InstallationTransport.set_tweakable(:sensitivity, 2.5)
+
+      assert :ok = InstallationTransport.save_now_playing_as_new("Hot storm")
+      assert state().now_playing.dirty == false
+
+      user_modes =
+        AppModePresets.list_presets(Collective)
+        |> Enum.filter(&(&1.origin == :user))
+
+      assert Enum.any?(user_modes, &(&1.name == "Hot storm"))
+
+      InstallationTransport.set_tweakable(:sensitivity, 3.0)
+      assert :ok = InstallationTransport.overwrite_now_playing_mode()
+      assert state().now_playing.effective[:sensitivity] == 3.0
+
+      assert :ok = InstallationTransport.rename_now_playing_preset("Stormier")
+      assert state().now_playing.preset_name == "Stormier"
+
+      InstallationTransport.set_queue([
+        %{app: Collective, mode_id: "collective:storm"},
+        %{app: Collective, mode_id: "collective:breath"}
+      ])
+
+      assert :ok = InstallationTransport.archive_now_playing_mode()
+
+      queue = state().queue
+      assert length(queue) == 1
+      assert hd(queue).mode_id == "collective:breath"
+    end
+
+    test "save and overwrite matrix builtin" do
+      InstallationTransport.play_now(Matrix, @matrix)
+      InstallationTransport.set_tweakable(:speed, 2.5)
+
+      np = state().now_playing
+      assert np.persistable
+      assert np.overwriteable
+      assert np.deletable
+      assert np.renamable
+
+      assert :ok = InstallationTransport.overwrite_now_playing_mode()
+      assert state().now_playing.effective[:speed] == 2.5
+      assert state().now_playing.dirty == false
+
+      preset = AppModePresets.get(Matrix, @matrix)
+      assert preset.config[:speed] == 2.5
+    end
+
+    test "pixel fun save as new clears dirty state" do
+      InstallationTransport.play_now(PixelFun, @classic)
+      InstallationTransport.set_tweakable(:translate_scale, 4.0)
+
+      assert :ok = InstallationTransport.save_now_playing_as_new("Drifty ripple")
+      assert state().now_playing.dirty == false
     end
   end
 end

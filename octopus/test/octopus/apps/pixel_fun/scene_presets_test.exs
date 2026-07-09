@@ -1,7 +1,13 @@
 defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
-  use Octopus.DataCase, async: true
+  use Octopus.DataCase, async: false
 
+  alias Octopus.AppModePresets
   alias Octopus.Apps.PixelFun.ScenePresets
+
+  setup do
+    AppModePresets.sync_all!()
+    :ok
+  end
 
   @scene_attrs %{
     name: "Test scene",
@@ -34,7 +40,9 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
       ids = ScenePresets.list_all() |> Enum.map(& &1.id)
 
       assert "builtin:classic_ripple" in ids
-      assert Enum.any?(ids, &String.starts_with?(&1, "user:"))
+      assert Enum.any?(ids, fn id ->
+               String.starts_with?(id, "user:") or String.starts_with?(id, "pixelfun:")
+             end)
     end
   end
 
@@ -62,15 +70,15 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
       assert "has invalid syntax" in errors_on(changeset).formula
     end
 
-    test "rejects duplicate names" do
-      assert {:ok, _} = ScenePresets.create(@scene_attrs)
-      assert {:error, changeset} = ScenePresets.create(@scene_attrs)
-      assert "has already been taken" in errors_on(changeset).name
+    test "allows duplicate names with distinct slugs" do
+      assert {:ok, first} = ScenePresets.create(@scene_attrs)
+      assert {:ok, second} = ScenePresets.create(@scene_attrs)
+      assert first.id != second.id
     end
   end
 
   describe "update/2" do
-    test "updates user presets but not builtins" do
+    test "updates user presets and builtins" do
       {:ok, %{id: id}} = ScenePresets.create(@scene_attrs)
 
       assert {:ok, updated} =
@@ -78,17 +86,23 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
 
       assert updated.translate_scale == 2.0
       assert updated.rotate_scale == 0.5
-      assert {:error, :builtin} = ScenePresets.update("builtin:cross_waves", %{name: "Nope"})
+
+      assert {:ok, builtin} =
+               ScenePresets.update("builtin:cross_waves", %{translate_scale: 3.0})
+
+      assert builtin.translate_scale == 3.0
     end
   end
 
   describe "delete/1" do
-    test "deletes user presets but not builtins" do
+    test "archives user presets and builtins" do
       {:ok, %{id: id}} = ScenePresets.create(@scene_attrs)
 
       assert :ok = ScenePresets.delete(id)
       assert ScenePresets.get(id) == nil
-      assert {:error, :builtin} = ScenePresets.delete("builtin:cross_waves")
+
+      assert :ok = ScenePresets.delete("builtin:cross_waves")
+      assert ScenePresets.get("builtin:cross_waves") == nil
     end
   end
 

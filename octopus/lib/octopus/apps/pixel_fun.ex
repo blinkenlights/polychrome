@@ -8,8 +8,61 @@ defmodule Octopus.Apps.PixelFun do
   alias Octopus.Events.Event.Proximity, as: ProximityEvent
   alias Octopus.AppSupervisor
   alias Octopus.Apps.PixelFun.Program
+  alias Octopus.AppModePresets
   alias Octopus.Apps.PixelFun.ScenePresets
   alias Octopus.Installation
+
+  @default_scene %{
+    color_interval: 5.0,
+    translate_scale: 0.0,
+    rotate_scale: 0.0,
+    zoom_scale: 1.0
+  }
+
+  @builtin_defs [
+    %{
+      slug: "classic_ripple",
+      name: "Classic ripple",
+      formula: "sin(10*t-hypot(x,y))",
+      accent_color: "#E74C3C"
+    },
+    %{
+      slug: "cross_waves",
+      name: "Cross waves",
+      formula: "sin(x*0.7+t*2)*cos(y*0.7-t*1.3)",
+      accent_color: "#3498DB"
+    },
+    %{
+      slug: "xy_interference",
+      name: "XY interference",
+      formula: "sin(x*y*0.08 - t*3)",
+      accent_color: "#9B59B6"
+    },
+    %{
+      slug: "nested_sincos",
+      name: "Nested sin/cos",
+      formula: "sin(x*0.4+sin(y*0.3+t)*3+t)*cos(y*0.4+cos(x*0.3-t)*3-t)",
+      accent_color: "#1ABC9C"
+    },
+    %{
+      slug: "layered_waves",
+      name: "Layered waves",
+      formula: "sin(x*0.5+t)*cos(y*0.5-t)+sin((x+y)*0.35+t*1.5)*0.5",
+      accent_color: "#F39C12"
+    },
+    %{
+      slug: "ripple_rings",
+      name: "Ripple rings",
+      formula: "sin(hypot(x,y)*5-t*3)*sin(hypot(x+3,y+3)*5+t*2)",
+      accent_color: "#E91E63"
+    },
+    %{
+      slug: "organic_swirl",
+      name: "Organic swirl",
+      formula: "sin(x*y*0.06+sin(t)*x*0.2-t*2)*cos(hypot(x,y)*2+t)",
+      accent_color: "#2ECC71"
+    }
+  ]
 
   @fps 60
   @frame_time_ms trunc(1000 / @fps)
@@ -95,25 +148,54 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   def list_modes do
-    ScenePresets.list_all()
-    |> Enum.map(fn preset ->
+    AppModePresets.list_modes(__MODULE__)
+  end
+
+  def mode_config(mode_id) do
+    AppModePresets.config_for(__MODULE__, mode_id) || %{}
+  end
+
+  def builtin_presets do
+    Enum.map(@builtin_defs, fn def ->
+      config =
+        @default_scene
+        |> Map.put(:program, def.formula)
+
       %{
-        id: preset.id,
-        name: preset.name,
-        accent_color: preset.accent_color,
-        summary: ScenePresets.summary(preset),
-        formula: preset.formula,
-        builtin: preset.builtin
+        slug: def.slug,
+        name: def.name,
+        accent_color: def.accent_color,
+        config: config
       }
     end)
   end
 
-  def mode_config(mode_id) do
-    case ScenePresets.get(mode_id) do
-      nil -> %{}
-      preset -> ScenePresets.to_config(preset)
+  def legacy_mode_config(slug) do
+    case Enum.find(@builtin_defs, &(&1.slug == slug)) do
+      nil ->
+        %{}
+
+      def ->
+        @default_scene
+        |> Map.put(:program, def.formula)
     end
   end
+
+  def summary_for_preset(%{config: config}) do
+    sliders =
+      "drift #{format_num(config[:translate_scale])} · rot #{format_num(config[:rotate_scale])} · zoom #{format_num(config[:zoom_scale])} · palette #{format_num(config[:color_interval])}s"
+
+    formula =
+      (config[:program] || "")
+      |> String.trim()
+      |> then(fn f -> if String.length(f) > 28, do: String.slice(f, 0, 25) <> "...", else: f end)
+
+    "#{sliders} · #{formula}"
+  end
+
+  defp format_num(n) when is_float(n), do: :erlang.float_to_binary(n, decimals: 1)
+  defp format_num(n) when is_integer(n), do: Integer.to_string(n)
+  defp format_num(n), do: to_string(n)
 
   def mode_tweakables(_mode_id) do
     [

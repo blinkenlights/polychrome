@@ -1,0 +1,94 @@
+defmodule Octopus.AppModePresetsTest do
+  use Octopus.DataCase, async: true
+
+  alias Octopus.AppModePresets
+  alias Octopus.Apps.{Collective, Matrix, PixelFun}
+
+  setup do
+    AppModePresets.sync_all!()
+    :ok
+  end
+
+  describe "sync_builtins/1" do
+    test "is idempotent and seeds all three apps" do
+      assert length(AppModePresets.list_presets(PixelFun)) == 7
+      assert length(AppModePresets.list_presets(Collective)) == 6
+      assert length(AppModePresets.list_presets(Matrix)) == 1
+
+      AppModePresets.sync_all!()
+
+      assert length(AppModePresets.list_presets(PixelFun)) == 7
+    end
+
+    test "does not overwrite existing rows" do
+      storm_id = AppModePresets.mode_id(Collective, "storm")
+
+      assert {:ok, _} =
+               AppModePresets.update(Collective, storm_id, %{
+                 config: %{animation: :storm, background: :deep_dark, sensitivity: 9.0}
+               })
+
+      AppModePresets.sync_builtins(Collective)
+
+      assert %{config: %{sensitivity: 9.0}} = AppModePresets.get(Collective, storm_id)
+    end
+  end
+
+  describe "create/3 and archive/2" do
+    test "creates user preset and archives it" do
+      assert {:ok, preset} =
+               AppModePresets.create(Collective, "My storm", %{
+                 animation: :storm,
+                 background: :deep_dark,
+                 sensitivity: 1.5
+               })
+
+      assert preset.origin == :user
+      assert String.starts_with?(preset.id, "collective:")
+
+      assert :ok = AppModePresets.archive(Collective, preset.id)
+      assert AppModePresets.get(Collective, preset.id) == nil
+    end
+
+    test "rejects invalid pixel fun formulas" do
+      assert {:error, :invalid_formula} =
+               AppModePresets.create(PixelFun, "Bad", %{program: "sin(+"})
+    end
+  end
+
+  describe "rename/3 and update/3" do
+    test "renames and overwrites builtins" do
+      id = AppModePresets.mode_id(Matrix, "matrix")
+
+      assert {:ok, renamed} = AppModePresets.rename(Matrix, id, "Code rain")
+      assert renamed.name == "Code rain"
+
+      assert {:ok, updated} =
+               AppModePresets.update(Matrix, id, %{config: %{speed: 2.0, density: 4, max_particles: 100}})
+
+      assert updated.config[:speed] == 2.0
+    end
+  end
+
+  describe "normalize_mode_id/2" do
+    test "maps legacy pixel fun and bare collective ids" do
+      assert AppModePresets.normalize_mode_id(PixelFun, "builtin:classic_ripple") ==
+               "pixelfun:classic_ripple"
+
+      assert AppModePresets.normalize_mode_id(Collective, "storm") == "collective:storm"
+      assert AppModePresets.normalize_mode_id(Matrix, "matrix") == "matrix:matrix"
+    end
+  end
+
+  describe "list_modes/1" do
+    test "returns foyer tiles with summaries" do
+      modes = AppModePresets.list_modes(Collective)
+      storm = Enum.find(modes, &(&1.id == "collective:storm"))
+
+      assert storm.name == "Storm"
+      assert storm.summary != ""
+      assert storm.deletable
+      assert storm.renamable
+    end
+  end
+end

@@ -15,6 +15,7 @@ defmodule Octopus.Apps.Collective do
 
   use Octopus.App, category: :animation
 
+  alias Octopus.AppModePresets
   alias Octopus.Canvas
   alias Octopus.Radar
   alias Octopus.Radar.Frame
@@ -56,19 +57,34 @@ defmodule Octopus.Apps.Collective do
   }
 
   def list_modes do
+    AppModePresets.list_modes(__MODULE__)
+  end
+
+  def mode_config(mode_id) do
+    (AppModePresets.config_for(__MODULE__, mode_id) ||
+       legacy_mode_config(AppModePresets.mode_slug(mode_id)))
+    |> coerce_config_atoms()
+  end
+
+  def mode_tweakables(mode_id) do
+    mode_tweakables_for(AppModePresets.mode_slug(mode_id))
+  end
+
+  def builtin_presets do
     Enum.map(@animations, fn {key, _mod} ->
+      slug = Atom.to_string(key)
+
       %{
-        id: Atom.to_string(key),
+        slug: slug,
         name: Map.fetch!(@mode_labels, key),
         accent_color: Map.fetch!(@mode_accents, key),
-        summary: "",
-        builtin: true
+        config: legacy_mode_config(slug)
       }
     end)
   end
 
-  def mode_config(mode_id) do
-    case mode_id do
+  def legacy_mode_config(slug) do
+    case slug do
       "storm" ->
         %{animation: :storm, background: :deep_dark, sensitivity: 1.0}
 
@@ -112,7 +128,7 @@ defmodule Octopus.Apps.Collective do
     end
   end
 
-  def mode_tweakables("storm") do
+  def mode_tweakables_for("storm") do
     [
       %{
         key: :sensitivity,
@@ -133,7 +149,7 @@ defmodule Octopus.Apps.Collective do
     ]
   end
 
-  def mode_tweakables("breath") do
+  def mode_tweakables_for("breath") do
     [
       %{
         key: :breath_liveliness,
@@ -167,7 +183,7 @@ defmodule Octopus.Apps.Collective do
     ]
   end
 
-  def mode_tweakables("dots") do
+  def mode_tweakables_for("dots") do
     [
       %{
         key: :dots_smoothing,
@@ -181,7 +197,7 @@ defmodule Octopus.Apps.Collective do
     ]
   end
 
-  def mode_tweakables("orbital") do
+  def mode_tweakables_for("orbital") do
     [
       %{
         key: :orbital_liveliness,
@@ -204,7 +220,7 @@ defmodule Octopus.Apps.Collective do
     ]
   end
 
-  def mode_tweakables("lava_lamp") do
+  def mode_tweakables_for("lava_lamp") do
     [
       %{
         key: :lava_speed,
@@ -225,7 +241,7 @@ defmodule Octopus.Apps.Collective do
     ]
   end
 
-  def mode_tweakables("ring_noise") do
+  def mode_tweakables_for("ring_noise") do
     [
       %{
         key: :ring_noise_speed,
@@ -252,7 +268,7 @@ defmodule Octopus.Apps.Collective do
     ]
   end
 
-  def mode_tweakables(_mode_id), do: []
+  def mode_tweakables_for(_mode_id), do: []
 
   def apply_mode(app_id, mode_id) do
     Octopus.AppSupervisor.update_config(app_id, mode_config(mode_id))
@@ -285,8 +301,8 @@ defmodule Octopus.Apps.Collective do
     ring_noise_pulse_amount = Map.get(config, :ring_noise_pulse_amount, 0.65)
     ring_noise_counter_wave = Map.get(config, :ring_noise_counter_wave, true)
     ring_noise_palette = Map.get(config, :ring_noise_palette, :lava)
-    background = Map.get(config, :background, :deep_dark)
-    animation = Map.get(config, :animation, :storm)
+    background = Map.get(config, :background, :deep_dark) |> coerce_atom(:deep_dark)
+    animation = Map.get(config, :animation, :storm) |> coerce_atom(:storm)
     anim_mod = Map.fetch!(@animations, animation)
 
     Process.send_after(self(), :tick, 0)
@@ -697,6 +713,7 @@ defmodule Octopus.Apps.Collective do
   end
 
   def handle_config(config, state) do
+    config = coerce_config_atoms(config)
     animation = Map.get(config, :animation, state.animation)
 
     {anim_mod, anim_state, last_update} =
@@ -794,4 +811,31 @@ defmodule Octopus.Apps.Collective do
     speed = Octopus.Installation.global_speed() |> max(0.1)
     trunc(1000 / (@fps * speed))
   end
+
+  defp coerce_config_atoms(config) when is_map(config) do
+    config
+    |> Map.new(fn {k, v} -> {k, coerce_config_value(k, v)} end)
+  end
+
+  defp coerce_config_value(:animation, value), do: coerce_atom(value, :storm)
+  defp coerce_config_value(:background, value), do: coerce_atom(value, :deep_dark)
+  defp coerce_config_value(:breath_palette, value), do: coerce_atom(value, :ocean)
+  defp coerce_config_value(:breath_layout, value), do: coerce_atom(value, :wave)
+  defp coerce_config_value(:lava_palette, value), do: coerce_atom(value, :classic)
+  defp coerce_config_value(:ring_noise_palette, value), do: coerce_atom(value, :lava)
+  defp coerce_config_value(_key, value), do: value
+
+  defp coerce_atom(value, _default) when is_atom(value), do: value
+
+  defp coerce_atom(value, default) when is_binary(value) do
+    case value do
+      "true" -> true
+      "false" -> false
+      other -> String.to_existing_atom(other)
+    end
+  rescue
+    ArgumentError -> default
+  end
+
+  defp coerce_atom(_value, default), do: default
 end

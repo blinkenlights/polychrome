@@ -10,9 +10,7 @@ defmodule Octopus.InstallationTransport do
   use GenServer
   require Logger
 
-  alias Octopus.{App, AppManager, AppSupervisor}
-  alias Octopus.Apps.PixelFun
-  alias Octopus.Apps.PixelFun.ScenePresets
+  alias Octopus.{App, AppManager, AppSupervisor, AppModePresets}
 
   @topic "installation_transport"
   @default_interval_seconds 300.0
@@ -95,6 +93,12 @@ defmodule Octopus.InstallationTransport do
   def overwrite_now_playing_mode,
     do: GenServer.call(__MODULE__, :overwrite_now_playing_mode)
 
+  def rename_now_playing_preset(name) when is_binary(name),
+    do: GenServer.call(__MODULE__, {:rename_now_playing, name})
+
+  def archive_now_playing_mode,
+    do: GenServer.call(__MODULE__, :archive_now_playing_mode)
+
   # -- Callbacks --------------------------------------------------------------
 
   @impl true
@@ -161,6 +165,20 @@ defmodule Octopus.InstallationTransport do
     end
   end
 
+  def handle_call({:rename_now_playing, name}, _from, state) do
+    case rename_now_playing_preset(state, name) do
+      {:ok, new_state} -> {:reply, :ok, broadcast(new_state)}
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
+  def handle_call(:archive_now_playing_mode, _from, state) do
+    case archive_now_playing_mode(state) do
+      {:ok, new_state} -> {:reply, :ok, broadcast(new_state)}
+      {:error, reason} -> {:reply, {:error, reason}, state}
+    end
+  end
+
   def handle_call(:reset, _from, %State{} = state) do
     state =
       %State{
@@ -183,7 +201,7 @@ defmodule Octopus.InstallationTransport do
   end
 
   def handle_call({:play_now, app, mode_id}, _from, state) do
-    entry = %{app: app, mode_id: mode_id}
+    entry = normalize_entry(%{app: app, mode_id: mode_id})
 
     result =
       if apply(app, :compatible?, []) do
@@ -195,7 +213,7 @@ defmodule Octopus.InstallationTransport do
           |> restart_countdown()
 
         case state.live_entry do
-          %{app: ^app, mode_id: ^mode_id} -> {:ok, state}
+          %{app: ^app, mode_id: id} when id == entry.mode_id -> {:ok, state}
           _ -> {:error, :failed, state}
         end
       else
@@ -235,7 +253,7 @@ defmodule Octopus.InstallationTransport do
   end
 
   def handle_cast({:queue_toggle, app, mode_id}, state) do
-    entry = %{app: app, mode_id: mode_id}
+    entry = normalize_entry(%{app: app, mode_id: mode_id})
     adding? = not entry_in_queue?(state.queue, entry)
 
     new_queue =
@@ -486,29 +504,34 @@ defmodule Octopus.InstallationTransport do
     %State{state | now_playing_overrides: %{}}
   end
 
-  defp save_now_playing_as_new(%State{live_entry: %{app: PixelFun}} = state, name) do
-    attrs = pixel_fun_preset_attrs(state, String.trim(name))
+  defp save_now_playing_as_new(%State{live_entry: nil}, _name), do: {:error, :nothing_playing}
 
-    case ScenePresets.create(attrs) do
-      {:ok, _preset} ->
-        {:ok, clear_now_playing_overrides(state)}
+  defp save_now_playing_as_new(%State{live_entry: %{app: app}} = state, name) do
+    if AppModePresets.persistable?(app) do
+      %{app: app, mode_id: mode_id} = state.live_entry
+      effective = effective_config(state)
+      attrs = AppModePresets.attrs_from_effective(app, mode_id, effective)
 
-      {:error, changeset} ->
-        {:error, changeset}
+      case AppModePresets.create(app, name, attrs.config, accent_color: attrs[:accent_color]) do
+        {:ok, _preset} ->
+          {:ok, clear_now_playing_overrides(state)}
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+    else
+      {:error, :unsupported}
     end
   end
 
-  defp save_now_playing_as_new(_state, _name), do: {:error, :unsupported}
+  defp overwrite_now_playing_mode(%State{live_entry: %{app: app, mode_id: mode_id}} = state) do
+    if AppModePresets.persistable?(app) do
+      effective = effective_config(state)
+      attrs = AppModePresets.attrs_from_effective(app, mode_id, effective)
 
-  defp overwrite_now_playing_mode(%State{live_entry: %{app: PixelFun, mode_id: mode_id}} = state) do
-    if mode_builtin?(mode_id) do
-      {:error, :builtin}
-    else
-      attrs = pixel_fun_preset_attrs(state, preset_name(mode_id))
-
-      case ScenePresets.update(mode_id, attrs) do
+      case AppModePresets.update(app, mode_id, %{config: attrs.config}) do
         {:ok, preset} ->
-          stored = ScenePresets.to_config(preset)
+          stored = preset.config
           cleared = clear_now_playing_overrides(state)
           new_state = %State{cleared | now_playing_stored_config: stored} |> apply_now_playing_config()
           {:ok, new_state}
@@ -516,23 +539,35 @@ defmodule Octopus.InstallationTransport do
         {:error, reason} ->
           {:error, reason}
       end
+    else
+      {:error, :unsupported}
     end
   end
 
-  defp overwrite_now_playing_mode(_state), do: {:error, :unsupported}
+  defp rename_now_playing_preset(%State{live_entry: %{app: app, mode_id: mode_id}} = state, name) do
+    if AppModePresets.persistable?(app) do
+      case AppModePresets.rename(app, mode_id, name) do
+        {:ok, _preset} -> {:ok, state}
+        error -> error
+      end
+    else
+      {:error, :unsupported}
+    end
+  end
 
-  defp pixel_fun_preset_attrs(%State{} = state, name) do
-    effective = effective_config(state)
+  defp archive_now_playing_mode(%State{live_entry: %{app: app, mode_id: mode_id}} = state) do
+    if AppModePresets.persistable?(app) do
+      case AppModePresets.archive(app, mode_id) do
+        :ok ->
+          new_queue = AppModePresets.filter_queue(state.queue, app, mode_id)
+          {:ok, put_queue(state, new_queue)}
 
-    %{
-      name: name,
-      formula: effective[:program],
-      color_interval: effective[:color_interval],
-      translate_scale: effective[:translate_scale],
-      rotate_scale: effective[:rotate_scale],
-      zoom_scale: effective[:zoom_scale],
-      accent_color: ScenePresets.random_accent_color()
-    }
+        error ->
+          error
+      end
+    else
+      {:error, :unsupported}
+    end
   end
 
   defp effective_config(%State{} = state) do
@@ -583,18 +618,24 @@ defmodule Octopus.InstallationTransport do
     effective = effective_config(state)
     tweakables = App.mode_tweakables(app, mode_id)
 
+    preset = AppModePresets.get(app, mode_id)
+
     %{
       app: app,
       mode_id: mode_id,
       app_id: state.now_playing_app_id,
+      preset_name: preset && preset.name,
       stored: stored,
       overrides: overrides,
       effective: effective,
       dirty: now_playing_dirty?(stored, overrides, tweakables),
       tweakables: tweakables,
       meta: App.now_playing_meta(app, effective),
-      persistable: app == PixelFun,
-      overwriteable: app == PixelFun and not mode_builtin?(mode_id)
+      persistable: AppModePresets.persistable?(app),
+      overwriteable: AppModePresets.persistable?(app) and not is_nil(preset),
+      deletable: AppModePresets.persistable?(app) and not is_nil(preset),
+      renamable: AppModePresets.persistable?(app) and not is_nil(preset),
+      preset_label: AppModePresets.preset_label(app)
     }
   end
 
@@ -706,20 +747,6 @@ defmodule Octopus.InstallationTransport do
   defp value_eq?(a, b) when is_number(a) and is_number(b), do: abs(a - b) < 0.001
   defp value_eq?(a, b), do: a == b
 
-  defp mode_builtin?(mode_id) do
-    case ScenePresets.get(mode_id) do
-      %{builtin: true} -> true
-      _ -> false
-    end
-  end
-
-  defp preset_name(mode_id) do
-    case ScenePresets.get(mode_id) do
-      %{name: name} -> name
-      _ -> "Scene"
-    end
-  end
-
   defp schedule_change(%State{rotation_paused: true} = state), do: cancel_timer(state)
   defp schedule_change(%State{playing: false} = state), do: cancel_timer(state)
 
@@ -830,24 +857,24 @@ defmodule Octopus.InstallationTransport do
     })
   end
 
-  defp find_mode(Octopus.Apps.PixelFun, mode_id) do
-    case ScenePresets.get(mode_id) do
+  defp find_mode(app, mode_id) do
+    normalized = AppModePresets.normalize_mode_id(app, mode_id)
+
+    case AppModePresets.get(app, normalized) do
       nil ->
-        nil
+        Enum.find(App.list_modes(app), fn mode ->
+          AppModePresets.normalize_mode_id(app, mode.id) == normalized
+        end)
 
       preset ->
         %{
           id: preset.id,
           name: preset.name,
           accent_color: preset.accent_color,
-          summary: ScenePresets.summary(preset),
+          summary: AppModePresets.summary(app, preset),
           builtin: preset.builtin
         }
     end
-  end
-
-  defp find_mode(app, mode_id) do
-    Enum.find(App.list_modes(app), &(&1.id == mode_id))
   end
 
   defp takeover_name(nil), do: nil
@@ -861,7 +888,19 @@ defmodule Octopus.InstallationTransport do
 
   defp entry_in_queue?(queue, entry), do: entry in queue
 
-  defp normalize_entry(%{app: app, mode_id: id}), do: %{app: normalize_app(app), mode_id: to_string(id)}
+  defp normalize_entry(%{app: app, mode_id: id}) do
+    app = normalize_app(app)
+    id = to_string(id)
+
+    mode_id =
+      if AppModePresets.persistable?(app) do
+        AppModePresets.normalize_mode_id(app, id)
+      else
+        id
+      end
+
+    %{app: app, mode_id: mode_id}
+  end
 
   defp normalize_app(app) when is_atom(app) do
     if Code.ensure_loaded?(app) and function_exported?(app, :list_modes, 0) do

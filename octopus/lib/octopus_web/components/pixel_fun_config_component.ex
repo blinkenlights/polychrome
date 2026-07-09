@@ -154,7 +154,7 @@ defmodule OctopusWeb.PixelFunConfigComponent do
             Save as new scene…
           </button>
           <button
-            :if={@editor_preset && !@editor_preset.builtin}
+            :if={@editor_preset}
             class="btn"
             phx-click="overwrite_preset"
             phx-target={@myself}
@@ -166,7 +166,7 @@ defmodule OctopusWeb.PixelFunConfigComponent do
             Discard edits
           </button>
           <button
-            :if={@editor_preset && !@editor_preset.builtin}
+            :if={@editor_preset}
             class="btn btn-ghost text-[#ff6266] ml-auto"
             phx-click="request_delete"
             phx-value-id={@editor_preset.id}
@@ -382,9 +382,6 @@ defmodule OctopusWeb.PixelFunConfigComponent do
             preset_message: {:ok, "Scene deleted"},
             selected_preset_id: nil
           )
-
-        {:error, :builtin} ->
-          assign(socket, preset_message: {:error, "Built-in scenes can't be deleted"})
 
         {:error, _} ->
           assign(socket, preset_message: {:error, "Could not delete scene"})

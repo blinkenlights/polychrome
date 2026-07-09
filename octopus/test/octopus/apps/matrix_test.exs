@@ -1,8 +1,14 @@
 defmodule Octopus.Apps.MatrixTest do
-  use ExUnit.Case, async: true
+  use Octopus.DataCase, async: true
 
+  alias Octopus.AppModePresets
   alias Octopus.Apps.Matrix
   alias Octopus.Apps.Matrix.State
+
+  setup do
+    AppModePresets.sync_all!()
+    :ok
+  end
 
   defp base_state(overrides \\ []) do
     defaults = %{
@@ -21,11 +27,12 @@ defmodule Octopus.Apps.MatrixTest do
 
   test "list_modes/0 includes matrix mode" do
     [mode] = Matrix.list_modes()
-    assert mode.id == "matrix"
+    assert mode.id == "matrix:matrix"
     assert mode.builtin == true
   end
 
   test "mode_config/1 returns defaults" do
+    assert Matrix.mode_config("matrix:matrix") == %{speed: 1.0, density: 3, max_particles: 200}
     assert Matrix.mode_config("matrix") == %{speed: 1.0, density: 3, max_particles: 200}
     assert Matrix.mode_config("unknown") == %{}
   end

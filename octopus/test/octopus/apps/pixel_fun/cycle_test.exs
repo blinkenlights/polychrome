@@ -1,6 +1,7 @@
 defmodule Octopus.Apps.PixelFun.CycleTest do
-  use ExUnit.Case, async: true
+  use Octopus.DataCase, async: true
 
+  alias Octopus.AppModePresets
   alias Octopus.Apps.PixelFun
   alias Octopus.Apps.PixelFun.ScenePresets
 
@@ -8,6 +9,7 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
   @cross "builtin:cross_waves"
 
   setup do
+    AppModePresets.sync_all!()
     {:ok, _} = Registry.register(Octopus.AppRegistry, "test-#{System.unique_integer([:positive])}", PixelFun)
     :ok
   end

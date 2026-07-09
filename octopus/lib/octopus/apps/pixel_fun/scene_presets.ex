@@ -1,206 +1,94 @@
 defmodule Octopus.Apps.PixelFun.ScenePresets do
   @moduledoc """
-  Built-in and user-saved scene presets for Pixel Fun.
+  Adapter over `Octopus.AppModePresets` for Pixel Fun.
 
-  Each preset includes formula, slider values, and a tile accent color.
+  Keeps the legacy preset map shape (`formula` field, `builtin:` / `user:` ids)
+  used by the full editor and existing tests.
   """
 
-  import Ecto.Query, only: [order_by: 2]
-
+  alias Octopus.AppModePresets
+  alias Octopus.Apps.PixelFun
   alias Octopus.Apps.PixelFun.Program
-  alias Octopus.Apps.PixelFun.ScenePreset
-  alias Octopus.Repo
 
-  @type preset :: %{
-          id: String.t(),
-          name: String.t(),
-          formula: String.t(),
-          color_interval: float(),
-          translate_scale: float(),
-          rotate_scale: float(),
-          zoom_scale: float(),
-          accent_color: String.t(),
-          builtin: boolean()
-        }
+  @type preset :: map()
 
-  @default_scene %{
-    color_interval: 5.0,
-    translate_scale: 0.0,
-    rotate_scale: 0.0,
-    zoom_scale: 1.0
-  }
-
-  @builtins [
-    %{
-      id: "builtin:classic_ripple",
-      name: "Classic ripple",
-      formula: "sin(10*t-hypot(x,y))",
-      accent_color: "#E74C3C",
-      builtin: true
-    },
-    %{
-      id: "builtin:cross_waves",
-      name: "Cross waves",
-      formula: "sin(x*0.7+t*2)*cos(y*0.7-t*1.3)",
-      accent_color: "#3498DB",
-      builtin: true
-    },
-    %{
-      id: "builtin:xy_interference",
-      name: "XY interference",
-      formula: "sin(x*y*0.08 - t*3)",
-      accent_color: "#9B59B6",
-      builtin: true
-    },
-    %{
-      id: "builtin:nested_sincos",
-      name: "Nested sin/cos",
-      formula: "sin(x*0.4+sin(y*0.3+t)*3+t)*cos(y*0.4+cos(x*0.3-t)*3-t)",
-      accent_color: "#1ABC9C",
-      builtin: true
-    },
-    %{
-      id: "builtin:layered_waves",
-      name: "Layered waves",
-      formula: "sin(x*0.5+t)*cos(y*0.5-t)+sin((x+y)*0.35+t*1.5)*0.5",
-      accent_color: "#F39C12",
-      builtin: true
-    },
-    %{
-      id: "builtin:ripple_rings",
-      name: "Ripple rings",
-      formula: "sin(hypot(x,y)*5-t*3)*sin(hypot(x+3,y+3)*5+t*2)",
-      accent_color: "#E91E63",
-      builtin: true
-    },
-    %{
-      id: "builtin:organic_swirl",
-      name: "Organic swirl",
-      formula: "sin(x*y*0.06+sin(t)*x*0.2-t*2)*cos(hypot(x,y)*2+t)",
-      accent_color: "#2ECC71",
-      builtin: true
-    }
-  ]
-  |> Enum.map(&Map.merge(@default_scene, &1))
-
-  @doc "Returns built-in scene presets (not stored in the database)."
-  @spec builtins() :: [preset()]
-  def builtins, do: @builtins
-
-  @doc "Returns built-in presets followed by user-saved presets."
+  @doc "Returns user-facing presets (legacy shape)."
   @spec list_all() :: [preset()]
   def list_all do
-    builtins() ++ list_user()
+    PixelFun
+    |> AppModePresets.list_presets()
+    |> Enum.map(&to_legacy/1)
   end
 
-  @doc "Returns user-saved presets from the database."
+  @doc "Returns built-in presets only."
+  @spec builtins() :: [preset()]
+  def builtins do
+    list_all() |> Enum.filter(& &1.builtin)
+  end
+
+  @doc "Returns user-saved presets only."
   @spec list_user() :: [preset()]
   def list_user do
-    ScenePreset
-    |> order_by(asc: :name)
-    |> Repo.all()
-    |> Enum.map(&to_preset/1)
+    list_all() |> Enum.reject(& &1.builtin)
   end
 
-  @doc "Looks up a preset by id (`builtin:…` or `user:…`)."
   @spec get(String.t()) :: preset() | nil
-  def get("builtin:" <> slug) do
-    Enum.find(builtins(), &(&1.id == "builtin:#{slug}"))
-  end
-
-  def get("user:" <> id) do
-    case Integer.parse(id) do
-      {db_id, ""} ->
-        case Repo.get(ScenePreset, db_id) do
-          nil -> nil
-          record -> to_preset(record)
-        end
-
-      _ ->
-        nil
+  def get(mode_id) do
+    case AppModePresets.get(PixelFun, mode_id) do
+      nil -> nil
+      preset -> to_legacy(preset)
     end
   end
 
-  def get(_), do: nil
-
-  @doc "Creates a user preset. Returns `{:ok, preset}` or `{:error, changeset}`."
-  @spec create(map()) :: {:ok, preset()} | {:error, Ecto.Changeset.t()}
+  @spec create(map()) :: {:ok, preset()} | {:error, Ecto.Changeset.t() | atom()}
   def create(attrs) do
-    attrs =
-      @default_scene
-      |> Map.merge(Map.new(attrs))
-      |> Map.put_new(:accent_color, random_accent_color())
-      |> Map.take([
-        :name,
-        :formula,
-        :color_interval,
-        :translate_scale,
-        :rotate_scale,
-        :zoom_scale,
-        :accent_color
-      ])
+    name = Map.fetch!(attrs, :name)
 
-    %ScenePreset{}
-    |> ScenePreset.changeset(attrs)
-    |> Repo.insert()
-    |> case do
-      {:ok, record} -> {:ok, to_preset(record)}
+    config = %{
+      program: Map.get(attrs, :formula) || Map.get(attrs, :program),
+      color_interval: Map.get(attrs, :color_interval, 5.0),
+      translate_scale: Map.get(attrs, :translate_scale, 0.0),
+      rotate_scale: Map.get(attrs, :rotate_scale, 0.0),
+      zoom_scale: Map.get(attrs, :zoom_scale, 1.0)
+    }
+
+    opts = [accent_color: Map.get(attrs, :accent_color, AppModePresets.random_accent_color())]
+
+    case AppModePresets.create(PixelFun, name, config, opts) do
+      {:ok, preset} -> {:ok, to_legacy(preset)}
+      {:error, :invalid_formula} -> {:error, invalid_formula_changeset(Map.get(attrs, :formula, ""))}
       error -> error
     end
   end
 
-  @doc "Updates a user preset. Built-ins cannot be updated."
   @spec update(String.t(), map()) :: {:ok, preset()} | {:error, Ecto.Changeset.t() | atom()}
-  def update("user:" <> id, attrs) do
-    case Integer.parse(id) do
-      {db_id, ""} ->
-        case Repo.get(ScenePreset, db_id) do
-          nil ->
-            {:error, :not_found}
+  def update(mode_id, attrs) do
+    preset = AppModePresets.get(PixelFun, mode_id)
+    base_config = normalize_config_keys((preset && preset.config) || %{})
 
-          record ->
-            record
-            |> ScenePreset.changeset(attrs)
-            |> Repo.update()
-            |> case do
-              {:ok, updated} -> {:ok, to_preset(updated)}
-              error -> error
-            end
-        end
+    config =
+      base_config
+      |> Map.merge(flat_attrs_to_config(attrs))
 
-      _ ->
-        {:error, :not_found}
+    update_attrs =
+      %{config: config}
+      |> maybe_put_name(attrs)
+
+    case AppModePresets.update(PixelFun, mode_id, update_attrs) do
+      {:ok, preset} -> {:ok, to_legacy(preset)}
+      error -> error
     end
   end
 
-  def update("builtin:" <> _, _attrs), do: {:error, :builtin}
-  def update(_, _attrs), do: {:error, :not_found}
-
-  @doc "Deletes a user preset by id. Built-ins cannot be deleted."
-  @spec delete(String.t()) :: :ok | {:error, :not_found | :builtin}
-  def delete("user:" <> id) do
-    case Integer.parse(id) do
-      {db_id, ""} ->
-        case Repo.get(ScenePreset, db_id) do
-          nil ->
-            {:error, :not_found}
-
-          record ->
-            case Repo.delete(record) do
-              {:ok, _} -> :ok
-              {:error, _} -> {:error, :not_found}
-            end
-        end
-
-      _ ->
-        {:error, :not_found}
+  @spec delete(String.t()) :: :ok | {:error, atom()}
+  def delete(mode_id) do
+    case AppModePresets.archive(PixelFun, mode_id) do
+      :ok -> :ok
+      {:error, :not_found} -> {:error, :not_found}
+      _ -> {:error, :failed}
     end
   end
 
-  def delete("builtin:" <> _), do: {:error, :builtin}
-  def delete(_), do: {:error, :not_found}
-
-  @doc "Returns `:ok` if the formula parses, otherwise `:error`."
   @spec validate_formula(String.t()) :: :ok | :error
   def validate_formula(formula) when is_binary(formula) do
     case Program.parse(formula) do
@@ -209,7 +97,6 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
     end
   end
 
-  @doc "Converts a preset to the app config fields it controls."
   @spec to_config(preset()) :: map()
   def to_config(%{} = preset) do
     %{
@@ -221,19 +108,17 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
     }
   end
 
-  @doc "Builds preset attrs from the live editor config."
   @spec attrs_from_config(map()) :: map()
   def attrs_from_config(config) do
     %{
       formula: Map.get(config, :program, ""),
-      color_interval: Map.get(config, :color_interval, @default_scene.color_interval),
-      translate_scale: Map.get(config, :translate_scale, @default_scene.translate_scale),
-      rotate_scale: Map.get(config, :rotate_scale, @default_scene.rotate_scale),
-      zoom_scale: Map.get(config, :zoom_scale, @default_scene.zoom_scale)
+      color_interval: Map.get(config, :color_interval, 5.0),
+      translate_scale: Map.get(config, :translate_scale, 0.0),
+      rotate_scale: Map.get(config, :rotate_scale, 0.0),
+      zoom_scale: Map.get(config, :zoom_scale, 1.0)
     }
   end
 
-  @doc "Returns true when config matches a preset's scene fields."
   @spec config_matches?(map(), map()) :: boolean()
   def config_matches?(config, preset_or_snapshot) do
     snapshot = normalize_snapshot(preset_or_snapshot)
@@ -246,48 +131,80 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
     )
   end
 
-  @doc "Returns a preset id for an exact scene match, or `\"custom\"`."
   @spec id_for_config(map()) :: String.t()
   def id_for_config(config) do
-    case Enum.find(list_all(), &config_matches?(config, &1)) do
-      nil -> "custom"
-      preset -> preset.id
+    case AppModePresets.id_for_config(PixelFun, config) do
+      "custom" ->
+        "custom"
+
+      id ->
+        case AppModePresets.get(PixelFun, id) do
+          nil -> id
+          preset -> to_legacy(preset).id
+        end
     end
   end
 
-  @doc "One-line tile summary for a preset."
   @spec summary(preset()) :: String.t()
   def summary(%{} = preset) do
-    sliders =
-      "drift #{format_num(preset.translate_scale)} · rot #{format_num(preset.rotate_scale)} · zoom #{format_num(preset.zoom_scale)} · palette #{format_num(preset.color_interval)}s"
-
-    formula =
-      preset.formula
-      |> String.trim()
-      |> then(fn f -> if String.length(f) > 28, do: String.slice(f, 0, 25) <> "...", else: f end)
-
-    "#{sliders} · #{formula}"
+    PixelFun.summary_for_preset(%{config: to_config(preset)})
   end
 
-  @doc "Random `#RRGGBB` accent color for new presets."
-  @spec random_accent_color() :: String.t()
-  def random_accent_color do
-    <<r, g, b>> = :crypto.strong_rand_bytes(3)
-    "#" <> Base.encode16(<<r, g, b>>, case: :upper)
-  end
+  def random_accent_color, do: AppModePresets.random_accent_color()
 
-  defp to_preset(%ScenePreset{} = record) do
+  defp to_legacy(%{} = preset) do
+    config = preset.config
+
     %{
-      id: "user:#{record.id}",
-      name: record.name,
-      formula: record.formula,
-      color_interval: record.color_interval,
-      translate_scale: record.translate_scale,
-      rotate_scale: record.rotate_scale,
-      zoom_scale: record.zoom_scale,
-      accent_color: record.accent_color,
-      builtin: false
+      id: legacy_id(preset),
+      name: preset.name,
+      formula: config[:program],
+      color_interval: config[:color_interval],
+      translate_scale: config[:translate_scale],
+      rotate_scale: config[:rotate_scale],
+      zoom_scale: config[:zoom_scale],
+      accent_color: preset.accent_color,
+      builtin: preset.builtin
     }
+  end
+
+  defp legacy_id(%{origin: :builtin, slug: slug}), do: "builtin:#{slug}"
+  defp legacy_id(%{slug: "user_" <> _ = slug}), do: "user:" <> String.replace_prefix(slug, "user_", "")
+  defp legacy_id(%{id: id}), do: id
+
+  defp maybe_put_name(attrs, source) do
+    case Map.get(source, :name) do
+      nil -> attrs
+      name -> Map.put(attrs, :name, name)
+    end
+  end
+
+  defp flat_attrs_to_config(attrs) do
+    %{}
+    |> maybe_config_put(:program, Map.get(attrs, :formula) || Map.get(attrs, :program))
+    |> maybe_config_put(:color_interval, Map.get(attrs, :color_interval))
+    |> maybe_config_put(:translate_scale, Map.get(attrs, :translate_scale))
+    |> maybe_config_put(:rotate_scale, Map.get(attrs, :rotate_scale))
+    |> maybe_config_put(:zoom_scale, Map.get(attrs, :zoom_scale))
+  end
+
+  defp maybe_config_put(config, _key, nil), do: config
+  defp maybe_config_put(config, key, value), do: Map.put(config, key, value)
+
+  defp normalize_config_keys(config) when is_map(config) do
+    Map.new(config, fn {k, v} -> {normalize_config_key(k), v} end)
+  end
+
+  defp normalize_config_key(k) when is_atom(k), do: k
+
+  defp normalize_config_key(k) when is_binary(k) do
+    case k do
+      "true" -> :true
+      "false" -> :false
+      other -> String.to_existing_atom(other)
+    end
+  rescue
+    ArgumentError -> String.to_atom(k)
   end
 
   defp normalize_snapshot(%{formula: formula} = preset) do
@@ -305,7 +222,9 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
   defp float_eq?(a, b) when is_number(a) and is_number(b), do: abs(a - b) < 0.001
   defp float_eq?(a, b), do: a == b
 
-  defp format_num(n) when is_float(n), do: :erlang.float_to_binary(n, decimals: 1)
-  defp format_num(n) when is_integer(n), do: Integer.to_string(n)
-  defp format_num(n), do: to_string(n)
+  defp invalid_formula_changeset(formula) do
+    %Octopus.Apps.PixelFun.ScenePreset{}
+    |> Ecto.Changeset.change(%{formula: formula})
+    |> Ecto.Changeset.add_error(:formula, "has invalid syntax")
+  end
 end

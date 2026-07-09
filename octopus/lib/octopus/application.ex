@@ -19,6 +19,11 @@ defmodule Octopus.Application do
         {Ecto.Migrator,
          repos: Application.fetch_env!(:octopus, :ecto_repos),
          skip: System.get_env("SKIP_MIGRATIONS") == "true"},
+        %{
+          id: Octopus.AppModePresets.Sync,
+          start: {Task, :start_link, [fn -> Octopus.AppModePresets.sync_all!() end]},
+          restart: :transient
+        },
         Octopus.Params,
         %{
           id: Octopus.Params.LoadPersistedConfig,

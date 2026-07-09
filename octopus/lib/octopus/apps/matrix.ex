@@ -1,6 +1,8 @@
 defmodule Octopus.Apps.Matrix do
   use Octopus.App, category: :animation
 
+  alias Octopus.AppModePresets
+
   defmodule Particle do
     defstruct [:x, :y, :z, :speed, :color, :age, :max_age, :tail]
   end
@@ -121,21 +123,33 @@ defmodule Octopus.Apps.Matrix do
   def name(), do: "Matrix"
 
   def list_modes do
+    AppModePresets.list_modes(__MODULE__)
+  end
+
+  def mode_config(mode_id) do
+    AppModePresets.config_for(__MODULE__, mode_id) ||
+      legacy_mode_config(AppModePresets.mode_slug(mode_id))
+  end
+
+  def builtin_presets do
     [
       %{
-        id: "matrix",
+        slug: "matrix",
         name: "matrix",
         accent_color: "#2ECC71",
-        summary: "Falling code rain",
-        builtin: true
+        config: legacy_mode_config("matrix")
       }
     ]
   end
 
-  def mode_config("matrix"), do: %{speed: 1.0, density: 3, max_particles: 200}
-  def mode_config(_), do: %{}
+  def legacy_mode_config("matrix"), do: %{speed: 1.0, density: 3, max_particles: 200}
+  def legacy_mode_config(_), do: %{}
 
-  def mode_tweakables("matrix") do
+  def mode_tweakables(mode_id) do
+    mode_tweakables_for(AppModePresets.mode_slug(mode_id))
+  end
+
+  def mode_tweakables_for("matrix") do
     [
       %{
         key: :speed,
@@ -167,7 +181,7 @@ defmodule Octopus.Apps.Matrix do
     ]
   end
 
-  def mode_tweakables(_), do: []
+  def mode_tweakables_for(_), do: []
 
   def compatible?() do
     installation = Octopus.App.get_installation_info()
