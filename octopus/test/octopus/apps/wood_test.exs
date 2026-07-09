@@ -180,6 +180,24 @@ defmodule Octopus.Apps.WoodTest do
     assert config[:speed] == 2.0
   end
 
+  test "mode_tweakables/1 exposes foyer controls including position and full color", _context do
+    with_installation(Octopus.Installation.Woodstock1, fn ->
+      keys =
+        apply(@wood, :mode_tweakables, ["experiment"])
+        |> Enum.map(& &1.key)
+
+      assert :mode in keys
+      assert :position in keys
+      assert :fullcolor in apply(@wood, :mode_tweakables, ["experiment"])
+             |> Enum.find(&(&1.key == :mode))
+             |> Map.fetch!(:options)
+             |> Enum.map(&elem(&1, 0))
+
+      position = apply(@wood, :mode_tweakables, ["experiment"]) |> Enum.find(&(&1.key == :position))
+      assert position.max == 31
+    end)
+  end
+
   test "build_canvas/1 lights bottom pixel when static at position 0", _context do
     with_installation(Octopus.Installation.RunningLights, fn ->
       canvas = wood_build_canvas(base_state())

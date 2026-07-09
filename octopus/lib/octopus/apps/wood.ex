@@ -108,10 +108,52 @@ defmodule Octopus.Apps.Wood do
   end
 
   def mode_tweakables_for("experiment") do
+    motion_modes = [:endless_up, :endless_down, :up_and_down]
+    max_pos = max(Octopus.Installation.panel_width(), Octopus.Installation.panel_height()) - 1
+
     [
-      %{key: :speed, label: "Speed (LEDs/s)", type: :slider, min: 0.0, max: 5.0, step: 0.1, default: 0.0},
-      %{key: :blob_size, label: "Blob size (LEDs)", type: :slider, min: 1, max: 12, step: 1, default: 1},
-      %{key: :blob_count, label: "Blob count", type: :slider, min: 1, max: 8, step: 1, default: 1},
+      %{
+        key: :mode,
+        label: "Mode",
+        type: :choice,
+        default: :endless_up,
+        options: [
+          {:endless_up, "Endless up"},
+          {:endless_down, "Endless down"},
+          {:up_and_down, "Up and down"},
+          {:fullcolor, "Full color"}
+        ]
+      },
+      %{
+        key: :speed,
+        label: "Speed (LEDs/s)",
+        type: :slider,
+        min: 0.0,
+        max: 5.0,
+        step: 0.1,
+        default: 0.0,
+        visible_when: {:mode, motion_modes}
+      },
+      %{
+        key: :blob_size,
+        label: "Blob size (LEDs)",
+        type: :slider,
+        min: 1,
+        max: 12,
+        step: 1,
+        default: 1,
+        visible_when: {:mode, motion_modes}
+      },
+      %{
+        key: :blob_count,
+        label: "Blob count",
+        type: :slider,
+        min: 1,
+        max: 8,
+        step: 1,
+        default: 1,
+        visible_when: {:mode, motion_modes}
+      },
       %{
         key: :blob_spacing,
         label: "Blob spacing (LEDs)",
@@ -119,7 +161,8 @@ defmodule Octopus.Apps.Wood do
         min: 0,
         max: 12,
         step: 1,
-        default: 1
+        default: 1,
+        visible_when: {:mode, motion_modes}
       },
       %{
         key: :trail_length,
@@ -128,7 +171,18 @@ defmodule Octopus.Apps.Wood do
         min: 0,
         max: 12,
         step: 1,
-        default: 0
+        default: 0,
+        visible_when: {:mode, motion_modes}
+      },
+      %{
+        key: :position,
+        label: "Position (from bottom)",
+        type: :slider,
+        min: 0,
+        max: max_pos,
+        step: 1,
+        default: 0,
+        visible_when: {:mode, motion_modes}
       },
       %{
         key: :color_channel,
@@ -138,18 +192,45 @@ defmodule Octopus.Apps.Wood do
         options: [{:white, "White"}, {:rgb, "RGB"}]
       },
       %{
+        key: :color,
+        label: "Color",
+        type: :color,
+        default: "#78c850",
+        visible_when: {:color_channel, [:rgb]}
+      },
+      %{
+        key: :rgb_mode,
+        label: "RGB mode",
+        type: :choice,
+        default: :static,
+        options: [{:static, "Fixed color"}, {:cycle, "Cycle hue"}],
+        visible_when: {:color_channel, [:rgb]}
+      },
+      %{
+        key: :hue_cycle_speed,
+        label: "Hue cycle (s)",
+        type: :slider,
+        min: 1.0,
+        max: 120.0,
+        step: 1.0,
+        unit: "s",
+        default: 30.0,
+        visible_when: {:rgb_mode, [:cycle]}
+      },
+      %{
         key: :panel_sync,
         label: "Strip relation",
         type: :choice,
         default: :sync,
-        options: [{:sync, "Sync"}, {:stagger, "Stagger"}, {:mirror, "Mirror"}]
+        options: [{:sync, "Sync"}, {:stagger, "Stagger"}, {:mirror, "Mirror"}],
+        visible_when: {:mode, motion_modes}
       },
       %{
         key: :panel_stagger,
         label: "Stagger offset (LEDs)",
         type: :slider,
         min: 0,
-        max: 31,
+        max: max_pos,
         step: 1,
         default: 16,
         visible_when: {:panel_sync, [:stagger]}

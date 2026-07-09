@@ -14,7 +14,8 @@ defmodule Octopus.Installation.Woodstock1 do
     location: :auto,
     auto_brightness: false,
     network_config: [
-      mode: :individual,
+      mode: :broadcast,
+      broadcast_ip: :auto,
       send_in_dev: true
     ],
     simulator_layouts: [
