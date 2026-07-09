@@ -28,7 +28,9 @@ defmodule Octopus.Apps.Wood do
       color: "#78c850",
       hue_cycle_speed: 30.0,
       cycle_phase: 0.0,
-      trail_length: 0
+      trail_length: 0,
+      panel_sync: :sync,
+      panel_stagger: 16
     ]
   end
 
@@ -59,6 +61,8 @@ defmodule Octopus.Apps.Wood do
     |> Map.update(:mode, :endless_up, &coerce_mode/1)
     |> Map.update(:color_channel, :white, &coerce_color_channel/1)
     |> Map.update(:rgb_mode, :static, &coerce_rgb_mode/1)
+    |> Map.update(:panel_sync, :sync, &coerce_panel_sync/1)
+    |> Map.update(:panel_stagger, 16, &trunc/1)
   end
 
   def builtin_presets do
@@ -68,6 +72,12 @@ defmodule Octopus.Apps.Wood do
         name: "Experiment",
         accent_color: "#4a7c59",
         config: legacy_mode_config("experiment")
+      },
+      %{
+        slug: "mirror_strips",
+        name: "Mirror strips",
+        accent_color: "#2d6a4f",
+        config: legacy_mode_config("mirror_strips")
       }
     ]
   end
@@ -80,8 +90,15 @@ defmodule Octopus.Apps.Wood do
       blob_count: 1,
       blob_spacing: 1,
       color_channel: :white,
-      trail_length: 0
+      trail_length: 0,
+      panel_sync: :sync,
+      panel_stagger: 16
     }
+  end
+
+  def legacy_mode_config("mirror_strips") do
+    legacy_mode_config("experiment")
+    |> Map.merge(%{panel_sync: :mirror})
   end
 
   def legacy_mode_config(_), do: %{}
@@ -119,9 +136,28 @@ defmodule Octopus.Apps.Wood do
         type: :choice,
         default: :white,
         options: [{:white, "White"}, {:rgb, "RGB"}]
+      },
+      %{
+        key: :panel_sync,
+        label: "Strip relation",
+        type: :choice,
+        default: :sync,
+        options: [{:sync, "Sync"}, {:stagger, "Stagger"}, {:mirror, "Mirror"}]
+      },
+      %{
+        key: :panel_stagger,
+        label: "Stagger offset (LEDs)",
+        type: :slider,
+        min: 0,
+        max: 31,
+        step: 1,
+        default: 16,
+        visible_when: {:panel_sync, [:stagger]}
       }
     ]
   end
+
+  def mode_tweakables_for("mirror_strips"), do: mode_tweakables_for("experiment")
 
   def mode_tweakables_for(_), do: []
 
@@ -130,12 +166,21 @@ defmodule Octopus.Apps.Wood do
     speed = Map.get(config, :speed, 0.0)
     blob_size = Map.get(config, :blob_size, 1)
     color_channel = Map.get(config, :color_channel, :white)
+    panel_sync = Map.get(config, :panel_sync, :sync)
+
+    strip_relation =
+      case panel_sync do
+        :mirror -> "mirror strips"
+        :stagger -> "stagger #{Map.get(config, :panel_stagger, 16)}"
+        _ -> "sync strips"
+      end
 
     [
       to_string(mode),
       "speed #{speed}",
       "blob #{blob_size}",
-      to_string(color_channel)
+      to_string(color_channel),
+      strip_relation
     ]
   end
 
@@ -192,7 +237,21 @@ defmodule Octopus.Apps.Wood do
            default: 0,
            options: [{"Fixed color", :static}, {"Cycle hue", :cycle}]
          }},
-      hue_cycle_speed: {"Hue cycle (s)", :float, %{min: 1.0, max: 120.0, default: 30.0, step: 1.0}}
+      hue_cycle_speed: {"Hue cycle (s)", :float, %{min: 1.0, max: 120.0, default: 30.0, step: 1.0}},
+      panel_sync:
+        {"Strip relation", :select,
+         %{
+           default: 0,
+           options: [{"Sync", :sync}, {"Stagger", :stagger}, {"Mirror", :mirror}]
+         }},
+      panel_stagger:
+        {"Stagger offset (LEDs)", :int,
+         %{
+           min: 0,
+           max: 31,
+           default: 16,
+           visible_when: {:panel_sync, [:stagger]}
+         }}
     ]
   end
 
@@ -217,7 +276,9 @@ defmodule Octopus.Apps.Wood do
       color: state.color,
       hue_cycle_speed: state.hue_cycle_speed,
       trail_length: state.trail_length,
-      position: trunc(state.position)
+      position: trunc(state.position),
+      panel_sync: state.panel_sync,
+      panel_stagger: state.panel_stagger
     }
   end
 
@@ -346,17 +407,61 @@ defmodule Octopus.Apps.Wood do
     strip_len = last + 1
     mode = if state.color_channel == :white, do: :grayscale, else: :rgb
     canvas = Canvas.new(info.width, info.height, mode)
-    radius = blob_radius(state.blob_size)
     rgb = if mode == :rgb, do: current_rgb(state), else: {0, 0, 0}
     wrap? = endless?(state)
-    base = if wrap?, do: state.position, else: wrap_coord(state.position, strip_len)
 
-    blob_centers_from_bottom(base, state, last)
-    |> Enum.reduce(canvas, fn center_bottom, canvas ->
-      canvas
-      |> draw_trail(info, center_bottom, state, radius, last, strip_len, mode, rgb, wrap?)
-      |> draw_blob(info, center_bottom, state.blob_size, last, strip_len, mode, rgb, 1.0, wrap?)
-    end)
+    for panel_id <- 0..(info.num_panels - 1), reduce: canvas do
+      canvas ->
+        {panel_position, panel_direction} = panel_motion(state, panel_id, last, strip_len, wrap?)
+        base = if wrap?, do: panel_position, else: wrap_coord(panel_position, strip_len)
+
+        blob_centers_from_bottom(base, state, last)
+        |> Enum.reduce(canvas, fn center_bottom, canvas ->
+          canvas
+          |> draw_trail(
+            info,
+            panel_id,
+            center_bottom,
+            state,
+            panel_direction,
+            last,
+            strip_len,
+            mode,
+            rgb,
+            wrap?
+          )
+          |> draw_blob(
+            info,
+            panel_id,
+            center_bottom,
+            state.blob_size,
+            last,
+            strip_len,
+            mode,
+            rgb,
+            1.0,
+            wrap?
+          )
+        end)
+    end
+  end
+
+  @doc false
+  def panel_motion(%State{} = state, panel_id, last, strip_len, wrap?) do
+    base = state.position
+
+    case state.panel_sync do
+      :stagger ->
+        offset = panel_id * state.panel_stagger
+        position = if wrap?, do: wrap_coord(base + offset * 1.0, strip_len), else: base + offset * 1.0
+        {position, state.direction}
+
+      :mirror when rem(panel_id, 2) == 1 ->
+        {last - base, -state.direction}
+
+      _ ->
+        {base, state.direction}
+    end
   end
 
   @doc false
@@ -433,7 +538,9 @@ defmodule Octopus.Apps.Wood do
         rgb_mode: Map.get(config, :rgb_mode, state.rgb_mode),
         color: Map.get(config, :color, state.color),
         hue_cycle_speed: Map.get(config, :hue_cycle_speed, state.hue_cycle_speed),
-        trail_length: Map.get(config, :trail_length, state.trail_length)
+        trail_length: Map.get(config, :trail_length, state.trail_length),
+        panel_sync: Map.get(config, :panel_sync, state.panel_sync),
+        panel_stagger: Map.get(config, :panel_stagger, state.panel_stagger)
     }
   end
 
@@ -504,16 +611,40 @@ defmodule Octopus.Apps.Wood do
   defp effective_blob_count(%State{mode: :fullcolor}), do: 1
   defp effective_blob_count(%State{blob_count: count}), do: count
 
-  defp draw_trail(canvas, info, center_bottom, %State{} = state, _radius, last, strip_len, mode, rgb, wrap?) do
-    if state.trail_length > 0 and state.speed > 0 and state.direction != 0 do
+  defp draw_trail(
+         canvas,
+         info,
+         panel_id,
+         center_bottom,
+         %State{} = state,
+         direction,
+         last,
+         strip_len,
+         mode,
+         rgb,
+         wrap?
+       ) do
+    if state.trail_length > 0 and state.speed > 0 and direction != 0 do
       for t <- 1..state.trail_length, reduce: canvas do
         canvas ->
-          raw_center = center_bottom - state.direction * t
+          raw_center = center_bottom - direction * t
           trail_center = if wrap?, do: wrap_coord(raw_center, strip_len), else: raw_center
           intensity = trail_falloff(t, state.trail_length)
 
           if intensity > 0 and (wrap? or (trail_center >= 0 and trail_center <= last)) do
-            draw_blob(canvas, info, trail_center, state.blob_size, last, strip_len, mode, rgb, intensity, wrap?)
+            draw_blob(
+              canvas,
+              info,
+              panel_id,
+              trail_center,
+              state.blob_size,
+              last,
+              strip_len,
+              mode,
+              rgb,
+              intensity,
+              wrap?
+            )
           else
             canvas
           end
@@ -523,10 +654,8 @@ defmodule Octopus.Apps.Wood do
     end
   end
 
-  defp draw_blob(canvas, info, center_bottom, blob_size, last, strip_len, mode, rgb, scale, wrap?) do
-    for panel_id <- 0..(info.num_panels - 1),
-        bottom_coord <- blob_bottom_coords(center_bottom, blob_size, last, wrap?, strip_len),
-        reduce: canvas do
+  defp draw_blob(canvas, info, panel_id, center_bottom, blob_size, last, strip_len, mode, rgb, scale, wrap?) do
+    for bottom_coord <- blob_bottom_coords(center_bottom, blob_size, last, wrap?, strip_len), reduce: canvas do
       canvas ->
         intensity =
           if blob_size == 1 do
@@ -638,8 +767,6 @@ defmodule Octopus.Apps.Wood do
     end
   end
 
-  defp blob_radius(size), do: (size - 1) / 2
-
   defp falloff(distance, _radius, 1) do
     if distance <= 0.5, do: 1.0, else: 0.0
   end
@@ -674,4 +801,10 @@ defmodule Octopus.Apps.Wood do
   defp coerce_rgb_mode("static"), do: :static
   defp coerce_rgb_mode("cycle"), do: :cycle
   defp coerce_rgb_mode(_), do: :static
+
+  defp coerce_panel_sync(sync) when is_atom(sync), do: sync
+  defp coerce_panel_sync("sync"), do: :sync
+  defp coerce_panel_sync("stagger"), do: :stagger
+  defp coerce_panel_sync("mirror"), do: :mirror
+  defp coerce_panel_sync(_), do: :sync
 end

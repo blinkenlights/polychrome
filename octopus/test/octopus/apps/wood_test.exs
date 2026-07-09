@@ -65,7 +65,9 @@ defmodule Octopus.Apps.WoodTest do
       color: "#78c850",
       hue_cycle_speed: 30.0,
       cycle_phase: 0.0,
-      trail_length: 0
+      trail_length: 0,
+      panel_sync: :sync,
+      panel_stagger: 16
     }
 
     struct!(State, Map.merge(defaults, overrides))
@@ -133,14 +135,49 @@ defmodule Octopus.Apps.WoodTest do
     end)
   end
 
-  test "build_canvas/1 lights bottom pixel on all Woodstock1 panels", _context do
+  test "build_canvas/1 lights bottom pixel on all Woodstock1 panels in sync", _context do
     with_installation(Octopus.Installation.Woodstock1, fn ->
-      canvas = wood_build_canvas(base_state())
+      canvas = wood_build_canvas(base_state(%{panel_sync: :sync}))
 
       assert canvas.mode == :grayscale
       assert {canvas.width, canvas.height} == {34, 32}
       assert Enum.sort(lit_grayscale_pixels(canvas)) == [{0, 31}, {33, 31}]
     end)
+  end
+
+  test "build_canvas/1 mirrors Woodstock1 strips at position 0", _context do
+    with_installation(Octopus.Installation.Woodstock1, fn ->
+      canvas = wood_build_canvas(base_state(%{panel_sync: :mirror, position: 0.0, blob_size: 1}))
+
+      assert Enum.sort(lit_grayscale_pixels(canvas)) == [{0, 31}, {33, 0}]
+    end)
+  end
+
+  test "build_canvas/1 staggers Woodstock1 strips by half length", _context do
+    with_installation(Octopus.Installation.Woodstock1, fn ->
+      canvas =
+        wood_build_canvas(
+          base_state(%{panel_sync: :stagger, panel_stagger: 16, position: 0.0, blob_size: 1})
+        )
+
+      assert Enum.sort(lit_grayscale_pixels(canvas)) == [{0, 31}, {33, 15}]
+    end)
+  end
+
+  test "panel_motion/5 mirrors odd panels", _context do
+    with_installation(Octopus.Installation.Woodstock1, fn ->
+      state = base_state(%{panel_sync: :mirror, position: 4.0, direction: 1.0})
+
+      assert wood_panel_motion(state, 0, 31, 32, false) == {4.0, 1.0}
+      assert wood_panel_motion(state, 1, 31, 32, false) == {27.0, -1.0}
+    end)
+  end
+
+  test "mode_config/1 for mirror strips preset", _context do
+    config = apply(@wood, :mode_config, ["wood:mirror_strips"])
+
+    assert config[:panel_sync] == :mirror
+    assert config[:speed] == 2.0
   end
 
   test "build_canvas/1 lights bottom pixel when static at position 0", _context do
@@ -277,6 +314,9 @@ defmodule Octopus.Apps.WoodTest do
     assert pos < 23.0
     assert direction == -1.0
   end
+
+  defp wood_panel_motion(state, panel_id, last, strip_len, wrap?),
+    do: apply(@wood, :panel_motion, [state, panel_id, last, strip_len, wrap?])
 
   defp wood_compatible?, do: apply(@wood, :compatible?, [])
   defp wood_build_canvas(state), do: apply(@wood, :build_canvas, [state])

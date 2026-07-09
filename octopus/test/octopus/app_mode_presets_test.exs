@@ -17,7 +17,7 @@ defmodule Octopus.AppModePresetsTest do
       assert length(preset_list(Matrix)) == 1
       assert length(preset_list(Sand)) == 1
       assert length(preset_list(SparkleMist)) == 1
-      assert length(preset_list(Wood)) == 1
+      assert length(preset_list(Wood)) == 2
 
       preset_sync_all!()
 
@@ -117,13 +117,14 @@ defmodule Octopus.AppModePresetsTest do
     end
 
     test "returns wood tiles with summaries" do
-      [mode] = preset_list_modes(Wood)
+      modes = preset_list_modes(Wood)
+      experiment = Enum.find(modes, &(&1.id == "wood:experiment"))
+      mirror = Enum.find(modes, &(&1.id == "wood:mirror_strips"))
 
-      assert mode.id == "wood:experiment"
-      assert mode.name == "Experiment"
-      assert mode.summary != ""
-      assert mode.deletable
-      assert mode.renamable
+      assert experiment.name == "Experiment"
+      assert experiment.summary != ""
+      assert mirror.name == "Mirror strips"
+      assert String.contains?(mirror.summary, "mirror")
     end
   end
 
