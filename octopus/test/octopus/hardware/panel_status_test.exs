@@ -85,6 +85,30 @@ defmodule Octopus.Hardware.PanelStatusTest do
                  panel_slots: panel_slots
                )
     end
+
+    test "matches firmware MAC case and hostname without .local suffix" do
+      firmware_stats = %{
+        "CC:DB:A7:52:F7:FB" =>
+          meta(
+            %FirmwareInfo{
+              hostname: "blinkenleds-9",
+              mac: "CC:DB:A7:52:F7:FB",
+              panel_index: 9
+            },
+            @now - 5
+          )
+      }
+
+      panel_slots = [
+        %PanelSlot{controller_id: :polychrome_panel_9, wiring_id: :serpentine_vertical_bottom_left}
+      ]
+
+      assert [%{panel: 1, status: :online, controller_id: :polychrome_panel_9}] =
+               PanelStatus.all(@now,
+                 firmware_stats: firmware_stats,
+                 panel_slots: panel_slots
+               )
+    end
   end
 
   describe "enabled?/0" do

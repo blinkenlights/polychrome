@@ -230,10 +230,6 @@ defmodule Octopus.Broadcaster do
   defp handle_firmware_packet(%FirmwareInfo{} = firmware_info, from_ip, %State{} = state) do
     %FirmwareConfig{config_phash: expected_phash} = state.config
 
-    Logger.info(
-      "FirmwareInfo from #{firmware_info.hostname} (mac=#{firmware_info.mac}) via #{print_ip(from_ip)}"
-    )
-
     state = update_firmware_stats(firmware_info, from_ip, state)
     PanelStatusTracker.firmware_info_received(firmware_info, from_ip)
 

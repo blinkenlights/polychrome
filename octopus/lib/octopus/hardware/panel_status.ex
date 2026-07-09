@@ -104,16 +104,29 @@ defmodule Octopus.Hardware.PanelStatus do
   def status_for_age_seconds(_age), do: :offline
 
   defp find_firmware_meta(firmware_stats, %Controller{} = controller) do
-    case Map.get(firmware_stats, controller.mac) do
-      %FirmwareInfoMeta{} = meta ->
-        meta
+    firmware_stats
+    |> Map.values()
+    |> Enum.find(fn %FirmwareInfoMeta{firmware_info: info} ->
+      macs_match?(info.mac, controller.mac) or
+        hostnames_match?(info.hostname, controller.hostname)
+    end)
+  end
 
-      nil ->
-        firmware_stats
-        |> Map.values()
-        |> Enum.find(fn %FirmwareInfoMeta{firmware_info: info} ->
-          info.hostname == controller.hostname
-        end)
-    end
+  defp macs_match?(left, right) when is_binary(left) and is_binary(right) do
+    String.downcase(left) == String.downcase(right)
+  end
+
+  defp macs_match?(_, _), do: false
+
+  defp hostnames_match?(left, right) when is_binary(left) and is_binary(right) do
+    normalize_hostname(left) == normalize_hostname(right)
+  end
+
+  defp hostnames_match?(_, _), do: false
+
+  defp normalize_hostname(hostname) do
+    hostname
+    |> String.downcase()
+    |> String.trim_trailing(".local")
   end
 end
