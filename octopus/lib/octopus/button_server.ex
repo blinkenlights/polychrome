@@ -1,7 +1,6 @@
 defmodule Octopus.ButtonServer do
   use GenServer
 
-  alias Octopus.Events.Router
   alias Octopus.InputAdapter
   alias Octopus.AppManager
   alias Octopus.Events.Event.Input
@@ -15,7 +14,6 @@ defmodule Octopus.ButtonServer do
   end
 
   def init(:ok) do
-    Router.subscribe()
     AppManager.subscribe()
     AppSupervisor.subscribe()
 
