@@ -17,25 +17,24 @@ defmodule OctopusWeb.Router do
   scope "/", OctopusWeb do
     pipe_through :browser
 
-    live_session :default, on_mount: OctopusWeb.PresenceLive do
+    live_session :default do
       live "/sim", PixelsLive
       live "/app/:id", AppLive
       live "/", ManagerLive
       live "/playlists", PlaylistsLive
       live "/playlist/:id", PlaylistLive
-      live "/presence", PresenceLive
       live "/firmware-info", FirmwareInfoLive
       live "/proximity", ProximityLive
       live "/radar", RadarLive
       live "/radar/debug", RadarDebugLive
     end
 
-    live_session :sim3d, on_mount: OctopusWeb.PresenceLive,
+    live_session :sim3d,
                  root_layout: {OctopusWeb.Layouts, :root_sim3d} do
       live "/sim3d", Sim3dLive
     end
 
-    live_session :sim3daframe, on_mount: OctopusWeb.PresenceLive,
+    live_session :sim3daframe,
                  root_layout: {OctopusWeb.Layouts, :root_aframe} do
       live "/sim3daframe", Sim3dAframeLive
     end

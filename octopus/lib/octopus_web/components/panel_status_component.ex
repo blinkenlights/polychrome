@@ -8,6 +8,27 @@ defmodule OctopusWeb.PanelStatusComponent do
   attr :panel_statuses, :list, required: true
   attr :enabled, :boolean, default: false
 
+  def panel_status_boxes(assigns) do
+    ~H"""
+    <div :if={@enabled} class="flex flex-wrap gap-1.5 items-center">
+      <div
+        :for={entry <- @panel_statuses}
+        class={[
+          "min-w-[1.75rem] h-7 px-1.5 flex items-center justify-center rounded",
+          "text-xs font-mono font-bold text-white shadow-sm",
+          status_box_class(entry.status)
+        ]}
+        title={status_title(entry)}
+      >
+        {entry.panel}
+      </div>
+    </div>
+    """
+  end
+
+  attr :panel_statuses, :list, required: true
+  attr :enabled, :boolean, default: false
+
   def panel_status_bar(assigns) do
     ~H"""
     <div :if={@enabled} class="flex flex-wrap gap-2 items-center">
@@ -55,6 +76,11 @@ defmodule OctopusWeb.PanelStatusComponent do
   defp status_color_class(:stale), do: "bg-yellow-500"
   defp status_color_class(:offline), do: "bg-red-500"
   defp status_color_class(_), do: "bg-red-500"
+
+  defp status_box_class(:online), do: "bg-green-600"
+  defp status_box_class(:stale), do: "bg-yellow-500 text-black"
+  defp status_box_class(:offline), do: "bg-red-600"
+  defp status_box_class(_), do: "bg-red-600"
 
   defp status_title(%{status: status, last_seen: last_seen}) when is_integer(last_seen) do
     "Panel #{status} (last seen #{last_seen}s epoch)"

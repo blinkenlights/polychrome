@@ -6,7 +6,7 @@ defmodule Octopus.Broadcaster do
   alias Octopus.Protobuf
   alias Octopus.Protobuf.{FirmwareConfig, RemoteLog, FirmwareInfo, FirmwarePacket, ProximityEvent}
   alias Octopus.Hardware
-  alias Octopus.Hardware.{InstallationValidator, PanelStatusTracker, Untangle}
+  alias Octopus.Hardware.{InstallationValidator, PanelSlot, PanelStatusTracker}
   alias Octopus.Installation
 
   @default_config %FirmwareConfig{
@@ -25,7 +25,8 @@ defmodule Octopus.Broadcaster do
       :pixel_count,
       :remote_port,
       :should_send_udp,
-      firmware_stats: %{}
+      firmware_stats: %{},
+      firmware_panel_index_map: %{}
     ]
   end
 
@@ -98,7 +99,8 @@ defmodule Octopus.Broadcaster do
       network_mode: network_mode,
       pixel_count: pixel_count,
       remote_port: remote_port,
-      should_send_udp: should_send_udp
+      should_send_udp: should_send_udp,
+      firmware_panel_index_map: build_firmware_panel_index_map()
     }
 
     state = send_config(@default_config, state)
@@ -153,6 +155,10 @@ defmodule Octopus.Broadcaster do
       end
 
     {:noreply, state}
+  rescue
+    e in UndefinedFunctionError ->
+      Logger.debug("Ignoring firmware UDP packet during reload: #{Exception.message(e)}")
+      {:noreply, state}
   end
 
   def handle_cast({:send_binary, frame}, %State{} = state) do
@@ -247,20 +253,19 @@ defmodule Octopus.Broadcaster do
 
   defp handle_firmware_packet(%ProximityEvent{} = protobuf_event, _from_ip, %State{} = state) do
     logical_panel =
-      case Untangle.logical_panel_number(Installation, protobuf_event.panel_index) do
-        nil ->
-          if Installation.panels() == [] do
-            protobuf_event.panel_index
-          else
-            Logger.warning(
-              "Ignoring proximity event from unknown firmware panel_index #{protobuf_event.panel_index}"
-            )
-
-            nil
-          end
-
-        logical ->
+      case Map.get(state.firmware_panel_index_map, protobuf_event.panel_index) do
+        logical when is_integer(logical) ->
           logical
+
+        nil when map_size(state.firmware_panel_index_map) == 0 ->
+          protobuf_event.panel_index
+
+        nil ->
+          Logger.warning(
+            "Ignoring proximity event from unknown firmware panel_index #{protobuf_event.panel_index}"
+          )
+
+          nil
       end
 
     if logical_panel do
@@ -359,6 +364,15 @@ defmodule Octopus.Broadcaster do
         Logger.warning("Multiple broadcast IPs found. Using the first one: #{inspect(ip)}")
         ip
     end
+  end
+
+  defp build_firmware_panel_index_map do
+    Installation.panel_slots()
+    |> Enum.with_index(1)
+    |> Map.new(fn {%PanelSlot{controller_id: controller_id}, logical_panel} ->
+      controller = Hardware.fetch!(controller_id)
+      {controller.firmware_panel_index, logical_panel}
+    end)
   end
 
   defp validate_installation! do

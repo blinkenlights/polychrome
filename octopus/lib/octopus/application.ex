@@ -56,7 +56,6 @@ defmodule Octopus.Application do
 
         # WebApp
         {Finch, name: Octopus.Finch},
-        Octopus.Presence,
         OctopusWeb.Endpoint,
 
         # OSC

@@ -2,8 +2,10 @@ defmodule OctopusWeb.PixelsLive do
   use OctopusWeb, :live_view
 
   import Phoenix.LiveView, only: [push_event: 3, connected?: 1]
+  import OctopusWeb.PanelStatusComponent
 
   alias Octopus.{Events, Mixer}
+  alias Octopus.Hardware.PanelStatus
   alias Octopus.Protobuf.{FirmwareConfig, RGBFrame}
   alias Octopus.Events.Event.Input, as: InputEvent
   alias Octopus.Installation
@@ -94,10 +96,12 @@ defmodule OctopusWeb.PixelsLive do
         |> push_config(@default_config)
         |> push_frame(frame)
         |> push_pixel_offset(0)
+        |> subscribe_panel_status()
       else
         socket
       end
 
+    panel_status_enabled = PanelStatus.enabled?()
     view_options = Enum.map(views, fn {k, v} -> [key: v.name, value: k] end)
     max_windows = Installation.num_panels()
     num_buttons = Installation.num_buttons()
@@ -117,7 +121,9 @@ defmodule OctopusWeb.PixelsLive do
        window: 1,
        num_buttons: num_buttons,
        key_map: get_key_map(),
-       pressed_buttons: MapSet.new()
+       pressed_buttons: MapSet.new(),
+       panel_status_enabled: panel_status_enabled,
+       panel_statuses: initial_panel_statuses(panel_status_enabled)
      )}
   end
 
@@ -132,6 +138,10 @@ defmodule OctopusWeb.PixelsLive do
       phx-window-keydown="keydown"
       phx-window-keyup="keyup"
     >
+      <div class="absolute top-2 left-2 z-10">
+        <.panel_status_boxes enabled={@panel_status_enabled} panel_statuses={@panel_statuses} />
+      </div>
+
       <div class="absolute top-2 left-1/2 -translate-x-1/2 flex flex-col gap-2 z-10">
         <form id="view-form" phx-change="view-changed">
           <.input type="select" name="view" options={@view_options} value={@view} />
@@ -431,6 +441,19 @@ defmodule OctopusWeb.PixelsLive do
     {:noreply, socket}
   end
 
+  def handle_info({:panel_status, panel, status}, %{assigns: %{panel_status_enabled: true}} = socket) do
+    panel_statuses =
+      Enum.map(socket.assigns.panel_statuses, fn entry ->
+        if entry.panel == panel, do: %{entry | status: status}, else: entry
+      end)
+
+    {:noreply, assign(socket, panel_statuses: panel_statuses)}
+  end
+
+  def handle_info({:panel_status, _panel, _status}, socket) do
+    {:noreply, socket}
+  end
+
   def handle_info({:button_release, button_num}, socket) do
     socket =
       socket
@@ -469,4 +492,15 @@ defmodule OctopusWeb.PixelsLive do
   defp push_pixel_offset(socket, offset) do
     push_event(socket, "pixel_offset:#{@id_prefix}-#{socket.id}", %{offset: offset})
   end
+
+  defp subscribe_panel_status(socket) do
+    if PanelStatus.enabled?() do
+      PanelStatus.subscribe()
+    end
+
+    socket
+  end
+
+  defp initial_panel_statuses(true), do: PanelStatus.all()
+  defp initial_panel_statuses(false), do: []
 end
