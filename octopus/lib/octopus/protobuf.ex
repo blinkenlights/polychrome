@@ -117,7 +117,13 @@ defmodule Octopus.Protobuf do
   end
 
   def decode_firmware_packet(protobuf) when is_binary(protobuf) do
-    {:ok, FirmwarePacket.decode(protobuf)}
+    case FirmwarePacket.decode(protobuf) do
+      %FirmwarePacket{content: content} = packet when not is_nil(content) ->
+        {:ok, packet}
+
+      %FirmwarePacket{} ->
+        {:error, :missing_content}
+    end
   rescue
     error ->
       {:error, error}

@@ -6,7 +6,7 @@ defmodule Octopus.Broadcaster do
   alias Octopus.Protobuf
   alias Octopus.Protobuf.{FirmwareConfig, RemoteLog, FirmwareInfo, FirmwarePacket, ProximityEvent}
   alias Octopus.Hardware
-  alias Octopus.Hardware.{InstallationValidator, Untangle}
+  alias Octopus.Hardware.{InstallationValidator, PanelStatusTracker, Untangle}
   alias Octopus.Installation
 
   @default_config %FirmwareConfig{
@@ -53,6 +53,28 @@ defmodule Octopus.Broadcaster do
     GenServer.call(__MODULE__, :firmware_stats)
   end
 
+  @doc """
+  Returns whether Octopus is sending UDP frames to firmware controllers.
+
+  Mirrors the gate used at startup: in `:dev`, sending requires
+  `send_in_dev: true` in the installation network config.
+  """
+  @spec sending_enabled?() :: boolean()
+  def sending_enabled? do
+    sending_enabled?(Installation.network_config())
+  end
+
+  @spec sending_enabled?(keyword()) :: boolean()
+  def sending_enabled?(network_config) when is_list(network_config) do
+    current_env = Application.get_env(:octopus, :env, :prod)
+    send_in_dev = Keyword.get(network_config, :send_in_dev, false)
+
+    case current_env do
+      :dev -> send_in_dev
+      _ -> true
+    end
+  end
+
   def init(:ok) do
     validate_installation!()
 
@@ -63,11 +85,11 @@ defmodule Octopus.Broadcaster do
     {targets, network_mode, should_send_udp} = determine_targets(network_config)
     pixel_count = Installation.panel_width() * Installation.panel_height()
 
+    {:ok, udp} = :gen_udp.open(local_port, [:binary, active: true, broadcast: true, reuseaddr: true])
+
     Logger.info(
       "Broadcasting to #{inspect(targets)}. Port #{remote_port}. Send UDP: #{should_send_udp}"
     )
-
-    {:ok, udp} = :gen_udp.open(local_port, [:binary, active: true, broadcast: true])
 
     state = %State{
       udp: udp,
@@ -97,15 +119,35 @@ defmodule Octopus.Broadcaster do
     {:noreply, state}
   end
 
-  def handle_info({:udp, _socket, from_ip, _port, protobuf}, %State{} = state) do
+  def handle_info({:udp, _socket, {from_ip, from_port}, protobuf}, %State{} = state) do
+    handle_udp_packet(from_ip, from_port, protobuf, state)
+  end
+
+  def handle_info({:udp, _socket, from_ip, from_port, protobuf}, %State{} = state) do
+    handle_udp_packet(from_ip, from_port, protobuf, state)
+  end
+
+  def handle_info({:udp, _socket, from_ip, from_port, _anc_data, protobuf}, %State{} = state) do
+    handle_udp_packet(from_ip, from_port, protobuf, state)
+  end
+
+  defp handle_udp_packet(from_ip, from_port, protobuf, %State{} = state) do
     state =
       case Protobuf.decode_firmware_packet(protobuf) do
         {:ok, %FirmwarePacket{content: {_, content}}} ->
           handle_firmware_packet(content, from_ip, state)
 
+        {:error, :missing_content} ->
+          Logger.debug(
+            "#{print_ip(from_ip)}:#{from_port}: Ignoring undecodable firmware packet (#{byte_size(protobuf)} bytes)"
+          )
+
+          state
+
         {:error, error} ->
-          "#{print_ip(from_ip)}: Could not decode firmware packet: #{inspect(error)}"
-          |> Logger.warning()
+          Logger.debug(
+            "#{print_ip(from_ip)}:#{from_port}: Could not decode firmware packet: #{inspect(error)}"
+          )
 
           state
       end
@@ -141,6 +183,7 @@ defmodule Octopus.Broadcaster do
   end
 
   defp print_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"
+  defp print_ip(ip), do: inspect(ip)
 
   defp send_config(%FirmwareConfig{} = config, %State{} = state) do
     phash =
@@ -187,7 +230,12 @@ defmodule Octopus.Broadcaster do
   defp handle_firmware_packet(%FirmwareInfo{} = firmware_info, from_ip, %State{} = state) do
     %FirmwareConfig{config_phash: expected_phash} = state.config
 
+    Logger.info(
+      "FirmwareInfo from #{firmware_info.hostname} (mac=#{firmware_info.mac}) via #{print_ip(from_ip)}"
+    )
+
     state = update_firmware_stats(firmware_info, from_ip, state)
+    PanelStatusTracker.firmware_info_received(firmware_info, from_ip)
 
     case firmware_info do
       %FirmwareInfo{config_phash: ^expected_phash} ->
@@ -244,16 +292,7 @@ defmodule Octopus.Broadcaster do
   end
 
   defp determine_targets(network_config) do
-    # Use Application.get_env to determine environment, defaulting to :prod
-    current_env = Application.get_env(:octopus, :env, :prod)
-    send_in_dev = Keyword.get(network_config, :send_in_dev, false)
-
-    should_send_udp =
-      case current_env do
-        :dev -> send_in_dev
-        _ -> true
-      end
-
+    should_send_udp = sending_enabled?(network_config)
     network_mode = Keyword.get(network_config, :mode, :broadcast)
 
     targets =

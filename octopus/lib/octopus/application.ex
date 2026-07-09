@@ -34,6 +34,7 @@ defmodule Octopus.Application do
 
         # Apps
         Octopus.Broadcaster,
+        Octopus.Hardware.PanelStatusTracker,
         {Registry, keys: :unique, name: Octopus.AppRegistry},
         {Registry, keys: :unique, name: Octopus.Animator},
         Octopus.AppSupervisor,
