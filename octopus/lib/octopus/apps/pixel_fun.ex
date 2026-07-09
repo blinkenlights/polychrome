@@ -97,10 +97,7 @@ defmodule Octopus.Apps.PixelFun do
   def name(), do: "Pixel Fun"
 
   def compatible?() do
-    info = Octopus.App.get_installation_info()
-
-    (info.panel_width == 8 and info.panel_height == 8) or
-      info.panel_width == 1 or info.panel_height == 1
+    Octopus.App.get_installation_info().panel_count >= 1
   end
 
   def config_schema() do

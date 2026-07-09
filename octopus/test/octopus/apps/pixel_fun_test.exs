@@ -67,6 +67,12 @@ defmodule Octopus.Apps.PixelFunTest do
     end)
   end
 
+  test "compatible?/0 for Woodstock 2x32 panels", _context do
+    with_installation(Octopus.Installation.Woodstock, fn ->
+      assert pixel_fun_compatible?()
+    end)
+  end
+
   test "build_canvas/1 fills all vertical strip pixels on Running Lights", _context do
     with_installation(Octopus.Installation.RunningLights, fn ->
       {:ok, program} = Program.parse("1")
@@ -91,6 +97,34 @@ defmodule Octopus.Apps.PixelFunTest do
 
       for y <- 0..23 do
         assert Canvas.get_pixel(canvas, {0, y}) != {0, 0, 0}
+      end
+    end)
+  end
+
+  test "build_canvas/1 fills all Woodstock panel pixels", _context do
+    with_installation(Octopus.Installation.Woodstock, fn ->
+      {:ok, program} = Program.parse("1")
+
+      state = %State{
+        program: program,
+        display_info: %{width: Installation.width(), height: Installation.height()},
+        colors: {Chameleon.HSV.new(0, 70, 100), Chameleon.HSV.new(180, 70, 100)},
+        panel_proximities: %{0 => 0.0, 1 => 0.0},
+        panel_interaction_factors: %{0 => 0.0, 1 => 0.0},
+        seconds: 0.0,
+        translate_scale: 0.0,
+        rotate_scale: 0.0,
+        zoom_scale: 0.0,
+        offset: {0, 0},
+        audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
+      }
+
+      canvas = pixel_fun_build_canvas(state)
+
+      assert {canvas.width, canvas.height} == {36, 32}
+
+      for panel_x <- [0, 34], y <- 0..31, x <- panel_x..(panel_x + 1) do
+        assert Canvas.get_pixel(canvas, {x, y}) != {0, 0, 0}
       end
     end)
   end

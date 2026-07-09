@@ -80,6 +80,22 @@ defmodule Octopus.Apps.WoodTest do
     end)
   end
 
+  test "compatible?/0 for Woodstock 2x32 panels", _context do
+    with_installation(Octopus.Installation.Woodstock, fn ->
+      assert wood_compatible?()
+    end)
+  end
+
+  test "build_canvas/1 lights bottom pixel on Woodstock first panel", _context do
+    with_installation(Octopus.Installation.Woodstock, fn ->
+      canvas = wood_build_canvas(base_state())
+
+      assert canvas.mode == :grayscale
+      assert {canvas.width, canvas.height} == {36, 32}
+      assert lit_grayscale_pixels(canvas) == [{0, 31}]
+    end)
+  end
+
   test "build_canvas/1 lights bottom pixel when static at position 0", _context do
     with_installation(Octopus.Installation.RunningLights, fn ->
       canvas = wood_build_canvas(base_state())

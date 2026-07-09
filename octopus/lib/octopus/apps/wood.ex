@@ -82,10 +82,7 @@ defmodule Octopus.Apps.Wood do
   def mode_tweakables(_), do: []
 
   def compatible? do
-    installation = Octopus.App.get_installation_info()
-
-    installation.panel_count >= 1 and
-      (installation.panel_width == 1 or installation.panel_height == 1)
+    Octopus.App.get_installation_info().panel_count >= 1
   end
 
   def config_schema do
