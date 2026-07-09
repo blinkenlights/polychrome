@@ -72,7 +72,8 @@ defmodule OctopusWeb.PixelsLive do
     (button_mappings ++ joystick_mappings) |> Enum.into(%{})
   end
 
-  def mount(_params, _session, socket) do
+  def mount(_params, session, socket) do
+    embedded = session["embedded"] in [true, "true"]
     views = get_views()
     default_view = views |> Map.keys() |> List.first()
     pixel_layout = views[default_view]
@@ -106,6 +107,7 @@ defmodule OctopusWeb.PixelsLive do
      |> assign(
        id: socket.id,
        id_prefix: @id_prefix,
+       embedded: embedded,
        pixel_layout: views[default_view],
        view: default_view,
        default_view: default_view,
@@ -122,16 +124,19 @@ defmodule OctopusWeb.PixelsLive do
   def render(assigns) do
     ~H"""
     <div
-      class="flex w-full h-full justify-center bg-black"
+      class={[
+        "flex w-full justify-center bg-black",
+        @embedded && "sim-embedded-root flex-col items-stretch min-h-0",
+        !@embedded && "h-full min-h-screen"
+      ]}
       phx-window-keydown="keydown"
       phx-window-keyup="keyup"
     >
-      <div class="absolute top-4 flex flex-col gap-3 z-10">
-        <!-- Playlist Information -->
+      <div class="absolute top-2 left-1/2 -translate-x-1/2 flex flex-col gap-2 z-10">
         <form id="view-form" phx-change="view-changed">
           <.input type="select" name="view" options={@view_options} value={@view} />
         </form>
-        <div :if={@view != @default_view} class="flex gap-1">
+        <div :if={@view != @default_view} class="flex gap-1 justify-center">
           <button
             :for={window <- 1..@max_windows}
             phx-click="window-changed"
@@ -146,39 +151,59 @@ defmodule OctopusWeb.PixelsLive do
         </div>
       </div>
 
-      <div class="w-full h-full float-left relative">
-        <canvas
-          id={"#{@id_prefix}-#{@id}"}
-          phx-hook="Pixels"
-          class="w-full h-full bg-contain bg-no-repeat bg-center"
-          style={"background-image: url(#{@pixel_layout.background_image});"}
-        />
-        <%!-- <img
-          src={@pixel_layout.pixel_image}
-          class="absolute left-0 top-0 w-full h-full object-contain mix-blend-multiply pointer-events-none"
-        /> --%>
-        
-    <!-- Button UI Panel - Bottom -->
-        <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-10">
-          <div class="flex gap-2 justify-center">
-            <button
-              :for={i <- 1..@num_buttons//1}
-              phx-click="button-click"
-              phx-value-button={i}
-              class={[
-                "btn btn-sm font-mono min-w-[2.5rem]",
-                if MapSet.member?(@pressed_buttons, i) do
-                  "btn-success"
-                else
-                  "btn-neutral"
-                end
-              ]}
-              type="button"
-            >
-              {i}
-            </button>
-          </div>
+      <%= if @embedded do %>
+        <div class="sim-embedded-canvas flex-1 min-h-[12rem] max-h-[38vh] w-full flex items-center justify-center px-4 pt-14">
+          <canvas
+            id={"#{@id_prefix}-#{@id}"}
+            phx-hook="Pixels"
+            class="max-h-full max-w-full w-full h-full bg-contain bg-no-repeat bg-center"
+            style={"background-image: url(#{@pixel_layout.background_image});"}
+          />
         </div>
+        <.button_panel num_buttons={@num_buttons} pressed_buttons={@pressed_buttons} class="shrink-0 pb-3 pt-1" />
+      <% else %>
+        <div class="w-full h-full float-left relative">
+          <canvas
+            id={"#{@id_prefix}-#{@id}"}
+            phx-hook="Pixels"
+            class="w-full h-full bg-contain bg-no-repeat bg-center"
+            style={"background-image: url(#{@pixel_layout.background_image});"}
+          />
+          <.button_panel
+            num_buttons={@num_buttons}
+            pressed_buttons={@pressed_buttons}
+            class="absolute bottom-4 left-1/2 -translate-x-1/2 z-10"
+          />
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  attr :num_buttons, :integer, required: true
+  attr :pressed_buttons, :any, required: true
+  attr :class, :string, default: nil
+
+  defp button_panel(assigns) do
+    ~H"""
+    <div class={["flex justify-center", @class]}>
+      <div class="flex gap-2 justify-center">
+        <button
+          :for={i <- 1..@num_buttons//1}
+          phx-click="button-click"
+          phx-value-button={i}
+          class={[
+            "btn btn-sm font-mono min-w-[2.5rem]",
+            if MapSet.member?(@pressed_buttons, i) do
+              "btn-success"
+            else
+              "btn-neutral"
+            end
+          ]}
+          type="button"
+        >
+          {i}
+        </button>
       </div>
     </div>
     """

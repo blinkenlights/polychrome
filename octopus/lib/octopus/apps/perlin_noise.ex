@@ -1,12 +1,115 @@
 defmodule Octopus.Apps.PerlinNoise do
   use Octopus.App, category: :animation, output_type: :grayscale
 
+  alias Octopus.AppModePresets
   alias Octopus.Canvas
 
   @fps 30
   @frame_time_ms trunc(1000 / @fps)
 
   def name, do: "Perlin Noise"
+
+  def list_modes do
+    AppModePresets.list_modes(__MODULE__)
+  end
+
+  def mode_config(mode_id) do
+    AppModePresets.config_for(__MODULE__, mode_id) ||
+      legacy_mode_config(AppModePresets.mode_slug(mode_id))
+  end
+
+  def builtin_presets do
+    [
+      %{
+        slug: "perlin",
+        name: "Perlin noise",
+        accent_color: "#95A5A6",
+        config: legacy_mode_config("perlin")
+      }
+    ]
+  end
+
+  def legacy_mode_config("perlin") do
+    %{
+      scale: 0.1,
+      octaves: 4,
+      persistence: 0.5,
+      speed: 1.0,
+      seed: 42
+    }
+  end
+
+  def legacy_mode_config(_), do: %{}
+
+  def mode_tweakables(mode_id) do
+    mode_tweakables_for(AppModePresets.mode_slug(mode_id))
+  end
+
+  def mode_tweakables_for("perlin") do
+    [
+      %{
+        key: :scale,
+        label: "Scale",
+        type: :slider,
+        min: 0.01,
+        max: 0.5,
+        step: 0.01,
+        default: 0.1
+      },
+      %{
+        key: :octaves,
+        label: "Octaves",
+        type: :slider,
+        min: 1,
+        max: 8,
+        step: 1,
+        default: 4
+      },
+      %{
+        key: :persistence,
+        label: "Persistence",
+        type: :slider,
+        min: 0.1,
+        max: 1.0,
+        step: 0.05,
+        default: 0.5
+      },
+      %{
+        key: :speed,
+        label: "Speed",
+        type: :slider,
+        min: 0.1,
+        max: 3.0,
+        step: 0.1,
+        default: 1.0
+      },
+      %{
+        key: :seed,
+        label: "Seed",
+        type: :slider,
+        min: 1,
+        max: 9999,
+        step: 1,
+        default: 42
+      }
+    ]
+  end
+
+  def mode_tweakables_for(_), do: []
+
+  def now_playing_meta(config) do
+    scale = Map.get(config, :scale, 0.1)
+    octaves = Map.get(config, :octaves, 4)
+    speed = Map.get(config, :speed, 1.0)
+
+    ["scale #{format_num(scale)}", "#{octaves} octaves", "speed #{format_num(speed)}"]
+  end
+
+  def compatible? do
+    installation = Octopus.App.get_installation_info()
+
+    installation.panel_count >= 1
+  end
 
   def app_init(config) do
     # Configure display for grayscale output using the new API
@@ -26,7 +129,7 @@ defmodule Octopus.Apps.PerlinNoise do
       octaves: Map.get(config, :octaves, 4),
       persistence: Map.get(config, :persistence, 0.5),
       speed: Map.get(config, :speed, 1.0),
-      seed: Map.get(config, :seed, :rand.uniform(1000))
+      seed: Map.get(config, :seed, 42)
     }
 
     {:ok, state}
@@ -256,4 +359,7 @@ defmodule Octopus.Apps.PerlinNoise do
   defp lerp(a, b, t) do
     a + t * (b - a)
   end
+
+  defp format_num(n) when is_float(n), do: :erlang.float_to_binary(n, decimals: 2)
+  defp format_num(n) when is_integer(n), do: Integer.to_string(n)
 end

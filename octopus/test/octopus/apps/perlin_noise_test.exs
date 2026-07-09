@@ -1,0 +1,71 @@
+defmodule Octopus.Apps.PerlinNoiseTest do
+  use Octopus.DataCase, async: true
+
+  alias Octopus.AppModePresets
+  alias Octopus.Apps.PerlinNoise
+
+  setup do
+    AppModePresets.sync_all!()
+    :ok
+  end
+
+  test "list_modes/0 includes perlin mode" do
+    [mode] = PerlinNoise.list_modes()
+    assert mode.id == "perlinnoise:perlin"
+    assert mode.builtin == true
+  end
+
+  test "mode_config/1 returns defaults" do
+    defaults = %{
+      scale: 0.1,
+      octaves: 4,
+      persistence: 0.5,
+      speed: 1.0,
+      seed: 42
+    }
+
+    assert PerlinNoise.mode_config("perlinnoise:perlin") == defaults
+    assert PerlinNoise.mode_config("perlin") == defaults
+    assert PerlinNoise.mode_config("unknown") == %{}
+  end
+
+  test "mode_tweakables/1 exposes noise settings" do
+    keys =
+      PerlinNoise.mode_tweakables("perlin")
+      |> Enum.map(& &1.key)
+
+    assert keys == [:scale, :octaves, :persistence, :speed, :seed]
+  end
+
+  test "handle_config/2 applies settings live" do
+    state = %{
+      time: 0.0,
+      scale: 0.1,
+      octaves: 4,
+      persistence: 0.5,
+      speed: 1.0,
+      seed: 42
+    }
+
+    {:noreply, updated} =
+      PerlinNoise.handle_config(%{scale: 0.2, octaves: 6, speed: 2.0, seed: 99}, state)
+
+    assert updated.scale == 0.2
+    assert updated.octaves == 6
+    assert updated.speed == 2.0
+    assert updated.seed == 99
+    assert updated.persistence == 0.5
+  end
+
+  test "now_playing_meta/1 summarizes key settings" do
+    assert PerlinNoise.now_playing_meta(%{scale: 0.15, octaves: 5, speed: 1.5}) == [
+             "scale 0.15",
+             "5 octaves",
+             "speed 1.50"
+           ]
+  end
+
+  test "compatible?/0" do
+    assert PerlinNoise.compatible?()
+  end
+end

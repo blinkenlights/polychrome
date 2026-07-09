@@ -148,6 +148,7 @@ defmodule Octopus.AppSupervisor do
     case Registry.lookup(Octopus.AppRegistry, app_id) do
       [{pid, _}] ->
         :ok = GenServer.call(pid, {:update_config, config})
+        config = GenServer.call(pid, :get_config)
 
         Phoenix.PubSub.broadcast(
           Octopus.PubSub,
