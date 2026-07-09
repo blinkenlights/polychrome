@@ -168,11 +168,6 @@ defmodule OctopusWeb.ManagerLive do
   end
 
   def handle_info(:console_tick, socket) do
-    send_update(OctopusWeb.InstallationConsoleComponent,
-      id: "installation-console",
-      now_ms: System.os_time(:millisecond)
-    )
-
     {:noreply, assign(socket, now_ms: System.os_time(:millisecond))}
   end
 

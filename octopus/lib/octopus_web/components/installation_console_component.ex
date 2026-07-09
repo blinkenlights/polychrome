@@ -31,16 +31,17 @@ defmodule OctopusWeb.InstallationConsoleComponent do
        running_apps: [],
        browse_apps: [],
        browse_app_count: 0,
-       console_theme: "light"
+       console_theme: "light",
+       library_sections: nil
      )}
   end
 
   def update(assigns, socket) do
-    initial_load? = is_nil(socket.assigns[:library_sections])
+    initial_load? = connected?(socket) and is_nil(socket.assigns[:library_sections])
 
     socket =
       socket
-      |> assign(Map.drop(assigns, [:refresh_running, :transport]))
+      |> assign(Map.drop(assigns, [:refresh_running, :transport, :refresh_library]))
       |> maybe_assign_transport(assigns)
       |> assign_transport_view()
       |> maybe_refresh_library(assigns, initial_load?)
@@ -63,7 +64,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         <.transport_bar {transport_bar_assigns(assigns)} target={@myself} />
 
         <div class="grid gap-6 min-[900px]:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] min-[900px]:items-start">
-          <.mode_library sections={@library_sections} target={@myself} transport={@transport} show_all_pixel_fun={@show_all_pixel_fun} />
+          <.mode_library sections={@library_sections || []} target={@myself} transport={@transport} show_all_pixel_fun={@show_all_pixel_fun} />
           <div class="space-y-6">
             <.global_params_card />
             <.queue_card {queue_assigns(assigns)} target={@myself} />
@@ -101,7 +102,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
           />
         </div>
         <div class={@active_tab != "library" && "hidden"}>
-          <.mode_library sections={@library_sections} target={@myself} transport={@transport} compact show_all_pixel_fun={@show_all_pixel_fun} />
+          <.mode_library sections={@library_sections || []} target={@myself} transport={@transport} compact show_all_pixel_fun={@show_all_pixel_fun} />
           <.browse_apps
             apps={@browse_apps}
             count={@browse_app_count}
@@ -810,6 +811,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   defp maybe_assign_transport(socket, %{transport: transport}), do: assign(socket, :transport, transport)
   defp maybe_assign_transport(socket, _assigns), do: socket
 
+  defp maybe_refresh_library(socket, %{refresh_library: true}, _initial_load?), do: assign_library(socket)
   defp maybe_refresh_library(socket, %{transport: _transport}, false), do: refresh_library_transport(socket)
   defp maybe_refresh_library(socket, _assigns, true), do: assign_library(socket)
   defp maybe_refresh_library(socket, _assigns, false), do: socket
