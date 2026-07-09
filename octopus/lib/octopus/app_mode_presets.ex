@@ -314,32 +314,12 @@ defmodule Octopus.AppModePresets do
       PixelFun ->
         PixelFun.summary_for_preset(preset)
 
-      Collective ->
-        lines = App.now_playing_meta(Collective, Collective.mode_config(preset.id))
-        Enum.join(lines, " · ")
+      app ->
+        config = summary_config(app, preset)
 
-      Matrix ->
-        lines = App.now_playing_meta(Matrix, Matrix.mode_config(preset.id))
-        Enum.join(lines, " · ")
-
-      PerlinNoise ->
-        lines = App.now_playing_meta(PerlinNoise, PerlinNoise.mode_config(preset.id))
-        Enum.join(lines, " · ")
-
-      Ocean ->
-        lines = App.now_playing_meta(Ocean, Ocean.mode_config(preset.id))
-        Enum.join(lines, " · ")
-
-      Sand ->
-        lines = App.now_playing_meta(Sand, Sand.mode_config(preset.id))
-        Enum.join(lines, " · ")
-
-      SparkleMist ->
-        lines = App.now_playing_meta(SparkleMist, SparkleMist.mode_config(preset.id))
-        Enum.join(lines, " · ")
-
-      _ ->
-        ""
+        app
+        |> App.now_playing_meta(config)
+        |> Enum.join(" · ")
     end
   end
 
@@ -362,6 +342,15 @@ defmodule Octopus.AppModePresets do
     |> case do
       "" -> "preset"
       slug -> slug
+    end
+  end
+
+  defp summary_config(app, preset) do
+    case app do
+      Collective -> Collective.normalize_mode_config(preset.config)
+      Sand -> Sand.normalize_mode_config(preset.config)
+      SparkleMist -> SparkleMist.normalize_mode_config(preset.config)
+      _ -> preset.config
     end
   end
 

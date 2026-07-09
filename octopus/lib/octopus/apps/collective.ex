@@ -63,8 +63,10 @@ defmodule Octopus.Apps.Collective do
   def mode_config(mode_id) do
     (AppModePresets.config_for(__MODULE__, mode_id) ||
        legacy_mode_config(AppModePresets.mode_slug(mode_id)))
-    |> coerce_config_atoms()
+    |> normalize_mode_config()
   end
+
+  def normalize_mode_config(config), do: coerce_config_atoms(config)
 
   def mode_tweakables(mode_id) do
     mode_tweakables_for(AppModePresets.mode_slug(mode_id))
