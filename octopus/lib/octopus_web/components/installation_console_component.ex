@@ -4,11 +4,9 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
   import OctopusWeb.ConsoleComponents
 
-  alias Octopus.{App, AppManager, AppSupervisor, InstallationTransport}
-  alias Octopus.Apps.{Collective, DoomFire, Matrix, Ocean, PerlinNoise, PixelFun, PixieDebug, Sand, Wood}
+  alias Octopus.{App, AppManager, AppModePresets, AppSupervisor, InstallationTransport}
+  alias Octopus.Apps.{PixelFun, PixieDebug}
 
-  @wired_apps [PixelFun, Collective, DoomFire, Matrix, PerlinNoise, Ocean, Sand]
-  @experiment_apps [Wood]
   @debug_apps [PixieDebug]
   @pixel_fun_preview 6
 
@@ -827,7 +825,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     }
 
     more_sections =
-      for app <- [Collective, DoomFire, Matrix, PerlinNoise, Ocean, Sand] do
+      for app <- AppModePresets.persistable_apps(), app != PixelFun do
         %{
           title: App.name(app),
           app: app,
@@ -838,62 +836,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         }
       end
 
-    stub_sections = stub_app_sections(transport)
-    debug_sections = debug_app_sections(transport)
-    experiment_sections = experiment_app_sections(transport)
-
-    assign(socket,
-      library_sections: debug_sections ++ experiment_sections ++ [pixel_section | more_sections] ++ stub_sections
-    )
-  end
-
-  defp debug_app_sections(transport) do
-    for app <- @debug_apps, apply(app, :compatible?, []) do
-      %{
-        title: App.name(app),
-        app: app,
-        new_scene_path: nil,
-        show_more_count: 0,
-        soon: [],
-        tiles: tile_list(app, App.list_modes(app), transport, queueable?: false)
-      }
-    end
-  end
-
-  defp experiment_app_sections(transport) do
-    for app <- @experiment_apps, apply(app, :compatible?, []) do
-      %{
-        title: App.name(app),
-        app: app,
-        new_scene_path: nil,
-        show_more_count: 0,
-        soon: [],
-        tiles: tile_list(app, App.list_modes(app), transport)
-      }
-    end
-  end
-
-  defp stub_app_sections(_transport) do
-    wired = MapSet.new(@wired_apps)
-    experiments = MapSet.new(@experiment_apps)
-    debug = MapSet.new(@debug_apps)
-
-    AppSupervisor.available_apps()
-    |> Enum.filter(
-      &(App.rotation_eligible?(&1) and &1 not in wired and &1 not in experiments and &1 not in debug and
-          App.category(&1) == :animation)
-    )
-    |> Enum.group_by(&App.name/1)
-    |> Enum.map(fn {name, modules} ->
-      %{
-        title: name,
-        app: hd(modules),
-        new_scene_path: nil,
-        show_more_count: 0,
-        soon: [name],
-        tiles: []
-      }
-    end)
+    assign(socket, library_sections: [pixel_section | more_sections])
   end
 
   defp tile_list(app, modes, transport, opts \\ []) do

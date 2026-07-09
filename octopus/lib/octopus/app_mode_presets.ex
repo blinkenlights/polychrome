@@ -27,6 +27,9 @@ defmodule Octopus.AppModePresets do
   }
 
   @doc false
+  def persistable_apps, do: @persistable
+
+  @doc false
   def persistable?(app) when app in @persistable, do: true
   def persistable?(_), do: false
 
