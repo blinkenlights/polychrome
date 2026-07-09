@@ -2,12 +2,13 @@ defmodule Octopus.InstallationTransportTest do
   use ExUnit.Case, async: false
 
   alias Octopus.{AppModePresets, AppSupervisor, InstallationTransport}
-  alias Octopus.Apps.{Collective, Matrix, PerlinNoise, PixelFun, PixieDebug, Wood}
+  alias Octopus.Apps.{Collective, Matrix, Ocean, PerlinNoise, PixelFun, PixieDebug, Wood}
 
   @classic "pixelfun:classic_ripple"
   @cross "pixelfun:cross_waves"
   @matrix "matrix:matrix"
   @perlin "perlinnoise:perlin"
+  @ocean "ocean:ocean"
   @orbital "collective:orbital"
 
   setup do
@@ -563,6 +564,43 @@ defmodule Octopus.InstallationTransportTest do
       s = state()
       assert s.now_playing.preset_name == "Soft drift"
       assert s.live.mode_name == "Soft drift"
+    end
+
+    test "ocean tweak applies wave_strength and water_level live" do
+      InstallationTransport.play_now(Ocean, @ocean)
+
+      playing = state().now_playing
+      assert playing.effective[:wave_strength] == 1.0
+      assert playing.effective[:damping] == 0.95
+      assert playing.effective[:water_level] == 0.6
+      assert length(playing.tweakables) == 3
+      assert playing.persistable
+      assert playing.renamable
+
+      InstallationTransport.set_tweakable(:wave_strength, 2.0)
+      InstallationTransport.set_tweakable(:water_level, 0.75)
+
+      tweaked = state().now_playing
+      assert tweaked.dirty == true
+      assert tweaked.effective[:wave_strength] == 2.0
+      assert tweaked.effective[:water_level] == 0.75
+
+      {:ok, app_id} = AppSupervisor.find_running_app(Ocean)
+      config = AppSupervisor.config(app_id)
+      assert config[:wave_strength] == 2.0
+      assert config[:water_level] == 0.75
+    end
+
+    test "save and rename ocean preset" do
+      InstallationTransport.play_now(Ocean, @ocean)
+      InstallationTransport.set_tweakable(:damping, 0.88)
+
+      assert :ok = InstallationTransport.save_now_playing_as_new("Calm sea")
+      assert :ok = InstallationTransport.rename_now_playing_preset("Glassy water")
+
+      s = state()
+      assert s.now_playing.preset_name == "Glassy water"
+      assert s.live.mode_name == "Glassy water"
     end
   end
 end

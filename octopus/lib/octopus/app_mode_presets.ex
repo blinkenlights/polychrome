@@ -1,6 +1,6 @@
 defmodule Octopus.AppModePresets do
   @moduledoc """
-  DB-backed mode presets for foyer apps (Pixel Fun, Collective, Matrix, Perlin Noise).
+  DB-backed mode presets for foyer apps (Pixel Fun, Collective, Matrix, Perlin Noise, Ocean).
 
   Mode ids use `app_key:slug`, e.g. `pixelfun:classic_ripple`, `collective:storm`.
   Legacy Pixel Fun ids (`builtin:…`, `user:…`) and bare Collective slugs are
@@ -11,17 +11,18 @@ defmodule Octopus.AppModePresets do
 
   alias Octopus.App
   alias Octopus.AppModePreset
-  alias Octopus.Apps.{Collective, Matrix, PerlinNoise, PixelFun}
+  alias Octopus.Apps.{Collective, Matrix, Ocean, PerlinNoise, PixelFun}
   alias Octopus.Apps.PixelFun.Program
   alias Octopus.Repo
 
-  @persistable [PixelFun, Collective, Matrix, PerlinNoise]
+  @persistable [PixelFun, Collective, Matrix, PerlinNoise, Ocean]
 
   @app_keys %{
     PixelFun => "pixelfun",
     Collective => "collective",
     Matrix => "matrix",
-    PerlinNoise => "perlinnoise"
+    PerlinNoise => "perlinnoise",
+    Ocean => "ocean"
   }
 
   @doc false
@@ -81,6 +82,9 @@ defmodule Octopus.AppModePresets do
 
       app == PerlinNoise and mode_id in ["perlin", "default"] ->
         mode_id(app, "perlin")
+
+      app == Ocean and mode_id in ["ocean", "default"] ->
+        mode_id(app, "ocean")
 
       true ->
         mode_id
@@ -311,6 +315,10 @@ defmodule Octopus.AppModePresets do
         lines = App.now_playing_meta(PerlinNoise, PerlinNoise.mode_config(preset.id))
         Enum.join(lines, " · ")
 
+      Ocean ->
+        lines = App.now_playing_meta(Ocean, Ocean.mode_config(preset.id))
+        Enum.join(lines, " · ")
+
       _ ->
         ""
     end
@@ -461,6 +469,7 @@ defmodule Octopus.AppModePresets do
       Collective -> Collective.legacy_mode_config(slug)
       Matrix -> Matrix.legacy_mode_config(slug)
       PerlinNoise -> PerlinNoise.legacy_mode_config(slug)
+      Ocean -> Ocean.legacy_mode_config(slug)
       PixelFun -> PixelFun.legacy_mode_config(slug)
       _ -> %{}
     end

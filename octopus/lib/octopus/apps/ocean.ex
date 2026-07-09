@@ -1,6 +1,7 @@
 defmodule Octopus.Apps.Ocean do
   use Octopus.App, category: :animation
 
+  alias Octopus.AppModePresets
   alias Octopus.Events.Event.Input, as: InputEvent
   alias Octopus.{Canvas, WebP}
 
@@ -13,6 +14,7 @@ defmodule Octopus.Apps.Ocean do
       :damping,
       :width,
       :height,
+      :water_level_ratio,
       :water_level,
       # Replace wave processes with direct wave data
       :background_waves,
@@ -58,14 +60,96 @@ defmodule Octopus.Apps.Ocean do
 
   def icon(), do: WebP.load("ocean")
 
+  def list_modes do
+    AppModePresets.list_modes(__MODULE__)
+  end
+
+  def mode_config(mode_id) do
+    AppModePresets.config_for(__MODULE__, mode_id) ||
+      legacy_mode_config(AppModePresets.mode_slug(mode_id))
+  end
+
+  def builtin_presets do
+    [
+      %{
+        slug: "ocean",
+        name: "Ocean",
+        accent_color: "#2980B9",
+        config: legacy_mode_config("ocean")
+      }
+    ]
+  end
+
+  def legacy_mode_config("ocean") do
+    %{wave_strength: 1.0, damping: 0.95, water_level: 0.6}
+  end
+
+  def legacy_mode_config(_), do: %{}
+
+  def mode_tweakables(mode_id) do
+    mode_tweakables_for(AppModePresets.mode_slug(mode_id))
+  end
+
+  def mode_tweakables_for("ocean") do
+    [
+      %{
+        key: :wave_strength,
+        label: "Wave strength",
+        type: :slider,
+        min: 0.1,
+        max: 3.0,
+        step: 0.1,
+        default: 1.0
+      },
+      %{
+        key: :damping,
+        label: "Surface damping",
+        type: :slider,
+        min: 0.8,
+        max: 0.99,
+        step: 0.01,
+        default: 0.95
+      },
+      %{
+        key: :water_level,
+        label: "Water level",
+        type: :slider,
+        min: 0.3,
+        max: 0.9,
+        step: 0.05,
+        default: 0.6
+      }
+    ]
+  end
+
+  def mode_tweakables_for(_), do: []
+
+  def now_playing_meta(config) do
+    strength = Map.get(config, :wave_strength, 1.0)
+    damping = Map.get(config, :damping, 0.95)
+    level = Map.get(config, :water_level, 0.6)
+
+    [
+      "strength #{format_num(strength)}",
+      "damping #{format_num(damping)}",
+      "level #{round(level * 100)}%",
+      "Press panels for waves"
+    ]
+  end
+
+  def compatible? do
+    Octopus.App.get_installation_info().panel_gap > 0
+  end
+
   def config_schema do
     %{
       wave_strength: {"Wave Strength", :float, %{default: 1.0, min: 0.1, max: 3.0}},
-      damping: {"Surface Damping", :float, %{default: 0.95, min: 0.8, max: 0.99}}
+      damping: {"Surface Damping", :float, %{default: 0.95, min: 0.8, max: 0.99}},
+      water_level: {"Water Level", :float, %{default: 0.6, min: 0.3, max: 0.9, step: 0.05}}
     }
   end
 
-  def app_init(%{wave_strength: wave_strength, damping: damping}) do
+  def app_init(config) do
     # Configure display using new unified API - gapped_panels_wrapped layout for seamless wrapping
     Octopus.App.configure_display(layout: :gapped_panels_wrapped)
     Octopus.App.subscribe_to_button_events()
@@ -77,50 +161,30 @@ defmodule Octopus.Apps.Ocean do
     width = display_info.width
     height = display_info.height
 
-    # Logger.info("Ocean: Virtual matrix size: \\#{width}x\\#{height} (gapped panels wrapped layout)")
-    # Logger.info("Ocean: Panel count: \\#{installation().panel_count()}")
+    state = %State{
+      time: 0,
+      width: width,
+      height: height,
+      interaction_waves: [],
+      start_time: :os.system_time(:millisecond),
+      button_flashes: [],
+      last_activity_time: :os.system_time(:millisecond),
+      inactivity_timer_ref: nil
+    }
 
-    # Water level at rest (lower third of panels instead of middle)
-    water_level = height * 0.6
-
-    # Generate background ocean waves using realistic wave spectrum
-    background_waves = generate_background_waves(width, wave_strength)
-
-    # Logger.info("Ocean: Generated \\#{length(background_waves)} background waves")
-    # Logger.info("Ocean: Initialization complete!")
-
-    {:ok,
-     %State{
-       time: 0,
-       wave_strength: wave_strength,
-       damping: damping,
-       width: width,
-       height: height,
-       water_level: water_level,
-       background_waves: background_waves,
-       interaction_waves: [],
-       start_time: :os.system_time(:millisecond),
-       button_flashes: [],
-       last_activity_time: :os.system_time(:millisecond),
-       inactivity_timer_ref: nil
-     }}
+    {:ok, apply_config(state, config)}
   end
 
-  def handle_config(%{wave_strength: wave_strength, damping: damping}, %State{} = state) do
-    # Regenerate background waves with new strength
-    new_background_waves = generate_background_waves(state.width, wave_strength)
-
-    {:noreply,
-     %{
-       state
-       | wave_strength: wave_strength,
-         damping: damping,
-         background_waves: new_background_waves
-     }}
+  def handle_config(config, %State{} = state) do
+    {:noreply, apply_config(state, config)}
   end
 
-  def get_config(%State{wave_strength: wave_strength, damping: damping}) do
-    %{wave_strength: wave_strength, damping: damping}
+  def get_config(%State{} = state) do
+    %{
+      wave_strength: state.wave_strength,
+      damping: state.damping,
+      water_level: state.water_level_ratio
+    }
   end
 
   # Handle button press events - create interaction wave
@@ -741,4 +805,32 @@ defmodule Octopus.Apps.Ocean do
 
     :ok
   end
+
+  defp apply_config(%State{} = state, config) do
+    wave_strength = Map.get(config, :wave_strength, state.wave_strength || 1.0)
+    damping = Map.get(config, :damping, state.damping || 0.95)
+    water_level_ratio = Map.get(config, :water_level, state.water_level_ratio || 0.6)
+    water_level = state.height * water_level_ratio
+
+    strength_changed? = wave_strength != state.wave_strength
+
+    background_waves =
+      if strength_changed? or is_nil(state.background_waves) do
+        generate_background_waves(state.width, wave_strength)
+      else
+        state.background_waves
+      end
+
+    %State{
+      state
+      | wave_strength: wave_strength,
+        damping: damping,
+        water_level_ratio: water_level_ratio,
+        water_level: water_level,
+        background_waves: background_waves
+    }
+  end
+
+  defp format_num(n) when is_float(n), do: :erlang.float_to_binary(n, decimals: 2)
+  defp format_num(n) when is_integer(n), do: Integer.to_string(n)
 end
