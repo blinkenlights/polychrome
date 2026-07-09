@@ -356,5 +356,41 @@ defmodule Octopus.InstallationTransportTest do
       assert config[:color_channel] == :rgb
       assert config[:color] == "#00ff00"
     end
+
+    test "collective storm tweak applies sensitivity live" do
+      InstallationTransport.play_now(Collective, "storm")
+
+      playing = state().now_playing
+      assert playing.effective[:animation] == :storm
+      assert playing.effective[:sensitivity] == 1.0
+      assert length(playing.tweakables) == 2
+      assert playing.meta != []
+
+      InstallationTransport.set_tweakable(:sensitivity, 2.0)
+
+      tweaked = state().now_playing
+      assert tweaked.dirty == true
+      assert tweaked.effective[:sensitivity] == 2.0
+
+      {:ok, app_id} = AppSupervisor.find_running_app(Collective)
+      assert AppSupervisor.config(app_id)[:sensitivity] == 2.0
+    end
+
+    test "collective lava lamp tweak applies palette live" do
+      InstallationTransport.play_now(Collective, "lava_lamp")
+
+      playing = state().now_playing
+      assert playing.effective[:animation] == :lava_lamp
+      assert playing.effective[:lava_palette] == :classic
+
+      InstallationTransport.set_tweakable(:lava_palette, :magenta)
+
+      tweaked = state().now_playing
+      assert tweaked.dirty == true
+      assert tweaked.effective[:lava_palette] == :magenta
+
+      {:ok, app_id} = AppSupervisor.find_running_app(Collective)
+      assert AppSupervisor.config(app_id)[:lava_palette] == :magenta
+    end
   end
 end

@@ -68,11 +68,191 @@ defmodule Octopus.Apps.Collective do
   end
 
   def mode_config(mode_id) do
-    animation = String.to_existing_atom(mode_id)
-    %{animation: animation}
-  rescue
-    ArgumentError -> %{}
+    case mode_id do
+      "storm" ->
+        %{animation: :storm, background: :deep_dark, sensitivity: 1.0}
+
+      "breath" ->
+        %{
+          animation: :breath,
+          breath_liveliness: 0.25,
+          breath_layout: :wave,
+          breath_palette: :ocean,
+          breath_hue_shift: 0.0
+        }
+
+      "dots" ->
+        %{animation: :dots, dots_smoothing: 0.35}
+
+      "orbital" ->
+        %{animation: :orbital, orbital_liveliness: 0.35, orbital_sun_gain: 1.0}
+
+      "lava_lamp" ->
+        %{
+          animation: :lava_lamp,
+          lava_blob_count: 7,
+          lava_speed: 1.0,
+          lava_size_mul: 1.25,
+          lava_thresh: 0.9,
+          lava_palette: :classic
+        }
+
+      "ring_noise" ->
+        %{
+          animation: :ring_noise,
+          ring_noise_speed: 1.0,
+          ring_noise_pulse_period: 24.0,
+          ring_noise_pulse_amount: 0.65,
+          ring_noise_counter_wave: true,
+          ring_noise_palette: :lava
+        }
+
+      _ ->
+        %{}
+    end
   end
+
+  def mode_tweakables("storm") do
+    [
+      %{
+        key: :sensitivity,
+        label: "Storm sensitivity",
+        type: :slider,
+        min: 0.2,
+        max: 3.0,
+        step: 0.1,
+        default: 1.0
+      },
+      %{
+        key: :background,
+        label: "Background",
+        type: :choice,
+        default: :deep_dark,
+        options: [{:deep_dark, "Deep dark"}, {:still_stars, "Still stars"}]
+      }
+    ]
+  end
+
+  def mode_tweakables("breath") do
+    [
+      %{
+        key: :breath_liveliness,
+        label: "Liveliness",
+        type: :slider,
+        min: 0.0,
+        max: 1.0,
+        step: 0.05,
+        default: 0.25
+      },
+      %{
+        key: :breath_layout,
+        label: "Layout",
+        type: :choice,
+        default: :wave,
+        options: [{:wave, "Wave"}, {:canopy, "Canopy"}]
+      },
+      %{
+        key: :breath_palette,
+        label: "Palette",
+        type: :choice,
+        default: :ocean,
+        options: [
+          {:ocean, "Ocean"},
+          {:ember, "Ember"},
+          {:aurora, "Aurora"},
+          {:violet, "Violet"},
+          {:mono, "Mono"}
+        ]
+      }
+    ]
+  end
+
+  def mode_tweakables("dots") do
+    [
+      %{
+        key: :dots_smoothing,
+        label: "Dot smoothing",
+        type: :slider,
+        min: 0.0,
+        max: 1.0,
+        step: 0.05,
+        default: 0.35
+      }
+    ]
+  end
+
+  def mode_tweakables("orbital") do
+    [
+      %{
+        key: :orbital_liveliness,
+        label: "Liveliness",
+        type: :slider,
+        min: 0.0,
+        max: 1.0,
+        step: 0.05,
+        default: 0.35
+      },
+      %{
+        key: :orbital_sun_gain,
+        label: "Sun gain",
+        type: :slider,
+        min: 0.2,
+        max: 2.5,
+        step: 0.05,
+        default: 1.0
+      }
+    ]
+  end
+
+  def mode_tweakables("lava_lamp") do
+    [
+      %{
+        key: :lava_speed,
+        label: "Speed",
+        type: :slider,
+        min: 0.2,
+        max: 3.0,
+        step: 0.05,
+        default: 1.0
+      },
+      %{
+        key: :lava_palette,
+        label: "Palette",
+        type: :choice,
+        default: :classic,
+        options: [{:classic, "Classic"}, {:magenta, "Magenta"}, {:slime, "Slime"}]
+      }
+    ]
+  end
+
+  def mode_tweakables("ring_noise") do
+    [
+      %{
+        key: :ring_noise_speed,
+        label: "Noise speed",
+        type: :slider,
+        min: 0.0,
+        max: 3.0,
+        step: 0.05,
+        default: 1.0
+      },
+      %{
+        key: :ring_noise_palette,
+        label: "Palette",
+        type: :choice,
+        default: :lava,
+        options: [{:lava, "Lava"}, {:ocean, "Ocean"}, {:aurora, "Aurora"}]
+      },
+      %{
+        key: :ring_noise_counter_wave,
+        label: "Counter wave",
+        type: :toggle,
+        default: true
+      }
+    ]
+  end
+
+  def mode_tweakables(_mode_id), do: []
 
   def apply_mode(app_id, mode_id) do
     Octopus.AppSupervisor.update_config(app_id, mode_config(mode_id))
@@ -478,6 +658,18 @@ defmodule Octopus.Apps.Collective do
   end
 
   def config_info(_config), do: nil
+
+  def now_playing_meta(config) do
+    case config_info(config) do
+      nil ->
+        []
+
+      text ->
+        text
+        |> String.split("\n", trim: true)
+        |> Enum.take(2)
+    end
+  end
 
   def get_config(state) do
     %{
