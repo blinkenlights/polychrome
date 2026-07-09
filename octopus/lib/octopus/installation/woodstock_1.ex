@@ -2,8 +2,8 @@ defmodule Octopus.Installation.Woodstock1 do
   use Octopus.Installation,
     arrangement: :linear,
     panels: [
-      [controller: :polychrome_panel_11, wiring: :serpentine_vertical_bottom_left],
-      [controller: :polychrome_panel_12, wiring: :serpentine_vertical_bottom_left]
+      [controller: :polychrome_panel_9, wiring: :serpentine_vertical_bottom_left],
+      [controller: :polychrome_panel_10, wiring: :serpentine_vertical_bottom_left]
     ],
     panel_layout: {1, 32},
     num_buttons: 0,
