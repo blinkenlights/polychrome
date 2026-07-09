@@ -673,17 +673,15 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   end
 
   defp refresh_transport(socket, opts \\ []) do
-    socket
-    |> assign(transport: InstallationTransport.get_state())
-    |> assign_transport_view()
-    |> maybe_assign_library(opts)
-  end
+    socket =
+      socket
+      |> assign(transport: InstallationTransport.get_state())
+      |> assign_transport_view()
 
-  defp maybe_assign_library(socket, opts) do
-    if Keyword.get(opts, :refresh_library, true) do
+    if Keyword.get(opts, :refresh_library, false) do
       assign_library(socket)
     else
-      socket
+      refresh_library_transport(socket)
     end
   end
 
@@ -824,17 +822,20 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     end
   end
 
-  defp refresh_library_transport(socket) do
+  defp refresh_library_transport(%{assigns: %{library_sections: sections}} = socket)
+       when is_list(sections) do
     transport = socket.assigns.transport
 
     sections =
-      Enum.map(socket.assigns.library_sections, fn section ->
+      Enum.map(sections, fn section ->
         modes = Enum.map(section.tiles, & &1.mode)
         %{section | tiles: tile_list(section.app, modes, transport)}
       end)
 
     assign(socket, library_sections: sections)
   end
+
+  defp refresh_library_transport(socket), do: socket
 
   defp assign_library(socket) do
     transport = socket.assigns.transport
