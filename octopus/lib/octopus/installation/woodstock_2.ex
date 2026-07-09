@@ -1,4 +1,4 @@
-defmodule Octopus.Installation.Woodstock do
+defmodule Octopus.Installation.Woodstock2 do
   use Octopus.Installation,
     arrangement: :linear,
     panels: [
@@ -19,7 +19,7 @@ defmodule Octopus.Installation.Woodstock do
     ],
     simulator_layouts: [
       [
-        name: "Woodstock",
+        name: "Woodstock 2",
         mode: "generic",
         pixel_size: {16, 16}
       ]

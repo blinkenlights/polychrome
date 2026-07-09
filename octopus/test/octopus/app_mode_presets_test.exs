@@ -1,7 +1,7 @@
 defmodule Octopus.AppModePresetsTest do
   use Octopus.DataCase, async: true
 
-  alias Octopus.Apps.{Collective, Matrix, PixelFun, Sand, SparkleMist}
+  alias Octopus.Apps.{Collective, Matrix, PixelFun, Sand, SparkleMist, Wood}
 
   @presets Module.concat(["Octopus", "AppModePresets"])
 
@@ -17,6 +17,7 @@ defmodule Octopus.AppModePresetsTest do
       assert length(preset_list(Matrix)) == 1
       assert length(preset_list(Sand)) == 1
       assert length(preset_list(SparkleMist)) == 1
+      assert length(preset_list(Wood)) == 1
 
       preset_sync_all!()
 
@@ -82,6 +83,7 @@ defmodule Octopus.AppModePresetsTest do
       assert preset_normalize_mode_id(Matrix, "matrix") == "matrix:matrix"
       assert preset_normalize_mode_id(Sand, "sand") == "sand:sand"
       assert preset_normalize_mode_id(SparkleMist, "mist") == "sparklemist:mist"
+      assert preset_normalize_mode_id(Wood, "experiment") == "wood:experiment"
     end
   end
 
@@ -109,6 +111,16 @@ defmodule Octopus.AppModePresetsTest do
       [mode] = preset_list_modes(SparkleMist)
 
       assert mode.id == "sparklemist:mist"
+      assert mode.summary != ""
+      assert mode.deletable
+      assert mode.renamable
+    end
+
+    test "returns wood tiles with summaries" do
+      [mode] = preset_list_modes(Wood)
+
+      assert mode.id == "wood:experiment"
+      assert mode.name == "Experiment"
       assert mode.summary != ""
       assert mode.deletable
       assert mode.renamable

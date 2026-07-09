@@ -68,7 +68,7 @@ defmodule Octopus.Apps.PixelFunTest do
   end
 
   test "compatible?/0 for Woodstock 2x32 panels", _context do
-    with_installation(Octopus.Installation.Woodstock, fn ->
+    with_installation(Octopus.Installation.Woodstock2, fn ->
       assert pixel_fun_compatible?()
     end)
   end
@@ -102,7 +102,7 @@ defmodule Octopus.Apps.PixelFunTest do
   end
 
   test "build_canvas/1 fills all Woodstock panel pixels", _context do
-    with_installation(Octopus.Installation.Woodstock, fn ->
+    with_installation(Octopus.Installation.Woodstock2, fn ->
       {:ok, program} = Program.parse("1")
 
       state = %State{

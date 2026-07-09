@@ -23,19 +23,27 @@ defmodule Octopus.Apps.WoodTest do
   end
 
   defp display_info do
+    num_panels = Installation.num_panels()
+    panel_width = Installation.panel_width()
+    panel_height = Installation.panel_height()
+    panel_gap = Installation.panel_gap()
+
+    panel_to_global_coords = fn panel_id, local_x, local_y ->
+      if panel_id >= 0 and panel_id < num_panels do
+        x_offset = panel_id * (panel_width + panel_gap)
+        {x_offset + local_x, local_y}
+      else
+        :invalid_panel
+      end
+    end
+
     %{
       width: Installation.width(),
       height: Installation.height(),
-      panel_width: Installation.panel_width(),
-      panel_height: Installation.panel_height(),
-      num_panels: Installation.num_panels(),
-      panel_to_global_coords: fn panel_id, local_x, local_y ->
-        if panel_id == 0 do
-          {local_x, local_y}
-        else
-          :invalid_panel
-        end
-      end
+      panel_width: panel_width,
+      panel_height: panel_height,
+      num_panels: num_panels,
+      panel_to_global_coords: panel_to_global_coords
     }
   end
 
@@ -81,18 +89,57 @@ defmodule Octopus.Apps.WoodTest do
   end
 
   test "compatible?/0 for Woodstock 2x32 panels", _context do
-    with_installation(Octopus.Installation.Woodstock, fn ->
+    with_installation(Octopus.Installation.Woodstock2, fn ->
       assert wood_compatible?()
     end)
   end
 
-  test "build_canvas/1 lights bottom pixel on Woodstock first panel", _context do
-    with_installation(Octopus.Installation.Woodstock, fn ->
+  test "compatible?/0 for Woodstock 1x32 panels", _context do
+    with_installation(Octopus.Installation.Woodstock1, fn ->
+      assert wood_compatible?()
+    end)
+  end
+
+  test "build_canvas/1 accepts db-style string enums", _context do
+    with_installation(Octopus.Installation.Woodstock1, fn ->
+      config =
+        apply(@wood, :normalize_mode_config, [
+          %{mode: "endless_up", color_channel: "white", speed: 2.0, blob_size: 3}
+        ])
+
+      canvas = wood_build_canvas(struct!(base_state(), config))
+
+      assert canvas.mode == :grayscale
+      assert length(lit_grayscale_pixels(canvas)) > 0
+    end)
+  end
+
+  test "mode_config/1 merges legacy defaults with stored db config", _context do
+    config = apply(@wood, :mode_config, ["wood:experiment"])
+
+    assert config[:mode] == :endless_up
+    assert config[:color_channel] == :white
+    assert config[:speed] == 2.0
+    assert config[:blob_size] == 3
+  end
+
+  test "build_canvas/1 lights bottom pixel on all Woodstock2 panels", _context do
+    with_installation(Octopus.Installation.Woodstock2, fn ->
       canvas = wood_build_canvas(base_state())
 
       assert canvas.mode == :grayscale
       assert {canvas.width, canvas.height} == {36, 32}
-      assert lit_grayscale_pixels(canvas) == [{0, 31}]
+      assert Enum.sort(lit_grayscale_pixels(canvas)) == [{0, 31}, {34, 31}]
+    end)
+  end
+
+  test "build_canvas/1 lights bottom pixel on all Woodstock1 panels", _context do
+    with_installation(Octopus.Installation.Woodstock1, fn ->
+      canvas = wood_build_canvas(base_state())
+
+      assert canvas.mode == :grayscale
+      assert {canvas.width, canvas.height} == {34, 32}
+      assert Enum.sort(lit_grayscale_pixels(canvas)) == [{0, 31}, {33, 31}]
     end)
   end
 

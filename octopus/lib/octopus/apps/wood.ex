@@ -1,6 +1,8 @@
 defmodule Octopus.Apps.Wood do
   use Octopus.App, category: :animation
 
+  @mode_presets Module.concat(["Octopus", "AppModePresets"])
+
   alias Octopus.Canvas
   alias Octopus.Events.Event.Lifecycle, as: LifecycleEvent
 
@@ -33,20 +35,62 @@ defmodule Octopus.Apps.Wood do
   def name, do: "Wood"
 
   def list_modes do
+    apply(@mode_presets, :list_modes, [__MODULE__])
+  end
+
+  def mode_config(mode_id) do
+    slug = apply(@mode_presets, :mode_slug, [mode_id])
+    legacy = legacy_mode_config(slug)
+
+    stored =
+      case apply(@mode_presets, :config_for, [__MODULE__, mode_id]) do
+        nil -> %{}
+        config -> config
+      end
+
+    legacy
+    |> Map.merge(stored)
+    |> normalize_mode_config()
+  end
+
+  def normalize_mode_config(config) do
+    config
+    |> coerce_config_atoms()
+    |> Map.update(:mode, :endless_up, &coerce_mode/1)
+    |> Map.update(:color_channel, :white, &coerce_color_channel/1)
+    |> Map.update(:rgb_mode, :static, &coerce_rgb_mode/1)
+  end
+
+  def builtin_presets do
     [
       %{
-        id: "experiment",
+        slug: "experiment",
         name: "Experiment",
         accent_color: "#4a7c59",
-        summary: "Configurable blobs on the vertical strip",
-        builtin: true
+        config: legacy_mode_config("experiment")
       }
     ]
   end
 
-  def mode_config("experiment"), do: %{}
+  def legacy_mode_config("experiment") do
+    %{
+      mode: :endless_up,
+      speed: 2.0,
+      blob_size: 3,
+      blob_count: 1,
+      blob_spacing: 1,
+      color_channel: :white,
+      trail_length: 0
+    }
+  end
 
-  def mode_tweakables("experiment") do
+  def legacy_mode_config(_), do: %{}
+
+  def mode_tweakables(mode_id) do
+    mode_tweakables_for(apply(@mode_presets, :mode_slug, [mode_id]))
+  end
+
+  def mode_tweakables_for("experiment") do
     [
       %{key: :speed, label: "Speed (LEDs/s)", type: :slider, min: 0.0, max: 5.0, step: 0.1, default: 0.0},
       %{key: :blob_size, label: "Blob size (LEDs)", type: :slider, min: 1, max: 12, step: 1, default: 1},
@@ -79,7 +123,21 @@ defmodule Octopus.Apps.Wood do
     ]
   end
 
-  def mode_tweakables(_), do: []
+  def mode_tweakables_for(_), do: []
+
+  def now_playing_meta(config) do
+    mode = Map.get(config, :mode, :endless_up)
+    speed = Map.get(config, :speed, 0.0)
+    blob_size = Map.get(config, :blob_size, 1)
+    color_channel = Map.get(config, :color_channel, :white)
+
+    [
+      to_string(mode),
+      "speed #{speed}",
+      "blob #{blob_size}",
+      to_string(color_channel)
+    ]
+  end
 
   def compatible? do
     Octopus.App.get_installation_info().panel_count >= 1
@@ -120,7 +178,7 @@ defmodule Octopus.Apps.Wood do
       blob_size: {"Blob size (LEDs)", :int, %{min: 1, max: 12, default: 1}},
       speed: {"Speed (LEDs/s)", :float, %{min: 0.0, max: 5.0, default: 0.0, step: 0.1}},
       trail_length: {"Trail length (LEDs)", :int, %{min: 0, max: 12, default: 0}},
-      position: {"Position (from bottom)", :int, %{min: 0, max: 23, default: 0}},
+      position: {"Position (from bottom)", :int, %{min: 0, max: position_max(), default: 0}},
       color_channel:
         {"Color channel", :select,
          %{
@@ -360,6 +418,7 @@ defmodule Octopus.Apps.Wood do
   end
 
   defp apply_config(%State{} = state, config) do
+    config = normalize_mode_config(config)
     mode = Map.get(config, :mode, Map.get(config, :movement, state.mode))
 
     %{
@@ -465,7 +524,9 @@ defmodule Octopus.Apps.Wood do
   end
 
   defp draw_blob(canvas, info, center_bottom, blob_size, last, strip_len, mode, rgb, scale, wrap?) do
-    for bottom_coord <- blob_bottom_coords(center_bottom, blob_size, last, wrap?, strip_len), reduce: canvas do
+    for panel_id <- 0..(info.num_panels - 1),
+        bottom_coord <- blob_bottom_coords(center_bottom, blob_size, last, wrap?, strip_len),
+        reduce: canvas do
       canvas ->
         intensity =
           if blob_size == 1 do
@@ -478,7 +539,7 @@ defmodule Octopus.Apps.Wood do
           strip_coord = bottom_to_strip_coord(last, bottom_coord)
           {local_x, local_y} = strip_coords(info, strip_coord)
 
-          case info.panel_to_global_coords.(0, local_x, local_y) do
+          case info.panel_to_global_coords.(panel_id, local_x, local_y) do
             :invalid_panel ->
               canvas
 
@@ -561,6 +622,10 @@ defmodule Octopus.Apps.Wood do
 
   defp bottom_to_strip_coord(last, bottom_coord), do: last - trunc(bottom_coord)
 
+  defp position_max do
+    max(Octopus.Installation.panel_width(), Octopus.Installation.panel_height()) - 1
+  end
+
   defp strip_length(%{panel_width: panel_width, panel_height: panel_height}) do
     max(panel_width, panel_height)
   end
@@ -582,4 +647,31 @@ defmodule Octopus.Apps.Wood do
   defp falloff(distance, radius, _blob_size) do
     if distance <= radius, do: 1.0, else: 0.0
   end
+
+  defp coerce_config_atoms(config) when is_map(config) do
+    Map.new(config, fn
+      {k, v} when is_binary(k) -> {String.to_existing_atom(k), v}
+      {k, v} -> {k, v}
+    end)
+  rescue
+    ArgumentError ->
+      Map.new(config, fn {k, v} -> {String.to_atom(k), v} end)
+  end
+
+  defp coerce_mode(mode) when is_atom(mode), do: mode
+  defp coerce_mode("endless_up"), do: :endless_up
+  defp coerce_mode("endless_down"), do: :endless_down
+  defp coerce_mode("up_and_down"), do: :up_and_down
+  defp coerce_mode("fullcolor"), do: :fullcolor
+  defp coerce_mode(_), do: :endless_up
+
+  defp coerce_color_channel(channel) when is_atom(channel), do: channel
+  defp coerce_color_channel("white"), do: :white
+  defp coerce_color_channel("rgb"), do: :rgb
+  defp coerce_color_channel(_), do: :white
+
+  defp coerce_rgb_mode(mode) when is_atom(mode), do: mode
+  defp coerce_rgb_mode("static"), do: :static
+  defp coerce_rgb_mode("cycle"), do: :cycle
+  defp coerce_rgb_mode(_), do: :static
 end

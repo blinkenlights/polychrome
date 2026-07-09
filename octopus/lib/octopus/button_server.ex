@@ -114,14 +114,17 @@ defmodule Octopus.ButtonServer do
   end
 
   defp turn_on_all_buttons() do
-    for button <- 1..Installation.num_buttons() do
-      InputAdapter.send_light_event(button, 1_000_000)
-    end
+    Enum.each(button_ids(), &InputAdapter.send_light_event(&1, 1_000_000))
   end
 
   defp turn_off_all_buttons() do
-    for button <- 1..Installation.num_buttons() do
-      InputAdapter.send_light_event(button, 0)
+    Enum.each(button_ids(), &InputAdapter.send_light_event(&1, 0))
+  end
+
+  defp button_ids do
+    case Installation.num_buttons() do
+      0 -> []
+      n -> Enum.to_list(1..n)
     end
   end
 end
