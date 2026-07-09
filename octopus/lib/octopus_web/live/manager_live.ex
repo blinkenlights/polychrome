@@ -1,6 +1,8 @@
 defmodule OctopusWeb.ManagerLive do
   use OctopusWeb, :live_view
 
+  import OctopusWeb.CoreComponents
+
   alias Octopus.Installation
   alias Octopus.InstallationTransport
   alias Octopus.Params.Global
@@ -61,6 +63,7 @@ defmodule OctopusWeb.ManagerLive do
 
   def render(assigns) do
     ~H"""
+    <.flash_group flash={@flash} />
     <div
       id="console-page"
       phx-hook="ConsoleTheme"

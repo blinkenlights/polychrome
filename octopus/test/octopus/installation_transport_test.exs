@@ -2,7 +2,7 @@ defmodule Octopus.InstallationTransportTest do
   use ExUnit.Case, async: false
 
   alias Octopus.{AppSupervisor, InstallationTransport}
-  alias Octopus.Apps.{Collective, PixelFun, PixieDebug, Wood}
+  alias Octopus.Apps.{Collective, Matrix, PixelFun, PixieDebug, Wood}
 
   @classic "builtin:classic_ripple"
   @cross "builtin:cross_waves"
@@ -17,14 +17,12 @@ defmodule Octopus.InstallationTransportTest do
 
     for {_, app_id} <- AppSupervisor.running_apps(), do: AppSupervisor.stop_app(app_id)
 
-    InstallationTransport.set_queue([])
+    InstallationTransport.reset!()
     InstallationTransport.set_interval(300)
-    InstallationTransport.resume_rotation_after_takeover()
 
     on_exit(fn ->
       for {_, app_id} <- AppSupervisor.running_apps(), do: AppSupervisor.stop_app(app_id)
-      InstallationTransport.set_queue([])
-      InstallationTransport.resume_rotation_after_takeover()
+      InstallationTransport.reset!()
     end)
 
     :ok
@@ -196,6 +194,51 @@ defmodule Octopus.InstallationTransportTest do
       InstallationTransport.play_now(PixelFun, @cross)
       assert state().cycle_index == 1
       assert state().live.mode_id == @cross
+    end
+
+    test "off-queue play pauses rotation so it stays on the wall" do
+      InstallationTransport.set_queue([
+        %{app: PixelFun, mode_id: @classic},
+        %{app: PixelFun, mode_id: @cross}
+      ])
+
+      InstallationTransport.play_now(Matrix, "matrix")
+
+      s = state()
+      assert s.live.app == Matrix
+      assert s.live.mode_id == "matrix"
+      assert s.rotation_paused
+      assert s.playing
+      assert s.takeover_app_id != nil
+      assert s.now_playing.effective[:speed] == 1.0
+    end
+
+    test "queue toggle starts first entry when nothing is live" do
+      assert InstallationTransport.get_state().live == nil
+
+      InstallationTransport.queue_toggle(Matrix, "matrix")
+
+      s = state()
+      assert s.live.app == Matrix
+      assert s.live.mode_id == "matrix"
+      assert length(s.queue) == 1
+    end
+
+    test "transport play resumes queue after manual play_now takeover" do
+      InstallationTransport.set_queue([
+        %{app: PixelFun, mode_id: @classic},
+        %{app: PixelFun, mode_id: @cross}
+      ])
+
+      InstallationTransport.play_now(Matrix, "matrix")
+      assert state().rotation_paused
+
+      InstallationTransport.toggle_play()
+      InstallationTransport.toggle_play()
+
+      s = state()
+      assert s.rotation_paused == false
+      assert s.playing
     end
   end
 
@@ -391,6 +434,30 @@ defmodule Octopus.InstallationTransportTest do
 
       {:ok, app_id} = AppSupervisor.find_running_app(Collective)
       assert AppSupervisor.config(app_id)[:lava_palette] == :magenta
+    end
+
+    test "matrix tweak applies speed and density live" do
+      InstallationTransport.play_now(Matrix, "matrix")
+
+      playing = state().now_playing
+      assert playing.effective[:speed] == 1.0
+      assert playing.effective[:density] == 3
+      assert playing.effective[:max_particles] == 200
+      assert length(playing.tweakables) == 3
+      assert playing.meta == ["200 particles max", "density 3"]
+
+      InstallationTransport.set_tweakable(:speed, 2.0)
+      InstallationTransport.set_tweakable(:density, 6)
+
+      tweaked = state().now_playing
+      assert tweaked.dirty == true
+      assert tweaked.effective[:speed] == 2.0
+      assert tweaked.effective[:density] == 6
+
+      {:ok, app_id} = AppSupervisor.find_running_app(Matrix)
+      config = AppSupervisor.config(app_id)
+      assert config[:speed] == 2.0
+      assert config[:density] == 6
     end
   end
 end

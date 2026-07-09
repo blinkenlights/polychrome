@@ -1,6 +1,5 @@
 defmodule Octopus.Apps.Matrix do
   use Octopus.App, category: :animation
-  use Octopus.Params, prefix: :matrix
 
   defmodule Particle do
     defstruct [:x, :y, :z, :speed, :color, :age, :max_age, :tail]
@@ -12,7 +11,16 @@ defmodule Octopus.Apps.Matrix do
 
     alias Octopus.Canvas
 
-    defstruct [:canvas, :particles, :width, :height, :global_speed]
+    defstruct [
+      :canvas,
+      :particles,
+      :width,
+      :height,
+      :global_speed,
+      :speed,
+      :density,
+      :max_particles
+    ]
 
     def spawn_particles(
           %State{particles: particles, width: width, height: height} = state,
@@ -112,46 +120,116 @@ defmodule Octopus.Apps.Matrix do
 
   def name(), do: "Matrix"
 
-  def app_init(_args) do
-    # Configure display using new unified API - adjacent layout (was Canvas.to_frame())
-    Octopus.App.configure_display(layout: :adjacent_panels)
+  def list_modes do
+    [
+      %{
+        id: "matrix",
+        name: "matrix",
+        accent_color: "#2ECC71",
+        summary: "Falling code rain",
+        builtin: true
+      }
+    ]
+  end
 
-    # Subscribe to global parameter changes
+  def mode_config("matrix"), do: %{speed: 1.0, density: 3, max_particles: 200}
+  def mode_config(_), do: %{}
+
+  def mode_tweakables("matrix") do
+    [
+      %{
+        key: :speed,
+        label: "Speed",
+        type: :slider,
+        min: 0.1,
+        max: 3.0,
+        step: 0.1,
+        default: 1.0
+      },
+      %{
+        key: :density,
+        label: "Density",
+        type: :slider,
+        min: 1,
+        max: 10,
+        step: 1,
+        default: 3
+      },
+      %{
+        key: :max_particles,
+        label: "Max particles",
+        type: :slider,
+        min: 50,
+        max: 400,
+        step: 10,
+        default: 200
+      }
+    ]
+  end
+
+  def mode_tweakables(_), do: []
+
+  def compatible?() do
+    installation = Octopus.App.get_installation_info()
+
+    installation.panel_count >= 8 and installation.panel_width == 8 and
+      installation.panel_height == 8
+  end
+
+  def get_config(%State{} = state) do
+    %{
+      speed: state.speed,
+      density: state.density,
+      max_particles: state.max_particles
+    }
+  end
+
+  def handle_config(config, %State{} = state) do
+    {:noreply, apply_config(state, config)}
+  end
+
+  def now_playing_meta(config) do
+    max = Map.get(config, :max_particles, 200)
+    density = Map.get(config, :density, 3)
+    ["#{max} particles max", "density #{density}"]
+  end
+
+  def app_init(config) do
+    Octopus.App.configure_display(layout: :adjacent_panels)
     Octopus.Params.Global.subscribe()
 
-    # Read initial global speed value
     global_speed = Octopus.Params.Global.speed()
 
-    # This is for the 10 panel installation that Matrix was made for
-
-    # Get dimensions from display info instead of installation
     display_info = Octopus.App.get_display_info()
     width = display_info.width
     height = display_info.height
 
     canvas = Canvas.new(width, height)
-    particles = []
     :timer.send_interval(trunc(1000 / 60), :tick)
     :timer.send_interval(50, :spawn_particles)
     :timer.send_interval(50, :change_colors)
 
-    {:ok,
-     %State{
-       canvas: canvas,
-       particles: particles,
-       width: width,
-       height: height,
-       global_speed: global_speed
-     }}
+    state =
+      %State{
+        canvas: canvas,
+        particles: [],
+        width: width,
+        height: height,
+        global_speed: global_speed,
+        speed: 1.0,
+        density: 3,
+        max_particles: 200
+      }
+      |> apply_config(config)
+
+    {:ok, state}
   end
 
   def handle_info({:param_updated, :speed, new_value}, %State{} = state) do
-    # Global speed parameter changed - update stored value
     {:noreply, %{state | global_speed: new_value}}
   end
 
   def handle_info({:param_updated, _key, _value}, %State{} = state) do
-    # Other global parameters changed - ignore
     {:noreply, state}
   end
 
@@ -161,8 +239,8 @@ defmodule Octopus.Apps.Matrix do
 
   def handle_info(:spawn_particles, %State{} = state) do
     state =
-      if Enum.count(state.particles) < 200 do
-        State.spawn_particles(state, 3)
+      if Enum.count(state.particles) < state.max_particles do
+        State.spawn_particles(state, max(1, trunc(state.density)))
       else
         state
       end
@@ -171,9 +249,20 @@ defmodule Octopus.Apps.Matrix do
   end
 
   def handle_info(:tick, %State{} = state) do
-    dt = 1 / 60 * param(:speed, 1.0) * state.global_speed
+    dt = 1 / 60 * state.speed * state.global_speed
     state = state |> State.update(dt) |> State.render()
     Octopus.App.update_display(state.canvas)
     {:noreply, state}
+  end
+
+  defp apply_config(%State{} = state, config) do
+    state
+    |> maybe_put(:speed, config, 1.0)
+    |> maybe_put(:density, config, 3)
+    |> maybe_put(:max_particles, config, 200)
+  end
+
+  defp maybe_put(state, key, config, default) do
+    Map.put(state, key, Map.get(config, key, Map.get(state, key) || default))
   end
 end

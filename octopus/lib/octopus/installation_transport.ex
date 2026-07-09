@@ -8,6 +8,7 @@ defmodule Octopus.InstallationTransport do
   """
 
   use GenServer
+  require Logger
 
   alias Octopus.{App, AppManager, AppSupervisor}
   alias Octopus.Apps.PixelFun
@@ -50,7 +51,7 @@ defmodule Octopus.InstallationTransport do
   def prev, do: GenServer.cast(__MODULE__, :prev)
 
   def play_now(app, mode_id),
-    do: GenServer.cast(__MODULE__, {:play_now, normalize_app(app), to_string(mode_id)})
+    do: GenServer.call(__MODULE__, {:play_now, normalize_app(app), to_string(mode_id)})
 
   def queue_toggle(app, mode_id) do
     GenServer.cast(__MODULE__, {:queue_toggle, normalize_app(app), to_string(mode_id)})
@@ -72,6 +73,9 @@ defmodule Octopus.InstallationTransport do
     do: GenServer.cast(__MODULE__, {:pause_rotation_for_takeover, app_id})
 
   def resume_rotation_after_takeover, do: GenServer.cast(__MODULE__, :resume_rotation_after_takeover)
+
+  @doc false
+  def reset!, do: GenServer.call(__MODULE__, :reset)
 
   def launch_app(module) when is_atom(module),
     do: GenServer.cast(__MODULE__, {:launch_app, module})
@@ -157,13 +161,69 @@ defmodule Octopus.InstallationTransport do
     end
   end
 
+  def handle_call(:reset, _from, %State{} = state) do
+    state =
+      %State{
+        state
+        | queue: [],
+          cycle_index: 0,
+          playing: true,
+          paused_remaining_ms: nil,
+          next_change_at_ms: nil,
+          live_entry: nil,
+          rotation_paused: false,
+          takeover_app_id: nil,
+          now_playing_stored_config: %{},
+          now_playing_overrides: %{},
+          now_playing_app_id: nil
+      }
+      |> cancel_timer()
+
+    {:reply, :ok, broadcast(state)}
+  end
+
+  def handle_call({:play_now, app, mode_id}, _from, state) do
+    entry = %{app: app, mode_id: mode_id}
+
+    result =
+      if apply(app, :compatible?, []) do
+        state =
+          state
+          |> apply_entry(entry)
+          |> maybe_jump_queue_index(entry)
+          |> maybe_takeover_off_queue_play(entry)
+          |> restart_countdown()
+
+        case state.live_entry do
+          %{app: ^app, mode_id: ^mode_id} -> {:ok, state}
+          _ -> {:error, :failed, state}
+        end
+      else
+        {:error, :incompatible, state}
+      end
+
+    {reply, state} =
+      case result do
+        {:ok, state} -> {:ok, state}
+        {:error, reason, state} -> {{:error, reason}, state}
+      end
+
+    {:reply, reply, broadcast(state)}
+  end
+
   @impl true
   def handle_cast(:toggle_play, %State{playing: true} = state) do
     {:noreply, state |> pause() |> broadcast()}
   end
 
   def handle_cast(:toggle_play, %State{playing: false} = state) do
-    {:noreply, state |> resume() |> broadcast()}
+    state =
+      state
+      |> clear_manual_takeover()
+      |> resume()
+      |> maybe_apply_live_queue_entry()
+
+    {:noreply, broadcast(state)}
   end
 
   def handle_cast(:next, state) do
@@ -174,29 +234,32 @@ defmodule Octopus.InstallationTransport do
     {:noreply, state |> step(-1) |> broadcast()}
   end
 
-  def handle_cast({:play_now, app, mode_id}, state) do
-    entry = %{app: app, mode_id: mode_id}
-
-    state =
-      state
-      |> apply_entry(entry)
-      |> maybe_jump_queue_index(entry)
-      |> restart_countdown()
-
-    {:noreply, broadcast(state)}
-  end
-
   def handle_cast({:queue_toggle, app, mode_id}, state) do
     entry = %{app: app, mode_id: mode_id}
+    adding? = not entry_in_queue?(state.queue, entry)
 
     new_queue =
-      if entry_in_queue?(state.queue, entry) do
-        List.delete(state.queue, entry)
-      else
+      if adding? do
         state.queue ++ [entry]
+      else
+        List.delete(state.queue, entry)
       end
 
-    {:noreply, state |> put_queue(new_queue) |> broadcast()}
+    state = state |> put_queue(new_queue)
+
+    state =
+      if adding? and is_nil(state.live_entry) and new_queue != [] do
+        idx = Enum.find_index(new_queue, &(&1 == entry)) || 0
+
+        state
+        |> Map.put(:cycle_index, idx)
+        |> apply_entry(entry)
+        |> clear_manual_takeover()
+      else
+        state
+      end
+
+    {:noreply, broadcast(state)}
   end
 
   def handle_cast({:set_queue, entries}, state) do
@@ -310,6 +373,32 @@ defmodule Octopus.InstallationTransport do
     end
   end
 
+  # Off-queue Play now pauses auto-rotation (without flipping playing=false).
+  defp maybe_takeover_off_queue_play(%State{} = state, entry) do
+    cond do
+      entry_in_queue?(state.queue, entry) ->
+        clear_manual_takeover(state)
+
+      is_nil(state.now_playing_app_id) ->
+        state
+
+      true ->
+        %State{state | rotation_paused: true, takeover_app_id: state.now_playing_app_id}
+    end
+  end
+
+  defp clear_manual_takeover(%State{} = state) do
+    %State{state | rotation_paused: false, takeover_app_id: nil}
+  end
+
+  defp maybe_apply_live_queue_entry(%State{live_entry: nil, queue: queue} = state)
+       when queue != [] do
+    entry = Enum.at(queue, state.cycle_index)
+    apply_entry(state, entry)
+  end
+
+  defp maybe_apply_live_queue_entry(%State{} = state), do: state
+
   defp step(%State{queue: queue} = state, _dir) when length(queue) < 2, do: state
 
   defp step(%State{queue: queue, cycle_index: index} = state, dir) do
@@ -335,8 +424,12 @@ defmodule Octopus.InstallationTransport do
           stored = stored_config_for(app, mode_id)
 
           case AppSupervisor.start_app(app, config: stored) do
-            {:ok, id} -> id
-            _ -> nil
+            {:ok, id} ->
+              id
+
+            {:error, reason} ->
+              Logger.warning("play_now start_app #{inspect(app)} failed: #{inspect(reason)}")
+              nil
           end
       end
 
@@ -770,12 +863,27 @@ defmodule Octopus.InstallationTransport do
 
   defp normalize_entry(%{app: app, mode_id: id}), do: %{app: normalize_app(app), mode_id: to_string(id)}
 
-  defp normalize_app(app) when is_atom(app), do: app
+  defp normalize_app(app) when is_atom(app) do
+    if Code.ensure_loaded?(app) and function_exported?(app, :list_modes, 0) do
+      app
+    else
+      Module.concat(Octopus.Apps, app)
+    end
+  end
 
-  defp normalize_app(app) when is_binary(app) do
-    Module.concat(Octopus.Apps, app)
-  rescue
-    _ -> app
+  defp normalize_app(app) when is_binary(app), do: parse_app_module_string(app)
+
+  defp parse_app_module_string(str) when is_binary(str) do
+    cond do
+      String.starts_with?(str, "Elixir.") ->
+        String.to_existing_atom(str)
+
+      String.contains?(str, ".") ->
+        str |> String.split(".") |> Enum.map(&String.to_existing_atom/1) |> Module.concat()
+
+      true ->
+        Module.concat(Octopus.Apps, String.to_existing_atom(str))
+    end
   end
 
   defp normalize_interval(seconds) when is_number(seconds), do: seconds * 1.0 |> max(1.0)

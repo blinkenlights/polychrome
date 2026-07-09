@@ -358,7 +358,7 @@ defmodule OctopusWeb.ConsoleComponents do
           <button
             class={["btn btn-sm min-h-11", @queueable? && "flex-1"]}
             phx-click="play_now"
-            phx-value-app={@app_module}
+            phx-value-app={Atom.to_string(@app_module)}
             phx-value-mode_id={@mode.id}
             phx-target={@target}
           >
@@ -371,7 +371,7 @@ defmodule OctopusWeb.ConsoleComponents do
               @queued_pos && "btn-primary bg-[#6d7cff] border-[#6d7cff]"
             ]}
             phx-click="queue_toggle"
-            phx-value-app={@app_module}
+            phx-value-app={Atom.to_string(@app_module)}
             phx-value-mode_id={@mode.id}
             phx-target={@target}
           >

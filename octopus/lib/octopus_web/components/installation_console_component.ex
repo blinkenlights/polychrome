@@ -5,9 +5,9 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   import OctopusWeb.ConsoleComponents
 
   alias Octopus.{App, AppManager, AppSupervisor, InstallationTransport}
-  alias Octopus.Apps.{Collective, DoomFire, PixelFun, PixieDebug, Wood}
+  alias Octopus.Apps.{Collective, DoomFire, Matrix, PixelFun, PixieDebug, Wood}
 
-  @wired_apps [PixelFun, Collective, DoomFire]
+  @wired_apps [PixelFun, Collective, DoomFire, Matrix]
   @experiment_apps [Wood]
   @debug_apps [PixieDebug]
   @pixel_fun_preview 6
@@ -190,7 +190,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
               type="button"
               class="text-sm link link-primary"
               phx-click="configure_app"
-              phx-value-module={section.app}
+              phx-value-module={Atom.to_string(section.app)}
               phx-target={@target}
             >
               Configure {section.title} →
@@ -341,8 +341,26 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   end
 
   def handle_event("play_now", %{"app" => app, "mode_id" => mode_id}, socket) do
-    InstallationTransport.play_now(parse_app_module(app), mode_id)
-    {:noreply, refresh_transport(socket)}
+    module = parse_app_module(app)
+
+    message =
+      case InstallationTransport.play_now(module, mode_id) do
+        :ok ->
+          refresh_transport(socket)
+          nil
+
+        {:error, :incompatible} ->
+          refresh_transport(socket)
+          "#{App.name(module)} is not compatible with this installation"
+
+        {:error, _} ->
+          refresh_transport(socket)
+          "Could not play #{App.name(module)} · #{mode_id}"
+      end
+
+    socket = if message, do: put_flash(socket, :error, message), else: socket
+
+    {:noreply, socket}
   end
 
   def handle_event("queue_toggle", %{"app" => app, "mode_id" => mode_id}, socket) do
@@ -524,7 +542,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         str |> String.split(".") |> Enum.map(&String.to_existing_atom/1) |> Module.concat()
 
       true ->
-        String.to_existing_atom(str)
+        Module.concat(Octopus.Apps, String.to_existing_atom(str))
     end
   end
 
@@ -634,7 +652,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     }
 
     more_sections =
-      for app <- [Collective, DoomFire] do
+      for app <- [Collective, DoomFire, Matrix] do
         %{
           title: App.name(app),
           app: app,
