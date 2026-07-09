@@ -14,8 +14,10 @@ defmodule OctopusWeb.ConsoleComponents do
 
   attr :playing, :boolean, required: true
   attr :rotating?, :boolean, required: true
+  attr :takeover?, :boolean, default: false
   attr :live_label, :string, required: true
   attr :live?, :boolean, default: false
+  attr :transport_mode, :atom, required: true
   attr :subtitle, :string, required: true
   attr :countdown_percent, :integer, required: true
   attr :countdown_label, :string, required: true
@@ -28,13 +30,14 @@ defmodule OctopusWeb.ConsoleComponents do
     <div class="card bg-base-200 border border-base-300 shadow-sm">
       <div class="card-body p-4 gap-4">
         <div class="flex items-center gap-4 flex-wrap">
-          <.transport_controls rotating?={@rotating?} target={@target} playing={@playing} />
+          <.transport_controls rotating?={@rotating?} takeover?={@takeover?} target={@target} playing={@playing} />
 
           <div class="flex-1 min-w-[12rem]">
             <div class="text-[11px] uppercase tracking-wide opacity-60">Now on the wall</div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <span class="text-lg font-semibold">{@live_label}</span>
               <.live_badge :if={@live?} />
+              <.transport_mode_badge mode={@transport_mode} />
             </div>
             <div class="text-sm opacity-70">{@subtitle}</div>
           </div>
@@ -64,8 +67,10 @@ defmodule OctopusWeb.ConsoleComponents do
 
   attr :playing, :boolean, required: true
   attr :rotating?, :boolean, required: true
+  attr :takeover?, :boolean, default: false
   attr :live_label, :string, required: true
   attr :live?, :boolean, default: false
+  attr :transport_mode, :atom, required: true
   attr :subtitle, :string, required: true
   attr :countdown_percent, :integer, required: true
   attr :countdown_label, :string, required: true
@@ -75,18 +80,18 @@ defmodule OctopusWeb.ConsoleComponents do
     ~H"""
     <div class="sticky top-0 z-20 card bg-base-200 border border-base-300 shadow-sm">
       <div class="card-body p-3 flex-row items-center gap-3">
-        <button
-          class="btn btn-circle btn-primary btn-sm w-11 h-11"
-          phx-click="toggle_play"
-          phx-target={@target}
-          aria-label={if @playing, do: "Pause", else: "Play"}
-        >
-          {if @playing, do: "❚❚", else: "▶"}
-        </button>
+        <.transport_controls
+          rotating?={@rotating?}
+          takeover?={@takeover?}
+          target={@target}
+          playing={@playing}
+          compact
+        />
         <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
             <span class="font-semibold truncate">{@live_label}</span>
             <.live_badge :if={@live?} />
+            <.transport_mode_badge mode={@transport_mode} />
           </div>
           <div class="text-xs opacity-70 truncate">{@subtitle}</div>
         </div>
@@ -103,6 +108,8 @@ defmodule OctopusWeb.ConsoleComponents do
 
   attr :rotating?, :boolean, required: true
   attr :playing, :boolean, required: true
+  attr :takeover?, :boolean, default: false
+  attr :compact, :boolean, default: false
   attr :target, :any, default: nil
 
   def transport_controls(assigns) do
@@ -118,7 +125,25 @@ defmodule OctopusWeb.ConsoleComponents do
         ⏮
       </button>
       <button
-        class="btn btn-circle btn-primary bg-[#6d7cff] border-[#6d7cff] hover:bg-[#5b6aff] w-14 h-14 text-lg"
+        :if={@takeover?}
+        class={[
+          "btn btn-primary bg-[#6d7cff] border-[#6d7cff] hover:bg-[#5b6aff]",
+          @compact && "btn-sm btn-circle w-11 h-11 text-xs",
+          !@compact && "min-h-14 px-4"
+        ]}
+        phx-click="resume_rotation"
+        phx-target={@target}
+        aria-label="Resume rotation"
+      >
+        {if @compact, do: "↩", else: "Resume rotation"}
+      </button>
+      <button
+        :if={!@takeover?}
+        class={[
+          "btn btn-circle btn-primary bg-[#6d7cff] border-[#6d7cff] hover:bg-[#5b6aff] text-lg",
+          @compact && "btn-sm w-11 h-11",
+          !@compact && "w-14 h-14"
+        ]}
         phx-click="toggle_play"
         phx-target={@target}
         aria-label={if @playing, do: "Pause", else: "Play"}
@@ -137,6 +162,31 @@ defmodule OctopusWeb.ConsoleComponents do
     </div>
     """
   end
+
+  attr :mode, :atom, required: true
+
+  def transport_mode_badge(assigns) do
+    ~H"""
+    <span
+      :if={@mode != :idle}
+      class={[
+        "badge badge-sm border-0 font-semibold uppercase tracking-wide",
+        @mode == :rotating && "bg-[#00d390] text-black",
+        @mode == :takeover && "bg-warning text-warning-content",
+        @mode == :paused && "badge-neutral",
+        @mode == :hold && "badge-outline opacity-80"
+      ]}
+    >
+      {transport_mode_label(@mode)}
+    </span>
+    """
+  end
+
+  defp transport_mode_label(:rotating), do: "Rotating"
+  defp transport_mode_label(:takeover), do: "Takeover"
+  defp transport_mode_label(:paused), do: "Paused"
+  defp transport_mode_label(:hold), do: "Hold"
+  defp transport_mode_label(_), do: ""
 
   attr :playing, :boolean, required: true
   attr :countdown_percent, :integer, required: true
@@ -326,6 +376,7 @@ defmodule OctopusWeb.ConsoleComponents do
   attr :live?, :boolean, default: false
   attr :queued_pos, :integer, default: nil
   attr :queueable?, :boolean, default: true
+  attr :play_now_title, :string, default: "Show on the wall"
   attr :target, :any, default: nil
 
   def mode_tile(assigns) do
@@ -361,6 +412,7 @@ defmodule OctopusWeb.ConsoleComponents do
             phx-value-app={Atom.to_string(@app_module)}
             phx-value-mode_id={@mode.id}
             phx-target={@target}
+            title={@play_now_title}
           >
             ▶ Play now
           </button>

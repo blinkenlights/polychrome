@@ -229,7 +229,30 @@ defmodule Octopus.InstallationTransportTest do
       assert length(s.queue) == 1
     end
 
-    test "transport play resumes queue after manual play_now takeover" do
+    test "resume rotation snaps wall back to queue position after off-queue play" do
+      InstallationTransport.set_queue([
+        %{app: PixelFun, mode_id: @classic},
+        %{app: PixelFun, mode_id: @cross}
+      ])
+
+      InstallationTransport.play_now(PixelFun, @classic)
+      InstallationTransport.play_now(Matrix, @matrix)
+
+      assert state().live.app == Matrix
+      assert state().rotation_paused
+      assert state().cycle_index == 0
+
+      InstallationTransport.resume_rotation_after_takeover()
+
+      s = state()
+      assert s.rotation_paused == false
+      assert s.playing
+      assert s.live.app == PixelFun
+      assert s.live.mode_id == @classic
+      assert s.cycle_index == 0
+    end
+
+    test "resume rotation restores queue after manual play_now takeover" do
       InstallationTransport.set_queue([
         %{app: PixelFun, mode_id: @classic},
         %{app: PixelFun, mode_id: @cross}
@@ -238,12 +261,13 @@ defmodule Octopus.InstallationTransportTest do
       InstallationTransport.play_now(Matrix, @matrix)
       assert state().rotation_paused
 
-      InstallationTransport.toggle_play()
-      InstallationTransport.toggle_play()
+      InstallationTransport.resume_rotation_after_takeover()
 
       s = state()
       assert s.rotation_paused == false
       assert s.playing
+      assert s.live.app == PixelFun
+      assert s.live.mode_id == @classic
     end
   end
 
@@ -268,6 +292,9 @@ defmodule Octopus.InstallationTransportTest do
       assert resumed.rotation_paused == false
       assert resumed.takeover_app_id == nil
       assert resumed.playing
+      assert resumed.live.app == PixelFun
+      assert resumed.live.mode_id == @classic
+      assert resumed.cycle_index == 0
     end
   end
 

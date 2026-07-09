@@ -233,6 +233,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
               live?={tile.live?}
               queued_pos={tile.queued_pos}
               queueable?={Map.get(tile, :queueable?, true)}
+              play_now_title={tile.play_now_title}
               target={@target}
             />
             <.soon_tile :for={label <- section.soon} label={label} />
@@ -402,6 +403,11 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
   def handle_event("toggle_play", _params, socket) do
     InstallationTransport.toggle_play()
+    {:noreply, refresh_transport(socket)}
+  end
+
+  def handle_event("resume_rotation", _params, socket) do
+    InstallationTransport.resume_rotation_after_takeover()
     {:noreply, refresh_transport(socket)}
   end
 
@@ -722,6 +728,25 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
     live = transport.live
     live_label = if live, do: "#{live.app_name} · #{live.mode_name}", else: "—"
+    takeover? = transport.rotation_paused
+
+    transport_mode =
+      cond do
+        transport.rotation_paused ->
+          :takeover
+
+        count == 0 && is_nil(live) ->
+          :idle
+
+        count >= 2 && !transport.playing ->
+          :paused
+
+        count >= 2 && transport.playing ->
+          :rotating
+
+        true ->
+          :hold
+      end
 
     next_entry =
       if rotating? do
@@ -731,17 +756,21 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
     subtitle =
       cond do
-        transport.rotation_paused && transport.takeover_app_name ->
-          "#{transport.takeover_app_name} is on the wall — queue resumes when it stops."
+        transport_mode == :takeover ->
+          name = transport.takeover_app_name || live_label
+          "#{name} on wall — queue waiting."
 
-        !playing && rotating? ->
-          "Paused — holding current mode."
+        transport_mode == :paused ->
+          "Rotation paused."
 
-        rotating? && next_entry ->
+        transport_mode == :rotating && next_entry ->
           "Next: #{next_entry.app_name} · #{next_entry.mode_name} · item #{transport.cycle_index + 2} of #{count}"
 
-        count == 0 ->
-          "Nothing queued — pick a mode to show."
+        transport_mode == :idle ->
+          "Nothing queued — pick a mode."
+
+        transport_mode == :hold ->
+          "Single mode — add another to rotate."
 
         true ->
           "Holding this mode — add more to rotate."
@@ -758,6 +787,8 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     |> assign(
       rotating?: rotating?,
       playing: playing,
+      takeover?: takeover?,
+      transport_mode: transport_mode,
       live_label: live_label,
       live?: not is_nil(live),
       subtitle: subtitle,
@@ -867,17 +898,25 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
   defp tile_list(app, modes, transport, opts \\ []) do
     queueable? = Keyword.get(opts, :queueable?, true)
+    rotating_active? = length(transport.queue) >= 2 and not transport.rotation_paused
 
     Enum.map(modes, fn mode ->
+      queued_pos = queue_position(transport.queue, app, mode.id, 1)
+
       %{
         app: app,
         mode: mode,
         live?: live?(transport, app, mode.id),
-        queued_pos: queue_position(transport.queue, app, mode.id, 1),
-        queueable?: queueable?
+        queued_pos: queued_pos,
+        queueable?: queueable?,
+        play_now_title: play_now_title(queued_pos, rotating_active?)
       }
     end)
   end
+
+  defp play_now_title(queued_pos, _rotating_active?) when not is_nil(queued_pos), do: "Jump to this mode"
+  defp play_now_title(_queued_pos, true), do: "Preview — pauses rotation"
+  defp play_now_title(_queued_pos, _rotating_active?), do: "Show on the wall"
 
   defp assign_running(socket) do
     selected = AppManager.get_selected_app()
@@ -925,6 +964,8 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     Map.take(assigns, [
       :playing,
       :rotating?,
+      :takeover?,
+      :transport_mode,
       :live_label,
       :live?,
       :subtitle,
@@ -939,6 +980,8 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     Map.take(assigns, [
       :playing,
       :rotating?,
+      :takeover?,
+      :transport_mode,
       :live_label,
       :live?,
       :subtitle,

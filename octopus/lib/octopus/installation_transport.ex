@@ -298,7 +298,9 @@ defmodule Octopus.InstallationTransport do
 
   def handle_cast(:resume_rotation_after_takeover, %State{} = state) do
     state =
-      %State{state | rotation_paused: false, takeover_app_id: nil}
+      state
+      |> clear_manual_takeover()
+      |> apply_queue_entry_at_cycle_index()
       |> resume()
 
     {:noreply, broadcast(state)}
@@ -416,6 +418,13 @@ defmodule Octopus.InstallationTransport do
   end
 
   defp maybe_apply_live_queue_entry(%State{} = state), do: state
+
+  defp apply_queue_entry_at_cycle_index(%State{queue: []} = state), do: state
+
+  defp apply_queue_entry_at_cycle_index(%State{} = state) do
+    entry = Enum.at(state.queue, state.cycle_index)
+    apply_entry(state, entry)
+  end
 
   defp step(%State{queue: queue} = state, _dir) when length(queue) < 2, do: state
 
