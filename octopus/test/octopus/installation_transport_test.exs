@@ -2,13 +2,14 @@ defmodule Octopus.InstallationTransportTest do
   use ExUnit.Case, async: false
 
   alias Octopus.{AppModePresets, AppSupervisor, InstallationTransport}
-  alias Octopus.Apps.{Collective, Matrix, Ocean, PerlinNoise, PixelFun, PixieDebug, Wood}
+  alias Octopus.Apps.{Collective, Matrix, Ocean, PerlinNoise, PixelFun, PixieDebug, Sand, Wood}
 
   @classic "pixelfun:classic_ripple"
   @cross "pixelfun:cross_waves"
   @matrix "matrix:matrix"
   @perlin "perlinnoise:perlin"
   @ocean "ocean:ocean"
+  @sand "sand:sand"
   @orbital "collective:orbital"
 
   setup do
@@ -628,6 +629,50 @@ defmodule Octopus.InstallationTransportTest do
       s = state()
       assert s.now_playing.preset_name == "Glassy water"
       assert s.live.mode_name == "Glassy water"
+    end
+
+    test "sand tweak applies spawn_rate and button_force live" do
+      InstallationTransport.play_now(Sand, @sand)
+
+      playing = state().now_playing
+      assert playing.effective[:spawn_rate] == 0.25
+      assert playing.effective[:button_force] == 40
+      assert playing.effective[:auto_drain] == true
+      assert playing.effective[:color_mode] == :rainbow
+      assert length(playing.tweakables) == 4
+      assert playing.persistable
+      assert playing.renamable
+
+      InstallationTransport.set_tweakable(:spawn_rate, 0.5)
+      InstallationTransport.set_tweakable(:color_mode, :warm)
+
+      tweaked = state().now_playing
+      assert tweaked.dirty == true
+      assert tweaked.effective[:spawn_rate] == 0.5
+      assert tweaked.effective[:color_mode] == :warm
+
+      {:ok, app_id} = AppSupervisor.find_running_app(Sand)
+      config = AppSupervisor.config(app_id)
+      assert config[:spawn_rate] == 0.5
+      assert config[:color_mode] == :warm
+    end
+
+    test "save and overwrite sand builtin" do
+      InstallationTransport.play_now(Sand, @sand)
+      InstallationTransport.set_tweakable(:button_force, 55)
+
+      np = state().now_playing
+      assert np.persistable
+      assert np.overwriteable
+      assert np.deletable
+      assert np.renamable
+
+      assert :ok = InstallationTransport.overwrite_now_playing_mode()
+      assert state().now_playing.effective[:button_force] == 55
+      assert state().now_playing.dirty == false
+
+      preset = AppModePresets.get(Sand, @sand)
+      assert preset.config[:button_force] == 55
     end
   end
 end
