@@ -2,7 +2,7 @@ defmodule Octopus.InstallationTransportTest do
   use ExUnit.Case, async: false
 
   alias Octopus.{AppSupervisor, InstallationTransport}
-  alias Octopus.Apps.{Collective, PixelFun, Wood}
+  alias Octopus.Apps.{Collective, PixelFun, PixieDebug, Wood}
 
   @classic "builtin:classic_ripple"
   @cross "builtin:cross_waves"
@@ -301,6 +301,60 @@ defmodule Octopus.InstallationTransportTest do
       assert config[:speed] == 3.5
       assert config[:mode] == :endless_up
       assert config[:blob_size] == 3
+    end
+
+    test "pixie debug tweak applies layout_index live" do
+      original_installation = Application.get_env(:octopus, :installation)
+      Application.put_env(:octopus, :installation, Octopus.Installation.Pixie)
+
+      on_exit(fn ->
+        Application.put_env(:octopus, :installation, original_installation)
+      end)
+
+      InstallationTransport.play_now(PixieDebug, "pixel_walk")
+
+      before = state().now_playing
+      assert before.effective[:layout_index] == 0
+      assert before.meta != []
+
+      InstallationTransport.set_tweakable(:layout_index, 42)
+
+      tweaked = state().now_playing
+      assert tweaked.dirty == true
+      assert tweaked.effective[:layout_index] == 42
+      assert Enum.any?(tweaked.meta, &String.contains?(&1, "Layout"))
+
+      {:ok, app_id} = AppSupervisor.find_running_app(PixieDebug)
+      assert AppSupervisor.config(app_id)[:layout_index] == 42
+    end
+
+    test "pixie debug full panel tweak applies color live" do
+      original_installation = Application.get_env(:octopus, :installation)
+      Application.put_env(:octopus, :installation, Octopus.Installation.Pixie)
+
+      on_exit(fn ->
+        Application.put_env(:octopus, :installation, original_installation)
+      end)
+
+      InstallationTransport.play_now(PixieDebug, "full_panel")
+
+      playing = state().now_playing
+      assert playing.effective[:mode_id] == "full_panel"
+      assert playing.effective[:color_channel] == :white
+      assert playing.meta == ["Panel fill · white"]
+
+      InstallationTransport.set_tweakable(:color_channel, :rgb)
+      InstallationTransport.set_tweakable(:color, "#00ff00")
+
+      tweaked = state().now_playing
+      assert tweaked.effective[:color_channel] == :rgb
+      assert tweaked.effective[:color] == "#00ff00"
+      assert tweaked.meta == ["Panel fill · #00ff00 (RGB)"]
+
+      {:ok, app_id} = AppSupervisor.find_running_app(PixieDebug)
+      config = AppSupervisor.config(app_id)
+      assert config[:color_channel] == :rgb
+      assert config[:color] == "#00ff00"
     end
   end
 end

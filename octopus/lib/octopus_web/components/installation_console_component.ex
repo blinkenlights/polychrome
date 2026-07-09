@@ -5,10 +5,11 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   import OctopusWeb.ConsoleComponents
 
   alias Octopus.{App, AppManager, AppSupervisor, InstallationTransport}
-  alias Octopus.Apps.{Collective, DoomFire, PixelFun, Wood}
+  alias Octopus.Apps.{Collective, DoomFire, PixelFun, PixieDebug, Wood}
 
   @wired_apps [PixelFun, Collective, DoomFire]
   @experiment_apps [Wood]
+  @debug_apps [PixieDebug]
   @pixel_fun_preview 6
 
   def mount(socket) do
@@ -207,6 +208,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
               app_module={tile.app}
               live?={tile.live?}
               queued_pos={tile.queued_pos}
+              queueable?={Map.get(tile, :queueable?, true)}
               target={@target}
             />
             <.soon_tile :for={label <- section.soon} label={label} />
@@ -644,11 +646,25 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       end
 
     stub_sections = stub_app_sections(transport)
+    debug_sections = debug_app_sections(transport)
     experiment_sections = experiment_app_sections(transport)
 
     assign(socket,
-      library_sections: experiment_sections ++ [pixel_section | more_sections] ++ stub_sections
+      library_sections: debug_sections ++ experiment_sections ++ [pixel_section | more_sections] ++ stub_sections
     )
+  end
+
+  defp debug_app_sections(transport) do
+    for app <- @debug_apps, apply(app, :compatible?, []) do
+      %{
+        title: App.name(app),
+        app: app,
+        new_scene_path: nil,
+        show_more_count: 0,
+        soon: [],
+        tiles: tile_list(app, App.list_modes(app), transport, queueable?: false)
+      }
+    end
   end
 
   defp experiment_app_sections(transport) do
@@ -667,10 +683,11 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   defp stub_app_sections(_transport) do
     wired = MapSet.new(@wired_apps)
     experiments = MapSet.new(@experiment_apps)
+    debug = MapSet.new(@debug_apps)
 
     AppSupervisor.available_apps()
     |> Enum.filter(
-      &(App.rotation_eligible?(&1) and &1 not in wired and &1 not in experiments and
+      &(App.rotation_eligible?(&1) and &1 not in wired and &1 not in experiments and &1 not in debug and
           App.category(&1) == :animation)
     )
     |> Enum.group_by(&App.name/1)
@@ -686,13 +703,16 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     end)
   end
 
-  defp tile_list(app, modes, transport) do
+  defp tile_list(app, modes, transport, opts \\ []) do
+    queueable? = Keyword.get(opts, :queueable?, true)
+
     Enum.map(modes, fn mode ->
       %{
         app: app,
         mode: mode,
         live?: live?(transport, app, mode.id),
-        queued_pos: queue_position(transport.queue, app, mode.id, 1)
+        queued_pos: queue_position(transport.queue, app, mode.id, 1),
+        queueable?: queueable?
       }
     end)
   end
@@ -714,6 +734,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
     browse_apps =
       AppSupervisor.available_apps()
+      |> Enum.reject(&(&1 in @debug_apps))
       |> Enum.map(fn module ->
         %{
           module: module,

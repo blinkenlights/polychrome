@@ -499,6 +499,7 @@ defmodule Octopus.InstallationTransport do
       effective: effective,
       dirty: now_playing_dirty?(stored, overrides, tweakables),
       tweakables: tweakables,
+      meta: App.now_playing_meta(app, effective),
       persistable: app == PixelFun,
       overwriteable: app == PixelFun and not mode_builtin?(mode_id)
     }
@@ -532,6 +533,9 @@ defmodule Octopus.InstallationTransport do
 
       %{type: :choice, options: options} ->
         parse_choice(value, options)
+
+      %{type: :color} ->
+        normalize_hex_color(value)
 
       _ ->
         value
@@ -589,6 +593,22 @@ defmodule Octopus.InstallationTransport do
   defp normalize_tweak_key(key) when is_binary(key) do
     String.to_existing_atom(key)
   end
+
+  defp normalize_hex_color(value) when is_binary(value) do
+    value =
+      if String.starts_with?(value, "#") do
+        value
+      else
+        "#" <> value
+      end
+
+    case value do
+      "#" <> hex when byte_size(hex) == 6 -> "#" <> String.downcase(hex)
+      _ -> "#ffffff"
+    end
+  end
+
+  defp normalize_hex_color(_), do: "#ffffff"
 
   defp value_eq?(a, b) when is_number(a) and is_number(b), do: abs(a - b) < 0.001
   defp value_eq?(a, b), do: a == b

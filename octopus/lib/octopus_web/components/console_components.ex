@@ -325,6 +325,7 @@ defmodule OctopusWeb.ConsoleComponents do
   attr :app_module, :atom, required: true
   attr :live?, :boolean, default: false
   attr :queued_pos, :integer, default: nil
+  attr :queueable?, :boolean, default: true
   attr :target, :any, default: nil
 
   def mode_tile(assigns) do
@@ -355,7 +356,7 @@ defmodule OctopusWeb.ConsoleComponents do
 
         <div class="flex gap-2 mt-1">
           <button
-            class="btn btn-sm flex-1 min-h-11"
+            class={["btn btn-sm min-h-11", @queueable? && "flex-1"]}
             phx-click="play_now"
             phx-value-app={@app_module}
             phx-value-mode_id={@mode.id}
@@ -364,6 +365,7 @@ defmodule OctopusWeb.ConsoleComponents do
             ▶ Play now
           </button>
           <button
+            :if={@queueable?}
             class={[
               "btn btn-sm flex-1 min-h-11",
               @queued_pos && "btn-primary bg-[#6d7cff] border-[#6d7cff]"
@@ -459,9 +461,17 @@ defmodule OctopusWeb.ConsoleComponents do
   attr :target, :any, required: true
 
   def now_playing_card(assigns) do
+    visible_tweakables =
+      if assigns.now_playing do
+        visible_now_playing_tweakables(assigns.now_playing)
+      else
+        []
+      end
+
     assigns =
       assign(assigns,
-        has_tweakables: assigns.now_playing && assigns.now_playing.tweakables != [],
+        visible_tweakables: visible_tweakables,
+        has_tweakables: visible_tweakables != [],
         show_countdown: assigns.rotating?
       )
 
@@ -505,7 +515,7 @@ defmodule OctopusWeb.ConsoleComponents do
           phx-target={@target}
           class="space-y-4"
         >
-          <div :for={spec <- @now_playing.tweakables} class="space-y-1">
+          <div :for={spec <- @visible_tweakables} class="space-y-1">
             <div class="flex items-baseline justify-between gap-2">
               <label class="text-sm" for={"now-playing-#{spec.key}"}>{spec.label}</label>
               <span class={[
@@ -560,10 +570,26 @@ defmodule OctopusWeb.ConsoleComponents do
                     {elem(option, 1)}
                   </button>
                 </div>
+              <% spec.type == :color -> %>
+                <input
+                  type="color"
+                  id={"now-playing-#{spec.key}"}
+                  name={Atom.to_string(spec.key)}
+                  value={Map.get(@now_playing.effective, spec.key, spec[:default] || "#ffffff")}
+                  phx-debounce="100"
+                  class="w-full h-11 min-h-11 cursor-pointer rounded-lg border border-base-300 bg-base-100"
+                />
               <% true -> %>
             <% end %>
           </div>
         </form>
+
+        <div
+          :if={@now_playing.meta != []}
+          class="rounded-lg bg-base-300/40 p-3 console-mono text-xs space-y-0.5"
+        >
+          <div :for={line <- @now_playing.meta}>{line}</div>
+        </div>
 
         <div :if={@has_tweakables} class="flex flex-wrap gap-2 pt-3 border-t border-base-300">
           <button
@@ -647,6 +673,16 @@ defmodule OctopusWeb.ConsoleComponents do
     Map.has_key?(now_playing.overrides, key)
   end
 
+  defp visible_now_playing_tweakables(now_playing) do
+    Enum.filter(now_playing.tweakables, &now_playing_tweakable_visible?(&1, now_playing.effective))
+  end
+
+  defp now_playing_tweakable_visible?(%{visible_when: {dep_key, allowed}}, effective) do
+    Map.get(effective, dep_key) in allowed
+  end
+
+  defp now_playing_tweakable_visible?(_, _), do: true
+
   defp format_tweakable_value(%{type: :slider, unit: unit}, value) when is_binary(unit),
     do: "#{format_tweak_number(value)} #{unit}"
 
@@ -660,6 +696,7 @@ defmodule OctopusWeb.ConsoleComponents do
 
   defp format_tweakable_value(%{type: :toggle}, true), do: "On"
   defp format_tweakable_value(%{type: :toggle}, _), do: "Off"
+  defp format_tweakable_value(%{type: :color}, value) when is_binary(value), do: String.downcase(value)
   defp format_tweakable_value(_, value), do: to_string(value)
 
   defp format_tweak_number(n) when is_float(n), do: :erlang.float_to_binary(n, decimals: 1)

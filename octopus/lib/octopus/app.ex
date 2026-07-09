@@ -146,6 +146,11 @@ defmodule Octopus.App do
   """
   @callback rotation_eligible?() :: boolean()
 
+  @doc """
+  Optional read-only lines for the console "Now playing" panel (e.g. wiring debug info).
+  """
+  @callback now_playing_meta(config :: map()) :: [String.t()]
+
   defmacro __using__(opts) do
     category = Keyword.get(opts, :category, :misc)
     output_type = Keyword.get(opts, :output_type, :rgb)
@@ -222,6 +227,8 @@ defmodule Octopus.App do
         unquote(category) != :game
       end
 
+      def now_playing_meta(_config), do: []
+
       defoverridable output_type: 0
       defoverridable icon: 0
       defoverridable app_init: 1
@@ -235,6 +242,7 @@ defmodule Octopus.App do
       defoverridable mode_tweakables: 1
       defoverridable apply_mode: 2
       defoverridable rotation_eligible?: 0
+      defoverridable now_playing_meta: 1
     end
   end
 
@@ -247,6 +255,9 @@ defmodule Octopus.App do
 
   def mode_tweakables(module, mode_id) when is_atom(module),
     do: apply(module, :mode_tweakables, [mode_id])
+
+  def now_playing_meta(module, config) when is_atom(module),
+    do: apply(module, :now_playing_meta, [config])
 
   def apply_mode(app_id, module, mode_id) when is_atom(module) do
     apply(module, :apply_mode, [app_id, mode_id])
