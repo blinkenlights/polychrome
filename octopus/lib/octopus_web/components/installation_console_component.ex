@@ -19,8 +19,10 @@ defmodule OctopusWeb.InstallationConsoleComponent do
        active_tab: "queue",
        show_custom_interval: false,
        show_all_pixel_fun: false,
+       show_all_apps: false,
        running_apps: [],
        browse_apps: [],
+       browse_app_count: 0,
        console_theme: "light"
      )}
   end
@@ -59,7 +61,6 @@ defmodule OctopusWeb.InstallationConsoleComponent do
           <div class="min-[1100px]:col-start-2 space-y-6 order-1 min-[1100px]:order-none">
             <.queue_card {queue_assigns(assigns)} target={@myself} />
             <.running_now_strip running_apps={@running_apps} target={@myself} />
-            <.browse_apps apps={@browse_apps} target={@myself} />
           </div>
         </div>
       </div>
@@ -71,7 +72,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
         <div role="tablist" class="tabs tabs-boxed">
           <button
-            :for={{id, label} <- [{"queue", "Queue"}, {"library", "Library"}, {"apps", "Apps"}]}
+            :for={{id, label} <- [{"queue", "Queue"}, {"library", "Library"}, {"running", "Running"}]}
             role="tab"
             class={["tab min-h-11", @active_tab == id && "tab-active"]}
             phx-click="select_tab"
@@ -87,11 +88,27 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         </div>
         <div class={@active_tab != "library" && "hidden"}>
           <.mode_library sections={@library_sections} target={@myself} transport={@transport} compact show_all_pixel_fun={@show_all_pixel_fun} />
+          <.browse_apps
+            apps={@browse_apps}
+            count={@browse_app_count}
+            expanded={@show_all_apps}
+            target={@myself}
+            class="mt-4"
+          />
         </div>
-        <div class={@active_tab != "apps" && "hidden"}>
+        <div class={@active_tab != "running" && "hidden"}>
           <.running_now_strip running_apps={@running_apps} target={@myself} />
-          <.browse_apps apps={@browse_apps} target={@myself} />
         </div>
+      </div>
+
+      <div class="hidden min-[700px]:block">
+        <.browse_apps
+          apps={@browse_apps}
+          count={@browse_app_count}
+          expanded={@show_all_apps}
+          target={@myself}
+          dom_id="all-apps-desktop"
+        />
       </div>
 
       <.console_footer />
@@ -206,8 +223,8 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
       <p class="text-xs opacity-60 px-1">
         Games & test apps launch full-screen and don't join the rotation.
-        <button class="link link-primary" phx-click="select_tab" phx-value-tab="apps" phx-target={@target}>
-          Browse all apps →
+        <button class="link link-primary" phx-click="open_all_apps" phx-target={@target}>
+          Show all apps →
         </button>
       </p>
     </div>
@@ -225,26 +242,55 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   end
 
   attr :apps, :list, required: true
+  attr :count, :integer, required: true
+  attr :expanded, :boolean, required: true
   attr :target, :any, required: true
+  attr :class, :string, default: nil
+  attr :dom_id, :string, default: "all-apps"
 
   defp browse_apps(assigns) do
+    panel_id = "#{assigns.dom_id}-panel"
+    toggle_id = "#{assigns.dom_id}-toggle"
+    assigns = assign(assigns, panel_id: panel_id, toggle_id: toggle_id)
+
     ~H"""
-    <div class="card bg-base-200 border border-base-300 mt-4">
-      <div class="card-body p-4 gap-3">
-        <h2 class="text-base font-semibold">Launch app</h2>
-        <div :for={{category, apps} <- @apps} class="space-y-2">
-          <div class="text-xs uppercase opacity-60">{category}</div>
-          <div class="flex flex-wrap gap-2">
-            <button
-              :for={app <- apps}
-              class={["btn btn-sm min-h-11", !app.compatible && "btn-disabled"]}
-              phx-click="launch_app"
-              phx-value-module={app.module}
-              phx-target={@target}
-              disabled={!app.compatible}
-            >
-              {app.name}
-            </button>
+    <div id={@dom_id} class={["card bg-base-200 border border-base-300", @class]}>
+      <div class="card-body p-4 gap-0">
+        <button
+          type="button"
+          id={@toggle_id}
+          class="flex w-full items-center justify-between gap-3 text-left min-h-11"
+          phx-click="toggle_all_apps"
+          phx-target={@target}
+          aria-expanded={to_string(@expanded)}
+          aria-controls={@panel_id}
+        >
+          <div>
+            <h2 class="text-base font-semibold">All apps</h2>
+            <p class="text-xs opacity-60">
+              {@count} legacy, game & test apps — scroll here when you need something off the main library.
+            </p>
+          </div>
+          <span class={["text-lg opacity-50 shrink-0 transition-transform", @expanded && "rotate-180"]}>
+            ▾
+          </span>
+        </button>
+
+        <div :if={@expanded} id={@panel_id} class="space-y-4 pt-4 border-t border-base-300 mt-3">
+          <div :for={{category, apps} <- @apps} class="space-y-2">
+            <div class="text-xs uppercase opacity-60">{category}</div>
+            <div class="flex flex-wrap gap-2">
+              <button
+                :for={app <- apps}
+                class={["btn btn-sm min-h-11", !app.compatible && "btn-disabled"]}
+                phx-click="launch_app"
+                phx-value-module={app.module}
+                phx-target={@target}
+                disabled={!app.compatible}
+              >
+                {app.name}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -335,6 +381,13 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
   def handle_event("show_more_pixel_fun", _params, socket),
     do: {:noreply, assign(socket, show_all_pixel_fun: true) |> assign_library()}
+
+  def handle_event("toggle_all_apps", _params, socket),
+    do: {:noreply, assign(socket, show_all_apps: !socket.assigns.show_all_apps)}
+
+  def handle_event("open_all_apps", _params, socket) do
+    {:noreply, assign(socket, show_all_apps: true, active_tab: "library")}
+  end
 
   def handle_event("select_app", %{"app-id" => app_id}, socket) do
     AppManager.select_app(app_id)
@@ -568,7 +621,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         }
       end
 
-    browse =
+    browse_apps =
       AppSupervisor.available_apps()
       |> Enum.map(fn module ->
         %{
@@ -578,11 +631,14 @@ defmodule OctopusWeb.InstallationConsoleComponent do
           category: App.category(module)
         }
       end)
+
+    browse =
+      browse_apps
       |> Enum.group_by(& &1.category)
       |> Enum.sort_by(fn {cat, _} -> category_order(cat) end)
 
     socket
-    |> assign(running_apps: running, browse_apps: browse)
+    |> assign(running_apps: running, browse_apps: browse, browse_app_count: length(browse_apps))
   end
 
   defp category_order(:animation), do: 0
