@@ -90,4 +90,27 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
       assert updated.source == PixelFun.mode_config(@cross).program
     end
   end
+
+  describe "handle_config/2" do
+    test "applies drift, rotation, and zoom immediately" do
+      state = base_state(%{live_scene_id: @classic})
+
+      {:noreply, updated} =
+        PixelFun.handle_config(%{translate_scale: 4.0, rotate_scale: 2.0, zoom_scale: 5.0}, state)
+
+      assert updated.translate_scale == 4.0
+      assert updated.rotate_scale == 2.0
+      assert updated.zoom_scale == 5.0
+    end
+
+    test "reschedules color timer and resets lerp_time when color_interval changes" do
+      state = base_state(%{live_scene_id: @classic, color_interval: 5.0, lerp_time: 2.0, color_timer_ref: nil})
+
+      {:noreply, updated} = PixelFun.handle_config(%{color_interval: 10.0}, state)
+
+      assert updated.color_interval == 10.0
+      assert updated.lerp_time == 10.0
+      assert is_reference(updated.color_timer_ref)
+    end
+  end
 end

@@ -36,7 +36,8 @@ defmodule Octopus.Apps.PixelFun do
       :panel_interaction_factors,
       :panel_proximities,
       :speed,
-      :display_info
+      :display_info,
+      :color_timer_ref
     ]
   end
 
@@ -170,7 +171,7 @@ defmodule Octopus.Apps.PixelFun do
     {:ok, program} = config.program |> Program.parse()
 
     :timer.send_interval(@frame_time_ms, :tick)
-    Process.send_after(self(), :update_colors, color_interval_ms(config.color_interval))
+    color_timer_ref = Process.send_after(self(), :update_colors, color_interval_ms(config.color_interval))
 
     {seconds, micros} = NaiveDateTime.utc_now() |> NaiveDateTime.to_gregorian_seconds()
     seconds = seconds + micros / 1_000_000
@@ -198,7 +199,8 @@ defmodule Octopus.Apps.PixelFun do
       panel_interaction_factors: panel_interaction_factors,
       panel_proximities: Map.new(0..(Installation.num_panels() - 1), fn i -> {i, 0.0} end),
       speed: Octopus.Params.Global.speed(),
-      display_info: display_info
+      display_info: display_info,
+      color_timer_ref: color_timer_ref
     }
 
     {:ok, state}
@@ -247,9 +249,10 @@ defmodule Octopus.Apps.PixelFun do
         _ -> state.program
       end
 
-    color_interval = Map.get(config, :color_interval, state.color_interval)
+    old_color_interval = state.color_interval
+    color_interval = Map.get(config, :color_interval, old_color_interval)
 
-    %State{
+    state = %State{
       state
       | program: program,
         source: program_source,
@@ -258,6 +261,22 @@ defmodule Octopus.Apps.PixelFun do
         zoom_scale: Map.get(config, :zoom_scale, state.zoom_scale),
         color_interval: color_interval
     }
+
+    if color_interval != old_color_interval do
+      state = reschedule_color_timer(state)
+      %State{state | lerp_time: color_interval_s(state)}
+    else
+      state
+    end
+  end
+
+  defp reschedule_color_timer(%State{} = state) do
+    if ref = state.color_timer_ref do
+      Process.cancel_timer(ref)
+    end
+
+    ref = Process.send_after(self(), :update_colors, color_interval_ms(state.color_interval))
+    %State{state | color_timer_ref: ref}
   end
 
   defp apply_scene_by_id(%State{} = state, scene_id) do
@@ -294,15 +313,15 @@ defmodule Octopus.Apps.PixelFun do
 
   def handle_info(:update_colors, %State{} = state) do
     colors = generate_random_colors()
-
-    Process.send_after(self(), :update_colors, color_interval_ms(state.color_interval))
+    color_timer_ref = Process.send_after(self(), :update_colors, color_interval_ms(state.color_interval))
 
     {:noreply,
      %State{
        state
        | last_colors: state.colors,
          target_colors: colors,
-         lerp_time: color_interval_s(state)
+         lerp_time: color_interval_s(state),
+         color_timer_ref: color_timer_ref
      }}
   end
 
