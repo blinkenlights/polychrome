@@ -197,6 +197,13 @@ defmodule Octopus.Apps.PixelFun do
   def mode_tweakables(_mode_id) do
     [
       %{
+        key: :program,
+        label: "Formula",
+        type: :formula,
+        default: "sin(10*t-hypot(x,y))",
+        hint: "x y t i · l m h · pi tau"
+      },
+      %{
         key: :color_interval,
         label: "Palette crossfade",
         type: :slider,
@@ -649,7 +656,7 @@ defmodule Octopus.Apps.PixelFun do
 
   defp generate_random_colors do
     hue_a = :rand.uniform(360) - 1
-    hue_b = Integer.mod(hue_a + 90 + :rand.uniform(180) - 1, 360)
+    hue_b = Integer.mod(hue_a + 60 + :rand.uniform(180) - 1, 360)
     sat_a = param(:saturation_percent, 70)
     sat_b = param(:saturation_percent, 70)
     hsv_a = Chameleon.HSV.new(hue_a, sat_a, 100)

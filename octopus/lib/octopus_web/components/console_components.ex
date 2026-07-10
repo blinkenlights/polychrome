@@ -2,6 +2,14 @@ defmodule OctopusWeb.ConsoleComponents do
   @moduledoc false
   use OctopusWeb, :html
 
+  alias Octopus.Apps.PixelFun.ScenePresets
+
+  @known_formula_idents ~w(
+    x y t i l m h pi tau
+    rand random abs sqrt hypot sin cos tan asin acos atan atan2
+    asinh acosh atanh floor ceil round fract noise
+  )
+
   @interval_presets [
     {"30 s", 30},
     {"1 min", 60},
@@ -503,6 +511,7 @@ defmodule OctopusWeb.ConsoleComponents do
   attr :playing, :boolean, default: true
   attr :countdown_percent, :integer, default: 0
   attr :countdown_label, :string, default: "--:--"
+  attr :id_suffix, :string, default: "main"
   attr :target, :any, required: true
 
   def now_playing_card(assigns) do
@@ -513,15 +522,24 @@ defmodule OctopusWeb.ConsoleComponents do
         []
       end
 
+    formula_spec = Enum.find(visible_tweakables, &(&1.type == :formula))
+    control_tweakables = Enum.reject(visible_tweakables, &(&1.type == :formula))
+
     assigns =
       assign(assigns,
         visible_tweakables: visible_tweakables,
+        formula_spec: formula_spec,
+        control_tweakables: control_tweakables,
         has_tweakables: visible_tweakables != [],
-        show_countdown: assigns.rotating?
+        has_formula: formula_spec != nil,
+        has_controls: control_tweakables != [],
+        show_countdown: assigns.rotating?,
+        formula_valid: now_playing_formula_valid?(assigns.now_playing),
+        formula_error: now_playing_formula_error(assigns.now_playing)
       )
 
     ~H"""
-    <div :if={@now_playing && @live} id="now-playing" class="card bg-base-200 border border-base-300 shadow-sm">
+    <div :if={@now_playing && @live} id={"now-playing-#{@id_suffix}"} class="card bg-base-200 border border-base-300 shadow-sm">
       <div class="card-body p-4 gap-3">
         <div class="flex items-center justify-between gap-3">
           <h2 class="text-base font-semibold">Now playing</h2>
@@ -554,23 +572,56 @@ defmodule OctopusWeb.ConsoleComponents do
         </div>
 
         <form
-          :if={@has_tweakables}
-          id="now-playing-tweaks"
+          :if={@has_formula}
+          id={"now-playing-formula-#{@id_suffix}"}
           phx-change="now_playing_change"
           phx-target={@target}
-          class="space-y-4"
+          class="space-y-1"
         >
-          <div :for={spec <- @visible_tweakables} class="space-y-1">
-            <%= if spec.type == :slider do %>
+          <label class="text-sm font-semibold" for={"now-playing-program-#{@id_suffix}"}>
+            {@formula_spec.label}
+          </label>
+          <p :if={@formula_spec[:hint]} class="console-mono text-[11px] opacity-60">{@formula_spec.hint}</p>
+          <input
+            type="text"
+            id={"now-playing-program-#{@id_suffix}"}
+            name={Atom.to_string(@formula_spec.key)}
+            value={now_playing_formula_value(@now_playing.effective, @formula_spec.key)}
+            phx-debounce="150"
+            class={[
+              "input input-bordered w-full console-mono text-sm min-h-11",
+              !@formula_valid && "border-[#ff6266] focus:border-[#ff6266]",
+              now_playing_value_dirty?(@now_playing, @formula_spec.key) && @formula_valid &&
+                "border-[#fcb700]"
+            ]}
+          />
+          <p :if={@formula_valid} class="text-xs text-[#00d390]">
+            ✓ Valid — updating the wall as you type
+          </p>
+          <p :if={!@formula_valid} class="text-xs text-[#ff6266]">
+            ✕ Invalid formula — {@formula_error || "syntax error"}. The wall keeps the last valid formula.
+          </p>
+        </form>
+
+        <form
+          :if={@has_controls}
+          id={"now-playing-tweaks-#{@id_suffix}"}
+          phx-change="now_playing_change"
+          phx-target={@target}
+          class={["space-y-4", @has_formula && "mt-4"]}
+        >
+          <div :for={spec <- @control_tweakables} class="space-y-1">
+            <%= cond do %>
+              <% spec.type == :slider -> %>
               <div
-                id={"now-playing-slider-#{spec.key}"}
+                id={"now-playing-slider-#{spec.key}-#{@id_suffix}"}
                 phx-hook=".NowPlayingSlider"
                 data-value={Map.get(@now_playing.effective, spec.key)}
                 data-unit={spec[:unit]}
                 class="space-y-1"
               >
                 <div class="flex items-baseline justify-between gap-2">
-                  <label class="text-sm" for={"now-playing-#{spec.key}"}>{spec.label}</label>
+                  <label class="text-sm" for={"now-playing-#{spec.key}-#{@id_suffix}"}>{spec.label}</label>
                   <span
                     data-value-display
                     class={[
@@ -584,7 +635,7 @@ defmodule OctopusWeb.ConsoleComponents do
                 </div>
                 <input
                   type="range"
-                  id={"now-playing-#{spec.key}"}
+                  id={"now-playing-#{spec.key}-#{@id_suffix}"}
                   name={Atom.to_string(spec.key)}
                   min={spec.min}
                   max={spec.max}
@@ -594,9 +645,9 @@ defmodule OctopusWeb.ConsoleComponents do
                   class="range range-primary range-sm w-full min-h-11"
                 />
               </div>
-            <% else %>
+              <% true -> %>
               <div class="flex items-baseline justify-between gap-2">
-                <label class="text-sm" for={"now-playing-#{spec.key}"}>{spec.label}</label>
+                <label class="text-sm" for={"now-playing-#{spec.key}-#{@id_suffix}"}>{spec.label}</label>
                 <span class={[
                   "console-mono text-xs tabular-nums",
                   now_playing_value_dirty?(@now_playing, spec.key) && "text-[#fcb700]",
@@ -614,7 +665,7 @@ defmodule OctopusWeb.ConsoleComponents do
                   />
                   <input
                     type="checkbox"
-                    id={"now-playing-#{spec.key}"}
+                    id={"now-playing-#{spec.key}-#{@id_suffix}"}
                     name={Atom.to_string(spec.key)}
                     value="true"
                     checked={Map.get(@now_playing.effective, spec.key) == true}
@@ -640,7 +691,7 @@ defmodule OctopusWeb.ConsoleComponents do
                 <% spec.type == :color -> %>
                   <input
                     type="color"
-                    id={"now-playing-#{spec.key}"}
+                    id={"now-playing-#{spec.key}-#{@id_suffix}"}
                     name={Atom.to_string(spec.key)}
                     value={Map.get(@now_playing.effective, spec.key, spec[:default] || "#ffffff")}
                     phx-debounce="50"
@@ -660,21 +711,30 @@ defmodule OctopusWeb.ConsoleComponents do
 
           export default {
             mounted() {
-              this.input = this.el.querySelector('input[type="range"]')
-              this.display = this.el.querySelector("[data-value-display]")
+              this.bindElements()
               this.onInput = () => {
-                this.display.textContent = formatValue(this.input.value, this.el.dataset.unit)
+                if (this.display) {
+                  this.display.textContent = formatValue(this.input.value, this.el.dataset.unit)
+                }
               }
               this.input.addEventListener("input", this.onInput)
             },
             updated() {
-              if (document.activeElement !== this.input) {
-                this.input.value = this.el.dataset.value
+              this.bindElements()
+              if (!this.input || document.activeElement === this.input) return
+              this.input.value = this.el.dataset.value
+              if (this.display) {
                 this.display.textContent = formatValue(this.input.value, this.el.dataset.unit)
               }
             },
             destroyed() {
-              this.input.removeEventListener("input", this.onInput)
+              if (this.input && this.onInput) {
+                this.input.removeEventListener("input", this.onInput)
+              }
+            },
+            bindElements() {
+              this.input = this.el.querySelector('input[type="range"]')
+              this.display = this.el.querySelector("[data-value-display]")
             }
           }
         </script>
@@ -693,6 +753,7 @@ defmodule OctopusWeb.ConsoleComponents do
             class="btn btn-primary btn-sm min-h-11 bg-[#6d7cff] border-[#6d7cff]"
             phx-click="open_now_playing_save_modal"
             phx-target={@target}
+            disabled={!@formula_valid}
           >
             Save as new…
           </button>
@@ -702,7 +763,7 @@ defmodule OctopusWeb.ConsoleComponents do
             class="btn btn-sm min-h-11"
             phx-click="now_playing_overwrite"
             phx-target={@target}
-            disabled={!@now_playing.dirty}
+            disabled={!@now_playing.dirty or !@formula_valid}
           >
             Overwrite
           </button>
@@ -890,6 +951,56 @@ defmodule OctopusWeb.ConsoleComponents do
   defp format_tweakable_value(%{type: :toggle}, _), do: "Off"
   defp format_tweakable_value(%{type: :color}, value) when is_binary(value), do: String.downcase(value)
   defp format_tweakable_value(_, value), do: to_string(value)
+
+  defp now_playing_formula_valid?(nil), do: true
+
+  defp now_playing_formula_valid?(%{tweakables: tweakables, effective: effective}) do
+    case Enum.find(tweakables, &(&1.type == :formula)) do
+      nil -> true
+      %{key: key} -> ScenePresets.validate_formula(now_playing_formula_value(effective, key)) == :ok
+    end
+  end
+
+  defp now_playing_formula_valid?(_), do: true
+
+  defp now_playing_formula_error(nil), do: nil
+
+  defp now_playing_formula_error(%{tweakables: tweakables, effective: effective}) do
+    case Enum.find(tweakables, &(&1.type == :formula)) do
+      nil ->
+        nil
+
+      %{key: key} ->
+        formula_error_token(now_playing_formula_value(effective, key))
+    end
+  end
+
+  defp now_playing_formula_error(_), do: nil
+
+  defp now_playing_formula_value(effective, key) when is_map(effective) do
+    effective
+    |> Map.get(key)
+    |> case do
+      value when is_binary(value) -> value
+      nil -> ""
+      value -> to_string(value)
+    end
+  end
+
+  defp formula_error_token(formula) when is_binary(formula) do
+    case ScenePresets.validate_formula(formula) do
+      :ok ->
+        nil
+
+      :error ->
+        Regex.scan(~r/[A-Za-z_][A-Za-z0-9_]*/, formula)
+        |> List.flatten()
+        |> Enum.find(&(&1 not in @known_formula_idents))
+        |> Kernel.||("?")
+    end
+  end
+
+  defp formula_error_token(_), do: "?"
 
   defp format_tweak_number(n) when is_float(n), do: :erlang.float_to_binary(n, decimals: 1)
   defp format_tweak_number(n) when is_integer(n), do: Integer.to_string(n)

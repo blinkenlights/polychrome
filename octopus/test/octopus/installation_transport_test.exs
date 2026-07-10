@@ -3,6 +3,7 @@ defmodule Octopus.InstallationTransportTest do
 
   alias Octopus.{AppSupervisor, InstallationTransport}
   alias Octopus.Apps.{Collective, Matrix, Ocean, PerlinNoise, PixelFun, PixieDebug, Sand, SparkleMist, Wood}
+  alias Octopus.Apps.PixelFun.Program
 
   @presets Module.concat(["Octopus", "AppModePresets"])
 
@@ -557,6 +558,84 @@ defmodule Octopus.InstallationTransportTest do
 
       assert :ok = InstallationTransport.save_now_playing_as_new("Drifty ripple")
       assert state().now_playing.dirty == false
+    end
+
+    test "pixel fun exposes formula tweakable" do
+      InstallationTransport.play_now(PixelFun, @classic)
+
+      playing = state().now_playing
+      assert length(playing.tweakables) == 5
+      assert Enum.any?(playing.tweakables, &(&1.key == :program and &1.type == :formula))
+      assert playing.effective[:program] == "sin(10*t-hypot(x,y))"
+    end
+
+    test "pixel fun formula tweak applies live and marks dirty" do
+      InstallationTransport.play_now(PixelFun, @classic)
+
+      stored_formula = state().now_playing.stored[:program]
+      InstallationTransport.set_tweakable(:program, "sin(x+t)")
+
+      tweaked = state().now_playing
+      assert tweaked.dirty == true
+      assert tweaked.stored[:program] == stored_formula
+      assert tweaked.effective[:program] == "sin(x+t)"
+
+      {:ok, app_id} = AppSupervisor.find_running_app(PixelFun)
+      assert AppSupervisor.config(app_id)[:program] == "sin(x+t)"
+    end
+
+    test "pixel fun invalid formula keeps last valid program on the wall" do
+      {:ok, original_ast} = Program.parse("sin(10*t-hypot(x,y))")
+
+      InstallationTransport.play_now(PixelFun, @classic)
+      InstallationTransport.set_tweakable(:program, "sin(+")
+
+      tweaked = state().now_playing
+      assert tweaked.dirty == true
+      assert tweaked.effective[:program] == "sin(+"
+
+      {:ok, app_id} = AppSupervisor.find_running_app(PixelFun)
+      {pid, _} = AppSupervisor.lookup_app(app_id)
+      %{program: program_ast} = :sys.get_state(pid)
+      assert program_ast == original_ast
+    end
+
+    test "pixel fun save as new persists tweaked formula" do
+      InstallationTransport.play_now(PixelFun, @classic)
+      InstallationTransport.set_tweakable(:program, "sin(x+t)")
+
+      assert :ok = InstallationTransport.save_now_playing_as_new("Custom wave")
+      assert state().now_playing.dirty == false
+
+      preset =
+        apply(@presets, :list_presets, [PixelFun])
+        |> Enum.find(&(&1.name == "Custom wave"))
+
+      assert preset.config[:program] == "sin(x+t)"
+    end
+
+    test "tweak recovers when now_playing_app_id is stale" do
+      InstallationTransport.play_now(PixelFun, @classic)
+      stale_id = state().now_playing.app_id
+      AppSupervisor.stop_app(stale_id)
+
+      InstallationTransport.set_tweakable(:zoom_scale, 3.5)
+
+      s = state().now_playing
+      assert s.effective[:zoom_scale] == 3.5
+      assert is_binary(s.app_id)
+      assert s.app_id != stale_id
+
+      {:ok, app_id} = AppSupervisor.find_running_app(PixelFun)
+      assert app_id == s.app_id
+      assert AppSupervisor.config(app_id)[:zoom_scale] == 3.5
+    end
+
+    test "pixel fun rejects save when formula is invalid" do
+      InstallationTransport.play_now(PixelFun, @classic)
+      InstallationTransport.set_tweakable(:program, "sin(+")
+
+      assert {:error, :invalid_formula} = InstallationTransport.save_now_playing_as_new("Bad scene")
     end
 
     test "perlin noise tweak applies scale and speed live" do

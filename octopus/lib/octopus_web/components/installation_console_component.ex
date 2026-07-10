@@ -68,7 +68,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
           <div class="space-y-6">
             <.global_params_card />
             <.queue_card {queue_assigns(assigns)} target={@myself} />
-            <.now_playing_card {now_playing_assigns(assigns)} target={@myself} />
+            <.now_playing_card {now_playing_assigns(assigns)} id_suffix="desktop" target={@myself} />
           </div>
         </div>
       </div>
@@ -92,7 +92,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         </div>
 
         <div class={@active_tab != "queue" && "hidden"}>
-          <.now_playing_card {now_playing_assigns(assigns)} target={@myself} />
+          <.now_playing_card {now_playing_assigns(assigns)} id_suffix="mobile" target={@myself} />
           <.queue_card {queue_assigns(assigns)} target={@myself} />
           <.running_now_panel
             running_apps={@running_apps}

@@ -500,17 +500,71 @@ defmodule Octopus.InstallationTransport do
     apply_now_playing_config(state)
   end
 
-  defp apply_now_playing_config(%State{now_playing_app_id: nil} = state), do: state
+  defp apply_now_playing_config(%State{live_entry: nil} = state), do: state
 
   defp apply_now_playing_config(%State{} = state) do
     effective = effective_config(state)
 
-    if state.now_playing_app_id do
-      current = AppSupervisor.config(state.now_playing_app_id) || %{}
-      AppSupervisor.update_config(state.now_playing_app_id, Map.merge(current, effective))
-    end
+    case resolve_now_playing_app_id(state) do
+      {nil, state} ->
+        state
 
-    state
+      {app_id, state} ->
+        current = config_map(app_id)
+        AppSupervisor.update_config(app_id, Map.merge(current, effective))
+        state
+    end
+  end
+
+  defp resolve_now_playing_app_id(%State{} = state) do
+    cond do
+      is_binary(state.now_playing_app_id) and app_running?(state.now_playing_app_id) ->
+        {state.now_playing_app_id, state}
+
+      match?(%{app: _}, state.live_entry) ->
+        case AppSupervisor.find_running_app(state.live_entry.app) do
+          {:ok, app_id} ->
+            {app_id, %State{state | now_playing_app_id: app_id}}
+
+          :not_found ->
+            case start_live_app(state) do
+              nil -> {nil, %State{state | now_playing_app_id: nil}}
+              app_id -> {app_id, %State{state | now_playing_app_id: app_id}}
+            end
+        end
+
+      true ->
+        {nil, %State{state | now_playing_app_id: nil}}
+    end
+  end
+
+  defp start_live_app(%State{live_entry: %{app: app, mode_id: mode_id}} = state) do
+    config = effective_config(state)
+
+    case AppSupervisor.start_app(app, config: config) do
+      {:ok, app_id} ->
+        AppManager.select_app(app_id)
+        app_apply_mode(app_id, app, mode_id)
+        app_id
+
+      {:error, reason} ->
+        Logger.warning("now_playing restart #{inspect(app)} failed: #{inspect(reason)}")
+        nil
+    end
+  end
+
+  defp app_running?(app_id) when is_binary(app_id) do
+    case AppSupervisor.config(app_id) do
+      config when is_map(config) -> true
+      _ -> false
+    end
+  end
+
+  defp config_map(app_id) when is_binary(app_id) do
+    case AppSupervisor.config(app_id) do
+      config when is_map(config) -> config
+      _ -> %{}
+    end
   end
 
   defp clear_now_playing_overrides(%State{} = state) do
@@ -597,7 +651,7 @@ defmodule Octopus.InstallationTransport do
         base
 
       id ->
-        current = AppSupervisor.config(id) || %{}
+        current = config_map(id)
         Map.merge(base, Map.take(current, tweakable_keys(app, mode_id)))
     end
   end
@@ -683,6 +737,9 @@ defmodule Octopus.InstallationTransport do
 
       %{type: :color} ->
         normalize_hex_color(value)
+
+      %{type: :formula} ->
+        value |> to_string() |> String.trim()
 
       _ ->
         value
