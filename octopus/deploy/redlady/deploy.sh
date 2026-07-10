@@ -31,12 +31,19 @@ fi
 # Build image locally (native architecture — no --platform flag so Docker uses
 # the Mac's native arm64; the Raspberry Pi is also arm64).
 if [ "$SKIP_BUILD" = false ]; then
-    echo "Pre-fetching Hex and npm dependencies on host..."
-    (cd "${OCTOPUS_DIR}" && MIX_ENV=prod mix deps.get --only prod)
-    (cd "${OCTOPUS_DIR}/assets" && npm ci)
+    CACHE_DIR="${HOME}/.cache/polychrome-docker"
+    mkdir -p "${CACHE_DIR}"
+
+    if ! docker buildx inspect polychrome-cache >/dev/null 2>&1; then
+        docker buildx create --name polychrome-cache --driver docker-container --bootstrap
+    fi
+    docker buildx use polychrome-cache
 
     echo "Building Docker image ${IMAGE_NAME}:${IMAGE_TAG}..."
-    docker build \
+    docker buildx build \
+        --load \
+        --cache-from "type=local,src=${CACHE_DIR}" \
+        --cache-to "type=local,dest=${CACHE_DIR},mode=max" \
         -t "${IMAGE_NAME}:${IMAGE_TAG}" \
         -f "${OCTOPUS_DIR}/Dockerfile" \
         "${OCTOPUS_DIR}"
