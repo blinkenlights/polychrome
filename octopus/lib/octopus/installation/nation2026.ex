@@ -25,7 +25,7 @@ defmodule Octopus.Installation.Nation2026 do
     network_config: [
       mode: :broadcast,
       broadcast_ip: :auto,
-      send_in_dev: false
+      send_in_dev: true
     ],
     simulator_layouts: [
       [
