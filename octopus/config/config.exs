@@ -39,9 +39,10 @@ config :octopus, :osc_server_port, 8000
 
 # Installation configuration (compile-time setting).
 # Override at build time via the INSTALLATION_MODULE env var (see Dockerfile ARG).
-config :octopus, :installation,
-  System.get_env("INSTALLATION_MODULE", "Octopus.Installation.Nation2025")
-  |> then(&Module.concat([&1]))
+config :octopus,
+       :installation,
+       System.get_env("INSTALLATION_MODULE", "Octopus.Installation.Nation2026")
+       |> then(&Module.concat([&1]))
 
 # Configures the endpoint
 config :octopus, OctopusWeb.Endpoint,
