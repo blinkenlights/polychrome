@@ -31,6 +31,10 @@ fi
 # Build image locally (native architecture — no --platform flag so Docker uses
 # the Mac's native arm64; the metaebene server is an ARM VPS).
 if [ "$SKIP_BUILD" = false ]; then
+    echo "Pre-fetching Hex and npm dependencies on host..."
+    (cd "${OCTOPUS_DIR}" && MIX_ENV=prod mix deps.get --only prod)
+    (cd "${OCTOPUS_DIR}/assets" && npm ci)
+
     echo "Building Docker image ${IMAGE_NAME}:${IMAGE_TAG}..."
     docker build \
         -t "${IMAGE_NAME}:${IMAGE_TAG}" \
@@ -52,8 +56,9 @@ echo "Preparing remote directory ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}..."
 ssh "${REMOTE_USER}@${REMOTE_HOST}" "mkdir -p ${REMOTE_DIR}/deploy/metaebene"
 
 # Copy files to remote
-echo "Copying files to remote..."
-rsync -av "/tmp/${TARBALL}" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/"
+echo "Copying image to ${REMOTE_HOST}..."
+rsync -av --progress "/tmp/${TARBALL}" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/"
+echo "Copying deploy config..."
 rsync -av "${SCRIPT_DIR}/docker-compose.yml" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/deploy/metaebene/"
 rsync -av "${ENV_FILE}" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/deploy/metaebene/.env"
 
