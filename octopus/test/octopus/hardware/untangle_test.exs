@@ -76,4 +76,8 @@ defmodule Octopus.Hardware.UntangleTest do
   test "encode_rgb_data broadcast round-trips each panel at firmware_panel_index offset" do
     WireMapAssertions.assert_broadcast_encode_rgb_roundtrip!(Octopus.TestInstallations.BroadcastTwoPanels)
   end
+
+  test "encode_w_data broadcast round-trips each panel at firmware_panel_index offset" do
+    WireMapAssertions.assert_broadcast_encode_w_roundtrip!(Octopus.TestInstallations.BroadcastTwoPanels)
+  end
 end

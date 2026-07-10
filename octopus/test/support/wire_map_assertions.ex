@@ -107,6 +107,62 @@ defmodule Octopus.WireMapAssertions do
   end
 
   @doc """
+  Asserts broadcast `Untangle.encode_w_data/1` round-trips every pixel for each panel
+  at the correct firmware_panel_index offset.
+  """
+  @spec assert_broadcast_encode_w_roundtrip!(module()) :: :ok
+  def assert_broadcast_encode_w_roundtrip!(installation_module) do
+    slots = installation_module.panel_slots()
+    layout = installation_module.panel_layout()
+    {width, height} = layout
+    pixels_per_panel = width * height
+
+    data =
+      for _panel <- 0..(length(slots) - 1),
+          i <- 0..(pixels_per_panel - 1),
+          into: <<>> do
+        <<i>>
+      end
+
+    max_firmware_index =
+      slots
+      |> Enum.map(fn slot -> Hardware.fetch!(slot.controller_id).firmware_panel_index end)
+      |> Enum.max()
+
+    original_installation = Application.get_env(:octopus, :installation)
+
+    try do
+      Application.put_env(:octopus, :installation, installation_module)
+      encoded = Untangle.encode_w_data(data)
+
+      assert byte_size(encoded) == max_firmware_index * 64
+
+      for {slot, logical_slot} <- Enum.with_index(slots) do
+        controller = Hardware.fetch!(slot.controller_id)
+        wiring = Hardware.fetch_wiring!(slot.wiring_id)
+        base_offset = (controller.firmware_panel_index - 1) * 64
+
+        for y <- 0..(height - 1), x <- 0..(width - 1) do
+          u = x + y * width
+          fw = WireMap.firmware_index_for_layout(x, y, layout, wiring, controller)
+
+          assert is_integer(fw),
+                 "missing firmware index for panel #{logical_slot} layout {#{x}, #{y}}"
+
+          global_offset = base_offset + fw
+
+          assert :binary.at(encoded, global_offset) == u,
+                 "panel #{logical_slot} layout {#{x}, #{y}} (u=#{u}) at firmware offset #{global_offset}"
+        end
+      end
+    after
+      Application.put_env(:octopus, :installation, original_installation)
+    end
+
+    :ok
+  end
+
+  @doc """
   Asserts broadcast `Untangle.encode_rgb_data/1` round-trips every pixel for each panel
   at the correct firmware_panel_index offset.
   """

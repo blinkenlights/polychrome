@@ -112,7 +112,7 @@ defmodule Octopus.Hardware.Untangle do
               |> IO.iodata_to_binary()
 
             controller = Hardware.fetch!(slot.controller_id)
-            dest_offset = controller.firmware_panel_index - 1
+            dest_offset = (controller.firmware_panel_index - 1) * pixels_per_panel
             place_binary(acc, dest_offset, encoded)
           end)
       end
