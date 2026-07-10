@@ -29,6 +29,51 @@ defmodule Octopus.Hardware.WireMapTest do
     assert WireMap.strip_index(56) == 0
   end
 
+  test "horizontal wiring maps corners for bottom-left serpentine" do
+    assert WireMap.layout_to_strip(56, @horizontal, 8, 8) == 0
+    assert WireMap.layout_to_strip(63, @horizontal, 8, 8) == 7
+    assert WireMap.layout_to_strip(0, @horizontal, 8, 8) == 63
+    assert WireMap.layout_to_strip(7, @horizontal, 8, 8) == 56
+
+    assert WireMap.strip_to_layout(0, @horizontal, 8, 8) == 56
+    assert WireMap.strip_to_layout(7, @horizontal, 8, 8) == 63
+    assert WireMap.strip_to_layout(63, @horizontal, 8, 8) == 0
+    assert WireMap.strip_to_layout(56, @horizontal, 8, 8) == 7
+  end
+
+  test "horizontal layout and strip indices are mutual inverses on 0..63" do
+    for u <- 0..63 do
+      strip = WireMap.layout_to_strip(u, @horizontal, 8, 8)
+      assert WireMap.strip_to_layout(strip, @horizontal, 8, 8) == u
+    end
+  end
+
+  test "encode_to_firmware preserves row-wise x order on serpentine horizontal 8x8" do
+    values = for _y <- 0..7, x <- 0..7, do: x
+    encoded = WireMap.encode_to_firmware(values, {8, 8}, @horizontal, @panel_1)
+
+    serp_strip = fn x, y ->
+      yb = 7 - y
+
+      if rem(yb, 2) == 0 do
+        yb * 8 + x
+      else
+        yb * 8 + (7 - x)
+      end
+    end
+
+    strip_to_buffer =
+      Map.new(0..63, fn i -> {WireMap.strip_index(i, 8, 8), i} end)
+
+    for y <- 0..7, x <- 0..7 do
+      strip = serp_strip.(x, y)
+      buffer_index = Map.fetch!(strip_to_buffer, strip)
+
+      assert Enum.at(encoded, buffer_index) == x,
+             "layout {#{x}, #{y}} should display x=#{x} on physical serpentine panel"
+    end
+  end
+
   test "vertical wiring maps first LEDs along left column bottom to top" do
     assert WireMap.layout_to_strip(56, @vertical, 8, 8) == 0
     assert WireMap.layout_to_strip(48, @vertical, 8, 8) == 1

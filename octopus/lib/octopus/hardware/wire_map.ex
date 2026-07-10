@@ -63,7 +63,7 @@ defmodule Octopus.Hardware.WireMap do
   def layout_to_strip(u, %Wiring{type: type}, width, height) do
     case type do
       :serpentine_horizontal_bottom_left ->
-        layout_to_firmware_index(u, width, height)
+        horizontal_layout_to_strip(u, width, height)
 
       :serpentine_vertical_bottom_left ->
         vertical_layout_to_strip(u, width, height)
@@ -79,7 +79,7 @@ defmodule Octopus.Hardware.WireMap do
   def strip_to_layout(strip, %Wiring{type: type}, width, height) do
     case type do
       :serpentine_horizontal_bottom_left ->
-        firmware_to_layout_index(strip, width, height)
+        horizontal_strip_to_layout(strip, width, height)
 
       :serpentine_vertical_bottom_left ->
         vertical_strip_to_layout(strip, width, height)
@@ -203,6 +203,32 @@ defmodule Octopus.Hardware.WireMap do
     bytes
     |> apply_inverse(pixel_count, width, height)
     |> IO.iodata_to_binary()
+  end
+
+  defp horizontal_layout_to_strip(u, width, height) do
+    x = rem(u, width)
+    y_top = div(u, width)
+    y_bottom = height - 1 - y_top
+
+    if rem(y_bottom, 2) == 0 do
+      y_bottom * width + x
+    else
+      y_bottom * width + (width - x - 1)
+    end
+  end
+
+  defp horizontal_strip_to_layout(strip, width, height) do
+    y_bottom = div(strip, width)
+    y_top = height - 1 - y_bottom
+
+    x =
+      if rem(y_bottom, 2) == 0 do
+        rem(strip, width)
+      else
+        width - 1 - rem(strip, width)
+      end
+
+    x + y_top * width
   end
 
   defp vertical_layout_to_strip(u, width, height) do
