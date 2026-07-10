@@ -614,6 +614,20 @@ defmodule Octopus.InstallationTransportTest do
       assert preset.config[:program] == "sin(x+t)"
     end
 
+    test "pixel fun save as new fills missing program from running app" do
+      InstallationTransport.play_now(PixelFun, @classic)
+      InstallationTransport.set_tweakable(:translate_scale, 4.0)
+
+      :sys.replace_state(InstallationTransport, fn state ->
+        stored = Map.delete(state.now_playing_stored_config, :program)
+        %{state | now_playing_stored_config: stored}
+      end)
+
+      playing = state().now_playing
+      assert playing.effective[:program] == "sin(10*t-hypot(x,y))"
+      assert :ok = InstallationTransport.save_now_playing_as_new("Drifty ripple")
+    end
+
     test "tweak recovers when now_playing_app_id is stale" do
       InstallationTransport.play_now(PixelFun, @classic)
       stale_id = state().now_playing.app_id

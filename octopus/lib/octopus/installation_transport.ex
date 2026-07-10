@@ -637,8 +637,30 @@ defmodule Octopus.InstallationTransport do
     end
   end
 
+  defp effective_config(%State{live_entry: %{app: app, mode_id: mode_id}} = state) do
+    state.now_playing_stored_config
+    |> Map.merge(state.now_playing_overrides)
+    |> fill_missing_tweakables(app, mode_id, state.now_playing_app_id)
+  end
+
   defp effective_config(%State{} = state) do
     Map.merge(state.now_playing_stored_config, state.now_playing_overrides)
+  end
+
+  defp fill_missing_tweakables(config, app, mode_id, app_id) when is_map(config) do
+    fallback = stored_config_for(app, mode_id, app_id)
+
+    tweakable_keys(app, mode_id)
+    |> Enum.reduce(config, fn key, acc ->
+      if Map.has_key?(acc, key) do
+        acc
+      else
+        case Map.fetch(fallback, key) do
+          {:ok, value} -> Map.put(acc, key, value)
+          :error -> acc
+        end
+      end
+    end)
   end
 
   defp stored_config_for(app, mode_id, app_id \\ nil) do

@@ -294,7 +294,9 @@ defmodule Octopus.AppModePresets do
       (Map.keys(base) ++ tweakable_keys(app, mode_id))
       |> Enum.uniq()
 
-    config = Map.take(effective, keys)
+    config =
+      base
+      |> Map.merge(Map.take(effective, keys))
 
     if app_key(app) == "pixelfun" do
       %{
