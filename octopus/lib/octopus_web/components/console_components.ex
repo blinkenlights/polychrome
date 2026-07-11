@@ -153,9 +153,9 @@ defmodule OctopusWeb.ConsoleComponents do
         ]}
         phx-click="resume_rotation"
         phx-target={@target}
-        aria-label="Resume rotation"
+        aria-label="Resume playlist"
       >
-        {if @compact, do: "↩", else: "Resume rotation"}
+        {if @compact, do: "↩", else: "Resume playlist"}
       </button>
       <button
         :if={!@takeover?}

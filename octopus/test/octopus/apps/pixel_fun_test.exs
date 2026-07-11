@@ -218,6 +218,7 @@ defmodule Octopus.Apps.PixelFunTest do
         program: program,
         display_info: %{width: Installation.width(), height: Installation.height()},
         color_mode: :white,
+        colors: white_levels(100, 50),
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
@@ -247,6 +248,7 @@ defmodule Octopus.Apps.PixelFunTest do
         program: program,
         display_info: %{width: Installation.width(), height: Installation.height()},
         color_mode: :white,
+        colors: white_levels(100, 50),
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
@@ -273,6 +275,7 @@ defmodule Octopus.Apps.PixelFunTest do
         program: program,
         display_info: %{width: Installation.width(), height: Installation.height()},
         color_mode: :white,
+        colors: white_levels(100, 50),
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 5.0,
@@ -297,7 +300,7 @@ defmodule Octopus.Apps.PixelFunTest do
     end)
   end
 
-  test "build_canvas/1 white mode uses abs for negative values", _context do
+  test "build_canvas/1 white mode maps negative lobe to level_b", _context do
     with_installation(Octopus.TestInstallations.HorizontalStrip64, fn ->
       {:ok, program} = Program.parse("-1")
 
@@ -305,6 +308,7 @@ defmodule Octopus.Apps.PixelFunTest do
         program: program,
         display_info: %{width: Installation.width(), height: Installation.height()},
         color_mode: :white,
+        colors: white_levels(100, 40),
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
@@ -318,11 +322,26 @@ defmodule Octopus.Apps.PixelFunTest do
       canvas = pixel_fun_build_canvas(state)
 
       for x <- 0..63 do
-        assert Canvas.get_pixel(canvas, {x, 0}) == 255
+        assert Canvas.get_pixel(canvas, {x, 0}) == 102
       end
     end)
   end
 
+  test "generate_random_white_levels/0 respects min gap and min level", _context do
+    for _ <- 1..100 do
+      {a, b} = pixel_fun_generate_random_white_levels()
+      assert abs(a.v - b.v) >= 30
+      assert a.v >= 32
+      assert b.v >= 32
+    end
+  end
+
+  defp white_levels(a, b),
+    do: {Chameleon.HSV.new(0, 0, a), Chameleon.HSV.new(0, 0, b)}
+
   defp pixel_fun_compatible?, do: apply(@pixel_fun, :compatible?, [])
   defp pixel_fun_build_canvas(state), do: apply(@pixel_fun, :build_canvas, [state])
+
+  defp pixel_fun_generate_random_white_levels,
+    do: apply(@pixel_fun, :generate_random_white_levels, [])
 end

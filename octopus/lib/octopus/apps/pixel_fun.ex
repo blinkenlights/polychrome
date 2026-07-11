@@ -92,6 +92,8 @@ defmodule Octopus.Apps.PixelFun do
 
   @fps 60
   @frame_time_ms trunc(1000 / @fps)
+  @min_white_level_gap 30
+  @min_white_level 32
 
   defmodule State do
     defstruct [
@@ -163,7 +165,7 @@ defmodule Octopus.Apps.PixelFun do
 
     Formula — expression evaluated per pixel. Pick a scene preset tile or type your own; saved scenes persist across restarts. Variables: x, y (position), t (time, scaled by global Speed), i (pixel index), l/m/h (audio bass/mid/high if present), pi, tau.
 
-    Colors — Random dual crossfades between random colour pairs; Rainbow spreads hue across the pattern (moves with drift/rotation). White drives brightness on the warm W channel of the TM1814 LEDs (no RGB tint). Palette crossfade applies only in Random dual mode.
+    Colors — Random dual crossfades between random colour pairs; Rainbow spreads hue across the pattern (moves with drift/rotation). White dual maps positive/negative lobes to two brightness levels on the warm W channel of the TM1814 LEDs (no RGB tint). Palette crossfade applies in Random dual and White dual modes.
 
     Drift strength — automatic sin/cos panning of the pattern (0 = off). Not manual translation.
 
@@ -238,7 +240,7 @@ defmodule Octopus.Apps.PixelFun do
     palette =
       case color_mode do
         :rainbow -> "rainbow"
-        :white -> "white"
+        :white -> "white #{format_num(config[:color_interval])}s"
         _ -> "palette #{format_num(config[:color_interval])}s"
       end
 
@@ -271,7 +273,7 @@ defmodule Octopus.Apps.PixelFun do
         label: "Colors",
         type: :choice,
         default: :random,
-        options: [{:random, "Random dual"}, {:rainbow, "Rainbow"}, {:white, "White (W channel)"}]
+        options: [{:random, "Random dual"}, {:rainbow, "Rainbow"}, {:white, "White dual (W channel)"}]
       },
       %{
         key: :color_interval,
@@ -361,6 +363,7 @@ defmodule Octopus.Apps.PixelFun do
 
     :timer.send_interval(@frame_time_ms, :tick)
     color_mode = Map.get(config, :color_mode, :random)
+    palette = generate_random_palette(color_mode)
     color_timer_ref = maybe_start_color_timer(color_mode, config.color_interval, nil)
 
     {seconds, micros} = NaiveDateTime.utc_now() |> NaiveDateTime.to_gregorian_seconds()
@@ -372,9 +375,9 @@ defmodule Octopus.Apps.PixelFun do
     state = %State{
       program: program,
       source: config.program,
-      colors: generate_random_colors(),
-      last_colors: generate_random_colors(),
-      target_colors: generate_random_colors(),
+      colors: palette,
+      last_colors: palette,
+      target_colors: palette,
       lerp_time: config.color_interval,
       color_mode: color_mode,
       color_interval: config.color_interval,
@@ -474,10 +477,19 @@ defmodule Octopus.Apps.PixelFun do
     state =
       cond do
         color_mode != old_color_mode ->
+          palette = generate_random_palette(color_mode)
           color_timer_ref = maybe_start_color_timer(color_mode, color_interval, state.color_timer_ref)
-          %State{state | color_timer_ref: color_timer_ref, lerp_time: color_interval_s(state)}
 
-        color_mode == :random and color_interval != old_color_interval ->
+          %State{
+            state
+            | colors: palette,
+              last_colors: palette,
+              target_colors: palette,
+              color_timer_ref: color_timer_ref,
+              lerp_time: color_interval_s(state)
+          }
+
+        color_mode in [:random, :white] and color_interval != old_color_interval ->
           state = reschedule_color_timer(state)
           %State{state | lerp_time: color_interval_s(state)}
 
@@ -488,7 +500,8 @@ defmodule Octopus.Apps.PixelFun do
     state
   end
 
-  defp maybe_start_color_timer(:random, color_interval, existing_ref) do
+  defp maybe_start_color_timer(color_mode, color_interval, existing_ref)
+       when color_mode in [:random, :white] do
     if existing_ref, do: Process.cancel_timer(existing_ref)
     Process.send_after(self(), :update_colors, color_interval_ms(color_interval))
   end
@@ -530,7 +543,8 @@ defmodule Octopus.Apps.PixelFun do
 
   defp effective_seconds(%State{} = state), do: state.seconds * time_sign(state.time_direction)
 
-  defp reschedule_color_timer(%State{color_mode: :random} = state) do
+  defp reschedule_color_timer(%State{color_mode: color_mode} = state)
+       when color_mode in [:random, :white] do
     if ref = state.color_timer_ref do
       Process.cancel_timer(ref)
     end
@@ -585,8 +599,9 @@ defmodule Octopus.Apps.PixelFun do
   defp color_interval_s(%State{} = state), do: color_interval_ms(state.color_interval) / 1000.0
   defp color_interval_ms(interval) when is_number(interval), do: max(trunc(interval * 1000), 1)
 
-  def handle_info(:update_colors, %State{color_mode: :random} = state) do
-    colors = generate_random_colors()
+  def handle_info(:update_colors, %State{color_mode: color_mode} = state)
+      when color_mode in [:random, :white] do
+    colors = generate_random_palette(color_mode)
     color_timer_ref = Process.send_after(self(), :update_colors, color_interval_ms(state.color_interval))
 
     {:noreply,
@@ -713,6 +728,8 @@ defmodule Octopus.Apps.PixelFun do
         pixel =
           case state.color_mode do
             :white ->
+              {color_a, color_b} = state.colors
+
               state.program
               |> eval_pixel_value(
                 x_scaled,
@@ -723,7 +740,7 @@ defmodule Octopus.Apps.PixelFun do
                 audio.mid,
                 audio.high
               )
-              |> white_pixel_value()
+              |> white_pixel_value(color_a, color_b)
 
             :rainbow ->
               value =
@@ -871,12 +888,18 @@ defmodule Octopus.Apps.PixelFun do
     |> min(1.0)
   end
 
-  defp white_pixel_value(value) do
-    value
-    |> abs()
+  defp white_pixel_value(value, %Chameleon.HSV{v: level_a}, %Chameleon.HSV{v: level_b}) do
+    level =
+      cond do
+        value > 0 -> level_a * value
+        value < 0 -> level_b * -value
+        true -> 0
+      end
+
+    level
     |> Kernel.*(param(:value_percent, 100) / 100.0)
-    |> Kernel.*(255)
-    |> trunc()
+    |> Kernel.*(255 / 100.0)
+    |> round()
     |> max(0)
     |> min(255)
   end
@@ -952,7 +975,8 @@ defmodule Octopus.Apps.PixelFun do
     (:math.sin(seconds * 0.1) * 0.5 + 0.5) * state.zoom_scale
   end
 
-  defp lerp_toward_target_colors(%State{color_mode: :random} = state) do
+  defp lerp_toward_target_colors(%State{color_mode: color_mode} = state)
+       when color_mode in [:random, :white] do
     current_time = max(color_interval_s(state) - state.lerp_time, 0)
     t = current_time / color_interval_s(state)
     lerp_time = max(state.lerp_time - 1 / @fps, 0)
@@ -981,6 +1005,31 @@ defmodule Octopus.Apps.PixelFun do
 
   defp lerp(a, b, t) do
     (1 - t) * a + t * b
+  end
+
+  defp generate_random_palette(:white), do: generate_random_white_levels()
+  defp generate_random_palette(_), do: generate_random_colors()
+
+  @doc false
+  def generate_random_white_levels do
+    low_max = 100 - @min_white_level_gap
+    low = @min_white_level + :rand.uniform(low_max - @min_white_level + 1) - 1
+    extra = 100 - low - @min_white_level_gap
+
+    high =
+      if extra <= 0 do
+        100
+      else
+        low + @min_white_level_gap + :rand.uniform(extra)
+      end
+
+    {a, b} =
+      case :rand.uniform(2) do
+        1 -> {low, high}
+        2 -> {high, low}
+      end
+
+    {%Chameleon.HSV{h: 0, s: 0, v: a}, %Chameleon.HSV{h: 0, s: 0, v: b}}
   end
 
   defp generate_random_colors do
