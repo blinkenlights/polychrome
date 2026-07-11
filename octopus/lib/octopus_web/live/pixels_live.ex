@@ -4,7 +4,7 @@ defmodule OctopusWeb.PixelsLive do
   import Phoenix.LiveView, only: [push_event: 3, connected?: 1]
   import OctopusWeb.PanelStatusComponent
 
-  alias Octopus.{Events, Mixer}
+  alias Octopus.{Broadcaster, Events, Mixer}
   alias Octopus.Hardware.PanelStatus
   alias Octopus.Protobuf.{FirmwareConfig, RGBFrame}
   alias Octopus.Events.Event.Input, as: InputEvent
@@ -79,6 +79,8 @@ defmodule OctopusWeb.PixelsLive do
     views = get_views()
     default_view = views |> Map.keys() |> List.first()
     pixel_layout = views[default_view]
+    panel_status_visible = Installation.num_panels() > 0
+    sending_to_panels = Broadcaster.sending_enabled?()
 
     socket =
       if connected?(socket) do
@@ -91,17 +93,31 @@ defmodule OctopusWeb.PixelsLive do
             |> IO.iodata_to_binary()
         }
 
+        socket =
+          socket
+          |> push_layout(views[default_view])
+          |> push_config(@default_config)
+          |> push_frame(frame)
+          |> push_pixel_offset(0)
+
+        socket =
+          if panel_status_visible do
+            Broadcaster.subscribe_sending_changes()
+            subscribe_panel_status(socket)
+          else
+            socket
+          end
+
+        if panel_status_visible do
+          :timer.send_interval(1_000, :refresh_panel_status)
+          send(self(), :refresh_panel_status)
+        end
+
         socket
-        |> push_layout(views[default_view])
-        |> push_config(@default_config)
-        |> push_frame(frame)
-        |> push_pixel_offset(0)
-        |> subscribe_panel_status()
       else
         socket
       end
 
-    panel_status_enabled = PanelStatus.enabled?()
     view_options = Enum.map(views, fn {k, v} -> [key: v.name, value: k] end)
     max_windows = Installation.num_panels()
     num_buttons = Installation.num_buttons()
@@ -122,8 +138,10 @@ defmodule OctopusWeb.PixelsLive do
        num_buttons: num_buttons,
        key_map: get_key_map(),
        pressed_buttons: MapSet.new(),
-       panel_status_enabled: panel_status_enabled,
-       panel_statuses: initial_panel_statuses(panel_status_enabled)
+       panel_status_visible: panel_status_visible,
+       sending_to_panels: sending_to_panels,
+       panel_statuses: initial_panel_statuses(panel_status_visible),
+       current_time: System.os_time(:second)
      )}
   end
 
@@ -139,7 +157,12 @@ defmodule OctopusWeb.PixelsLive do
       phx-window-keyup="keyup"
     >
       <div class="absolute top-2 left-2 z-10">
-        <.panel_status_boxes enabled={@panel_status_enabled} panel_statuses={@panel_statuses} />
+        <.panel_status_boxes
+          visible={@panel_status_visible}
+          sending_enabled={@sending_to_panels}
+          panel_statuses={@panel_statuses}
+          current_time={@current_time}
+        />
       </div>
 
       <div class="absolute top-2 left-1/2 -translate-x-1/2 flex flex-col gap-2 z-10">
@@ -217,6 +240,11 @@ defmodule OctopusWeb.PixelsLive do
       </div>
     </div>
     """
+  end
+
+  def handle_event("toggle-panel-sending", _params, socket) do
+    Broadcaster.set_sending_enabled(!socket.assigns.sending_to_panels)
+    {:noreply, socket}
   end
 
   def handle_event("view-changed", %{"view" => view}, socket) do
@@ -441,13 +469,43 @@ defmodule OctopusWeb.PixelsLive do
     {:noreply, socket}
   end
 
-  def handle_info({:panel_status, panel, status}, %{assigns: %{panel_status_enabled: true}} = socket) do
+  def handle_info({:panel_status, panel, status}, %{assigns: %{panel_status_visible: true}} = socket) do
     panel_statuses =
       Enum.map(socket.assigns.panel_statuses, fn entry ->
         if entry.panel == panel, do: %{entry | status: status}, else: entry
       end)
 
     {:noreply, assign(socket, panel_statuses: panel_statuses)}
+  end
+
+  def handle_info(:refresh_panel_status, %{assigns: %{panel_status_visible: true}} = socket) do
+    {:noreply,
+     assign(socket,
+       panel_statuses: PanelStatus.all(),
+       current_time: System.os_time(:second)
+     )}
+  end
+
+  def handle_info({:sending_changed, enabled}, socket) do
+    socket =
+      socket
+      |> assign(sending_to_panels: enabled)
+      |> then(fn socket ->
+        if enabled do
+          assign(socket,
+            panel_statuses: PanelStatus.all(),
+            current_time: System.os_time(:second)
+          )
+        else
+          socket
+        end
+      end)
+
+    {:noreply, socket}
+  end
+
+  def handle_info(:refresh_panel_status, socket) do
+    {:noreply, socket}
   end
 
   def handle_info({:panel_status, _panel, _status}, socket) do
@@ -494,10 +552,7 @@ defmodule OctopusWeb.PixelsLive do
   end
 
   defp subscribe_panel_status(socket) do
-    if PanelStatus.enabled?() do
-      PanelStatus.subscribe()
-    end
-
+    PanelStatus.subscribe()
     socket
   end
 

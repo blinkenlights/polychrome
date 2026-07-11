@@ -56,8 +56,11 @@ defmodule Octopus.Hardware.PanelStatusTest do
           panel_slots: panel_slots
         )
 
-      assert [%{panel: 1, status: :online, controller_id: :polychrome_panel_1},
-              %{panel: 2, status: :offline, controller_id: :polychrome_panel_2}] = statuses
+      assert [%{panel: 1, status: :online, controller_id: :polychrome_panel_1, firmware_info: %{} = info},
+              %{panel: 2, status: :offline, controller_id: :polychrome_panel_2, firmware_info: nil}] =
+               statuses
+
+      assert info.mac == controller.mac
     end
 
     test "falls back to hostname when MAC differs" do
@@ -147,8 +150,8 @@ defmodule Octopus.BroadcasterSendingEnabledTest do
 
     try do
       Application.put_env(:octopus, :env, :prod)
-      assert Broadcaster.sending_enabled?(send_in_dev: false)
-      assert Broadcaster.sending_enabled?(send_in_dev: true)
+      assert Broadcaster.config_allows_sending?(send_in_dev: false)
+      assert Broadcaster.config_allows_sending?(send_in_dev: true)
     after
       Application.put_env(:octopus, :env, previous)
     end
@@ -159,7 +162,7 @@ defmodule Octopus.BroadcasterSendingEnabledTest do
 
     try do
       Application.put_env(:octopus, :env, :dev)
-      refute Broadcaster.sending_enabled?(send_in_dev: false)
+      refute Broadcaster.config_allows_sending?(send_in_dev: false)
     after
       Application.put_env(:octopus, :env, previous)
     end
@@ -170,9 +173,26 @@ defmodule Octopus.BroadcasterSendingEnabledTest do
 
     try do
       Application.put_env(:octopus, :env, :dev)
-      assert Broadcaster.sending_enabled?(send_in_dev: true)
+      assert Broadcaster.config_allows_sending?(send_in_dev: true)
     after
       Application.put_env(:octopus, :env, previous)
+    end
+  end
+
+  test "set_sending_enabled toggles runtime UDP sending" do
+    previous = Broadcaster.sending_enabled?()
+    enabled = !previous
+
+    try do
+      Broadcaster.set_sending_enabled(enabled)
+      Process.sleep(50)
+      assert Broadcaster.sending_enabled?() == enabled
+
+      Broadcaster.set_sending_enabled(previous)
+      Process.sleep(50)
+      assert Broadcaster.sending_enabled?() == previous
+    after
+      Broadcaster.set_sending_enabled(previous)
     end
   end
 end

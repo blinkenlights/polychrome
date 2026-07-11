@@ -28,13 +28,29 @@ defmodule Octopus.Hardware.PanelStatusTracker do
     GenServer.cast(__MODULE__, {:firmware_info, firmware_info, from_ip})
   end
 
+  @doc """
+  Notifies the tracker that runtime panel sending was toggled.
+  """
+  @spec sending_changed(boolean()) :: :ok
+  def sending_changed(enabled) when is_boolean(enabled) do
+    GenServer.cast(__MODULE__, {:sending_changed, enabled})
+  end
+
   @impl true
   def init(_opts) do
-    if PanelStatus.enabled?() do
-      schedule_check()
-    end
+    schedule_check()
 
     {:ok, %{statuses: %{}}}
+  end
+
+  @impl true
+  def handle_cast({:sending_changed, true}, state) do
+    schedule_check()
+    {:noreply, reconcile(state)}
+  end
+
+  def handle_cast({:sending_changed, _enabled}, state) do
+    {:noreply, state}
   end
 
   @impl true

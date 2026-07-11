@@ -54,19 +54,40 @@ defmodule Octopus.Broadcaster do
     GenServer.call(__MODULE__, :firmware_stats)
   end
 
+  @sending_topic "hardware:broadcaster:sending"
+
   @doc """
   Returns whether Octopus is sending UDP frames to firmware controllers.
 
-  Mirrors the gate used at startup: in `:dev`, sending requires
-  `send_in_dev: true` in the installation network config.
+  Reflects the runtime toggle. Initial state follows installation config: in
+  `:dev`, sending starts enabled only when `send_in_dev: true`.
   """
   @spec sending_enabled?() :: boolean()
   def sending_enabled? do
-    sending_enabled?(Installation.network_config())
+    GenServer.call(__MODULE__, :sending_enabled?)
   end
 
-  @spec sending_enabled?(keyword()) :: boolean()
-  def sending_enabled?(network_config) when is_list(network_config) do
+  @doc """
+  Enables or disables runtime UDP sending to firmware controllers.
+  """
+  @spec set_sending_enabled(boolean()) :: :ok
+  def set_sending_enabled(enabled) when is_boolean(enabled) do
+    GenServer.cast(__MODULE__, {:set_sending_enabled, enabled})
+  end
+
+  @doc "PubSub topic for runtime sending toggle changes."
+  @spec sending_topic() :: String.t()
+  def sending_topic, do: @sending_topic
+
+  @doc "Subscribe to runtime sending toggle changes."
+  @spec subscribe_sending_changes() :: :ok | {:error, term()}
+  def subscribe_sending_changes do
+    Phoenix.PubSub.subscribe(Octopus.PubSub, @sending_topic)
+  end
+
+  @doc false
+  @spec config_allows_sending?(keyword()) :: boolean()
+  def config_allows_sending?(network_config) when is_list(network_config) do
     current_env = Application.get_env(:octopus, :env, :prod)
     send_in_dev = Keyword.get(network_config, :send_in_dev, false)
 
@@ -161,6 +182,21 @@ defmodule Octopus.Broadcaster do
       {:noreply, state}
   end
 
+  def handle_cast({:set_sending_enabled, enabled}, %State{} = state) do
+    if state.should_send_udp == enabled do
+      {:noreply, state}
+    else
+      Logger.info("Panel UDP sending #{if enabled, do: "enabled", else: "disabled"}")
+
+      state = %{state | should_send_udp: enabled}
+      state = if enabled, do: send_config(state.config, state), else: state
+
+      broadcast_sending_changed(enabled)
+
+      {:noreply, state}
+    end
+  end
+
   def handle_cast({:send_binary, frame}, %State{} = state) do
     frame
     |> send_binary(state)
@@ -188,6 +224,10 @@ defmodule Octopus.Broadcaster do
     {:reply, state.firmware_stats, state}
   end
 
+  def handle_call(:sending_enabled?, _from, %State{} = state) do
+    {:reply, state.should_send_udp, state}
+  end
+
   defp print_ip({a, b, c, d}), do: "#{a}.#{b}.#{c}.#{d}"
   defp print_ip(ip), do: inspect(ip)
 
@@ -213,8 +253,6 @@ defmodule Octopus.Broadcaster do
         payload = frame_payload(binary, state, panel_index)
         :gen_udp.send(state.udp, target_ip, state.remote_port, payload)
       end
-    else
-      Logger.debug("UDP sending disabled - packets not sent")
     end
   end
 
@@ -293,7 +331,7 @@ defmodule Octopus.Broadcaster do
   end
 
   defp determine_targets(network_config) do
-    should_send_udp = sending_enabled?(network_config)
+    should_send_udp = config_allows_sending?(network_config)
     network_mode = Keyword.get(network_config, :mode, :broadcast)
 
     targets =
@@ -410,5 +448,10 @@ defmodule Octopus.Broadcaster do
       _ ->
         :ok
     end
+  end
+
+  defp broadcast_sending_changed(enabled) do
+    Phoenix.PubSub.broadcast(Octopus.PubSub, @sending_topic, {:sending_changed, enabled})
+    PanelStatusTracker.sending_changed(enabled)
   end
 end

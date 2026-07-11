@@ -21,13 +21,14 @@ defmodule Octopus.Hardware.PanelStatus do
           panel: pos_integer(),
           status: status(),
           last_seen: non_neg_integer() | nil,
-          controller_id: atom()
+          controller_id: atom(),
+          firmware_info: Octopus.Protobuf.FirmwareInfo.t() | nil
         }
 
   @doc """
   Returns whether panel status tracking is active.
 
-  Disabled when Octopus is not sending UDP to hardware (e.g. dev with `send_in_dev: false`).
+  Mirrors runtime UDP sending — disabled when output to hardware is off.
   """
   @spec enabled?() :: boolean()
   def enabled?, do: Broadcaster.sending_enabled?()
@@ -78,7 +79,8 @@ defmodule Octopus.Hardware.PanelStatus do
         panel: panel,
         status: status_for_last_seen(meta && meta.last_seen, now),
         last_seen: meta && meta.last_seen,
-        controller_id: controller_id
+        controller_id: controller_id,
+        firmware_info: meta && meta.firmware_info
       }
     end)
   end
