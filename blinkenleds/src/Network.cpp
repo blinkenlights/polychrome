@@ -3,6 +3,7 @@
 #include <ETH.h>
 #include <ESPmDNS.h>
 #include <ArduinoOTA.h>
+#include <cstdio>
 
 #include <schema.pb.h>
 #include <pb_decode.h>
@@ -256,8 +257,13 @@ void Network::send_firmware_info()
   packet.which_content = FirmwarePacket_firmware_info_tag;
   packet.content.firmware_info = (FirmwareInfo)FirmwareInfo_init_default;
 
-  String version = String(VERSION);
-  version.toCharArray(packet.content.firmware_info.build_time, 20);
+  // build_time is a 20-char protobuf field; format must stay within that limit.
+  snprintf(
+      packet.content.firmware_info.build_time,
+      sizeof(packet.content.firmware_info.build_time),
+      "%s (%s)",
+      FIRMWARE_VERSION,
+      BUILD_DATE);
   hostname.toCharArray(packet.content.firmware_info.hostname, 20);
   packet.content.firmware_info.panel_index = PANEL_INDEX;
   packet.content.firmware_info.config_phash = Display::get_config_phash();

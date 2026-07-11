@@ -13,6 +13,24 @@ It has easing support that can be configured via a config frame.
 # Client Messages
 The firmware regulary sends messages that contain stats and the hash of the current config.
 
+# Versioning
+
+Firmware version is defined in `VERSION` (currently read at build time via `extra_script.py`). Release snapshots are tagged in git as `blinkenleds-vX.Y` (e.g. `blinkenleds-v0.9`). The running firmware reports its version and compile date in the existing `FirmwareInfo.build_time` field (20 characters max), e.g. `0.9 (2026-07-11)`.
+
+To tag a release after updating `VERSION`:
+
+```bash
+git tag -a blinkenleds-v0.9 -m "Blinkenleds firmware 0.9"
+git push origin blinkenleds-v0.9
+```
+
+To rebuild and flash a tagged release:
+
+```bash
+git checkout blinkenleds-v0.9
+cd blinkenleds && make upload_all
+```
+
 # Hardware
 It is build for the QuinLed ESP32 with the ethernet shield. But it should work on any other ESP32.
 

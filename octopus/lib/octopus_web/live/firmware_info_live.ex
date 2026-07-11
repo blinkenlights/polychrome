@@ -42,7 +42,7 @@ defmodule OctopusWeb.FirmwareInfoLive do
                   <th>Hostname</th>
                   <th>MAC</th>
                   <th>IPv4</th>
-                  <th>Build Time</th>
+                  <th>Version</th>
                   <th>Config Phash</th>
                   <th>FPS</th>
                   <th>Packets/s</th>
@@ -102,8 +102,8 @@ defmodule OctopusWeb.FirmwareInfoLive do
 
   defp format_build_time(build_time, current_time) when is_binary(build_time) do
     case Integer.parse(build_time) do
-      {timestamp, _} -> time_ago(timestamp, current_time)
-      :error -> build_time
+      {timestamp, ""} -> time_ago(timestamp, current_time)
+      _ -> build_time
     end
   end
 
