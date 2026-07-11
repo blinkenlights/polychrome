@@ -749,7 +749,7 @@ defmodule Octopus.InstallationTransportTest do
       assert playing.effective[:button_force] == 40
       assert playing.effective[:auto_drain] == true
       assert playing.effective[:color_mode] == :rainbow
-      assert length(playing.tweakables) == 4
+      assert length(playing.tweakables) == 6
       assert playing.persistable
       assert playing.renamable
 

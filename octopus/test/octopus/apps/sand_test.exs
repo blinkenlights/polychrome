@@ -2,9 +2,11 @@ defmodule Octopus.Apps.SandTest do
   use Octopus.DataCase, async: true
 
   alias Octopus.Apps.Sand.State
+  alias Octopus.Apps.Sand.Sim
 
   @sand Module.concat(["Octopus", "Apps", "Sand"])
   @presets Module.concat(["Octopus", "AppModePresets"])
+  @default_supersample 4
 
   setup do
     preset_sync_all!()
@@ -12,12 +14,16 @@ defmodule Octopus.Apps.SandTest do
   end
 
   defp base_state(overrides) do
+    s = @default_supersample
+
     defaults = %{
       panels: %{},
       spawn_rate: 0.25,
       button_force: 40,
       auto_drain: true,
-      color_mode: :rainbow
+      color_mode: :rainbow,
+      supersample: s,
+      gravity: Sim.default_gravity(s)
     }
 
     struct!(State, Map.merge(defaults, Map.new(overrides)))
@@ -30,11 +36,15 @@ defmodule Octopus.Apps.SandTest do
   end
 
   test "mode_config/1 returns defaults" do
+    s = @default_supersample
+
     defaults = %{
       spawn_rate: 0.25,
       button_force: 40,
       auto_drain: true,
-      color_mode: :rainbow
+      color_mode: :rainbow,
+      supersample: s,
+      gravity: Sim.default_gravity(s)
     }
 
     assert sand_mode_config("sand:sand") == defaults
@@ -42,12 +52,12 @@ defmodule Octopus.Apps.SandTest do
     assert sand_mode_config("unknown") == %{}
   end
 
-  test "mode_tweakables/1 exposes spawn_rate, button_force, auto_drain, color_mode" do
+  test "mode_tweakables/1 exposes all tweakable keys" do
     keys =
       sand_mode_tweakables("sand")
       |> Enum.map(& &1.key)
 
-    assert keys == [:spawn_rate, :button_force, :auto_drain, :color_mode]
+    assert keys == [:spawn_rate, :button_force, :auto_drain, :color_mode, :supersample, :gravity]
   end
 
   test "handle_config/2 applies partial updates without clearing panels" do
@@ -61,23 +71,43 @@ defmodule Octopus.Apps.SandTest do
   end
 
   test "get_config/1 returns tweakable values" do
-    state = base_state(spawn_rate: 0.4, button_force: 55, auto_drain: false, color_mode: :warm)
+    state =
+      base_state(
+        spawn_rate: 0.4,
+        button_force: 55,
+        auto_drain: false,
+        color_mode: :warm,
+        supersample: 2,
+        gravity: 0.1
+      )
 
-    assert %{spawn_rate: 0.4, button_force: 55, auto_drain: false, color_mode: :warm} =
-             sand_get_config(state)
+    assert %{
+             spawn_rate: 0.4,
+             button_force: 55,
+             auto_drain: false,
+             color_mode: :warm,
+             supersample: 2,
+             gravity: 0.1
+           } = sand_get_config(state)
   end
 
   test "now_playing_meta/1 summarizes settings and interaction hint" do
+    s = @default_supersample
+    gravity = Sim.default_gravity(s)
+
     assert sand_now_playing_meta(%{
              spawn_rate: 0.25,
              button_force: 40,
              auto_drain: true,
-             color_mode: :rainbow
+             color_mode: :rainbow,
+             supersample: s,
+             gravity: gravity
            }) == [
              "spawn 25%",
              "blast 40",
              "auto-drain on",
              "rainbow",
+             "S=4 grav=#{Float.round(gravity, 2)}",
              "Press buttons to explode"
            ]
   end

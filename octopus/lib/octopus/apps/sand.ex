@@ -10,9 +10,25 @@ defmodule Octopus.Apps.Sand do
   alias Octopus.Particles
 
   @fps 30
+  @default_supersample 4
 
   defmodule State do
-    defstruct [:panels, :spawn_rate, :button_force, :auto_drain, :color_mode]
+    defstruct [
+      :sim,
+      :particles,
+      :panels,
+      :display_info,
+      :spawn_rate,
+      :button_force,
+      :auto_drain,
+      :color_mode,
+      :supersample,
+      :gravity
+    ]
+  end
+
+  defmodule Panel do
+    defstruct [:index]
   end
 
   def name, do: "🏖️ Sand"
@@ -22,8 +38,13 @@ defmodule Octopus.Apps.Sand do
   end
 
   def mode_config(mode_id) do
-    (apply(@mode_presets, :config_for, [__MODULE__, mode_id]) ||
-       legacy_mode_config(apply(@mode_presets, :mode_slug, [mode_id])))
+    slug = apply(@mode_presets, :mode_slug, [mode_id])
+    defaults = legacy_mode_config(slug)
+
+    stored = apply(@mode_presets, :config_for, [__MODULE__, mode_id]) || %{}
+
+    defaults
+    |> Map.merge(stored)
     |> normalize_mode_config()
   end
 
@@ -41,11 +62,15 @@ defmodule Octopus.Apps.Sand do
   end
 
   def legacy_mode_config("sand") do
+    s = @default_supersample
+
     %{
       spawn_rate: 0.25,
       button_force: 40,
       auto_drain: true,
-      color_mode: :rainbow
+      color_mode: :rainbow,
+      supersample: s,
+      gravity: Sim.default_gravity(s)
     }
   end
 
@@ -56,6 +81,8 @@ defmodule Octopus.Apps.Sand do
   end
 
   def mode_tweakables_for("sand") do
+    s = @default_supersample
+
     [
       %{
         key: :spawn_rate,
@@ -92,6 +119,24 @@ defmodule Octopus.Apps.Sand do
           {:cool, "Cool"},
           {:mono, "Mono"}
         ]
+      },
+      %{
+        key: :supersample,
+        label: "Supersample",
+        type: :slider,
+        min: 1,
+        max: 6,
+        step: 1,
+        default: @default_supersample
+      },
+      %{
+        key: :gravity,
+        label: "Gravity",
+        type: :slider,
+        min: 0.0,
+        max: 3.0,
+        step: 0.05,
+        default: Sim.default_gravity(s)
       }
     ]
   end
@@ -103,143 +148,30 @@ defmodule Octopus.Apps.Sand do
     button_force = Map.get(config, :button_force, 40)
     auto_drain = Map.get(config, :auto_drain, true)
     color_mode = Map.get(config, :color_mode, :rainbow)
+    supersample = Map.get(config, :supersample, @default_supersample)
+    gravity = Map.get(config, :gravity, Sim.default_gravity(supersample))
 
     [
       "spawn #{round(spawn_rate * 100)}%",
       "blast #{button_force}",
       if(auto_drain, do: "auto-drain on", else: "auto-drain off"),
       to_string(color_mode),
+      "S=#{supersample} grav=#{Float.round(gravity, 2)}",
       "Press buttons to explode"
     ]
   end
 
   def config_schema do
+    s = @default_supersample
+
     %{
       spawn_rate: {"Spawn Rate", :float, %{default: 0.25, min: 0.05, max: 0.8, step: 0.05}},
       button_force: {"Button Blast", :integer, %{default: 40, min: 10, max: 80}},
       auto_drain: {"Auto Clear When Full", :boolean, %{default: true}},
-      color_mode: {"Colors", :atom, %{default: :rainbow}}
+      color_mode: {"Colors", :atom, %{default: :rainbow}},
+      supersample: {"Supersample", :integer, %{default: s, min: 1, max: 6}},
+      gravity: {"Gravity", :float, %{default: Sim.default_gravity(s), min: 0.0, max: 3.0, step: 0.05}}
     }
-  end
-
-  defmodule Panel do
-    defstruct [:index, :sim, :particles]
-
-    def new(index, width, height) do
-      %Panel{
-        index: index,
-        sim: Sim.new(width, height),
-        particles: Particles.new(width, height, 0, 0, [{255, 255, 255}])
-      }
-    end
-
-    def step(%Panel{} = panel, config) do
-      panel
-      |> maybe_spawn_sand(config)
-      |> maybe_drain_particles(config)
-      |> update_sim()
-    end
-
-    defp maybe_spawn_sand(%Panel{} = panel, config) do
-      spawn_rate = Map.get(config, :spawn_rate, 0.25)
-
-      if :rand.uniform() > 1 - spawn_rate do
-        x = Enum.random(0..(Installation.panel_width() - 1))
-        spawn_pos = {x, -1}
-
-        %Panel{
-          panel
-          | sim: Sim.put_cell(panel.sim, spawn_pos, {:sand, random_color(panel, config)})
-        }
-      else
-        panel
-      end
-    end
-
-    defp maybe_drain_particles(%Panel{} = panel, %{auto_drain: false}), do: panel
-
-    defp maybe_drain_particles(%Panel{} = panel, _config) do
-      coords =
-        for y <- 0..(Installation.panel_height() - 1),
-            x <- 0..(Installation.panel_width() - 1),
-            do: {x, y}
-
-      if :rand.uniform() > 0.75 &&
-           Enum.all?(coords, fn {x, y} ->
-             !Sim.cell_empty?(panel.sim, {x, y})
-           end) do
-        explode(panel, -5, 0)
-      else
-        panel
-      end
-    end
-
-    def draw(%Panel{} = panel) do
-      sim_canvas = Sim.draw(panel.sim, Canvas.new(panel.sim.width, panel.sim.height))
-
-      particle_canvas =
-        panel.particles
-        |> Particles.draw(Canvas.new(panel.particles.width, panel.particles.height))
-
-      Enum.reduce(particle_canvas.pixels, sim_canvas, fn {{x, y}, color}, canvas ->
-        Canvas.put_pixel(canvas, {x, y}, color)
-      end)
-    end
-
-    defp update_sim(%Panel{} = panel) do
-      %Panel{
-        panel
-        | sim: Sim.step(panel.sim),
-          particles: Particles.update(panel.particles, 1 / 30.0)
-      }
-    end
-
-    def handle_button_press(%Panel{} = panel, config) do
-      force = Map.get(config, :button_force, 40)
-      min_force = force * 0.75
-      max_force = force * 1.25
-      explode(panel, min_force, max_force)
-    end
-
-    defp explode(%Panel{} = panel, min_force, max_force) do
-      sim = panel.sim
-      particles = panel.particles
-
-      particles =
-        Enum.reduce(sim.particles, particles, fn {{x, y}, {:sand, color}}, particles ->
-          Particles.spawn(particles, {x, y}, 1,
-            angle: :math.pi() * 1.5,
-            spread: 0.15,
-            colors: color,
-            min_speed: min_force,
-            max_speed: max_force
-          )
-        end)
-
-      sim = Sim.clear(sim)
-
-      %Panel{panel | sim: sim, particles: particles}
-    end
-
-    def random_color(%Panel{index: index}, config) do
-      color_mode = Map.get(config, :color_mode, :rainbow)
-      num_panels = max(Installation.num_panels(), 1)
-
-      hue =
-        case color_mode do
-          :warm -> :rand.uniform() * 40 + 20
-          :cool -> :rand.uniform() * 60 + 180
-          :mono -> 0
-          _ -> 360 * index / num_panels
-        end
-
-      hue = rem(trunc(hue), 360)
-      saturation = :rand.uniform() * 25 + 60
-      lightness = :rand.uniform() * 25 + 45
-      hsl = Chameleon.HSL.new(trunc(hue), trunc(saturation), trunc(lightness))
-      %Chameleon.RGB{r: r, g: g, b: b} = Chameleon.convert(hsl, Chameleon.RGB)
-      {r, g, b}
-    end
   end
 
   def compatible?() do
@@ -247,18 +179,28 @@ defmodule Octopus.Apps.Sand do
   end
 
   def app_init(config) do
-    configure_display(layout: :adjacent_panels)
+    configure_display(layout: :gapped_panels_wrapped)
     Octopus.App.subscribe_to_button_events()
 
+    display_info = Octopus.App.get_display_info()
+
     panels =
-      for i <- 0..(Installation.num_panels() - 1), into: %{} do
-        {i, Panel.new(i, Installation.panel_width(), Installation.panel_height())}
+      for i <- 0..(display_info.num_panels - 1), into: %{} do
+        {i, %Panel{index: i}}
       end
 
     :timer.send_interval(trunc(1000 / @fps), self(), :tick)
     send(self(), :tick)
 
-    {:ok, apply_config(%State{panels: panels}, config)}
+    state =
+      %State{
+        panels: panels,
+        display_info: display_info,
+        particles:
+          Particles.new(display_info.width, display_info.height, 0, 0, [{255, 255, 255}])
+      }
+
+    {:ok, apply_config(state, config)}
   end
 
   def handle_config(config, %State{} = state) do
@@ -270,54 +212,243 @@ defmodule Octopus.Apps.Sand do
       spawn_rate: state.spawn_rate,
       button_force: state.button_force,
       auto_drain: state.auto_drain,
-      color_mode: state.color_mode
+      color_mode: state.color_mode,
+      supersample: state.supersample,
+      gravity: state.gravity
     }
   end
 
   def handle_info(:tick, %State{} = state) do
     config = get_config(state)
 
-    panels =
-      Map.new(state.panels, fn {i, panel} -> {i, Panel.step(panel, config)} end)
+    state =
+      state
+      |> spawn_all_panels(config)
+      |> maybe_auto_drain(config)
+
+    sim = Sim.step(state.sim)
+    particles = Particles.update(state.particles, 1 / @fps)
 
     canvas =
-      panels
-      |> Enum.sort_by(&elem(&1, 0))
-      |> Enum.map(&elem(&1, 1))
-      |> Enum.map(&Panel.draw/1)
-      |> Enum.reduce(&Canvas.join(&2, &1))
+      state
+      |> Map.put(:sim, sim)
+      |> Map.put(:particles, particles)
+      |> draw()
 
     update_display(canvas)
 
-    {:noreply, %{state | panels: panels}}
+    {:noreply, %{state | sim: sim, particles: particles}}
   end
 
   def handle_event(%Input{type: :button, action: :press} = input, %State{} = state) do
     index = input.button - 1
     config = get_config(state)
 
-    panels =
-      Map.update(state.panels, index, nil, &Panel.handle_button_press(&1, config))
+    force = Map.get(config, :button_force, 40)
+    {sim, particles} =
+      explode_panel(
+        state.sim,
+        state.particles,
+        state.display_info,
+        index,
+        force * 0.75,
+        force * 1.25
+      )
 
-    {:noreply, %{state | panels: panels}}
+    {:noreply, %{state | sim: sim, particles: particles}}
   end
 
   def handle_event(_event, state) do
     {:noreply, state}
   end
 
+  defp spawn_all_panels(%State{} = state, config) do
+    sim =
+      Enum.reduce(state.panels, state.sim, fn {_i, panel}, sim ->
+        maybe_spawn_sand(sim, panel, state.display_info, config)
+      end)
+
+    %{state | sim: sim}
+  end
+
+  defp maybe_spawn_sand(sim, _panel, _display_info, %{spawn_rate: spawn_rate})
+       when spawn_rate <= 0,
+       do: sim
+
+  defp maybe_spawn_sand(sim, %Panel{} = panel, display_info, config) do
+    spawn_rate = Map.get(config, :spawn_rate, 0.25)
+
+    if :rand.uniform() > 1 - spawn_rate do
+      local_x = Enum.random(0..(display_info.panel_width - 1))
+      {global_x, _} = display_info.panel_to_global_coords.(panel.index, local_x, 0)
+      color = random_color(panel, config)
+      spawn_grains(sim, global_x, color)
+    else
+      sim
+    end
+  end
+
+  defp spawn_grains(sim, global_x, color) do
+    sim_spawn_coords(sim, global_x)
+    |> Enum.reduce(sim, fn {x, y}, sim ->
+      Sim.put_cell(sim, {x, y}, Sim.sand(color))
+    end)
+  end
+
+  defp sim_spawn_coords(%Sim{supersample: s}, global_x) do
+    base_x = global_x * s
+
+    if s >= 3 do
+      cluster_x = base_x + div(s, 2) - 1
+      cluster_y = -2
+
+      for dy <- 0..1, dx <- 0..1, do: {cluster_x + dx, cluster_y + dy}
+    else
+      [{base_x, -1}]
+    end
+  end
+
+  defp maybe_auto_drain(%State{} = state, %{auto_drain: false}), do: state
+
+  defp maybe_auto_drain(%State{} = state, _config) do
+    full? =
+      Enum.any?(state.panels, fn {_i, panel} ->
+        panel_full?(state.sim, state.display_info, panel.index)
+      end)
+
+    if full? && :rand.uniform() > 0.75 do
+      panel_index = Enum.random(Map.keys(state.panels))
+
+      {sim, particles} =
+        explode_panel(state.sim, state.particles, state.display_info, panel_index, -5, 0)
+
+      %{state | sim: sim, particles: particles}
+    else
+      state
+    end
+  end
+
+  defp panel_full?(%Sim{} = sim, display_info, panel_index) do
+    {start_x, end_x} = display_info.panel_range.(panel_index, :x)
+    panel_height = display_info.panel_height
+
+    coords =
+      for y <- 0..(panel_height - 1), x <- start_x..end_x do
+        {x, y}
+      end
+
+    Enum.all?(coords, fn coord -> not led_cell_empty?(sim, coord) end)
+  end
+
+  defp led_cell_empty?(%Sim{} = sim, {led_x, led_y}) do
+    s = sim.supersample
+
+    Enum.all?(0..(s - 1), fn dy ->
+      Enum.all?(0..(s - 1), fn dx ->
+        Sim.cell_empty?(sim, {led_x * s + dx, led_y * s + dy})
+      end)
+    end)
+  end
+
+  defp draw(%State{} = state) do
+    canvas = Sim.draw(state.sim, Canvas.new(state.display_info.width, state.display_info.height))
+
+    particle_canvas = Particles.draw(state.particles, Canvas.new(state.display_info.width, state.display_info.height))
+
+    Enum.reduce(particle_canvas.pixels, canvas, fn {{x, y}, color}, canvas ->
+      Canvas.put_pixel(canvas, {x, y}, color)
+    end)
+  end
+
+  defp explode_panel(sim, particles, display_info, panel_index, min_force, max_force) do
+    {start_x, end_x} = display_info.panel_range.(panel_index, :x)
+    s = sim.supersample
+
+    {sim, particles} =
+      Enum.reduce(sim.particles, {sim, particles}, fn {{x, y}, {:sand, color, _vy}}, {sim, particles} ->
+        led_x = div(x, s)
+        led_y = div(y, s)
+
+        if led_x >= start_x and led_x <= end_x do
+          particles =
+            Particles.spawn(particles, {led_x, led_y}, 1,
+              angle: :math.pi() * 1.5,
+              spread: 0.15,
+              colors: color,
+              min_speed: min_force,
+              max_speed: max_force
+            )
+
+          {Sim.remove_cell(sim, {x, y}), particles}
+        else
+          {sim, particles}
+        end
+      end)
+
+    {sim, particles}
+  end
+
+  defp random_color(%Panel{index: index}, config) do
+    color_mode = Map.get(config, :color_mode, :rainbow)
+    num_panels = max(Installation.num_panels(), 1)
+
+    hue =
+      case color_mode do
+        :warm -> :rand.uniform() * 40 + 20
+        :cool -> :rand.uniform() * 60 + 180
+        :mono -> 0
+        _ -> 360 * index / num_panels
+      end
+
+    hue = rem(trunc(hue), 360)
+    saturation = :rand.uniform() * 25 + 60
+    lightness = :rand.uniform() * 25 + 45
+    hsl = Chameleon.HSL.new(trunc(hue), trunc(saturation), trunc(lightness))
+    %Chameleon.RGB{r: r, g: g, b: b} = Chameleon.convert(hsl, Chameleon.RGB)
+    {r, g, b}
+  end
+
   defp apply_config(%State{} = state, config) do
     config = coerce_config_atoms(config)
     defaults = legacy_mode_config("sand")
 
-    %State{
+    supersample =
+      Map.get(config, :supersample, Map.get(state, :supersample) || defaults.supersample)
+
+    gravity =
+      Map.get(config, :gravity, Map.get(state, :gravity) || Sim.default_gravity(supersample))
+
+    new_state = %State{
       state
       | spawn_rate: Map.get(config, :spawn_rate, Map.get(state, :spawn_rate) || defaults.spawn_rate),
         button_force:
           Map.get(config, :button_force, Map.get(state, :button_force) || defaults.button_force),
         auto_drain: Map.get(config, :auto_drain, Map.get(state, :auto_drain) || defaults.auto_drain),
-        color_mode: Map.get(config, :color_mode, Map.get(state, :color_mode) || defaults.color_mode)
+        color_mode: Map.get(config, :color_mode, Map.get(state, :color_mode) || defaults.color_mode),
+        supersample: supersample,
+        gravity: gravity
     }
+
+    sim =
+      cond do
+        is_nil(state.display_info) ->
+          state.sim
+
+        is_nil(state.sim) ->
+          build_sim(new_state)
+
+        state.supersample != supersample ->
+          build_sim(new_state)
+
+        true ->
+          Sim.with_gravity(state.sim, gravity)
+      end
+
+    %{new_state | sim: sim}
+  end
+
+  defp build_sim(%State{display_info: display_info, supersample: s, gravity: gravity}) do
+    Sim.new(display_info.width, display_info.height, supersample: s, gravity: gravity)
   end
 
   defp coerce_config_atoms(config) when is_map(config) do
