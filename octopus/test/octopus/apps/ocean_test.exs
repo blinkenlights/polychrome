@@ -7,8 +7,19 @@ defmodule Octopus.Apps.OceanTest do
   @presets Module.concat(["Octopus", "AppModePresets"])
 
   setup do
+    original_installation = Application.get_env(:octopus, :installation)
+
+    on_exit(fn ->
+      Application.put_env(:octopus, :installation, original_installation)
+    end)
+
     preset_sync_all!()
     :ok
+  end
+
+  defp with_installation(installation, fun) do
+    Application.put_env(:octopus, :installation, installation)
+    fun.()
   end
 
   defp base_state(overrides) do
@@ -100,8 +111,14 @@ defmodule Octopus.Apps.OceanTest do
            ]
   end
 
-  test "compatible?/0 requires gapped panels" do
+  test "compatible?/0 on Nation2026 (default)" do
     assert ocean_compatible?()
+  end
+
+  test "compatible?/0 on Pixie 8x8" do
+    with_installation(Octopus.Installation.Pixie, fn ->
+      assert ocean_compatible?()
+    end)
   end
 
   defp preset_sync_all!, do: apply(@presets, :sync_all!, [])

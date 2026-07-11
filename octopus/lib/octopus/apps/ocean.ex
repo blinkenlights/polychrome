@@ -139,7 +139,7 @@ defmodule Octopus.Apps.Ocean do
   end
 
   def compatible? do
-    Octopus.App.get_installation_info().panel_gap > 0
+    Octopus.App.get_installation_info().panel_count >= 1
   end
 
   def config_schema do
