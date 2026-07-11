@@ -1,7 +1,7 @@
 defmodule OctopusWeb.AppConfigComponent do
   use OctopusWeb, :live_component
 
-  alias Octopus.AppSupervisor
+  alias Octopus.{App, AppSupervisor}
   alias Octopus.InstallationTransport
 
   def mount(socket) do
@@ -9,7 +9,7 @@ defmodule OctopusWeb.AppConfigComponent do
   end
 
   def update(%{app_module: module} = assigns, socket) do
-    config_schema = apply(module, :config_schema, [])
+    config_schema = App.config_schema(module)
     config = Map.get(assigns, :config, AppSupervisor.config(assigns.app_id))
 
     {:ok,

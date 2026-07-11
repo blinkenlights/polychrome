@@ -161,7 +161,7 @@ defmodule OctopusWeb.ManagerLive do
   end
 
   def handle_info({:param_updated, key, value}, socket)
-      when key in [:speed, :brightness, :auto_brightness, :bleeding] do
+      when key in [:speed, :brightness, :auto_brightness] do
     for id <- ["global-params-desktop", "global-params-mobile"] do
       send_update(OctopusWeb.GlobalParamsComponent,
         id: id,

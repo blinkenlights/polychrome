@@ -18,6 +18,13 @@ defmodule Octopus.App do
   ```
   If not specified, the default is `:rgb`.
 
+  ## Bleeding
+
+  Every app has a `bleeding` parameter (0–100%) that controls per-panel pixel bleeding in the
+  mixer. It is included automatically in the app config schema and defaults to `0.0` when an
+  app starts. Apps can override the schema entry in `config_schema/0` or set the value directly
+  via `AppSupervisor.start_app/2` config.
+
   ## App Compatibility
 
   Apps can implement the `compatible?/0` callback to check if they're compatible with the current installation.
@@ -169,8 +176,9 @@ defmodule Octopus.App do
       end
 
       # Framework-provided init/1 that calls the app's app_init/1
-      def init(args) do
-        app_init(args)
+      def init(config) do
+        Process.put(:__octopus_app_bleeding__, Octopus.App.clamp_bleeding(Map.get(config, :bleeding, 0.0)))
+        app_init(config)
       end
 
       # Default app_init/1 implementation - can be overridden by apps
@@ -183,11 +191,18 @@ defmodule Octopus.App do
       end
 
       def handle_call(:get_config, _from, state) do
-        {:reply, get_config(state), state}
+        config =
+          get_config(state)
+          |> Map.put(:bleeding, Process.get(:__octopus_app_bleeding__, 0.0))
+
+        {:reply, config, state}
       end
 
       def handle_call({:update_config, config}, _from, state) do
-        app_id = AppSupervisor.lookup_app_id(self())
+        if Map.has_key?(config, :bleeding) do
+          Process.put(:__octopus_app_bleeding__, Octopus.App.clamp_bleeding(config.bleeding))
+        end
+
         {:noreply, state} = handle_config(config, state)
 
         {:reply, :ok, state}
@@ -244,6 +259,28 @@ defmodule Octopus.App do
       defoverridable rotation_eligible?: 0
       defoverridable now_playing_meta: 1
     end
+  end
+
+  @bleeding_config_option {"Bleeding", :float,
+                           %{default: 0.0, min: 0.0, max: 100.0, step: 1.0}}
+
+  @doc """
+  Returns the config schema for an app, including the built-in `bleeding` parameter unless
+  the app defines its own.
+  """
+  def config_schema(module) when is_atom(module) do
+    apply(module, :config_schema, [])
+    |> Map.put_new(:bleeding, @bleeding_config_option)
+  end
+
+  @doc false
+  def bleeding_config_option, do: @bleeding_config_option
+
+  @doc """
+  Clamps a bleeding value to the valid 0..100 range.
+  """
+  def clamp_bleeding(value) when is_number(value) do
+    value |> max(0.0) |> min(100.0)
   end
 
   def name(module) when is_atom(module), do: apply(module, :name, [])

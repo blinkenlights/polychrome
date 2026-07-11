@@ -356,6 +356,18 @@ defmodule Octopus.Apps.PixelFunTest do
     assert spec.runtime == true
   end
 
+  test "mode_tweakables/1 exposes runtime bleeding slider" do
+    spec =
+      pixel_fun_mode_tweakables("classic_ripple")
+      |> Enum.find(&(&1.key == :bleeding))
+
+    assert spec.label == "Bleeding"
+    assert spec.type == :slider
+    assert spec.unit == "%"
+    assert spec.default == 50.0
+    assert spec.runtime == true
+  end
+
   test "build_canvas/1 lower saturation produces less vivid colours on random dual", _context do
     with_installation(Octopus.TestInstallations.HorizontalStrip64, fn ->
       {:ok, program} = Program.parse("1")

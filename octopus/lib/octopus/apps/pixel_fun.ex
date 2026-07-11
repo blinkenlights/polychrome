@@ -160,7 +160,8 @@ defmodule Octopus.Apps.PixelFun do
          %{
            default: 0,
            options: [{"Forward", :forward}, {"Backward", :backward}]
-         }}
+         }},
+      bleeding: {"Bleeding", :float, %{default: 50.0, min: 0.0, max: 100.0, step: 1.0}}
     }
   end
 
@@ -362,6 +363,17 @@ defmodule Octopus.Apps.PixelFun do
         type: :select,
         options: [{"Forward", :forward}, {"Backward", :backward}],
         default: :forward
+      },
+      %{
+        key: :bleeding,
+        label: "Bleeding",
+        type: :slider,
+        min: 0.0,
+        max: 100.0,
+        step: 1.0,
+        unit: "%",
+        default: 50.0,
+        runtime: true
       },
       %{
         key: :time_frozen,

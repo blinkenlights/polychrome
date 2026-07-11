@@ -61,9 +61,9 @@ defmodule Octopus.AppSupervisor do
         {:error, :incompatible}
 
       true ->
-        default_config = apply(module, :config_schema, []) |> App.default_config()
+        default_config = module |> App.config_schema() |> App.default_config()
         config = Keyword.get(opts, :config, %{})
-        config = Map.merge(default_config, config)
+        config = default_config |> Map.merge(config) |> Map.put_new(:bleeding, 0.0)
         do_start_app(module, config)
     end
   end
