@@ -218,6 +218,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
               live?={tile.live?}
               queued_pos={tile.queued_pos}
               queueable?={Map.get(tile, :queueable?, true)}
+              stop_takeover?={tile.stop_takeover?}
               play_now_title={tile.play_now_title}
               target={@target}
             />
@@ -404,6 +405,18 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   def handle_event("prev", _params, socket) do
     InstallationTransport.prev()
     {:noreply, refresh_transport(socket)}
+  end
+
+  def handle_event("stop_takeover", %{"app" => app, "mode_id" => mode_id}, socket) do
+    module = parse_app_module(app)
+    transport = socket.assigns.transport
+
+    if takeover_live?(transport, module, mode_id) do
+      InstallationTransport.resume_rotation_after_takeover()
+      {:noreply, refresh_transport(socket)}
+    else
+      {:noreply, socket}
+    end
   end
 
   def handle_event("play_now", %{"app" => app, "mode_id" => mode_id}, socket) do
@@ -870,6 +883,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         live?: live?(transport, app, mode.id),
         queued_pos: queued_pos,
         queueable?: queueable?,
+        stop_takeover?: takeover_live?(transport, app, mode.id),
         play_now_title: play_now_title(queued_pos, rotating_active?)
       }
     end)

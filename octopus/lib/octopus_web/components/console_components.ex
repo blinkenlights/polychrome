@@ -383,6 +383,7 @@ defmodule OctopusWeb.ConsoleComponents do
   attr :queued_pos, :integer, default: nil
   attr :queueable?, :boolean, default: true
   attr :play_now_title, :string, default: "Show on the wall"
+  attr :stop_takeover?, :boolean, default: false
   attr :target, :any, default: nil
 
   def mode_tile(assigns) do
@@ -413,6 +414,18 @@ defmodule OctopusWeb.ConsoleComponents do
 
         <div class="flex gap-2 mt-1">
           <button
+            :if={@stop_takeover?}
+            class={["btn btn-sm btn-error min-h-11", @queueable? && "flex-1"]}
+            phx-click="stop_takeover"
+            phx-value-app={Atom.to_string(@app_module)}
+            phx-value-mode_id={@mode.id}
+            phx-target={@target}
+            title="End preview — resume playlist"
+          >
+            ■ Stop
+          </button>
+          <button
+            :if={!@stop_takeover?}
             class={["btn btn-sm min-h-11", @queueable? && "flex-1"]}
             phx-click="play_now"
             phx-value-app={Atom.to_string(@app_module)}
@@ -1071,5 +1084,11 @@ defmodule OctopusWeb.ConsoleComponents do
       %{app: live_app, mode_id: live_mode} when live_app == app and live_mode == mode_id -> true
       _ -> false
     end
+  end
+
+  def takeover_live?(transport, app, mode_id) do
+    transport.rotation_paused &&
+      live?(transport, app, mode_id) &&
+      is_nil(queue_position(transport.queue, app, mode_id, 1))
   end
 end

@@ -1,7 +1,7 @@
 defmodule Octopus.InstallationTransportTest do
   use ExUnit.Case, async: false
 
-  alias Octopus.{AppSupervisor, InstallationTransport}
+  alias Octopus.{AppManager, AppSupervisor, InstallationTransport}
   alias Octopus.Apps.{Collective, Matrix, Ocean, PerlinNoise, PixelFun, PixieDebug, Sand, SparkleMist, Wood}
   alias Octopus.Apps.PixelFun.Program
 
@@ -273,6 +273,20 @@ defmodule Octopus.InstallationTransportTest do
       assert s.playing
       assert s.live.app == PixelFun
       assert s.live.mode_id == @classic
+    end
+
+    test "resume rotation clears wall when queue is empty" do
+      InstallationTransport.play_now(PixelFun, @classic)
+
+      assert state().rotation_paused
+      assert state().live.mode_id == @classic
+
+      InstallationTransport.resume_rotation_after_takeover()
+
+      s = state()
+      assert s.rotation_paused == false
+      assert s.live == nil
+      assert AppManager.get_selected_app() == nil
     end
   end
 

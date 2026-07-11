@@ -304,7 +304,7 @@ defmodule Octopus.InstallationTransport do
     state =
       state
       |> clear_manual_takeover()
-      |> apply_queue_entry_at_cycle_index()
+      |> resume_after_takeover()
       |> resume()
 
     {:noreply, broadcast(state)}
@@ -428,6 +428,37 @@ defmodule Octopus.InstallationTransport do
   defp apply_queue_entry_at_cycle_index(%State{} = state) do
     entry = Enum.at(state.queue, state.cycle_index)
     apply_entry(state, entry)
+  end
+
+  defp resume_after_takeover(%State{queue: []} = state) do
+    state
+    |> deselect_now_playing_app()
+    |> clear_live_playback()
+  end
+
+  defp resume_after_takeover(%State{} = state), do: apply_queue_entry_at_cycle_index(state)
+
+  defp deselect_now_playing_app(%State{now_playing_app_id: app_id} = state) when is_binary(app_id) do
+    AppManager.select_app(nil)
+    state
+  end
+
+  defp deselect_now_playing_app(%State{} = state), do: state
+
+  defp clear_live_playback(%State{} = state) do
+    state
+    |> cancel_timer()
+    |> then(fn state ->
+      %State{
+        state
+        | live_entry: nil,
+          now_playing_app_id: nil,
+          now_playing_stored_config: %{},
+          now_playing_overrides: %{},
+          next_change_at_ms: nil,
+          paused_remaining_ms: nil
+      }
+    end)
   end
 
   defp step(%State{queue: queue} = state, _dir) when length(queue) < 2, do: state
