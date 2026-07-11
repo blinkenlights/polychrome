@@ -82,4 +82,9 @@ defmodule Octopus.MixerTest do
     assert display_info.panel_to_global_coords.(0, 0, display_info.panel_height - 1) ==
              {0, display_info.panel_height - 1}
   end
+
+  test "idle frame does not crash when no app is selected" do
+    send(Mixer, :idle_frame)
+    _ = :sys.get_state(Mixer)
+  end
 end

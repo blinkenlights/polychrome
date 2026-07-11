@@ -14,6 +14,7 @@ defmodule Octopus.Mixer do
   @pubsub_frames [RGBFrame, WFrame]
   @transition_duration 300
   @transition_frame_time trunc(1000 / 60)
+  @idle_frame_interval 1_000
 
   defmodule State do
     defstruct [
@@ -122,6 +123,8 @@ defmodule Octopus.Mixer do
     # Initialize buffer canvas
     buffer_width = Installation.num_panels() * Installation.panel_width()
     buffer_height = Installation.panel_height()
+
+    schedule_idle_frame()
 
     {:ok,
      %State{display_info: display_info, buffer_canvas: Canvas.new(buffer_width, buffer_height)}}
@@ -301,6 +304,16 @@ defmodule Octopus.Mixer do
 
   # Ignore other app supervisor events
   def handle_info({:apps, _}, %State{} = state) do
+    {:noreply, state}
+  end
+
+  def handle_info(:idle_frame, %State{} = state) do
+    schedule_idle_frame()
+
+    if state.rendered_app == nil do
+      send_blank_frame(state)
+    end
+
     {:noreply, state}
   end
 
@@ -869,6 +882,16 @@ defmodule Octopus.Mixer do
     else
       _ -> send_wframe(main_canvas, main_display_info, main_app_display, easing_interval)
     end
+  end
+
+  defp schedule_idle_frame do
+    Process.send_after(self(), :idle_frame, @idle_frame_interval)
+  end
+
+  defp send_blank_frame(%State{display_info: info}) do
+    canvas = Canvas.new(info.width, info.height)
+    app_display = %{config: %{merge_rgbw: false}}
+    send_rgb_frame(canvas, info, app_display, 0)
   end
 
   defp send_rgb_frame(main_canvas, main_display_info, main_app_display, easing_interval) do
