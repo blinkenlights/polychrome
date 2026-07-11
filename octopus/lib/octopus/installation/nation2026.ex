@@ -16,10 +16,10 @@ defmodule Octopus.Installation.Nation2026 do
       [controller: :polychrome_panel_12, wiring: :serpentine_horizontal_bottom_left]
     ],
     panel_layout: {8, 8},
-    num_buttons: 12,
+    num_buttons: 0,
     num_joysticks: 0,
     panel_gap: 18,
-    global_speed: 0.8,
+    global_speed: 1.0,
     location: {52.684273, 12.959300},
     auto_brightness: false,
     radar_enabled: true,
