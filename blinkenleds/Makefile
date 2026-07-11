@@ -1,4 +1,4 @@
-pio_binary = ~/.platformio/penv/bin/platformio # default location for binaries installed by platformio IDE in vscode
+pio_binary ?= $(shell command -v platformio 2>/dev/null || echo ~/.platformio/penv/bin/platformio)
 
 protobuf_generate:
 	python3 \
