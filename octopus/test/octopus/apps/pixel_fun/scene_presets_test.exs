@@ -23,7 +23,7 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
     test "returns presets with valid formulas and scene fields" do
       presets = ScenePresets.builtins()
 
-      assert length(presets) == 7
+      assert length(presets) == 8
 
       for preset <- presets do
         assert preset.builtin
@@ -116,7 +116,10 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
                color_interval: preset.color_interval,
                translate_scale: preset.translate_scale,
                rotate_scale: preset.rotate_scale,
-               zoom_scale: preset.zoom_scale
+               zoom_scale: preset.zoom_scale,
+               sway_scale: 0.0,
+               sway_speed: 0.5,
+               sway_mode: :wobble
              }
     end
 
@@ -126,6 +129,42 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
 
       assert ScenePresets.config_matches?(config, preset)
       refute ScenePresets.config_matches?(Map.put(config, :zoom_scale, 2.0), preset)
+    end
+
+    test "treats missing sway keys as defaults" do
+      preset = ScenePresets.get("builtin:classic_ripple")
+
+      legacy_config = %{
+        program: preset.formula,
+        color_interval: preset.color_interval,
+        translate_scale: preset.translate_scale,
+        rotate_scale: preset.rotate_scale,
+        zoom_scale: preset.zoom_scale
+      }
+
+      assert ScenePresets.config_matches?(legacy_config, preset)
+    end
+  end
+
+  describe "sway preset round-trip" do
+    test "create and update persist sway fields" do
+      attrs =
+        Map.merge(@scene_attrs, %{
+          sway_scale: 1.5,
+          sway_speed: 0.8,
+          sway_mode: :pendulum
+        })
+
+      assert {:ok, created} = ScenePresets.create(attrs)
+      assert created.sway_scale == 1.5
+      assert created.sway_speed == 0.8
+      assert created.sway_mode == :pendulum
+
+      assert {:ok, updated} =
+               ScenePresets.update(created.id, %{sway_scale: 2.0, sway_mode: :wobble})
+
+      assert updated.sway_scale == 2.0
+      assert updated.sway_mode == :wobble
     end
   end
 

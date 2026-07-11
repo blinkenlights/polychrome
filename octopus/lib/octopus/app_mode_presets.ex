@@ -520,14 +520,53 @@ defmodule Octopus.AppModePresets do
 
   defp config_matches?(app, config, preset_config) do
     if app_key(app) == "pixelfun" do
+      left = pixelfun_effective_config(config)
+      right = pixelfun_effective_config(preset_config)
+
       Enum.all?(
-        [:program, :color_interval, :translate_scale, :rotate_scale, :zoom_scale],
-        fn key -> float_eq?(Map.get(config, key), Map.get(preset_config, key)) end
+        [
+          :program,
+          :color_interval,
+          :translate_scale,
+          :rotate_scale,
+          :zoom_scale,
+          :sway_scale,
+          :sway_speed,
+          :sway_mode
+        ],
+        fn key ->
+          case key do
+            :program -> left.program == right.program
+            :sway_mode -> left.sway_mode == right.sway_mode
+            _ -> float_eq?(Map.get(left, key), Map.get(right, key))
+          end
+        end
       )
     else
       float_eq_maps?(config, preset_config)
     end
   end
+
+  @sway_defaults %{sway_scale: 0.0, sway_speed: 0.5, sway_mode: :wobble}
+
+  defp pixelfun_effective_config(config) do
+    %{
+      program: Map.get(config, :program),
+      color_interval: Map.get(config, :color_interval, 5.0),
+      translate_scale: Map.get(config, :translate_scale, 0.0),
+      rotate_scale: Map.get(config, :rotate_scale, 0.0),
+      zoom_scale: Map.get(config, :zoom_scale, 1.0),
+      sway_scale: Map.get(config, :sway_scale, @sway_defaults.sway_scale),
+      sway_speed: Map.get(config, :sway_speed, @sway_defaults.sway_speed),
+      sway_mode: pixelfun_sway_mode(Map.get(config, :sway_mode, @sway_defaults.sway_mode))
+    }
+  end
+
+  defp pixelfun_sway_mode(:wobble), do: :wobble
+  defp pixelfun_sway_mode(:pendulum), do: :pendulum
+  defp pixelfun_sway_mode("wobble"), do: :wobble
+  defp pixelfun_sway_mode("pendulum"), do: :pendulum
+  defp pixelfun_sway_mode(_), do: :wobble
 
   defp float_eq_maps?(left, right) do
     Map.keys(left) == Map.keys(right) &&

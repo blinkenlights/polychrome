@@ -138,9 +138,9 @@ defmodule OctopusWeb.PixelFunConfigComponent do
           <div :for={{key, {name, type, opts}} <- scene_entries(@config_schema)}>
             <div class="flex items-center justify-between">
               <label class="label-text font-semibold" for={"#{@app_id}-#{key}"}>{name}</label>
-              <span class="pf-mono text-sm opacity-80">{format_slider(@config[key])}</span>
+              <span :if={type != :select} class="pf-mono text-sm opacity-80">{format_slider(@config[key])}</span>
             </div>
-            <.slider_input app_id={@app_id} key={key} type={type} opts={opts} value={@config[key]} />
+            <.scene_input app_id={@app_id} key={key} type={type} opts={opts} value={@config[key]} />
           </div>
         </form>
 
@@ -253,6 +253,38 @@ defmodule OctopusWeb.PixelFunConfigComponent do
     />
     """
   end
+
+  defp select_input(assigns) do
+    index =
+      assigns.opts.options
+      |> Enum.find_index(fn {_name, val} -> val == assigns.value end)
+      |> case do
+        nil -> 0
+        i -> i
+      end
+
+    assigns = assign(assigns, :selected_index, index)
+
+    ~H"""
+    <select
+      name={@key}
+      id={"#{@app_id}-#{@key}"}
+      phx-debounce="50"
+      class="select select-bordered w-full"
+    >
+      <option
+        :for={{{name, _value}, i} <- Enum.with_index(@opts.options)}
+        value={i}
+        selected={i == @selected_index}
+      >
+        {name}
+      </option>
+    </select>
+    """
+  end
+
+  defp scene_input(%{type: :select} = assigns), do: select_input(assigns)
+  defp scene_input(assigns), do: slider_input(assigns)
 
   def handle_event("select_scene", %{"preset_id" => "new"}, socket) do
     {:noreply, assign(socket, selected_preset_id: "new") |> assign_editor_view()}
@@ -453,7 +485,10 @@ defmodule OctopusWeb.PixelFunConfigComponent do
       color_interval: config[:color_interval],
       translate_scale: config[:translate_scale],
       rotate_scale: config[:rotate_scale],
-      zoom_scale: config[:zoom_scale]
+      zoom_scale: config[:zoom_scale],
+      sway_scale: config[:sway_scale],
+      sway_speed: config[:sway_speed],
+      sway_mode: config[:sway_mode]
     }
   end
 
@@ -492,6 +527,11 @@ defmodule OctopusWeb.PixelFunConfigComponent do
     case type do
       :float -> value |> Float.parse() |> elem(0)
       :int -> value |> Integer.parse() |> elem(0)
+      :select ->
+        index = String.to_integer(value)
+        {_name, val} = config_schema |> Map.get(key) |> elem(2) |> Map.fetch!(:options) |> Enum.at(index)
+        val
+
       _ -> value
     end
   end

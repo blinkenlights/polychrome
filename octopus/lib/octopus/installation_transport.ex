@@ -423,8 +423,6 @@ defmodule Octopus.InstallationTransport do
 
   defp maybe_apply_live_queue_entry(%State{} = state), do: state
 
-  defp apply_queue_entry_at_cycle_index(%State{queue: []} = state), do: state
-
   defp apply_queue_entry_at_cycle_index(%State{} = state) do
     entry = Enum.at(state.queue, state.cycle_index)
     apply_entry(state, entry)
@@ -446,19 +444,17 @@ defmodule Octopus.InstallationTransport do
   defp deselect_now_playing_app(%State{} = state), do: state
 
   defp clear_live_playback(%State{} = state) do
-    state
-    |> cancel_timer()
-    |> then(fn state ->
-      %State{
-        state
-        | live_entry: nil,
-          now_playing_app_id: nil,
-          now_playing_stored_config: %{},
-          now_playing_overrides: %{},
-          next_change_at_ms: nil,
-          paused_remaining_ms: nil
-      }
-    end)
+    state = cancel_timer(state)
+
+    %State{
+      state
+      | live_entry: nil,
+        now_playing_app_id: nil,
+        now_playing_stored_config: %{},
+        now_playing_overrides: %{},
+        next_change_at_ms: nil,
+        paused_remaining_ms: nil
+    }
   end
 
   defp step(%State{queue: queue} = state, _dir) when length(queue) < 2, do: state

@@ -11,6 +11,8 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
   @app_mode_presets "Elixir.Octopus.AppModePresets"
   @pixel_fun "Elixir.Octopus.Apps.PixelFun"
 
+  @sway_defaults %{sway_scale: 0.0, sway_speed: 0.5, sway_mode: :wobble}
+
   @type preset :: map()
 
   @doc "Returns user-facing presets (legacy shape)."
@@ -50,7 +52,10 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
       color_interval: Map.get(attrs, :color_interval, 5.0),
       translate_scale: Map.get(attrs, :translate_scale, 0.0),
       rotate_scale: Map.get(attrs, :rotate_scale, 0.0),
-      zoom_scale: Map.get(attrs, :zoom_scale, 1.0)
+      zoom_scale: Map.get(attrs, :zoom_scale, 1.0),
+      sway_scale: Map.get(attrs, :sway_scale, @sway_defaults.sway_scale),
+      sway_speed: Map.get(attrs, :sway_speed, @sway_defaults.sway_speed),
+      sway_mode: Map.get(attrs, :sway_mode, @sway_defaults.sway_mode)
     }
 
     opts = [accent_color: Map.get(attrs, :accent_color, presets().random_accent_color())]
@@ -105,7 +110,10 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
       color_interval: preset.color_interval,
       translate_scale: preset.translate_scale,
       rotate_scale: preset.rotate_scale,
-      zoom_scale: preset.zoom_scale
+      zoom_scale: preset.zoom_scale,
+      sway_scale: Map.get(preset, :sway_scale, @sway_defaults.sway_scale),
+      sway_speed: Map.get(preset, :sway_speed, @sway_defaults.sway_speed),
+      sway_mode: Map.get(preset, :sway_mode, @sway_defaults.sway_mode)
     }
   end
 
@@ -116,18 +124,35 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
       color_interval: Map.get(config, :color_interval, 5.0),
       translate_scale: Map.get(config, :translate_scale, 0.0),
       rotate_scale: Map.get(config, :rotate_scale, 0.0),
-      zoom_scale: Map.get(config, :zoom_scale, 1.0)
+      zoom_scale: Map.get(config, :zoom_scale, 1.0),
+      sway_scale: Map.get(config, :sway_scale, @sway_defaults.sway_scale),
+      sway_speed: Map.get(config, :sway_speed, @sway_defaults.sway_speed),
+      sway_mode: Map.get(config, :sway_mode, @sway_defaults.sway_mode)
     }
   end
 
   @spec config_matches?(map(), map()) :: boolean()
   def config_matches?(config, preset_or_snapshot) do
-    snapshot = normalize_snapshot(preset_or_snapshot)
+    left = effective_scene_config(config)
+    right = effective_scene_config(normalize_snapshot(preset_or_snapshot))
 
     Enum.all?(
-      [:program, :color_interval, :translate_scale, :rotate_scale, :zoom_scale],
+      [
+        :program,
+        :color_interval,
+        :translate_scale,
+        :rotate_scale,
+        :zoom_scale,
+        :sway_scale,
+        :sway_speed,
+        :sway_mode
+      ],
       fn key ->
-        float_eq?(Map.get(config, key), Map.get(snapshot, key))
+        case key do
+          :program -> left.program == right.program
+          :sway_mode -> left.sway_mode == right.sway_mode
+          _ -> float_eq?(Map.get(left, key), Map.get(right, key))
+        end
       end
     )
   end
@@ -167,6 +192,9 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
       translate_scale: config[:translate_scale],
       rotate_scale: config[:rotate_scale],
       zoom_scale: config[:zoom_scale],
+      sway_scale: Map.get(config, :sway_scale, @sway_defaults.sway_scale),
+      sway_speed: Map.get(config, :sway_speed, @sway_defaults.sway_speed),
+      sway_mode: Map.get(config, :sway_mode, @sway_defaults.sway_mode),
       accent_color: preset.accent_color,
       builtin: preset.builtin
     }
@@ -190,6 +218,9 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
     |> maybe_config_put(:translate_scale, Map.get(attrs, :translate_scale))
     |> maybe_config_put(:rotate_scale, Map.get(attrs, :rotate_scale))
     |> maybe_config_put(:zoom_scale, Map.get(attrs, :zoom_scale))
+    |> maybe_config_put(:sway_scale, Map.get(attrs, :sway_scale))
+    |> maybe_config_put(:sway_speed, Map.get(attrs, :sway_speed))
+    |> maybe_config_put(:sway_mode, Map.get(attrs, :sway_mode))
   end
 
   defp maybe_config_put(config, _key, nil), do: config
@@ -217,11 +248,35 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
       color_interval: preset.color_interval,
       translate_scale: preset.translate_scale,
       rotate_scale: preset.rotate_scale,
-      zoom_scale: preset.zoom_scale
+      zoom_scale: preset.zoom_scale,
+      sway_scale: Map.get(preset, :sway_scale, @sway_defaults.sway_scale),
+      sway_speed: Map.get(preset, :sway_speed, @sway_defaults.sway_speed),
+      sway_mode: normalize_sway_mode(Map.get(preset, :sway_mode, @sway_defaults.sway_mode))
     }
   end
 
-  defp normalize_snapshot(%{program: _} = snapshot), do: snapshot
+  defp normalize_snapshot(%{program: _} = snapshot) do
+    effective_scene_config(snapshot)
+  end
+
+  defp effective_scene_config(config) do
+    %{
+      program: Map.get(config, :program),
+      color_interval: Map.get(config, :color_interval, 5.0),
+      translate_scale: Map.get(config, :translate_scale, 0.0),
+      rotate_scale: Map.get(config, :rotate_scale, 0.0),
+      zoom_scale: Map.get(config, :zoom_scale, 1.0),
+      sway_scale: Map.get(config, :sway_scale, @sway_defaults.sway_scale),
+      sway_speed: Map.get(config, :sway_speed, @sway_defaults.sway_speed),
+      sway_mode: normalize_sway_mode(Map.get(config, :sway_mode, @sway_defaults.sway_mode))
+    }
+  end
+
+  defp normalize_sway_mode(:wobble), do: :wobble
+  defp normalize_sway_mode(:pendulum), do: :pendulum
+  defp normalize_sway_mode("wobble"), do: :wobble
+  defp normalize_sway_mode("pendulum"), do: :pendulum
+  defp normalize_sway_mode(_), do: :wobble
 
   defp float_eq?(a, b) when is_number(a) and is_number(b), do: abs(a - b) < 0.001
   defp float_eq?(a, b), do: a == b

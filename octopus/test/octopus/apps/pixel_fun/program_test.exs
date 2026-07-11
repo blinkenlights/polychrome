@@ -105,6 +105,15 @@ defmodule Octopus.Apps.PixelFun.ProgramTest do
     assert :math.pi() == eval("PI", env)
   end
 
+  test "eval/2 evaluates atan2 without raising" do
+    assert_in_delta 0.7853, eval("atan2(1, 1)"), 0.001
+  end
+
+  test "eval/2 returns 0.0 for unknown functions instead of crashing" do
+    {:ok, program} = Program.parse("foobar(1)")
+    assert 0.0 == Program.eval(program, [])
+  end
+
   test "eval/2 evaluates identifiers" do
     assert 1337.0 == eval("x", [%{~c"x" => 1337.0}])
     assert 1337.0 == eval("x+1", [%{~c"x" => 1336.0}])

@@ -12,7 +12,6 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   @app_mode_presets Module.concat(["Octopus", "AppModePresets"])
 
   @debug_apps [PixieDebug]
-  @pixel_fun_preview 6
 
   def mount(socket) do
     {:ok,
@@ -21,7 +20,6 @@ defmodule OctopusWeb.InstallationConsoleComponent do
        now_ms: System.os_time(:millisecond),
        active_tab: "queue",
        show_custom_interval: false,
-       show_all_pixel_fun: false,
        show_all_apps: false,
        show_running_now: false,
        show_now_playing_save_modal: false,
@@ -64,7 +62,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         </div>
 
         <div class="grid gap-6 min-[900px]:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] min-[900px]:items-start">
-          <.mode_library sections={@library_sections || []} target={@myself} transport={@transport} show_all_pixel_fun={@show_all_pixel_fun} />
+          <.mode_library sections={@library_sections || []} target={@myself} transport={@transport} />
           <div class="space-y-6">
             <.global_params_card />
             <.now_playing_card {now_playing_assigns(assigns)} id_suffix="desktop" target={@myself} />
@@ -101,7 +99,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
           />
         </div>
         <div class={@active_tab != "library" && "hidden"}>
-          <.mode_library sections={@library_sections || []} target={@myself} transport={@transport} compact show_all_pixel_fun={@show_all_pixel_fun} />
+          <.mode_library sections={@library_sections || []} target={@myself} transport={@transport} compact />
           <.browse_apps
             apps={@browse_apps}
             count={@browse_app_count}
@@ -181,7 +179,6 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   attr :sections, :list, required: true
   attr :transport, :map, required: true
   attr :target, :any, required: true
-  attr :show_all_pixel_fun, :boolean, default: false
   attr :compact, :boolean, default: false
 
   defp mode_library(assigns) do
@@ -231,15 +228,6 @@ defmodule OctopusWeb.InstallationConsoleComponent do
               ＋ New scene
             </.link>
           </div>
-
-          <button
-            :if={section.show_more_count && section.show_more_count > 0 && !@show_all_pixel_fun}
-            class="btn btn-ghost btn-sm self-start"
-            phx-click="show_more_pixel_fun"
-            phx-target={@target}
-          >
-            Show {section.show_more_count} more
-          </button>
         </div>
       </div>
 
@@ -486,9 +474,6 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
     {:noreply, socket |> assign(show_custom_interval: false) |> refresh_transport()}
   end
-
-  def handle_event("show_more_pixel_fun", _params, socket),
-    do: {:noreply, assign(socket, show_all_pixel_fun: true) |> assign_library()}
 
   def handle_event("toggle_all_apps", _params, socket),
     do: {:noreply, assign(socket, show_all_apps: !socket.assigns.show_all_apps)}
@@ -835,24 +820,13 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   defp assign_library(socket) do
     transport = socket.assigns.transport
     pixel_fun_app_id = AppSupervisor.find_running_app(PixelFun) |> elem_or_nil()
-    pixel_modes_all = app_list_modes(PixelFun)
-
-    pixel_modes =
-      if socket.assigns.show_all_pixel_fun do
-        pixel_modes_all
-      else
-        Enum.take(pixel_modes_all, @pixel_fun_preview)
-      end
-
-    show_more = max(length(pixel_modes_all) - @pixel_fun_preview, 0)
 
     pixel_section = %{
       title: "Pixel Fun",
       app: PixelFun,
       new_scene_path: if(pixel_fun_app_id, do: ~p"/app/#{pixel_fun_app_id}", else: nil),
-      show_more_count: if(socket.assigns.show_all_pixel_fun, do: 0, else: show_more),
       soon: [],
-      tiles: tile_list(PixelFun, pixel_modes, transport)
+      tiles: tile_list(PixelFun, app_list_modes(PixelFun), transport)
     }
 
     more_sections =
@@ -861,7 +835,6 @@ defmodule OctopusWeb.InstallationConsoleComponent do
           title: app_name(app),
           app: app,
           new_scene_path: nil,
-          show_more_count: 0,
           soon: [],
           tiles: tile_list(app, app_list_modes(app), transport)
         }

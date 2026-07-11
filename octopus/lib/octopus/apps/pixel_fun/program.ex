@@ -15,8 +15,7 @@ defmodule Octopus.Apps.PixelFun.Program do
   def eval(expr, env) do
     do_eval(expr, env)
   rescue
-    ArithmeticError ->
-      0.0
+    _ -> 0.0
   end
 
   def do_eval(number, _env) when is_number(number), do: number
@@ -111,7 +110,7 @@ defmodule Octopus.Apps.PixelFun.Program do
   def do_eval({:call, [~c"asin", expr]}, env), do: expr |> do_eval(env) |> :math.asin()
   def do_eval({:call, [~c"acos", expr]}, env), do: expr |> do_eval(env) |> :math.acos()
   def do_eval({:call, [~c"atan", expr]}, env), do: expr |> do_eval(env) |> :math.atan()
-  def do_eval({:call, [~c"atan2", a, b]}, env), do: :math.atan2(do_eval(env, a), do_eval(env, b))
+  def do_eval({:call, [~c"atan2", a, b]}, env), do: :math.atan2(do_eval(a, env), do_eval(b, env))
 
   def do_eval({:call, [~c"asinh", expr]}, env), do: expr |> do_eval(env) |> :math.asinh()
   def do_eval({:call, [~c"acosh", expr]}, env), do: expr |> do_eval(env) |> :math.acosh()
