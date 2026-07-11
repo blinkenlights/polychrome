@@ -1,5 +1,6 @@
 import PixelsHook from "./pixels";
 import ProximityChartHook from "./proximity_chart";
+import { TopBar } from "./topbar";
 import { CodeEditorHook } from "../../../deps/live_monaco_editor/priv/static/live_monaco_editor.esm";
 
 // Copies the text in the button's data-dump attribute to the clipboard.
@@ -102,4 +103,5 @@ export const Hooks = {
   CodeEditorHook: CodeEditorHook,
   CopyDump: CopyDump,
   ConsoleTheme: ConsoleTheme,
+  TopBar,
 };

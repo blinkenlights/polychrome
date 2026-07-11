@@ -1,9 +1,6 @@
 defmodule OctopusWeb.ManagerLive do
   use OctopusWeb, :live_view
 
-  import OctopusWeb.CoreComponents
-
-  alias Octopus.Installation
   alias Octopus.InstallationTransport
   alias Octopus.Params.Global
   alias OctopusWeb.PixelsLive
@@ -17,18 +14,10 @@ defmodule OctopusWeb.ManagerLive do
       :timer.send_interval(1000, :console_tick)
     end
 
-    installation_label =
-      Application.get_env(:octopus, :installation_label, "Foyer wall")
-
-    panel_hint =
-      "#{Installation.num_panels()} panels · #{Installation.width()}×#{Installation.height()} px"
-
     socket =
       socket
       |> setup_preview(Application.fetch_env!(:octopus, :show_sim_preview))
       |> assign(
-        installation_label: installation_label,
-        panel_hint: panel_hint,
         now_ms: System.os_time(:millisecond),
         console_theme: "light",
         sim_layout: "top"
@@ -78,7 +67,6 @@ defmodule OctopusWeb.ManagerLive do
 
   def render(assigns) do
     ~H"""
-    <.flash_group flash={@flash} />
     <div
       id="console-page"
       phx-hook="ConsoleTheme"
@@ -86,35 +74,11 @@ defmodule OctopusWeb.ManagerLive do
       data-sim-layout={@sim_layout}
       class={[
         "w-full",
-        @show_sim_preview && "fixed inset-0 z-20 flex flex-col overflow-hidden",
+        @show_sim_preview && "fixed inset-x-0 bottom-0 top-10 z-20 flex flex-col overflow-hidden",
         @show_sim_preview && @sim_layout == "left" && "sim-layout-left",
         !@show_sim_preview && "relative"
       ]}
     >
-      <div class="fixed top-3 right-3 z-50 flex gap-2">
-        <%= if @show_sim_preview do %>
-          <button
-            id="sim-layout-toggle"
-            type="button"
-            class="hidden min-[700px]:inline-flex btn btn-sm btn-circle shadow-lg border border-base-300 bg-base-100"
-            phx-click="toggle_sim_layout"
-            aria-label={if @sim_layout == "left", do: "Sim oben", else: "Sim links"}
-            title={if @sim_layout == "left", do: "Sim oben", else: "Sim links"}
-          >
-            {if @sim_layout == "left", do: "↑", else: "←"}
-          </button>
-        <% end %>
-        <button
-          type="button"
-          class="btn btn-sm btn-circle shadow-lg border border-base-300 bg-base-100"
-          phx-click="toggle_console_theme"
-          aria-label={if @console_theme == "dark", do: "Light mode", else: "Dark mode"}
-          title={if @console_theme == "dark", do: "Light mode", else: "Dark mode"}
-        >
-          {if @console_theme == "dark", do: "☀", else: "☾"}
-        </button>
-      </div>
-
       <%= if @show_sim_preview do %>
         <div
           id="sim-preview"
@@ -156,8 +120,6 @@ defmodule OctopusWeb.ManagerLive do
           <.live_component
             id="installation-console"
             module={OctopusWeb.InstallationConsoleComponent}
-            installation_label={@installation_label}
-            panel_hint={@panel_hint}
             now_ms={@now_ms}
             console_theme={@console_theme}
           />

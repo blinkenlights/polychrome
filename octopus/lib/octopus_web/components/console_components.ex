@@ -44,7 +44,6 @@ defmodule OctopusWeb.ConsoleComponents do
             <div class="text-[11px] uppercase tracking-wide opacity-60">Now on the wall</div>
             <div class="flex items-center gap-2 flex-wrap">
               <span class="text-lg font-semibold">{@live_label}</span>
-              <.live_badge :if={@live?} />
               <.transport_mode_badge mode={@transport_mode} />
             </div>
             <div class="text-sm opacity-70">{@subtitle}</div>
@@ -98,7 +97,6 @@ defmodule OctopusWeb.ConsoleComponents do
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 flex-wrap">
             <span class="font-semibold truncate">{@live_label}</span>
-            <.live_badge :if={@live?} />
             <.transport_mode_badge mode={@transport_mode} />
           </div>
           <div class="text-xs opacity-70 truncate">{@subtitle}</div>
@@ -267,7 +265,7 @@ defmodule OctopusWeb.ConsoleComponents do
     <div class="card bg-base-200 border border-base-300">
       <div class="card-body p-4 gap-3">
         <div class="flex items-center justify-between">
-          <h2 class="text-base font-semibold">Queue</h2>
+          <h2 class="text-base font-semibold">Playlist</h2>
           <span class="text-xs opacity-60">
             <%= if @count == 0 do %>
               empty
@@ -281,8 +279,8 @@ defmodule OctopusWeb.ConsoleComponents do
           :if={@count == 0}
           class="border-2 border-dashed border-base-content/20 rounded-lg p-6 text-center text-sm opacity-70"
         >
-          <div class="font-semibold mb-1">Nothing queued</div>
-          The wall keeps showing {@holding_label}. Add modes with ＋ Queue.
+          <div class="font-semibold mb-1">Nothing in playlist</div>
+          The wall keeps showing {@holding_label}. Add modes with ＋ Playlist.
         </div>
 
         <div :if={@count > 0} class="flex flex-col gap-2">
@@ -435,7 +433,7 @@ defmodule OctopusWeb.ConsoleComponents do
             phx-value-mode_id={@mode.id}
             phx-target={@target}
           >
-            {if @queued_pos, do: "✓ Queued", else: "＋ Queue"}
+            {if @queued_pos, do: "✓ In playlist", else: "＋ Playlist"}
           </button>
         </div>
       </div>
@@ -560,7 +558,6 @@ defmodule OctopusWeb.ConsoleComponents do
             <div class="text-xs opacity-60">{@live.app_name}</div>
             <div class="flex flex-wrap items-center gap-2">
               <span class="font-semibold">{@live.mode_name}</span>
-              <.live_badge />
               <span
                 :if={@now_playing.dirty}
                 class="badge badge-sm gap-1 border-[#fcb700] text-[#fcb700] bg-transparent"
@@ -906,7 +903,7 @@ defmodule OctopusWeb.ConsoleComponents do
       <div class="modal-box bg-base-200">
         <h3 class="font-bold text-lg">Delete {@label}?</h3>
         <p class="py-2">
-          Remove <span class="font-semibold">{@preset_name}</span> from the library. The queue will be updated.
+          Remove <span class="font-semibold">{@preset_name}</span> from the library. The playlist will be updated.
         </p>
         <div class="modal-action">
           <button type="button" class="btn btn-ghost" phx-click="close_now_playing_delete_modal" phx-target={@target}>

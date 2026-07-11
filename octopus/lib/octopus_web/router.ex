@@ -17,7 +17,8 @@ defmodule OctopusWeb.Router do
   scope "/", OctopusWeb do
     pipe_through :browser
 
-    live_session :default do
+    live_session :default,
+                 on_mount: {OctopusWeb.Live.Hooks.AssignCurrentPath, :default} do
       live "/sim", PixelsLive
       live "/app/:id", AppLive
       live "/", ManagerLive
@@ -30,12 +31,14 @@ defmodule OctopusWeb.Router do
     end
 
     live_session :sim3d,
-                 root_layout: {OctopusWeb.Layouts, :root_sim3d} do
+                 root_layout: {OctopusWeb.Layouts, :root_sim3d},
+                 on_mount: {OctopusWeb.Live.Hooks.AssignCurrentPath, :default} do
       live "/sim3d", Sim3dLive
     end
 
     live_session :sim3daframe,
-                 root_layout: {OctopusWeb.Layouts, :root_aframe} do
+                 root_layout: {OctopusWeb.Layouts, :root_aframe},
+                 on_mount: {OctopusWeb.Live.Hooks.AssignCurrentPath, :default} do
       live "/sim3daframe", Sim3dAframeLive
     end
   end

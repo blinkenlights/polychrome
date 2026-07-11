@@ -6,6 +6,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
   alias Octopus.{AppManager, AppSupervisor, InstallationTransport}
   alias Octopus.Apps.{PixelFun, PixieDebug}
+  alias Octopus.Apps.{PixelFun, PixieDebug}
 
   @app Module.concat(["Octopus", "App"])
   @app_mode_presets Module.concat(["Octopus", "AppModePresets"])
@@ -53,21 +54,19 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   def render(assigns) do
     ~H"""
     <div class="console-root space-y-6">
-      <.console_header
-        installation_label={@installation_label}
-        panel_hint={@panel_hint}
-        target={@myself}
-      />
+      <.console_header />
 
       <%!-- Main console (wide) --%>
       <div class="hidden min-[700px]:block space-y-6 pb-8">
-        <.transport_bar {transport_bar_assigns(assigns)} target={@myself} />
+        <div class="grid gap-6 min-[900px]:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] min-[900px]:items-start">
+          <.transport_bar {transport_bar_assigns(assigns)} target={@myself} />
+          <.queue_card {queue_assigns(assigns)} target={@myself} />
+        </div>
 
         <div class="grid gap-6 min-[900px]:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] min-[900px]:items-start">
           <.mode_library sections={@library_sections || []} target={@myself} transport={@transport} show_all_pixel_fun={@show_all_pixel_fun} />
           <div class="space-y-6">
             <.global_params_card />
-            <.queue_card {queue_assigns(assigns)} target={@myself} />
             <.now_playing_card {now_playing_assigns(assigns)} id_suffix="desktop" target={@myself} />
           </div>
         </div>
@@ -80,7 +79,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
         <div role="tablist" class="tabs tabs-boxed">
           <button
-            :for={{id, label} <- [{"queue", "Queue"}, {"library", "Library"}]}
+            :for={{id, label} <- [{"queue", "Playlist"}, {"library", "Library"}]}
             role="tab"
             class={["tab min-h-11", @active_tab == id && "tab-active"]}
             phx-click="select_tab"
@@ -92,8 +91,8 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         </div>
 
         <div class={@active_tab != "queue" && "hidden"}>
-          <.now_playing_card {now_playing_assigns(assigns)} id_suffix="mobile" target={@myself} />
           <.queue_card {queue_assigns(assigns)} target={@myself} />
+          <.now_playing_card {now_playing_assigns(assigns)} id_suffix="mobile" target={@myself} />
           <.running_now_panel
             running_apps={@running_apps}
             expanded={@show_running_now}
@@ -169,31 +168,12 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     """
   end
 
-  attr :installation_label, :string, required: true
-  attr :panel_hint, :string, required: true
-  attr :target, :any, required: true
-
   defp console_header(assigns) do
     ~H"""
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h1 class="text-xl font-semibold">{@installation_label}</h1>
-        <p class="text-sm opacity-60">{@panel_hint}</p>
-      </div>
-      <div class="flex items-center gap-2">
-        <span class="badge badge-sm bg-[#00d390] text-black border-0 gap-1">
-          <span class="w-2 h-2 rounded-full bg-black/30" /> Connected
-        </span>
-        <div class="dropdown dropdown-end">
-          <div tabindex="0" role="button" class="btn btn-ghost btn-sm">Sim ▾</div>
-          <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box z-30 w-44 p-2 shadow">
-            <li><a href="/sim">Open Sim</a></li>
-            <li><a href="/sim3d">Open 3D Sim</a></li>
-            <li><a href="/proximity">Proximity</a></li>
-            <li><a href="/firmware-info">Firmware Info</a></li>
-          </ul>
-        </div>
-      </div>
+    <div class="flex flex-wrap items-center justify-end gap-3">
+      <span class="badge badge-sm bg-[#00d390] text-black border-0 gap-1">
+        <span class="w-2 h-2 rounded-full bg-black/30" /> Connected
+      </span>
     </div>
     """
   end
