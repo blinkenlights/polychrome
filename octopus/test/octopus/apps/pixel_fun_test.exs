@@ -265,6 +265,38 @@ defmodule Octopus.Apps.PixelFunTest do
     end)
   end
 
+  test "build_canvas/1 time_direction backward reverses formula time", _context do
+    with_installation(Octopus.TestInstallations.HorizontalStrip64, fn ->
+      {:ok, program} = Program.parse("sin(x-t)")
+
+      base = %{
+        program: program,
+        display_info: %{width: Installation.width(), height: Installation.height()},
+        color_mode: :white,
+        panel_proximities: %{0 => 0.0},
+        panel_interaction_factors: %{0 => 0.0},
+        seconds: 5.0,
+        translate_scale: 0.0,
+        rotate_scale: 0.0,
+        zoom_scale: 0.0,
+        offset: {0, 0},
+        audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
+      }
+
+      forward =
+        struct(State, Map.put(base, :time_direction, :forward))
+
+      backward =
+        struct(State, Map.put(base, :time_direction, :backward))
+
+      forward_canvas = pixel_fun_build_canvas(forward)
+      backward_canvas = pixel_fun_build_canvas(backward)
+
+      refute Canvas.get_pixel(forward_canvas, {10, 0}) ==
+               Canvas.get_pixel(backward_canvas, {10, 0})
+    end)
+  end
+
   test "build_canvas/1 white mode uses abs for negative values", _context do
     with_installation(Octopus.TestInstallations.HorizontalStrip64, fn ->
       {:ok, program} = Program.parse("-1")

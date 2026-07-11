@@ -488,7 +488,8 @@ defmodule OctopusWeb.PixelFunConfigComponent do
       zoom_scale: config[:zoom_scale],
       sway_scale: config[:sway_scale],
       sway_speed: config[:sway_speed],
-      sway_mode: config[:sway_mode]
+      sway_mode: config[:sway_mode],
+      time_direction: config[:time_direction]
     }
   end
 

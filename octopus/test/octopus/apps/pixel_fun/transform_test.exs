@@ -38,14 +38,14 @@ defmodule Octopus.Apps.PixelFun.TransformTest do
   describe "transform_pixel_coords/3 on Nation2026" do
     test "sway_scale 0 matches pre-sway transform (no y offset)" do
       with_installation(Octopus.Installation.Nation2026, fn ->
-        w = Installation.width()
         params = base_params()
+        center_x = Installation.width() / 2 - 0.5
+        center_y = Installation.height() / 2 - 0.5
 
-        {x0, y0} = PixelFun.transform_pixel_coords(0, 0, params)
-        {x1, y1} = PixelFun.transform_pixel_coords(w, 0, params)
+        {x_scaled, y_scaled} = PixelFun.transform_pixel_coords(center_x, center_y, params)
 
-        assert x0 == x1
-        assert y0 == y1
+        assert_in_delta x_scaled, 0.0, 0.0001
+        assert_in_delta y_scaled, 0.0, 0.0001
       end)
     end
 
@@ -68,23 +68,37 @@ defmodule Octopus.Apps.PixelFun.TransformTest do
       end)
     end
 
-    test "circular rotation keeps y in band (no 2D shear)" do
+    test "negative rotate_scale reverses 2D rotation" do
       with_installation(Octopus.Installation.Nation2026, fn ->
-        params =
-          base_params(%{
-            rotate_scale: 1.0,
-            seconds: 3.0,
-            zoom: 1.5
-          })
+        forward = base_params(%{rotate_scale: 1.0, seconds: 3.0})
+        reverse = base_params(%{rotate_scale: -1.0, seconds: 3.0})
+        mirrored = base_params(%{rotate_scale: 1.0, seconds: -3.0})
 
-        for x <- [0, 50, 150, 300], y <- 0..7 do
-          {_x_scaled, y_scaled} = PixelFun.transform_pixel_coords(x, y, params)
-          assert y_scaled >= -20 and y_scaled <= 20
-        end
+        {x_forward, y_forward} = PixelFun.transform_pixel_coords(50, 3, forward)
+        {x_reverse, y_reverse} = PixelFun.transform_pixel_coords(50, 3, reverse)
+        {x_mirrored, y_mirrored} = PixelFun.transform_pixel_coords(50, 3, mirrored)
+
+        refute_in_delta x_forward, x_reverse, 0.0001
+        refute_in_delta y_forward, y_reverse, 0.0001
+        assert_in_delta x_reverse, x_mirrored, 0.0001
+        assert_in_delta y_reverse, y_mirrored, 0.0001
       end)
     end
 
-    test "zoom does not scale x on circular ring" do
+    test "circular rotation uses 2D spin on x and y" do
+      with_installation(Octopus.Installation.Nation2026, fn ->
+        no_rot = base_params(%{rotate_scale: 0.0, seconds: 3.0, zoom: 1.0})
+        with_rot = base_params(%{rotate_scale: 1.0, seconds: 3.0, zoom: 1.0})
+
+        {x0, y0} = PixelFun.transform_pixel_coords(50, 6, no_rot)
+        {x1, y1} = PixelFun.transform_pixel_coords(50, 6, with_rot)
+
+        refute_in_delta x0, x1, 0.0001
+        refute_in_delta y0, y1, 0.0001
+      end)
+    end
+
+    test "zoom scales y only after rotation" do
       with_installation(Octopus.Installation.Nation2026, fn ->
         base = base_params(%{zoom: 1.0})
         zoomed = base_params(%{zoom: 2.5})

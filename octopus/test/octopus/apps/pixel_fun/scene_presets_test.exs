@@ -119,7 +119,8 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
                zoom_scale: preset.zoom_scale,
                sway_scale: 0.0,
                sway_speed: 0.5,
-               sway_mode: :wobble
+               sway_mode: :wobble,
+               time_direction: :forward
              }
     end
 

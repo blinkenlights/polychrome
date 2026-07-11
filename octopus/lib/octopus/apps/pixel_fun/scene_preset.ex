@@ -38,7 +38,7 @@ defmodule Octopus.Apps.PixelFun.ScenePreset do
     |> validate_accent_color()
     |> validate_number(:color_interval, greater_than: 0)
     |> validate_number(:translate_scale, greater_than_or_equal_to: 0)
-    |> validate_number(:rotate_scale, greater_than_or_equal_to: 0)
+    |> validate_number(:rotate_scale, greater_than_or_equal_to: -4, less_than_or_equal_to: 4)
     |> validate_number(:zoom_scale, greater_than_or_equal_to: 0)
     |> unique_constraint(:name)
   end

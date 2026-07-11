@@ -20,7 +20,8 @@ defmodule Octopus.Apps.PixelFun do
     zoom_scale: 1.0,
     sway_scale: 0.0,
     sway_speed: 0.5,
-    sway_mode: :wobble
+    sway_mode: :wobble,
+    time_direction: :forward
   }
 
   @sway_defaults %{sway_scale: 0.0, sway_speed: 0.5, sway_mode: :wobble}
@@ -33,7 +34,8 @@ defmodule Octopus.Apps.PixelFun do
     :zoom_scale,
     :sway_scale,
     :sway_speed,
-    :sway_mode
+    :sway_mode,
+    :time_direction
   ]
 
   @builtin_defs [
@@ -46,25 +48,25 @@ defmodule Octopus.Apps.PixelFun do
     %{
       slug: "cross_waves",
       name: "Cross waves",
-      formula: "sin(x*0.7+t*2)*cos(y*0.7-t*1.3)",
+      formula: "sin(x*0.7+t*2)*cos(y*0.7+t*1.3)",
       accent_color: "#3498DB"
     },
     %{
       slug: "xy_interference",
       name: "XY interference",
-      formula: "sin(x*y*0.08 - t*3)",
+      formula: "sin(x*y*0.08)*cos(t*3)",
       accent_color: "#9B59B6"
     },
     %{
       slug: "nested_sincos",
       name: "Nested sin/cos",
-      formula: "sin(x*0.4+sin(y*0.3+t)*3+t)*cos(y*0.4+cos(x*0.3-t)*3-t)",
+      formula: "sin(x*0.4+sin(y*0.3+t)*3+t)*cos(y*0.4+cos(x*0.3+t)*3+t)",
       accent_color: "#1ABC9C"
     },
     %{
       slug: "layered_waves",
       name: "Layered waves",
-      formula: "sin(x*0.5+t)*cos(y*0.5-t)+sin((x+y)*0.35+t*1.5)*0.5",
+      formula: "sin(x*0.5+t)*cos(y*0.5+t)+sin((x+y)*0.35+t*1.5)*0.5",
       accent_color: "#F39C12"
     },
     %{
@@ -105,6 +107,7 @@ defmodule Octopus.Apps.PixelFun do
       :sway_scale,
       :sway_speed,
       :sway_mode,
+      :time_direction,
       :color_mode,
       :color_interval,
       # Id of the scene currently rendered on the wall.
@@ -135,7 +138,7 @@ defmodule Octopus.Apps.PixelFun do
       color_interval:
         {"Palette crossfade (s)", :float, %{default: 5, min: 1, max: 20, step: 0.5}},
       translate_scale: {"Drift strength", :float, %{default: 0.0, min: 0, max: 20, step: 0.1}},
-      rotate_scale: {"Rotation speed", :float, %{default: 0.0, min: 0, max: 4, step: 0.01}},
+      rotate_scale: {"Rotation speed", :float, %{default: 0.0, min: -4, max: 4, step: 0.01}},
       zoom_scale: {"Zoom pulse strength", :float, %{default: 1.0, min: 0, max: 10, step: 0.1}},
       sway_scale: {"Sway strength", :float, %{default: 0.0, min: 0, max: 4, step: 0.1}},
       sway_speed: {"Sway speed", :float, %{default: 0.5, min: 0, max: 3, step: 0.05}},
@@ -144,6 +147,12 @@ defmodule Octopus.Apps.PixelFun do
          %{
            default: 0,
            options: [{"Wobble", :wobble}, {"Pendulum", :pendulum}]
+         }},
+      time_direction:
+        {"Time direction", :select,
+         %{
+           default: 0,
+           options: [{"Forward", :forward}, {"Backward", :backward}]
          }}
     }
   end
@@ -158,7 +167,9 @@ defmodule Octopus.Apps.PixelFun do
 
     Drift strength — automatic sin/cos panning of the pattern (0 = off). Not manual translation.
 
-    Rotation speed — on circular rings, the pattern orbits around the ring (~1 revolution every 6 s at 1.0); on flat layouts, 2D spin around centre (0 = off).
+    Rotation speed — 2D spin around the pattern centre (~1 revolution every 6 s at 1.0, using ring width as scale on circular layouts). 0 = off. Negative values reverse direction.
+
+    Time direction — forward (default) or backward. Backward reverses formula animation, rotation, sway, and drift together. Palette crossfade is unaffected.
 
     Zoom pulse strength — vertical breathing; actual zoom oscillates between ~0 and this value on the y axis only (0 forces zoom 1×).
 
@@ -178,7 +189,8 @@ defmodule Octopus.Apps.PixelFun do
       zoom_scale: state.zoom_scale,
       sway_scale: state.sway_scale,
       sway_speed: state.sway_speed,
-      sway_mode: state.sway_mode
+      sway_mode: state.sway_mode,
+      time_direction: state.time_direction
     }
 
     Map.merge(scene, %{
@@ -284,7 +296,7 @@ defmodule Octopus.Apps.PixelFun do
         key: :rotate_scale,
         label: "Rotation",
         type: :slider,
-        min: 0.0,
+        min: -4.0,
         max: 4.0,
         step: 0.01,
         default: 0.0
@@ -322,6 +334,13 @@ defmodule Octopus.Apps.PixelFun do
         type: :select,
         options: [{"Wobble", :wobble}, {"Pendulum", :pendulum}],
         default: :wobble
+      },
+      %{
+        key: :time_direction,
+        label: "Time direction",
+        type: :select,
+        options: [{"Forward", :forward}, {"Backward", :backward}],
+        default: :forward
       }
     ]
   end
@@ -365,6 +384,7 @@ defmodule Octopus.Apps.PixelFun do
       sway_scale: Map.get(config, :sway_scale, @sway_defaults.sway_scale),
       sway_speed: Map.get(config, :sway_speed, @sway_defaults.sway_speed),
       sway_mode: config |> Map.get(:sway_mode, @sway_defaults.sway_mode) |> Octopus.Sway.normalize_mode(),
+      time_direction: config |> Map.get(:time_direction, :forward) |> coerce_time_direction(),
       live_scene_id: scene_presets().id_for_config(config),
       offset: {0, 0},
       move: {0, 0},
@@ -443,6 +463,10 @@ defmodule Octopus.Apps.PixelFun do
           config
           |> Map.get(:sway_mode, state.sway_mode)
           |> Octopus.Sway.normalize_mode(),
+        time_direction:
+          config
+          |> Map.get(:time_direction, state.time_direction || :forward)
+          |> coerce_time_direction(),
         color_mode: color_mode,
         color_interval: color_interval
     }
@@ -477,6 +501,7 @@ defmodule Octopus.Apps.PixelFun do
   defp coerce_config(config) when is_map(config) do
     Map.new(config, fn
       {:color_mode, value} -> {:color_mode, coerce_color_mode(value)}
+      {:time_direction, value} -> {:time_direction, coerce_time_direction(value)}
       {key, value} -> {key, value}
     end)
   end
@@ -493,6 +518,17 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   defp coerce_color_mode(_), do: :random
+
+  defp coerce_time_direction(value) when value in [:forward, :backward], do: value
+
+  defp coerce_time_direction("forward"), do: :forward
+  defp coerce_time_direction("backward"), do: :backward
+  defp coerce_time_direction(_), do: :forward
+
+  defp time_sign(:backward), do: -1
+  defp time_sign(_), do: 1
+
+  defp effective_seconds(%State{} = state), do: state.seconds * time_sign(state.time_direction)
 
   defp reschedule_color_timer(%State{color_mode: :random} = state) do
     if ref = state.color_timer_ref do
@@ -645,12 +681,13 @@ defmodule Octopus.Apps.PixelFun do
   defp render_canvas(%State{display_info: display_info} = state) do
     {offset_x, offset_y} = translate_offset(state)
     zoom = zoom_factor(state)
+    seconds = effective_seconds(state)
 
     transform_params = %{
       offset_x: offset_x,
       offset_y: offset_y,
       zoom: zoom,
-      seconds: state.seconds,
+      seconds: seconds,
       rotate_scale: state.rotate_scale,
       sway_scale: state.sway_scale || 0.0,
       sway_speed: state.sway_speed || @sway_defaults.sway_speed,
@@ -667,7 +704,7 @@ defmodule Octopus.Apps.PixelFun do
       hue_shift = proximity * 180 * 5
       interaction_factor = Map.get(state.panel_interaction_factors, index, 0.0)
 
-      pixel_time = state.seconds + interaction_factor * 5
+      pixel_time = seconds + interaction_factor * 5
       audio = state.audio_input
 
       Enum.reduce(Enum.with_index(panel), canvas, fn {{x, y}, i}, canvas ->
@@ -744,27 +781,11 @@ defmodule Octopus.Apps.PixelFun do
     } = params
 
     w = Installation.width()
-    tau = 2 * :math.pi()
     center_x = w / 2 - 0.5
     center_y = Installation.height() / 2 - 0.5
 
     {x_scaled, y_scaled} =
-      case Installation.arrangement() do
-        :circular ->
-          rotation_offset_x = seconds * rotate_scale * w / tau
-          x_wrapped = positive_fmod(x - offset_x - rotation_offset_x, w)
-          {x_wrapped - center_x, (y - offset_y - center_y) * zoom}
-
-        _ ->
-          rotation = seconds * rotate_scale
-          x_translated = x - offset_x - center_x
-          y_translated = y - offset_y - center_y
-
-          x_rotated = x_translated * :math.cos(rotation) - y_translated * :math.sin(rotation)
-          y_rotated = x_translated * :math.sin(rotation) + y_translated * :math.cos(rotation)
-
-          {x_rotated, y_rotated * zoom}
-      end
+      rotate_and_zoom(x, y, offset_x, offset_y, center_x, center_y, seconds, rotate_scale, zoom)
 
     y_final =
       if sway_scale == 0.0 do
@@ -777,9 +798,15 @@ defmodule Octopus.Apps.PixelFun do
     {x_scaled, y_final}
   end
 
-  defp positive_fmod(value, period) do
-    rem = :math.fmod(value, period)
-    if rem < 0, do: rem + period, else: rem
+  defp rotate_and_zoom(x, y, offset_x, offset_y, center_x, center_y, seconds, rotate_scale, zoom) do
+    rotation = seconds * rotate_scale
+    x_translated = x - offset_x - center_x
+    y_translated = y - offset_y - center_y
+
+    x_rotated = x_translated * :math.cos(rotation) - y_translated * :math.sin(rotation)
+    y_rotated = x_translated * :math.sin(rotation) + y_translated * :math.cos(rotation)
+
+    {x_rotated, y_rotated * zoom}
   end
 
   @default_env %{
@@ -912,15 +939,17 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   defp translate_offset(%State{translate_scale: scale, offset: {ox, oy}} = state) do
-    anim_x = :math.sin(0.3 + state.seconds * 0.17) * scale
-    anim_y = :math.cos(0.7 + state.seconds * 0.05) * scale
+    seconds = effective_seconds(state)
+    anim_x = :math.sin(0.3 + seconds * 0.17) * scale
+    anim_y = :math.cos(0.7 + seconds * 0.05) * scale
     {ox + anim_x, oy + anim_y}
   end
 
   defp zoom_factor(%State{zoom_scale: zoom}) when zoom == 0, do: 1.0
 
-  defp zoom_factor(%State{zoom_scale: scale, seconds: seconds}) do
-    (:math.sin(seconds * 0.1) * 0.5 + 0.5) * scale
+  defp zoom_factor(%State{} = state) do
+    seconds = effective_seconds(state)
+    (:math.sin(seconds * 0.1) * 0.5 + 0.5) * state.zoom_scale
   end
 
   defp lerp_toward_target_colors(%State{color_mode: :random} = state) do

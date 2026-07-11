@@ -12,7 +12,7 @@ defmodule Octopus.AppModePresetsTest do
 
   describe "sync_builtins/1" do
     test "is idempotent and seeds all apps" do
-      assert length(preset_list(PixelFun)) == 7
+      assert length(preset_list(PixelFun)) == 8
       assert length(preset_list(Collective)) == 6
       assert length(preset_list(Matrix)) == 2
       assert length(preset_list(Sand)) == 1
@@ -21,7 +21,7 @@ defmodule Octopus.AppModePresetsTest do
 
       preset_sync_all!()
 
-      assert length(preset_list(PixelFun)) == 7
+      assert length(preset_list(PixelFun)) == 8
     end
 
     test "does not overwrite existing rows" do

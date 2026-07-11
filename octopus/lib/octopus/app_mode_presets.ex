@@ -535,12 +535,14 @@ defmodule Octopus.AppModePresets do
           :zoom_scale,
           :sway_scale,
           :sway_speed,
-          :sway_mode
+          :sway_mode,
+          :time_direction
         ],
         fn key ->
           case key do
             :program -> left.program == right.program
             :sway_mode -> left.sway_mode == right.sway_mode
+            :time_direction -> left.time_direction == right.time_direction
             _ -> float_eq?(Map.get(left, key), Map.get(right, key))
           end
         end
@@ -561,7 +563,8 @@ defmodule Octopus.AppModePresets do
       zoom_scale: Map.get(config, :zoom_scale, 1.0),
       sway_scale: Map.get(config, :sway_scale, @sway_defaults.sway_scale),
       sway_speed: Map.get(config, :sway_speed, @sway_defaults.sway_speed),
-      sway_mode: pixelfun_sway_mode(Map.get(config, :sway_mode, @sway_defaults.sway_mode))
+      sway_mode: pixelfun_sway_mode(Map.get(config, :sway_mode, @sway_defaults.sway_mode)),
+      time_direction: pixelfun_time_direction(Map.get(config, :time_direction, :forward))
     }
   end
 
@@ -570,6 +573,12 @@ defmodule Octopus.AppModePresets do
   defp pixelfun_sway_mode("wobble"), do: :wobble
   defp pixelfun_sway_mode("pendulum"), do: :pendulum
   defp pixelfun_sway_mode(_), do: :wobble
+
+  defp pixelfun_time_direction(:forward), do: :forward
+  defp pixelfun_time_direction(:backward), do: :backward
+  defp pixelfun_time_direction("forward"), do: :forward
+  defp pixelfun_time_direction("backward"), do: :backward
+  defp pixelfun_time_direction(_), do: :forward
 
   defp float_eq_maps?(left, right) do
     Map.keys(left) == Map.keys(right) &&

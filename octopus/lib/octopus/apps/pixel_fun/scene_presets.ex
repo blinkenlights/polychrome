@@ -55,7 +55,8 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
       zoom_scale: Map.get(attrs, :zoom_scale, 1.0),
       sway_scale: Map.get(attrs, :sway_scale, @sway_defaults.sway_scale),
       sway_speed: Map.get(attrs, :sway_speed, @sway_defaults.sway_speed),
-      sway_mode: Map.get(attrs, :sway_mode, @sway_defaults.sway_mode)
+      sway_mode: Map.get(attrs, :sway_mode, @sway_defaults.sway_mode),
+      time_direction: Map.get(attrs, :time_direction, :forward)
     }
 
     opts = [accent_color: Map.get(attrs, :accent_color, presets().random_accent_color())]
@@ -113,7 +114,8 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
       zoom_scale: preset.zoom_scale,
       sway_scale: Map.get(preset, :sway_scale, @sway_defaults.sway_scale),
       sway_speed: Map.get(preset, :sway_speed, @sway_defaults.sway_speed),
-      sway_mode: Map.get(preset, :sway_mode, @sway_defaults.sway_mode)
+      sway_mode: Map.get(preset, :sway_mode, @sway_defaults.sway_mode),
+      time_direction: Map.get(preset, :time_direction, :forward)
     }
   end
 
@@ -127,7 +129,8 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
       zoom_scale: Map.get(config, :zoom_scale, 1.0),
       sway_scale: Map.get(config, :sway_scale, @sway_defaults.sway_scale),
       sway_speed: Map.get(config, :sway_speed, @sway_defaults.sway_speed),
-      sway_mode: Map.get(config, :sway_mode, @sway_defaults.sway_mode)
+      sway_mode: Map.get(config, :sway_mode, @sway_defaults.sway_mode),
+      time_direction: Map.get(config, :time_direction, :forward)
     }
   end
 
@@ -145,12 +148,14 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
         :zoom_scale,
         :sway_scale,
         :sway_speed,
-        :sway_mode
+        :sway_mode,
+        :time_direction
       ],
       fn key ->
         case key do
           :program -> left.program == right.program
           :sway_mode -> left.sway_mode == right.sway_mode
+          :time_direction -> left.time_direction == right.time_direction
           _ -> float_eq?(Map.get(left, key), Map.get(right, key))
         end
       end
@@ -195,6 +200,7 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
       sway_scale: Map.get(config, :sway_scale, @sway_defaults.sway_scale),
       sway_speed: Map.get(config, :sway_speed, @sway_defaults.sway_speed),
       sway_mode: Map.get(config, :sway_mode, @sway_defaults.sway_mode),
+      time_direction: Map.get(config, :time_direction, :forward),
       accent_color: preset.accent_color,
       builtin: preset.builtin
     }
@@ -221,6 +227,7 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
     |> maybe_config_put(:sway_scale, Map.get(attrs, :sway_scale))
     |> maybe_config_put(:sway_speed, Map.get(attrs, :sway_speed))
     |> maybe_config_put(:sway_mode, Map.get(attrs, :sway_mode))
+    |> maybe_config_put(:time_direction, Map.get(attrs, :time_direction))
   end
 
   defp maybe_config_put(config, _key, nil), do: config
@@ -251,7 +258,8 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
       zoom_scale: preset.zoom_scale,
       sway_scale: Map.get(preset, :sway_scale, @sway_defaults.sway_scale),
       sway_speed: Map.get(preset, :sway_speed, @sway_defaults.sway_speed),
-      sway_mode: normalize_sway_mode(Map.get(preset, :sway_mode, @sway_defaults.sway_mode))
+      sway_mode: normalize_sway_mode(Map.get(preset, :sway_mode, @sway_defaults.sway_mode)),
+      time_direction: normalize_time_direction(Map.get(preset, :time_direction, :forward))
     }
   end
 
@@ -268,7 +276,8 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
       zoom_scale: Map.get(config, :zoom_scale, 1.0),
       sway_scale: Map.get(config, :sway_scale, @sway_defaults.sway_scale),
       sway_speed: Map.get(config, :sway_speed, @sway_defaults.sway_speed),
-      sway_mode: normalize_sway_mode(Map.get(config, :sway_mode, @sway_defaults.sway_mode))
+      sway_mode: normalize_sway_mode(Map.get(config, :sway_mode, @sway_defaults.sway_mode)),
+      time_direction: normalize_time_direction(Map.get(config, :time_direction, :forward))
     }
   end
 
@@ -277,6 +286,12 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
   defp normalize_sway_mode("wobble"), do: :wobble
   defp normalize_sway_mode("pendulum"), do: :pendulum
   defp normalize_sway_mode(_), do: :wobble
+
+  defp normalize_time_direction(:forward), do: :forward
+  defp normalize_time_direction(:backward), do: :backward
+  defp normalize_time_direction("forward"), do: :forward
+  defp normalize_time_direction("backward"), do: :backward
+  defp normalize_time_direction(_), do: :forward
 
   defp float_eq?(a, b) when is_number(a) and is_number(b), do: abs(a - b) < 0.001
   defp float_eq?(a, b), do: a == b
