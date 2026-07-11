@@ -23,6 +23,7 @@ DisplayMode display_mode = DisplayMode::Normal;
 bool show_test_frame = true;
 uint32_t config_phash = 0;
 uint8_t luminance = 255;
+bool enable_wframe_red = false;
 
 void Display::setup()
 {
@@ -77,6 +78,16 @@ DisplayMode Display::get_display_mode()
   return display_mode;
 }
 
+void Display::set_enable_wframe_red(bool enable)
+{
+  enable_wframe_red = enable;
+}
+
+bool Display::get_enable_wframe_red()
+{
+  return enable_wframe_red;
+}
+
 // Function to calculate R value for a given W value (0-255)
 // Based on the formula: r = max_r * ((max_w - w) / max_w)^2
 uint8_t calculate_r_for_wframe(uint8_t w_value)
@@ -108,9 +119,12 @@ void apply_rgb_frame(RGBFrame_data_t data, uint16_t first_pixel, uint16_t last_p
     {
       RgbwColor original = pixel[i - first_pixel].get_original_color();
       color.W = original.W;
-      uint8_t w_r = calculate_r_for_wframe(color.W);
-      uint16_t screen_red = color.R + w_r - (color.R * w_r / 255);
-      color.R = min(255, (int)screen_red);
+      if (enable_wframe_red)
+      {
+        uint8_t w_r = calculate_r_for_wframe(color.W);
+        uint16_t screen_red = color.R + w_r - (color.R * w_r / 255);
+        color.R = min(255, (int)screen_red);
+      }
     }
     else
     {
@@ -127,21 +141,33 @@ void apply_w_frame(WFrame_data_t data, uint16_t first_pixel, uint16_t last_pixel
   for (int i = first_pixel; i <= last_pixel; i++)
   {
     uint8_t w = data.bytes[i];
-    uint8_t w_r = calculate_r_for_wframe(w);
 
     if (keep_rgb)
     {
       RgbwColor original = pixel[i - first_pixel].get_original_color();
-      uint16_t screen_red = original.R + w_r - (original.R * w_r / 255);
-
-      color.R = min(255, (int)screen_red);
+      if (enable_wframe_red)
+      {
+        uint8_t w_r = calculate_r_for_wframe(w);
+        uint16_t screen_red = original.R + w_r - (original.R * w_r / 255);
+        color.R = min(255, (int)screen_red);
+      }
+      else
+      {
+        color.R = original.R;
+      }
       color.G = original.G;
       color.B = original.B;
     }
     else
     {
-      uint8_t r = calculate_r_for_wframe(w);
-      color.R = r;
+      if (enable_wframe_red)
+      {
+        color.R = calculate_r_for_wframe(w);
+      }
+      else
+      {
+        color.R = 0;
+      }
       color.G = 0;
       color.B = 0;
     }
@@ -250,7 +276,7 @@ void Display::render_test_frame()
 void Display::render_idle_grey()
 {
   const uint8_t w = 26; // 10% greyscale W-frame
-  const uint8_t r = calculate_r_for_wframe(w);
+  const uint8_t r = enable_wframe_red ? calculate_r_for_wframe(w) : 0;
   RgbwColor color(r, 0, 0, w);
 
   for (int i = 0; i < PIXEL_COUNT; i++)

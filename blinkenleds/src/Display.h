@@ -21,6 +21,8 @@ public:
   static uint32_t get_config_phash();
   static void set_display_mode(DisplayMode mode);
   static DisplayMode get_display_mode();
+  static void set_enable_wframe_red(bool enable);
+  static bool get_enable_wframe_red();
 
 private:
   static void render_test_frame();
