@@ -4,9 +4,12 @@ defmodule Octopus.Apps.PerlinNoise do
   @mode_presets Module.concat(["Octopus", "AppModePresets"])
 
   alias Octopus.Canvas
+  alias Octopus.Installation
 
   @fps 30
   @frame_time_ms trunc(1000 / @fps)
+  @two_pi 2.0 * :math.pi()
+  @default_contrast 3.0
 
   def name, do: "Perlin Noise"
 
@@ -32,11 +35,12 @@ defmodule Octopus.Apps.PerlinNoise do
 
   def legacy_mode_config("perlin") do
     %{
-      scale: 0.1,
+      scale: default_scale(),
       octaves: 4,
       persistence: 0.5,
       speed: 1.0,
-      seed: 42
+      seed: 42,
+      contrast: @default_contrast
     }
   end
 
@@ -49,31 +53,22 @@ defmodule Octopus.Apps.PerlinNoise do
   def mode_tweakables_for("perlin") do
     [
       %{
+        key: :contrast,
+        label: "Contrast",
+        type: :slider,
+        min: 0.5,
+        max: 8.0,
+        step: 0.5,
+        default: @default_contrast
+      },
+      %{
         key: :scale,
-        label: "Scale",
+        label: "Detail",
         type: :slider,
         min: 0.01,
         max: 0.5,
         step: 0.01,
-        default: 0.1
-      },
-      %{
-        key: :octaves,
-        label: "Octaves",
-        type: :slider,
-        min: 1,
-        max: 8,
-        step: 1,
-        default: 4
-      },
-      %{
-        key: :persistence,
-        label: "Persistence",
-        type: :slider,
-        min: 0.1,
-        max: 1.0,
-        step: 0.05,
-        default: 0.5
+        default: default_scale()
       },
       %{
         key: :speed,
@@ -99,11 +94,15 @@ defmodule Octopus.Apps.PerlinNoise do
   def mode_tweakables_for(_), do: []
 
   def now_playing_meta(config) do
-    scale = Map.get(config, :scale, 0.1)
-    octaves = Map.get(config, :octaves, 4)
+    scale = Map.get(config, :scale, default_scale())
     speed = Map.get(config, :speed, 1.0)
+    contrast = Map.get(config, :contrast, @default_contrast)
 
-    ["scale #{format_num(scale)}", "#{octaves} octaves", "speed #{format_num(speed)}"]
+    [
+      "contrast #{format_num(contrast)}",
+      "detail #{format_num(scale)}",
+      "speed #{format_num(speed)}"
+    ]
   end
 
   def compatible? do
@@ -113,12 +112,12 @@ defmodule Octopus.Apps.PerlinNoise do
   end
 
   def app_init(config) do
-    # Configure display for grayscale output using the new API
+    # Instant panel updates — easing on the firmware side blurs full-frame noise.
     Octopus.App.configure_display(
       layout: :adjacent_panels,
       supports_rgb: false,
       supports_grayscale: true,
-      easing_interval: 50
+      easing_interval: 0
     )
 
     # Start animation timer
@@ -126,11 +125,12 @@ defmodule Octopus.Apps.PerlinNoise do
 
     state = %{
       time: 0.0,
-      scale: Map.get(config, :scale, 0.1),
+      scale: Map.get(config, :scale, default_scale()),
       octaves: Map.get(config, :octaves, 4),
       persistence: Map.get(config, :persistence, 0.5),
       speed: Map.get(config, :speed, 1.0),
-      seed: Map.get(config, :seed, 42)
+      seed: Map.get(config, :seed, 42),
+      contrast: Map.get(config, :contrast, @default_contrast)
     }
 
     {:ok, state}
@@ -156,11 +156,12 @@ defmodule Octopus.Apps.PerlinNoise do
 
   def config_schema() do
     %{
-      scale: {"Scale", :float, %{min: 0.01, max: 0.5, default: 0.1}},
+      scale: {"Detail", :float, %{min: 0.01, max: 0.5, default: default_scale()}},
       octaves: {"Octaves", :int, %{min: 1, max: 8, default: 4}},
       persistence: {"Persistence", :float, %{min: 0.1, max: 1.0, default: 0.5}},
       speed: {"Speed", :float, %{min: 0.1, max: 3.0, default: 1.0}},
-      seed: {"Seed", :int, %{min: 1, max: 9999, default: 42}}
+      seed: {"Seed", :int, %{min: 1, max: 9999, default: 42}},
+      contrast: {"Contrast", :float, %{min: 0.5, max: 8.0, default: @default_contrast}}
     }
   end
 
@@ -170,7 +171,8 @@ defmodule Octopus.Apps.PerlinNoise do
       octaves: state.octaves,
       persistence: state.persistence,
       speed: state.speed,
-      seed: state.seed
+      seed: state.seed,
+      contrast: state.contrast
     }
   end
 
@@ -181,10 +183,19 @@ defmodule Octopus.Apps.PerlinNoise do
         octaves: Map.get(config, :octaves, state.octaves),
         persistence: Map.get(config, :persistence, state.persistence),
         speed: Map.get(config, :speed, state.speed),
-        seed: Map.get(config, :seed, state.seed)
+        seed: Map.get(config, :seed, state.seed),
+        contrast: Map.get(config, :contrast, state.contrast)
     }
 
     {:noreply, new_state}
+  end
+
+  @doc false
+  def default_scale, do: 2.5 / Installation.panel_width()
+
+  @doc false
+  def render_canvas(width, height, state) do
+    generate_perlin_canvas(width, height, state)
   end
 
   # Generate a canvas filled with Perlin noise
@@ -195,11 +206,7 @@ defmodule Octopus.Apps.PerlinNoise do
       for x <- 0..(width - 1),
           y <- 0..(height - 1),
           into: %{} do
-        # Sample Perlin noise at this coordinate with time as Z dimension for stationary evolution
-        sample_x = x * state.scale
-        sample_y = y * state.scale
-        # Use time as third dimension for evolution (25% faster)
-        sample_z = state.time * 0.25
+        {sample_x, sample_y, sample_z} = noise_sample_coords(x, y, width, state)
 
         noise_value =
           multi_octave_noise_3d(
@@ -211,35 +218,50 @@ defmodule Octopus.Apps.PerlinNoise do
             state.seed
           )
 
-        # Normalize from [-1, 1] to [0, 255] with balanced high contrast
         gray_value = trunc((noise_value + 1) * 127.5) |> max(0) |> min(255)
         normalized = gray_value / 255.0
-
-        # Use S-curve (sigmoid-like) for high contrast while preserving overall brightness balance
-        # This pushes values toward 0 and 1 while keeping the average around 0.5
-        contrast_factor = 3.0
-        s_curve = 1.0 / (1.0 + :math.exp(-contrast_factor * (normalized - 0.5)))
-
-        # Final compression filter: push values more aggressively toward extremes
-        # Values below 0.5 get compressed toward 0, values above 0.5 get compressed toward 1
-        # How aggressive the compression is
-        compression_factor = 3.0
-
-        compressed =
-          if s_curve < 0.5 do
-            # Compress dark values toward 0
-            :math.pow(s_curve * 2.0, compression_factor) / 2.0
-          else
-            # Compress bright values toward 1
-            1.0 - :math.pow((1.0 - s_curve) * 2.0, compression_factor) / 2.0
-          end
-
-        final_value = trunc(compressed * 255) |> max(0) |> min(255)
+        final_value = apply_contrast(normalized, state.contrast) |> trunc() |> max(0) |> min(255)
 
         {{x, y}, final_value}
       end
 
     %Canvas{canvas | pixels: pixels}
+  end
+
+  defp noise_sample_coords(x, y, width, state) do
+    time_z = state.time * 0.25
+
+    case Installation.arrangement() do
+      :circular ->
+        theta = x / max(width, 1) * @two_pi
+        ring_radius = width / @two_pi * state.scale
+
+        {
+          :math.cos(theta) * ring_radius,
+          y * state.scale,
+          :math.sin(theta) * ring_radius + time_z
+        }
+
+      _ ->
+        {x * state.scale, y * state.scale, time_z}
+    end
+  end
+
+  defp apply_contrast(normalized, contrast) do
+    s_curve = 1.0 / (1.0 + :math.exp(-contrast * (normalized - 0.5)))
+
+    if contrast <= 1.0 do
+      s_curve * 255.0
+    else
+      compressed =
+        if s_curve < 0.5 do
+          :math.pow(s_curve * 2.0, contrast) / 2.0
+        else
+          1.0 - :math.pow((1.0 - s_curve) * 2.0, contrast) / 2.0
+        end
+
+      compressed * 255.0
+    end
   end
 
   # Multi-octave 3D Perlin noise implementation for stationary evolution

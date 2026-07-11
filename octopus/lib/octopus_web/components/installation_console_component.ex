@@ -413,18 +413,16 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     message =
       case InstallationTransport.play_now(module, mode_id) do
         :ok ->
-          refresh_transport(socket)
           nil
 
         {:error, :incompatible} ->
-          refresh_transport(socket)
           "#{app_name(module)} is not compatible with this installation"
 
         {:error, _} ->
-          refresh_transport(socket)
           "Could not play #{app_name(module)} · #{mode_id}"
       end
 
+    socket = refresh_transport(socket)
     socket = if message, do: put_flash(socket, :error, message), else: socket
 
     {:noreply, socket}
