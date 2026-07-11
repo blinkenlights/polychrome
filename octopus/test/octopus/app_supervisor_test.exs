@@ -76,6 +76,19 @@ defmodule Octopus.AppSupervisorTest do
     AppSupervisor.stop_app(app_id)
   end
 
+  test "start_app stops other running apps" do
+    assert {:ok, app_id1} = AppSupervisor.start_app(Octopus.Apps.CanvasTest)
+    assert {:ok, app_id2} = AppSupervisor.start_app(Octopus.Apps.CanvasTest)
+
+    assert app_id1 != app_id2
+
+    running = AppSupervisor.running_apps()
+    assert Enum.any?(running, fn {module, ^app_id2} -> module == Octopus.Apps.CanvasTest end)
+    refute Enum.any?(running, fn {_, ^app_id1} -> true end)
+
+    AppSupervisor.stop_app(app_id2)
+  end
+
   test "find_running_app returns :not_found when app is not running" do
     # Ensure no Canvas Test apps are running
     AppSupervisor.running_apps()
