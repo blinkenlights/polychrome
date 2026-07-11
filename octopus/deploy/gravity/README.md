@@ -92,6 +92,13 @@ ssh tim@gravity.crested-frog.ts.net \
     'cd /home/tim/polychrome/deploy/gravity && docker compose logs -f'
 ```
 
+## Installation profile
+
+Gravity builds with the **Pixie** installation (`Octopus.Installation.Pixie`) — a
+single 8×8 panel. This is set via `INSTALLATION_MODULE` in `.env` and passed as a
+Docker build arg by `deploy.sh`. Change it there and redeploy to use a different
+profile.
+
 ## Radar sensors
 
 This deployment loads the `gravity` radar setup defined centrally in

@@ -75,10 +75,6 @@ RUN --mount=type=cache,target=/root/.npm \
     cd assets && npm ci
 
 COPY assets assets
-RUN --mount=type=cache,target=/root/.npm \
-    mix tailwind.install --if-missing && \
-    mix esbuild.install --if-missing && \
-    mix assets.deploy
 
 FROM deps_compile AS builder
 
@@ -86,7 +82,14 @@ COPY priv priv
 COPY lib lib
 COPY src src
 COPY native native
-COPY --from=assets /app/priv/static priv/static
+COPY --from=assets /app/assets assets
+
+# Tailwind scans lib/octopus_web from assets/tailwind.config.js — lib must be
+# present here, not in the assets stage, or utility classes won't be generated.
+RUN --mount=type=cache,target=/root/.npm \
+    mix tailwind.install --if-missing && \
+    mix esbuild.install --if-missing && \
+    mix assets.deploy
 
 # Changes to config/runtime.exs / radar.exs don't require recompiling the code.
 # radar.exs holds all named radar setups; the active one is selected at runtime
