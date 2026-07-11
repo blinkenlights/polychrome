@@ -673,6 +673,126 @@ defmodule Octopus.Canvas do
   def rgb_to_grayscale(r, g, b) do
     trunc(0.299 * r + 0.587 * g + 0.114 * b)
   end
+
+  @doc """
+  Applies per-panel pixel bleeding by blending each pixel with a separable Gaussian blur
+  of its neighbors within the same panel.
+
+  `strength` is a percentage from 0.0 (no effect) to 100.0 (full blur blend).
+  Requires `display_info` in opts for panel-isolated bleeding.
+  """
+  @bleed_full_at 50.0
+
+  @spec bleed(t(), float(), keyword()) :: t()
+  def bleed(canvas, strength, opts \\ [])
+
+  def bleed(canvas, strength, _opts) when strength <= 0.0, do: canvas
+
+  def bleed(%Canvas{mode: :rgb} = canvas, strength, opts) do
+    case Keyword.get(opts, :display_info) do
+      nil -> canvas
+      display_info -> apply_bleeding(canvas, bleed_alpha(strength), display_info, :rgb)
+    end
+  end
+
+  def bleed(%Canvas{mode: :grayscale} = canvas, strength, opts) do
+    case Keyword.get(opts, :display_info) do
+      nil -> canvas
+      display_info -> apply_bleeding(canvas, bleed_alpha(strength), display_info, :grayscale)
+    end
+  end
+
+  defp bleed_alpha(strength) do
+    strength / @bleed_full_at |> min(1.0)
+  end
+
+  defp apply_bleeding(%Canvas{} = canvas, alpha, display_info, mode) do
+    num_panels = display_info.num_panels
+    panel_range = display_info.panel_range
+
+    updated_pixels =
+      for panel_id <- 0..(num_panels - 1),
+          {x_start, x_end} = panel_range.(panel_id, :x),
+          {y_start, y_end} = panel_range.(panel_id, :y),
+          y <- y_start..y_end,
+          x <- x_start..x_end,
+          reduce: canvas.pixels do
+        pixels ->
+          original = get_pixel(canvas, {x, y})
+          blurred = blur_pixel(canvas, x, y, x_start, x_end, y_start, y_end, mode)
+          mixed = lerp_pixel(original, blurred, alpha, mode)
+          Map.put(pixels, {x, y}, mixed)
+      end
+
+    %Canvas{canvas | pixels: updated_pixels}
+  end
+
+  defp blur_pixel(canvas, x, y, x_start, x_end, y_start, y_end, mode) do
+    v_values =
+      for dy <- -1..1 do
+        ny = clamp_coord(y + dy, y_start, y_end)
+        sample_blurred_h(canvas, x, ny, x_start, x_end, mode)
+      end
+
+    weighted_average(v_values, mode)
+  end
+
+  defp sample_blurred_h(canvas, x, y, x_start, x_end, mode) do
+    values =
+      for dx <- -1..1 do
+        nx = clamp_coord(x + dx, x_start, x_end)
+        get_pixel(canvas, {nx, y})
+      end
+
+    weighted_average(values, mode)
+  end
+
+  defp weighted_average(values, :rgb) do
+    {rs, gs, bs} =
+      Enum.reduce(values, {[], [], []}, fn {r, g, b}, {acc_r, acc_g, acc_b} ->
+        {[r | acc_r], [g | acc_g], [b | acc_b]}
+      end)
+
+    weights = [1, 2, 1]
+    total_weight = 4
+
+    r = weighted_sum(rs, weights) / total_weight
+    g = weighted_sum(gs, weights) / total_weight
+    b = weighted_sum(bs, weights) / total_weight
+
+    {trunc(r), trunc(g), trunc(b)}
+  end
+
+  defp weighted_average(values, :grayscale) do
+    weights = [1, 2, 1]
+    trunc(weighted_sum(values, weights) / 4)
+  end
+
+  defp weighted_sum(values, weights) do
+    values
+    |> Enum.zip(weights)
+    |> Enum.reduce(0, fn {value, weight}, acc -> acc + value * weight end)
+  end
+
+  defp lerp_pixel(original, blurred, alpha, :rgb) do
+    {r1, g1, b1} = original
+    {r2, g2, b2} = blurred
+    inv = 1.0 - alpha
+
+    {
+      trunc(r1 * inv + r2 * alpha),
+      trunc(g1 * inv + g2 * alpha),
+      trunc(b1 * inv + b2 * alpha)
+    }
+  end
+
+  defp lerp_pixel(original, blurred, alpha, :grayscale) do
+    trunc(original * (1.0 - alpha) + blurred * alpha)
+  end
+
+  defp clamp_coord(value, min, _max) when value < min, do: min
+  defp clamp_coord(value, _min, max) when value > max, do: max
+  defp clamp_coord(value, _min, _max), do: value
 end
 
 defimpl Collectable, for: Octopus.Canvas do

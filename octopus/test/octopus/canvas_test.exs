@@ -291,6 +291,100 @@ defmodule Octopus.CanvasTest do
     end
   end
 
+  describe "bleed/3" do
+    defp two_panel_display_info(panel_width \\ 8, panel_gap \\ 4) do
+      panel_range = fn panel_id, axis ->
+        case axis do
+          :x ->
+            x_offset = panel_id * (panel_width + panel_gap)
+            {x_offset, x_offset + panel_width - 1}
+
+          :y ->
+            {0, 7}
+        end
+      end
+
+      %{
+        num_panels: 2,
+        panel_range: panel_range
+      }
+    end
+
+    test "strength 0 leaves canvas unchanged" do
+      canvas =
+        Canvas.new(20, 8, :rgb)
+        |> Canvas.put_pixel({4, 4}, {255, 255, 255})
+
+      display_info = two_panel_display_info()
+
+      assert canvas == Canvas.bleed(canvas, 0.0, display_info: display_info)
+    end
+
+    test "RGB white pixel bleeds to neighbors at full strength" do
+      canvas =
+        Canvas.new(20, 8, :rgb)
+        |> Canvas.put_pixel({4, 4}, {255, 255, 255})
+
+      display_info = two_panel_display_info()
+
+      bled = Canvas.bleed(canvas, 50.0, display_info: display_info)
+
+      assert Canvas.get_pixel(bled, {4, 4}) |> elem(0) > 0
+      assert Canvas.get_pixel(bled, {4, 3}) |> elem(0) > 0
+      assert Canvas.get_pixel(bled, {5, 4}) |> elem(0) > 0
+    end
+
+    test "50% reaches the previous maximum bleed strength" do
+      canvas =
+        Canvas.new(20, 8, :rgb)
+        |> Canvas.put_pixel({4, 4}, {255, 255, 255})
+
+      display_info = two_panel_display_info()
+
+      at_50 = Canvas.bleed(canvas, 50.0, display_info: display_info)
+      at_100 = Canvas.bleed(canvas, 100.0, display_info: display_info)
+
+      assert Canvas.get_pixel(at_50, {4, 3}) == Canvas.get_pixel(at_100, {4, 3})
+    end
+
+    test "bleeding does not cross panel boundaries" do
+      panel_width = 8
+      panel_gap = 4
+      display_info = two_panel_display_info(panel_width, panel_gap)
+
+      canvas =
+        Canvas.new(20, 8, :rgb)
+        |> Canvas.put_pixel({panel_width - 1, 0}, {255, 255, 255})
+
+      bled = Canvas.bleed(canvas, 100.0, display_info: display_info)
+
+      left_edge_second_panel = panel_width + panel_gap
+      assert Canvas.get_pixel(bled, {left_edge_second_panel, 0}) == {0, 0, 0}
+    end
+
+    test "grayscale white pixel bleeds to neighbors at full strength" do
+      canvas =
+        Canvas.new(20, 8, :grayscale)
+        |> Canvas.put_pixel({4, 4}, 255)
+
+      display_info = two_panel_display_info()
+
+      bled = Canvas.bleed(canvas, 50.0, display_info: display_info)
+
+      assert Canvas.get_pixel(bled, {4, 4}) > 0
+      assert Canvas.get_pixel(bled, {4, 3}) > 0
+      assert Canvas.get_pixel(bled, {5, 4}) > 0
+    end
+
+    test "returns canvas unchanged without display_info" do
+      canvas =
+        Canvas.new(8, 8, :rgb)
+        |> Canvas.put_pixel({2, 2}, {255, 0, 0})
+
+      assert canvas == Canvas.bleed(canvas, 50.0, [])
+    end
+  end
+
   describe "Inspect protocol" do
     test "inspects RGB canvas" do
       canvas = Canvas.new(3, 2, :rgb)

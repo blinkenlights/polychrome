@@ -3,6 +3,7 @@ defmodule Octopus.Mixer do
 
   alias Octopus.{Broadcaster, Protobuf, Canvas, AppManager, AppSupervisor, Installation}
   alias Octopus.Hardware.Untangle
+  alias Octopus.Params.Global
 
   alias Octopus.Protobuf.{
     RGBFrame,
@@ -809,6 +810,9 @@ defmodule Octopus.Mixer do
          easing_interval,
          main_app_mode
        ) do
+    main_canvas =
+      Canvas.bleed(main_canvas, Global.bleeding(), display_info: main_display_info)
+
     case state.output_mode do
       :masked when not is_nil(state.mask_app_id) ->
         # Send frame type based on selected app's mode, but with masking applied

@@ -8,6 +8,7 @@ defmodule Octopus.Params.Global do
   def brightness, do: param(:brightness, 128)
   def speed, do: param(:speed, 1.0)
   def auto_brightness, do: param(:auto_brightness, false)
+  def bleeding, do: param(:bleeding, 0.0)
 
   def speed_min, do: @speed_min
   def speed_max, do: @speed_max
@@ -42,7 +43,8 @@ defmodule Octopus.Params.Global do
     %{
       brightness: {"Brightness", :int, %{default: 128, min: 0, max: 255}},
       speed: {"Speed", :exp_float, %{default: 1.0, min: @speed_min, max: @speed_max}},
-      auto_brightness: {"Auto Brightness", :boolean, %{default: false}}
+      auto_brightness: {"Auto Brightness", :boolean, %{default: false}},
+      bleeding: {"Bleeding", :float, %{default: 0.0, min: 0.0, max: 100.0, step: 1.0}}
     }
   end
 
@@ -53,7 +55,8 @@ defmodule Octopus.Params.Global do
     %{
       brightness: brightness(),
       speed: speed(),
-      auto_brightness: auto_brightness()
+      auto_brightness: auto_brightness(),
+      bleeding: bleeding()
     }
   end
 
@@ -66,6 +69,7 @@ defmodule Octopus.Params.Global do
         :brightness -> handle_param("brightness", [value])
         :speed -> handle_param("speed", [value])
         :auto_brightness -> handle_param("auto_brightness", [value])
+        :bleeding -> handle_param("bleeding", [value])
         _ -> :ignore
       end
 
@@ -110,6 +114,18 @@ defmodule Octopus.Params.Global do
       Octopus.PubSub,
       "global_params",
       {:param_updated, :speed, clamped_value}
+    )
+
+    :ok
+  end
+
+  def handle_param("bleeding", [value]) when is_number(value) do
+    clamped_value = value |> max(0.0) |> min(100.0)
+
+    Phoenix.PubSub.broadcast(
+      Octopus.PubSub,
+      "global_params",
+      {:param_updated, :bleeding, clamped_value}
     )
 
     :ok

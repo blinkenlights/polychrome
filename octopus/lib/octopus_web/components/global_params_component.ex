@@ -43,6 +43,13 @@ defmodule OctopusWeb.GlobalParamsComponent do
           disabled={@config[:auto_brightness]}
           hint={@config[:auto_brightness] && "auto"}
         />
+        <.compact_slider
+          key={:bleeding}
+          label="Bleed"
+          type={elem(@config_schema[:bleeding], 1)}
+          opts={elem(@config_schema[:bleeding], 2)}
+          value={@config[:bleeding]}
+        />
         <label class="flex items-center gap-1.5 cursor-pointer w-fit">
           <input
             type="checkbox"
@@ -164,6 +171,7 @@ defmodule OctopusWeb.GlobalParamsComponent do
   end
 
   defp format_value(:speed, value), do: Global.format_speed(value)
+  defp format_value(:bleeding, value), do: "#{Float.round(value, 1)}%"
   defp format_value(_key, value), do: value
 
   defp parse_option(key, value, config_schema) do

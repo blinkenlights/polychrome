@@ -19,4 +19,20 @@ defmodule Octopus.Params.GlobalTest do
       assert Global.slider_to_speed(9999) == Global.speed_max()
     end
   end
+
+  describe "bleeding parameter" do
+    test "config includes bleeding with default 0.0" do
+      assert Global.config()[:bleeding] == 0.0
+    end
+
+    test "handle_param clamps bleeding to 0..100" do
+      Phoenix.PubSub.subscribe(Octopus.PubSub, "global_params")
+
+      Global.handle_param("bleeding", [150.0])
+      assert_receive {:param_updated, :bleeding, 100.0}
+
+      Global.handle_param("bleeding", [-5.0])
+      assert_receive {:param_updated, :bleeding, 0.0}
+    end
+  end
 end
