@@ -47,9 +47,10 @@ ENV NPM_CONFIG_FETCH_TIMEOUT=300000
 ENV NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000
 ENV NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000
 
-# Installation module — selectable at build time; defaults to Nation2025.
-# Pass --build-arg INSTALLATION_MODULE=Octopus.Installation.Prototype to override.
-ARG INSTALLATION_MODULE=Octopus.Installation.Nation2025
+# Installation module — selectable at build time; defaults to Nation2026.
+# Pass --build-arg INSTALLATION_MODULE=Octopus.Installation.Prototype to override,
+# or set INSTALLATION_MODULE in deploy/<host>/.env (read by deploy/common/build-image.sh).
+ARG INSTALLATION_MODULE=Octopus.Installation.Nation2026
 ENV INSTALLATION_MODULE=$INSTALLATION_MODULE
 
 FROM base AS deps

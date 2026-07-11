@@ -22,6 +22,7 @@ defmodule Octopus.Installation.Nation2026 do
     global_speed: 0.8,
     location: {52.684273, 12.959300},
     auto_brightness: false,
+    radar_enabled: true,
     network_config: [
       mode: :broadcast,
       broadcast_ip: :auto,

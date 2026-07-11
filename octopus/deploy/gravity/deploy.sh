@@ -10,6 +10,8 @@ TARBALL="${IMAGE_NAME}-${IMAGE_TAG}.tar.gz"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OCTOPUS_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+# shellcheck source=../common/build-image.sh
+source "${SCRIPT_DIR}/../common/build-image.sh"
 
 # Parse arguments
 SKIP_BUILD=false
@@ -28,31 +30,10 @@ if [ ! -f "${ENV_FILE}" ]; then
     exit 1
 fi
 
-INSTALLATION_MODULE="Octopus.Installation.Pixie"
-if grep -qE '^INSTALLATION_MODULE=' "${ENV_FILE}"; then
-    INSTALLATION_MODULE=$(grep -E '^INSTALLATION_MODULE=' "${ENV_FILE}" | tail -1 | cut -d= -f2-)
-fi
-
 # Build image locally (native architecture — no --platform flag so Docker uses
 # the Mac's native arm64; the Raspberry Pi is also arm64).
 if [ "$SKIP_BUILD" = false ]; then
-    CACHE_DIR="${HOME}/.cache/polychrome-docker"
-    mkdir -p "${CACHE_DIR}"
-
-    if ! docker buildx inspect polychrome-cache >/dev/null 2>&1; then
-        docker buildx create --name polychrome-cache --driver docker-container --bootstrap
-    fi
-    docker buildx use polychrome-cache
-
-    echo "Building Docker image ${IMAGE_NAME}:${IMAGE_TAG} (${INSTALLATION_MODULE})..."
-    docker buildx build \
-        --load \
-        --build-arg "INSTALLATION_MODULE=${INSTALLATION_MODULE}" \
-        --cache-from "type=local,src=${CACHE_DIR}" \
-        --cache-to "type=local,dest=${CACHE_DIR},mode=max" \
-        -t "${IMAGE_NAME}:${IMAGE_TAG}" \
-        -f "${OCTOPUS_DIR}/Dockerfile" \
-        "${OCTOPUS_DIR}"
+    build_polychrome_image "${ENV_FILE}" "${OCTOPUS_DIR}" "${IMAGE_NAME}" "${IMAGE_TAG}"
 
     echo "Saving image to tarball..."
     docker save "${IMAGE_NAME}:${IMAGE_TAG}" | gzip > "/tmp/${TARBALL}"
