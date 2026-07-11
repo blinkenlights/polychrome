@@ -17,6 +17,7 @@ NeoPixelBus<NeoWrgbTm1814Feature, NeoTm1814Method> strip(PIXEL_COUNT, DATA_PIN);
 #endif
 
 Pixel pixel[PIXEL_COUNT];
+DisplayMode display_mode = DisplayMode::Normal;
 
 // Config defaults
 bool show_test_frame = true;
@@ -37,20 +38,43 @@ void Display::setup()
 
 void Display::loop()
 {
-  if (show_test_frame)
+  switch (display_mode)
   {
-    render_test_frame();
-  }
-  else
-  {
-    for (int i = 0; i < PIXEL_COUNT; i++)
+  case DisplayMode::Conflict:
+    render_conflict_red();
+    break;
+
+  case DisplayMode::Idle:
+    render_idle_grey();
+    break;
+
+  case DisplayMode::Normal:
+    if (show_test_frame)
     {
-      strip.SetPixelColor(map_index(i), pixel[i].get_display_color().Dim(luminance));
+      render_test_frame();
     }
+    else
+    {
+      for (int i = 0; i < PIXEL_COUNT; i++)
+      {
+        strip.SetPixelColor(map_index(i), pixel[i].get_display_color().Dim(luminance));
+      }
+    }
+    break;
   }
 
   strip.Dirty();
   strip.Show();
+}
+
+void Display::set_display_mode(DisplayMode mode)
+{
+  display_mode = mode;
+}
+
+DisplayMode Display::get_display_mode()
+{
+  return display_mode;
 }
 
 // Function to calculate R value for a given W value (0-255)
@@ -221,9 +245,28 @@ void Display::render_test_frame()
     color = HsbColor(float(i) / float(PIXEL_COUNT), 1, 1);
     strip.SetPixelColor(map_index(i), color);
   }
+}
 
-  strip.Dirty();
-  strip.Show();
+void Display::render_idle_grey()
+{
+  const uint8_t w = 26; // 10% greyscale W-frame
+  const uint8_t r = calculate_r_for_wframe(w);
+  RgbwColor color(r, 0, 0, w);
+
+  for (int i = 0; i < PIXEL_COUNT; i++)
+  {
+    strip.SetPixelColor(map_index(i), color);
+  }
+}
+
+void Display::render_conflict_red()
+{
+  RgbwColor color(255, 0, 0, 0);
+
+  for (int i = 0; i < PIXEL_COUNT; i++)
+  {
+    strip.SetPixelColor(map_index(i), color);
+  }
 }
 
 uint32_t Display::get_config_phash()

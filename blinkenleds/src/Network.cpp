@@ -29,10 +29,145 @@ static bool ota_up = false;
 uint32_t framecount = 0;
 uint32_t packetcount = 0;
 uint32_t last_metrics_send = 0;
+uint32_t eth_connected_at = 0;
+uint32_t last_pixel_packet_ms = 0;
 
 bool remote_configured = false;
 IPAddress remote_ip;
 uint16_t remote_port = 4422;
+DisplayMode sender_mode = DisplayMode::Normal;
+
+#define MAX_SENDERS 8
+
+struct SenderRecord
+{
+  IPAddress ip;
+  uint16_t port;
+  uint32_t last_seen_ms;
+};
+
+static SenderRecord sender_records[MAX_SENDERS];
+static int sender_record_count = 0;
+
+static bool is_pixel_packet(const Packet &packet)
+{
+  switch (packet.which_content)
+  {
+  case Packet_w_frame_tag:
+  case Packet_rgb_frame_tag:
+  case Packet_rgb_frame_part1_tag:
+  case Packet_rgb_frame_part2_tag:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static void prune_sender_records(uint32_t now)
+{
+  int write_index = 0;
+
+  for (int read_index = 0; read_index < sender_record_count; read_index++)
+  {
+    if (now - sender_records[read_index].last_seen_ms <= METRICS_INTERVAL)
+    {
+      sender_records[write_index++] = sender_records[read_index];
+    }
+  }
+
+  sender_record_count = write_index;
+}
+
+static void record_pixel_sender(IPAddress ip, uint16_t port)
+{
+  uint32_t now = millis();
+  last_pixel_packet_ms = now;
+
+  for (int i = 0; i < sender_record_count; i++)
+  {
+    if (sender_records[i].ip == ip && sender_records[i].port == port)
+    {
+      sender_records[i].last_seen_ms = now;
+      return;
+    }
+  }
+
+  if (sender_record_count < MAX_SENDERS)
+  {
+    sender_records[sender_record_count].ip = ip;
+    sender_records[sender_record_count].port = port;
+    sender_records[sender_record_count].last_seen_ms = now;
+    sender_record_count++;
+  }
+}
+
+static void update_sender_state()
+{
+  uint32_t now = millis();
+  prune_sender_records(now);
+
+  DisplayMode new_mode;
+
+  if (sender_record_count > 1)
+  {
+    new_mode = DisplayMode::Conflict;
+    remote_configured = false;
+  }
+  else if (sender_record_count == 1)
+  {
+    new_mode = DisplayMode::Normal;
+    remote_ip = sender_records[0].ip;
+    remote_port = sender_records[0].port;
+    remote_configured = true;
+  }
+  else
+  {
+    bool boot_grace =
+        last_pixel_packet_ms == 0 &&
+        eth_connected_at > 0 &&
+        (now - eth_connected_at) < METRICS_INTERVAL;
+
+    if (boot_grace)
+    {
+      new_mode = DisplayMode::Normal;
+      remote_configured = false;
+    }
+    else
+    {
+      new_mode = DisplayMode::Idle;
+      remote_configured = false;
+    }
+  }
+
+  if (new_mode != sender_mode)
+  {
+    switch (new_mode)
+    {
+    case DisplayMode::Conflict:
+      Serial.println("Multiple pixel senders detected in 5s window");
+      break;
+    case DisplayMode::Idle:
+      Serial.println("No pixel sender in 5s window");
+      break;
+    case DisplayMode::Normal:
+      if (remote_configured)
+      {
+        Serial.println("Single pixel sender: " + remote_ip.toString() + ":" + String(remote_port));
+      }
+      break;
+    }
+
+    Display::set_display_mode(new_mode);
+    sender_mode = new_mode;
+  }
+}
+
+static void reset_metrics_counters()
+{
+  framecount = 0;
+  packetcount = 0;
+  last_metrics_send = millis();
+}
 
 void udp_setup()
 {
@@ -75,7 +210,7 @@ void network_event_callback(WiFiEvent_t event)
     Serial.println("  Speed : " + String(ETH.linkSpeed()) + " Mbps");
 
     udp_setup();
-    Network::send_firmware_info();
+    eth_connected_at = millis();
     eth_connected = true;
     break;
   case ARDUINO_EVENT_ETH_DISCONNECTED:
@@ -182,14 +317,8 @@ void Network::loop()
     // handle UDP packets
     while (udp.parsePacket())
     {
-      if (!remote_configured)
-      {
-        remote_ip = udp.remoteIP();
-        remote_port = udp.remotePort();
-        remote_configured = true;
-        Serial.println("Got first packet from " + remote_ip.toString() + ":" + String(remote_port));
-        send_firmware_info();
-      }
+      IPAddress sender_ip = udp.remoteIP();
+      uint16_t sender_port = udp.remotePort();
 
       bytes = udp.read(udp_buffer, UDP_BUFFER_SIZE);
 
@@ -206,15 +335,43 @@ void Network::loop()
         }
         else
         {
-          // Serial.println("Got valid protobuf. Type: " + String(packet.which_content));
-          Display::handle_packet(packet);
+          if (is_pixel_packet(packet))
+          {
+            bool was_idle = sender_mode == DisplayMode::Idle;
+
+            record_pixel_sender(sender_ip, sender_port);
+            update_sender_state();
+
+            if (was_idle && sender_mode == DisplayMode::Normal && remote_configured)
+            {
+              Network::send_firmware_info();
+            }
+
+            if (sender_mode == DisplayMode::Normal && remote_configured)
+            {
+              Display::handle_packet(packet);
+            }
+          }
+          else
+          {
+            Display::handle_packet(packet);
+          }
         }
       }
     }
 
+    update_sender_state();
+
     if (millis() - last_metrics_send > METRICS_INTERVAL)
     {
-      Network::send_firmware_info();
+      if (sender_mode == DisplayMode::Normal && remote_configured)
+      {
+        Network::send_firmware_info();
+      }
+      else
+      {
+        reset_metrics_counters();
+      }
     }
   }
 }
