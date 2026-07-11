@@ -693,7 +693,6 @@ defmodule Octopus.Apps.Matrix do
   end
 
   defp format_num(n) when is_float(n), do: :erlang.float_to_binary(n, decimals: 1)
-  defp format_num(n) when is_integer(n), do: Integer.to_string(n)
   defp format_num(n), do: to_string(n)
 
   def app_init(config) do
