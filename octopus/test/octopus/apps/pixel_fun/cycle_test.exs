@@ -33,6 +33,8 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
           translate_scale: 0.0,
           rotate_scale: 0.0,
           zoom_scale: 1.0,
+          color_mode: :random,
+          saturation_percent: 70,
           color_interval: 5.0,
           live_scene_id: nil,
           offset: {0, 0},
@@ -116,6 +118,15 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
       assert updated.color_interval == 10.0
       assert updated.lerp_time == 10.0
       assert is_reference(Map.get(updated, :color_timer_ref))
+    end
+
+    test "applies saturation_percent via handle_config" do
+      state = base_state(%{live_scene_id: @classic, saturation_percent: 70})
+
+      {:noreply, updated} = pixel_fun_handle_config(%{saturation_percent: 30}, state)
+
+      assert updated.saturation_percent == 30
+      assert pixel_fun_get_config(updated).saturation_percent == 30
     end
   end
 

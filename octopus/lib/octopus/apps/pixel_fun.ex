@@ -14,6 +14,7 @@ defmodule Octopus.Apps.PixelFun do
 
   @default_scene %{
     color_mode: :random,
+    saturation_percent: 70,
     color_interval: 5.0,
     translate_scale: 0.0,
     rotate_scale: 0.0,
@@ -28,6 +29,7 @@ defmodule Octopus.Apps.PixelFun do
 
   @builtin_scene_keys [
     :color_mode,
+    :saturation_percent,
     :color_interval,
     :translate_scale,
     :rotate_scale,
@@ -111,6 +113,7 @@ defmodule Octopus.Apps.PixelFun do
       :sway_mode,
       :time_direction,
       :color_mode,
+      :saturation_percent,
       :color_interval,
       # Id of the scene currently rendered on the wall.
       :live_scene_id,
@@ -137,6 +140,7 @@ defmodule Octopus.Apps.PixelFun do
     %{
       program: {"Formula", :string, %{default: "sin(10*t-hypot(x,y))"}},
       color_mode: {"Colors", :atom, %{default: :random}},
+      saturation_percent: {"Saturation", :int, %{default: 70, min: 0, max: 100}},
       color_interval:
         {"Palette crossfade (s)", :float, %{default: 5, min: 1, max: 20, step: 0.5}},
       translate_scale: {"Drift strength", :float, %{default: 0.0, min: 0, max: 20, step: 0.1}},
@@ -167,6 +171,8 @@ defmodule Octopus.Apps.PixelFun do
 
     Colors — Random dual crossfades between random colour pairs; Rainbow spreads hue across the pattern (moves with drift/rotation). White dual maps positive/negative lobes to two brightness levels on the warm W channel of the TM1814 LEDs (no RGB tint). Palette crossfade applies in Random dual and White dual modes.
 
+    Saturation — colour vividness for Random dual and Rainbow (0 = grey, 100 = full; default 70). White dual ignores saturation.
+
     Drift strength — automatic sin/cos panning of the pattern (0 = off). Not manual translation.
 
     Rotation speed — 2D spin around the pattern centre (~1 revolution every 6 s at 1.0, using ring width as scale on circular layouts). 0 = off. Negative values reverse direction.
@@ -185,6 +191,7 @@ defmodule Octopus.Apps.PixelFun do
     scene = %{
       program: state.source,
       color_mode: state.color_mode,
+      saturation_percent: state.saturation_percent,
       color_interval: state.color_interval,
       translate_scale: state.translate_scale,
       rotate_scale: state.rotate_scale,
@@ -276,6 +283,16 @@ defmodule Octopus.Apps.PixelFun do
         options: [{:random, "Random dual"}, {:rainbow, "Rainbow"}, {:white, "White dual (W channel)"}]
       },
       %{
+        key: :saturation_percent,
+        label: "Saturation",
+        type: :slider,
+        min: 0,
+        max: 100,
+        step: 1,
+        default: 70,
+        visible_when: {:color_mode, [:random, :rainbow]}
+      },
+      %{
         key: :color_interval,
         label: "Palette crossfade",
         type: :slider,
@@ -363,7 +380,8 @@ defmodule Octopus.Apps.PixelFun do
 
     :timer.send_interval(@frame_time_ms, :tick)
     color_mode = Map.get(config, :color_mode, :random)
-    palette = generate_random_palette(color_mode)
+    saturation_percent = Map.get(config, :saturation_percent, 70)
+    palette = generate_random_palette(color_mode, saturation_percent)
     color_timer_ref = maybe_start_color_timer(color_mode, config.color_interval, nil)
 
     {seconds, micros} = NaiveDateTime.utc_now() |> NaiveDateTime.to_gregorian_seconds()
@@ -380,6 +398,7 @@ defmodule Octopus.Apps.PixelFun do
       target_colors: palette,
       lerp_time: config.color_interval,
       color_mode: color_mode,
+      saturation_percent: saturation_percent,
       color_interval: config.color_interval,
       translate_scale: config.translate_scale,
       rotate_scale: config.rotate_scale,
@@ -452,6 +471,7 @@ defmodule Octopus.Apps.PixelFun do
     old_color_mode = state.color_mode
     color_interval = Map.get(config, :color_interval, old_color_interval)
     color_mode = Map.get(config, :color_mode, old_color_mode)
+    saturation_percent = Map.get(config, :saturation_percent, state.saturation_percent || 70)
 
     state = %State{
       state
@@ -471,13 +491,14 @@ defmodule Octopus.Apps.PixelFun do
           |> Map.get(:time_direction, state.time_direction || :forward)
           |> coerce_time_direction(),
         color_mode: color_mode,
+        saturation_percent: saturation_percent,
         color_interval: color_interval
     }
 
     state =
       cond do
         color_mode != old_color_mode ->
-          palette = generate_random_palette(color_mode)
+          palette = generate_random_palette(color_mode, saturation_percent)
           color_timer_ref = maybe_start_color_timer(color_mode, color_interval, state.color_timer_ref)
 
           %State{
@@ -514,6 +535,7 @@ defmodule Octopus.Apps.PixelFun do
   defp coerce_config(config) when is_map(config) do
     Map.new(config, fn
       {:color_mode, value} -> {:color_mode, coerce_color_mode(value)}
+      {:saturation_percent, value} -> {:saturation_percent, coerce_saturation_percent(value)}
       {:time_direction, value} -> {:time_direction, coerce_time_direction(value)}
       {key, value} -> {key, value}
     end)
@@ -531,6 +553,20 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   defp coerce_color_mode(_), do: :random
+
+  defp coerce_saturation_percent(value) when is_integer(value), do: value |> max(0) |> min(100)
+
+  defp coerce_saturation_percent(value) when is_float(value),
+    do: value |> trunc() |> coerce_saturation_percent()
+
+  defp coerce_saturation_percent(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {n, _} -> coerce_saturation_percent(n)
+      :error -> 70
+    end
+  end
+
+  defp coerce_saturation_percent(_), do: 70
 
   defp coerce_time_direction(value) when value in [:forward, :backward], do: value
 
@@ -601,7 +637,7 @@ defmodule Octopus.Apps.PixelFun do
 
   def handle_info(:update_colors, %State{color_mode: color_mode} = state)
       when color_mode in [:random, :white] do
-    colors = generate_random_palette(color_mode)
+    colors = generate_random_palette(color_mode, state.saturation_percent)
     color_timer_ref = Process.send_after(self(), :update_colors, color_interval_ms(state.color_interval))
 
     {:noreply,
@@ -711,6 +747,11 @@ defmodule Octopus.Apps.PixelFun do
 
     canvas_mode = if state.color_mode == :white, do: :grayscale, else: :rgb
     canvas = Canvas.new(display_info.width, display_info.height, canvas_mode)
+    saturation_percent = state.saturation_percent || 70
+
+    lerp_fn = fn a, b, v ->
+      interpolate_colors_with_black(a, b, v, saturation_percent)
+    end
 
     Installation.virtual_pixel_positions_per_panel()
     |> Enum.with_index()
@@ -755,7 +796,7 @@ defmodule Octopus.Apps.PixelFun do
                   audio.high
                 )
 
-              rainbow_pixel_color(x_scaled, y_scaled, value, hue_shift)
+              rainbow_pixel_color(x_scaled, y_scaled, value, hue_shift, saturation_percent)
 
             _ ->
               {color_a, color_b} = state.colors
@@ -775,7 +816,7 @@ defmodule Octopus.Apps.PixelFun do
                 audio.mid,
                 audio.high,
                 colors,
-                &interpolate_colors_with_black/3
+                lerp_fn
               )
           end
 
@@ -904,12 +945,13 @@ defmodule Octopus.Apps.PixelFun do
     |> min(255)
   end
 
-  defp rainbow_pixel_color(_x, _y, value, _hue_shift) when value == 0.0, do: {0, 0, 0}
+  defp rainbow_pixel_color(_x, _y, value, _hue_shift, _saturation_percent) when value == 0.0,
+    do: {0, 0, 0}
 
-  defp rainbow_pixel_color(x, y, value, hue_shift) do
+  defp rainbow_pixel_color(x, y, value, hue_shift, saturation_percent) do
     hue = rainbow_hue(x, y, hue_shift)
 
-    saturation = param(:saturation_percent, 70) |> max(0) |> min(100)
+    saturation = saturation_percent |> max(0) |> min(100)
     brightness = trunc(param(:value_percent, 100) * abs(value)) |> max(0) |> min(100)
 
     %Chameleon.RGB{r: r, g: g, b: b} =
@@ -934,20 +976,25 @@ defmodule Octopus.Apps.PixelFun do
     trunc(hue)
   end
 
-  defp interpolate_colors_with_black(%Chameleon.HSV{} = a, %Chameleon.HSV{} = b, value) do
+  defp interpolate_colors_with_black(%Chameleon.HSV{} = a, %Chameleon.HSV{} = b, value),
+    do: interpolate_colors_with_black(a, b, value, 70)
+
+  defp interpolate_colors_with_black(%Chameleon.HSV{} = a, %Chameleon.HSV{} = b, value, saturation_percent) do
+    saturation = saturation_percent |> max(0) |> min(100)
+
     hsv =
       cond do
         value > 0 ->
           %Chameleon.HSV{
             a
-            | s: param(:saturation_percent, 70) |> max(0) |> min(100),
+            | s: saturation,
               v: trunc(param(:value_percent, 100) * value) |> max(0) |> min(100)
           }
 
         value < 0 ->
           %Chameleon.HSV{
             b
-            | s: param(:saturation_percent, 70) |> max(0) |> min(100),
+            | s: saturation,
               v: trunc(param(:value_percent, 100) * -value) |> max(0) |> min(100)
           }
 
@@ -1007,8 +1054,8 @@ defmodule Octopus.Apps.PixelFun do
     (1 - t) * a + t * b
   end
 
-  defp generate_random_palette(:white), do: generate_random_white_levels()
-  defp generate_random_palette(_), do: generate_random_colors()
+  defp generate_random_palette(:white, _saturation_percent), do: generate_random_white_levels()
+  defp generate_random_palette(_color_mode, saturation_percent), do: generate_random_colors(saturation_percent)
 
   @doc false
   def generate_random_white_levels do
@@ -1032,13 +1079,12 @@ defmodule Octopus.Apps.PixelFun do
     {%Chameleon.HSV{h: 0, s: 0, v: a}, %Chameleon.HSV{h: 0, s: 0, v: b}}
   end
 
-  defp generate_random_colors do
+  defp generate_random_colors(saturation_percent) do
     hue_a = :rand.uniform(360) - 1
     hue_b = Integer.mod(hue_a + 60 + :rand.uniform(180) - 1, 360)
-    sat_a = param(:saturation_percent, 70)
-    sat_b = param(:saturation_percent, 70)
-    hsv_a = Chameleon.HSV.new(hue_a, sat_a, 100)
-    hsv_b = Chameleon.HSV.new(hue_b, sat_b, 100)
+    sat = saturation_percent |> max(0) |> min(100)
+    hsv_a = Chameleon.HSV.new(hue_a, sat, 100)
+    hsv_b = Chameleon.HSV.new(hue_b, sat, 100)
     {hsv_a, hsv_b}
   end
 end

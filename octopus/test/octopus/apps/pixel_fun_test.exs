@@ -336,11 +336,53 @@ defmodule Octopus.Apps.PixelFunTest do
     end
   end
 
+  test "mode_tweakables/1 exposes saturation with color_mode visibility" do
+    spec =
+      pixel_fun_mode_tweakables("classic_ripple")
+      |> Enum.find(&(&1.key == :saturation_percent))
+
+    assert spec.label == "Saturation"
+    assert spec.visible_when == {:color_mode, [:random, :rainbow]}
+    assert spec.default == 70
+  end
+
+  test "build_canvas/1 lower saturation produces less vivid colours on random dual", _context do
+    with_installation(Octopus.TestInstallations.HorizontalStrip64, fn ->
+      {:ok, program} = Program.parse("1")
+
+      base = %{
+        program: program,
+        display_info: %{width: Installation.width(), height: Installation.height()},
+        color_mode: :random,
+        colors: {Chameleon.HSV.new(0, 70, 100), Chameleon.HSV.new(180, 70, 100)},
+        panel_proximities: %{0 => 0.0},
+        panel_interaction_factors: %{0 => 0.0},
+        seconds: 0.0,
+        translate_scale: 0.0,
+        rotate_scale: 0.0,
+        zoom_scale: 0.0,
+        offset: {0, 0},
+        audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
+      }
+
+      muted = pixel_fun_build_canvas(struct(State, Map.put(base, :saturation_percent, 20)))
+      vivid = pixel_fun_build_canvas(struct(State, Map.put(base, :saturation_percent, 100)))
+
+      muted_pixel = Canvas.get_pixel(muted, {0, 0})
+      vivid_pixel = Canvas.get_pixel(vivid, {0, 0})
+
+      assert muted_pixel != {0, 0, 0}
+      assert vivid_pixel != {0, 0, 0}
+      assert muted_pixel != vivid_pixel
+    end)
+  end
+
   defp white_levels(a, b),
     do: {Chameleon.HSV.new(0, 0, a), Chameleon.HSV.new(0, 0, b)}
 
   defp pixel_fun_compatible?, do: apply(@pixel_fun, :compatible?, [])
   defp pixel_fun_build_canvas(state), do: apply(@pixel_fun, :build_canvas, [state])
+  defp pixel_fun_mode_tweakables(mode_id), do: apply(@pixel_fun, :mode_tweakables, [mode_id])
 
   defp pixel_fun_generate_random_white_levels,
     do: apply(@pixel_fun, :generate_random_white_levels, [])
