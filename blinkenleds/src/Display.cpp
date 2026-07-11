@@ -261,7 +261,8 @@ void Display::render_idle_grey()
 
 void Display::render_conflict_red()
 {
-  RgbwColor color(255, 0, 0, 0);
+  bool on = (millis() / 1000) % 2 == 0;
+  RgbwColor color = on ? RgbwColor(255, 0, 0, 0) : RgbwColor(0, 0, 0, 0);
 
   for (int i = 0; i < PIXEL_COUNT; i++)
   {
