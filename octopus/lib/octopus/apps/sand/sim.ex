@@ -1,6 +1,26 @@
 defmodule Octopus.Apps.Sand.Sim do
-  @enforce_keys [:width, :height, :led_width, :led_height, :supersample, :gravity, :v_max, :particles]
-  defstruct [:width, :height, :led_width, :led_height, :supersample, :gravity, :v_max, :particles]
+  @enforce_keys [
+    :width,
+    :height,
+    :led_width,
+    :led_height,
+    :supersample,
+    :gravity,
+    :v_max,
+    :panel_led_ranges,
+    :particles
+  ]
+  defstruct [
+    :width,
+    :height,
+    :led_width,
+    :led_height,
+    :supersample,
+    :gravity,
+    :v_max,
+    :panel_led_ranges,
+    :particles
+  ]
 
   alias __MODULE__
   alias Octopus.Canvas
@@ -17,6 +37,7 @@ defmodule Octopus.Apps.Sand.Sim do
           supersample: pos_integer(),
           gravity: float(),
           v_max: float(),
+          panel_led_ranges: [{integer(), integer()}],
           particles: %{required(coord()) => particle()}
         }
 
@@ -46,6 +67,7 @@ defmodule Octopus.Apps.Sand.Sim do
       supersample: s,
       gravity: gravity,
       v_max: default_v_max(s),
+      panel_led_ranges: Keyword.get(opts, :panel_led_ranges, []),
       particles: %{}
     }
   end
@@ -166,8 +188,20 @@ defmodule Octopus.Apps.Sand.Sim do
     cond do
       y >= sim.height -> false
       y < 0 -> true
+      gap_cell?(sim, x, y) -> false
       true -> !Map.has_key?(sim.particles, normalize_coord(sim, {x, y}))
     end
+  end
+
+  defp gap_cell?(%Sim{} = sim, x, y) do
+    sim.panel_led_ranges != [] and not led_on_panel?(sim, div(x, sim.supersample), div(y, sim.supersample))
+  end
+
+  defp led_on_panel?(%Sim{} = sim, led_x, led_y) do
+    led_y >= 0 and led_y < sim.led_height and
+      Enum.any?(sim.panel_led_ranges, fn {start_x, end_x} ->
+        led_x >= start_x and led_x <= end_x
+      end)
   end
 
   @spec get_cell(t(), coord(), particle() | nil) :: particle() | nil
@@ -177,8 +211,12 @@ defmodule Octopus.Apps.Sand.Sim do
 
   @spec put_cell(t(), coord(), {:sand, Canvas.color()} | particle()) :: t()
   def put_cell(%Sim{} = sim, {x, y}, value) do
-    coord = normalize_coord(sim, {x, y})
-    %Sim{sim | particles: Map.put(sim.particles, coord, normalize_particle(value))}
+    if gap_cell?(sim, x, y) do
+      sim
+    else
+      coord = normalize_coord(sim, {x, y})
+      %Sim{sim | particles: Map.put(sim.particles, coord, normalize_particle(value))}
+    end
   end
 
   @spec remove_cell(t(), coord()) :: t()

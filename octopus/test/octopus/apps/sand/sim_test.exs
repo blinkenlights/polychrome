@@ -27,6 +27,36 @@ defmodule Octopus.Apps.Sand.SimTest do
       refute Sim.cell_empty?(sim, {0, 8})
       refute Sim.cell_empty?(sim, {0, 100})
     end
+
+    test "gap cells between panels are solid" do
+      sim =
+        Sim.new(34, 8,
+          supersample: 1,
+          gravity: 0.0,
+          panel_led_ranges: [{0, 7}, {26, 33}]
+        )
+
+      refute Sim.cell_empty?(sim, {8, 0})
+      refute Sim.cell_empty?(sim, {25, 4})
+      assert Sim.cell_empty?(sim, {3, 0})
+    end
+
+    test "sand at panel edge cannot slide into gap" do
+      sim =
+        Sim.new(34, 8,
+          supersample: 1,
+          gravity: 0.0,
+          panel_led_ranges: [{0, 7}, {26, 33}]
+        )
+        |> Sim.put_cell({7, 6}, Sim.sand(@white))
+        |> Sim.put_cell({7, 7}, Sim.sand(@red))
+        |> Sim.put_cell({6, 7}, Sim.sand(@red))
+
+      sim = Sim.step(sim)
+
+      refute Sim.get_cell(sim, {8, 7})
+      assert Sim.get_cell(sim, {7, 6}) != nil
+    end
   end
 
   describe "draw/2 downsampling" do

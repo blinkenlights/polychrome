@@ -175,7 +175,10 @@ defmodule Octopus.Apps.Sand do
   end
 
   def compatible?() do
-    Installation.num_buttons() == Installation.num_panels()
+    buttons = Installation.num_buttons()
+    panels = Installation.num_panels()
+
+    panels > 0 and (buttons == 0 or buttons == panels)
   end
 
   def app_init(config) do
@@ -279,32 +282,37 @@ defmodule Octopus.Apps.Sand do
     spawn_rate = Map.get(config, :spawn_rate, 0.25)
 
     if :rand.uniform() > 1 - spawn_rate do
-      local_x = Enum.random(0..(display_info.panel_width - 1))
-      {global_x, _} = display_info.panel_to_global_coords.(panel.index, local_x, 0)
+      {start_x, end_x} = display_info.panel_range.(panel.index, :x)
       color = random_color(panel, config)
-      spawn_grains(sim, global_x, color)
+      spawn_grains(sim, start_x, end_x, color)
     else
       sim
     end
   end
 
-  defp spawn_grains(sim, global_x, color) do
-    sim_spawn_coords(sim, global_x)
-    |> Enum.reduce(sim, fn {x, y}, sim ->
-      Sim.put_cell(sim, {x, y}, Sim.sand(color))
+  defp spawn_grains(sim, panel_start_x, panel_end_x, color) do
+    drops = Enum.random(2..4)
+
+    Enum.reduce(1..drops, sim, fn _, sim ->
+      sim_spawn_coords(sim, panel_start_x, panel_end_x)
+      |> Enum.reduce(sim, fn {x, y}, sim ->
+        Sim.put_cell(sim, {x, y}, Sim.sand(color))
+      end)
     end)
   end
 
-  defp sim_spawn_coords(%Sim{supersample: s}, global_x) do
-    base_x = global_x * s
+  defp sim_spawn_coords(%Sim{supersample: s}, panel_start_x, panel_end_x) do
+    sim_start = panel_start_x * s
+    sim_end = panel_end_x * s + (s - 1)
+    sim_x = Enum.random(sim_start..sim_end)
+    spawn_y = Enum.random(-s..-1)
 
     if s >= 3 do
-      cluster_x = base_x + div(s, 2) - 1
-      cluster_y = -2
+      cluster_x = min(sim_x, sim_end - 1)
 
-      for dy <- 0..1, dx <- 0..1, do: {cluster_x + dx, cluster_y + dy}
+      for dy <- 0..1, dx <- 0..1, do: {cluster_x + dx, spawn_y + dy}
     else
-      [{base_x, -1}]
+      [{sim_x, spawn_y}]
     end
   end
 
@@ -448,7 +456,16 @@ defmodule Octopus.Apps.Sand do
   end
 
   defp build_sim(%State{display_info: display_info, supersample: s, gravity: gravity}) do
-    Sim.new(display_info.width, display_info.height, supersample: s, gravity: gravity)
+    panel_led_ranges =
+      for i <- 0..(display_info.num_panels - 1) do
+        display_info.panel_range.(i, :x)
+      end
+
+    Sim.new(display_info.width, display_info.height,
+      supersample: s,
+      gravity: gravity,
+      panel_led_ranges: panel_led_ranges
+    )
   end
 
   defp coerce_config_atoms(config) when is_map(config) do

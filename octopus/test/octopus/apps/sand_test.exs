@@ -112,8 +112,27 @@ defmodule Octopus.Apps.SandTest do
            ]
   end
 
-  test "compatible?/0 requires one button per panel" do
+  test "compatible?/0 allows panels without buttons or one button per panel" do
     assert sand_compatible?()
+
+    with_installation(Octopus.Installation.Nation2026, fn ->
+      assert sand_compatible?()
+    end)
+
+    with_installation(Octopus.Installation.Nation2025, fn ->
+      assert sand_compatible?()
+    end)
+  end
+
+  defp with_installation(installation, fun) do
+    previous = Application.get_env(:octopus, :installation)
+    Application.put_env(:octopus, :installation, installation)
+
+    try do
+      fun.()
+    after
+      Application.put_env(:octopus, :installation, previous)
+    end
   end
 
   defp preset_sync_all!, do: apply(@presets, :sync_all!, [])
