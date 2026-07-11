@@ -68,7 +68,8 @@ defmodule Octopus.Radar.Sensor do
       :ack_timer,
       :last_frame_at,
       :watchdog_timer,
-      ack_retries: 0
+      ack_retries: 0,
+      port_unavailable: false
     ]
   end
 
@@ -356,18 +357,19 @@ defmodule Octopus.Radar.Sensor do
             ack_buffer: <<>>,
             ack_retries: 0,
             last_track_count: nil,
-            current_command: nil
+            current_command: nil,
+            port_unavailable: false
         }
 
       {:error, reason} ->
-        log(state, :warning, "Failed to open serial port (#{inspect(reason)}) — retrying in 5s")
-        schedule_reopen(state)
+        schedule_reopen(state, unavailable_reason: reason)
     end
   end
 
-  defp schedule_reopen(%State{} = state) do
+  defp schedule_reopen(state, opts \\ [])
+
+  defp schedule_reopen(%State{port_unavailable: true} = state, _opts) do
     Process.send_after(self(), :reopen_port, @reopen_interval)
-    Radar.broadcast_status(state.device_id, :unavailable)
 
     %State{
       state
@@ -375,6 +377,24 @@ defmodule Octopus.Radar.Sensor do
         pending_commands: [],
         current_command: nil,
         ack_retries: 0
+    }
+  end
+
+  defp schedule_reopen(%State{} = state, opts) do
+    Process.send_after(self(), :reopen_port, @reopen_interval)
+    Radar.broadcast_status(state.device_id, :unavailable)
+
+    if reason = Keyword.get(opts, :unavailable_reason) do
+      log(state, :info, "Serial port unavailable (#{inspect(reason)}) — retrying every 5s")
+    end
+
+    %State{
+      state
+      | phase: :opening,
+        pending_commands: [],
+        current_command: nil,
+        ack_retries: 0,
+        port_unavailable: true
     }
   end
 
