@@ -1,0 +1,4 @@
+gravity.crested-frog.ts.net {
+	tls /certs/gravity.crested-frog.ts.net.crt /certs/gravity.crested-frog.ts.net.key
+	reverse_proxy localhost:4000
+}

@@ -30,8 +30,14 @@ deploy-metaebene:
 deploy-redlady:
 	./deploy/redlady/deploy.sh
 
+deploy-gravity:
+	./deploy/gravity/deploy.sh
+
 monitor-redlady:
 	ssh tim@redlady.crested-frog.ts.net "cd /home/tim/polychrome/deploy/redlady && docker compose logs -f"
+
+monitor-gravity:
+	ssh tim@gravity.crested-frog.ts.net "cd /home/tim/polychrome/deploy/gravity && docker compose logs -f"
 
 build-polychrome-image: export MIX_ENV=prod
 build-polychrome-image:
@@ -52,6 +58,9 @@ deploy-metaebene-skip-build:
 
 deploy-redlady-skip-build:
 	./deploy/redlady/deploy.sh --skip-build
+
+deploy-gravity-skip-build:
+	./deploy/gravity/deploy.sh --skip-build
 
 remote-logs:
 	ssh ${oldie_hostname} "sudo journalctl -u octopus.service -f"

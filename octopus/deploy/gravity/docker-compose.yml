@@ -1,0 +1,50 @@
+# Octopus — gravity (Raspberry Pi) deployment
+#
+# Both services use network_mode: host so that:
+#   - UDP broadcast to ESP32 panels works (no Docker NAT)
+#   - Caddy can reach the app at localhost:4000
+#
+# TLS is provided by Caddy using Tailscale certificates.
+# See README.md for one-time setup steps.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    network_mode: host
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /var/lib/tailscale/certs:/certs:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+  polychrome:
+    image: polychrome:latest
+    network_mode: host
+    env_file: .env
+    # dialout group is required to open /dev/ttyACM* devices.
+    group_add:
+      - dialout
+    # Allow any ttyACM serial port (major 166) without listing each device at
+    # container create time — USB may be unplugged on start or hot-plugged later.
+    device_cgroup_rules:
+      - 'c 166:* rmw'
+    # SYS_ADMIN is required to write to /sys/bus/usb/devices/*/authorized,
+    # which is how Radar.reset_adapter/1 power-cycles a USB adapter without
+    # a physical unplug. Remove if USB reset is not needed.
+    cap_add:
+      - SYS_ADMIN
+    volumes:
+      - ./data:/data
+      # Live host /dev so udev-created ttyACM nodes appear after hot-plug.
+      - /dev:/dev
+      # Stable /dev/serial/by-id/… paths (read-only; targets live under /dev).
+      - /dev/serial:/dev/serial:ro
+      # Expose host sysfs so USB adapter authorized files can be written.
+      - /sys/bus/usb:/sys/bus/usb
+      - /sys/devices:/sys/devices
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:

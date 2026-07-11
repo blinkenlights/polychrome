@@ -157,6 +157,12 @@ setups = %{
         ]
       ]
     ]
+  ],
+
+  # Gravity (Raspberry Pi). Configure adapters and layout once hardware is known.
+  "gravity" => [
+    enabled: false,
+    sensors: []
   ]
 }
 
