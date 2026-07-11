@@ -87,4 +87,29 @@ defmodule Octopus.MixerTest do
     send(Mixer, :idle_frame)
     _ = :sys.get_state(Mixer)
   end
+
+  test "retargets in-flight fade-out when a new app is selected during stop-then-start" do
+    old_app = "oldapp1"
+    new_app = "newapp1"
+
+    :sys.replace_state(Mixer, fn state ->
+      %{state | rendered_app: old_app, transition: {:out, 200, nil}}
+    end)
+
+    send(Mixer, {:app_manager, {:selected_app, new_app}})
+
+    state = :sys.get_state(Mixer)
+    assert state.transition == {:out, 200, new_app}
+    assert state.rendered_app == old_app
+
+    :sys.replace_state(Mixer, fn state ->
+      %{state | transition: {:out, 0, new_app}}
+    end)
+
+    send(Mixer, :transition)
+
+    state = :sys.get_state(Mixer)
+    assert state.rendered_app == new_app
+    assert match?({:in, _}, state.transition)
+  end
 end

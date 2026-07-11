@@ -264,22 +264,41 @@ defmodule Octopus.Mixer do
 
   # Handle app selection changes from AppManager
   def handle_info({:app_manager, {:selected_app, selected_app}}, %State{} = state) do
-    # Check if transitions are enabled
     transitions_enabled = Application.get_env(:octopus, :enable_transitions, true)
 
-    # Start transition if switching to a different app and transitions are enabled
-    if state.rendered_app != selected_app and state.transition == nil and transitions_enabled do
-      # Start fade out transition, store target app for later
-      state = %State{state | transition: {:out, @transition_duration, selected_app}}
-      Broadcaster.set_luminance(state.max_luminance)
-      schedule_transition()
-      {:noreply, state}
-    else
-      # No transition needed, transition already in progress, or transitions disabled
-      state = %State{state | rendered_app: selected_app}
-      state = update_output_mode(state)
-      {:noreply, state}
+    {state, action} =
+      cond do
+        not transitions_enabled ->
+          {%State{state | rendered_app: selected_app, transition: nil}, :noop}
+
+        state.rendered_app == selected_app and state.transition == nil ->
+          {state, :noop}
+
+        state.transition == nil ->
+          {%State{state | transition: {:out, @transition_duration, selected_app}}, :start_transition}
+
+        match?({:out, _, _}, state.transition) ->
+          # Retarget an in-flight fade-out (e.g. stop old app then immediately select new one).
+          {:out, time, _target} = state.transition
+          {%State{state | transition: {:out, time, selected_app}}, :noop}
+
+        true ->
+          {%State{state | rendered_app: selected_app, transition: nil}, :finish}
+      end
+
+    case action do
+      :start_transition ->
+        Broadcaster.set_luminance(state.max_luminance)
+        schedule_transition()
+
+      :finish ->
+        Broadcaster.set_luminance(state.max_luminance)
+
+      :noop ->
+        :ok
     end
+
+    {:noreply, update_output_mode(state)}
   end
 
   def handle_info({:app_manager, {:mask_app, mask_app_id}}, %State{} = state) do
@@ -310,7 +329,7 @@ defmodule Octopus.Mixer do
   def handle_info(:idle_frame, %State{} = state) do
     schedule_idle_frame()
 
-    if state.rendered_app == nil do
+    if state.rendered_app == nil and AppManager.get_selected_app() == nil do
       send_blank_frame(state)
     end
 
