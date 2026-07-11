@@ -13,6 +13,7 @@ defmodule Octopus.Apps.PixelFun do
   @app_mode_presets "Elixir.Octopus.AppModePresets"
 
   @default_scene %{
+    color_mode: :random,
     color_interval: 5.0,
     translate_scale: 0.0,
     rotate_scale: 0.0,
@@ -25,6 +26,7 @@ defmodule Octopus.Apps.PixelFun do
   @sway_defaults %{sway_scale: 0.0, sway_speed: 0.5, sway_mode: :wobble}
 
   @builtin_scene_keys [
+    :color_mode,
     :color_interval,
     :translate_scale,
     :rotate_scale,
@@ -103,6 +105,7 @@ defmodule Octopus.Apps.PixelFun do
       :sway_scale,
       :sway_speed,
       :sway_mode,
+      :color_mode,
       :color_interval,
       # Id of the scene currently rendered on the wall.
       :live_scene_id,
@@ -128,6 +131,7 @@ defmodule Octopus.Apps.PixelFun do
   def config_schema() do
     %{
       program: {"Formula", :string, %{default: "sin(10*t-hypot(x,y))"}},
+      color_mode: {"Colors", :atom, %{default: :random}},
       color_interval:
         {"Palette crossfade (s)", :float, %{default: 5, min: 1, max: 20, step: 0.5}},
       translate_scale: {"Drift strength", :float, %{default: 0.0, min: 0, max: 20, step: 0.1}},
@@ -146,11 +150,11 @@ defmodule Octopus.Apps.PixelFun do
 
   def config_info(_config) do
     """
-    Pixel Fun draws a math formula per pixel. Result −1…1 maps to two palette colours; zero renders black.
+    Pixel Fun draws a math formula per pixel. Result −1…1 controls brightness; zero renders black. Random dual mode maps positive/negative lobes to two palette colours; Rainbow mode derives hue from pattern coordinates so the full spectrum is visible at once.
 
     Formula — expression evaluated per pixel. Pick a scene preset tile or type your own; saved scenes persist across restarts. Variables: x, y (position), t (time, scaled by global Speed), i (pixel index), l/m/h (audio bass/mid/high if present), pi, tau.
 
-    Palette crossfade — seconds between new random colour pairs; the transition is smooth over the same duration.
+    Colors — Random dual crossfades between random colour pairs; Rainbow spreads hue across the pattern (moves with drift/rotation). Palette crossfade applies only in Random dual mode.
 
     Drift strength — automatic sin/cos panning of the pattern (0 = off). Not manual translation.
 
@@ -167,6 +171,7 @@ defmodule Octopus.Apps.PixelFun do
   def get_config(state) do
     scene = %{
       program: state.source,
+      color_mode: state.color_mode,
       color_interval: state.color_interval,
       translate_scale: state.translate_scale,
       rotate_scale: state.rotate_scale,
@@ -216,8 +221,16 @@ defmodule Octopus.Apps.PixelFun do
         ""
       end
 
+    color_mode = Map.get(config, :color_mode, :random)
+
+    palette =
+      case color_mode do
+        :rainbow -> "rainbow"
+        _ -> "palette #{format_num(config[:color_interval])}s"
+      end
+
     sliders =
-      "drift #{format_num(config[:translate_scale])} · rot #{format_num(config[:rotate_scale])} · zoom #{format_num(config[:zoom_scale])} · palette #{format_num(config[:color_interval])}s#{sway}"
+      "drift #{format_num(config[:translate_scale])} · rot #{format_num(config[:rotate_scale])} · zoom #{format_num(config[:zoom_scale])} · #{palette}#{sway}"
 
     formula =
       (config[:program] || "")
@@ -239,6 +252,13 @@ defmodule Octopus.Apps.PixelFun do
         type: :formula,
         default: "sin(10*t-hypot(x,y))",
         hint: "x y t i · l m h · pi PI tau"
+      },
+      %{
+        key: :color_mode,
+        label: "Colors",
+        type: :choice,
+        default: :random,
+        options: [{:random, "Random dual"}, {:rainbow, "Rainbow"}]
       },
       %{
         key: :color_interval,
@@ -315,11 +335,13 @@ defmodule Octopus.Apps.PixelFun do
     Octopus.Params.Global.subscribe()
 
     display_info = Octopus.App.get_display_info()
+    config = coerce_config(config)
 
     {:ok, program} = config.program |> Program.parse()
 
     :timer.send_interval(@frame_time_ms, :tick)
-    color_timer_ref = Process.send_after(self(), :update_colors, color_interval_ms(config.color_interval))
+    color_mode = Map.get(config, :color_mode, :random)
+    color_timer_ref = maybe_start_color_timer(color_mode, config.color_interval, nil)
 
     {seconds, micros} = NaiveDateTime.utc_now() |> NaiveDateTime.to_gregorian_seconds()
     seconds = seconds + micros / 1_000_000
@@ -334,6 +356,7 @@ defmodule Octopus.Apps.PixelFun do
       last_colors: generate_random_colors(),
       target_colors: generate_random_colors(),
       lerp_time: config.color_interval,
+      color_mode: color_mode,
       color_interval: config.color_interval,
       translate_scale: config.translate_scale,
       rotate_scale: config.rotate_scale,
@@ -392,6 +415,7 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   defp apply_scene_fields(%State{} = state, config) do
+    config = coerce_config(config)
     program_source = Map.get(config, :program, state.source)
 
     program =
@@ -401,7 +425,9 @@ defmodule Octopus.Apps.PixelFun do
       end
 
     old_color_interval = state.color_interval
+    old_color_mode = state.color_mode
     color_interval = Map.get(config, :color_interval, old_color_interval)
+    color_mode = Map.get(config, :color_mode, old_color_mode)
 
     state = %State{
       state
@@ -416,18 +442,57 @@ defmodule Octopus.Apps.PixelFun do
           config
           |> Map.get(:sway_mode, state.sway_mode)
           |> normalize_sway_mode(),
+        color_mode: color_mode,
         color_interval: color_interval
     }
 
-    if color_interval != old_color_interval do
-      state = reschedule_color_timer(state)
-      %State{state | lerp_time: color_interval_s(state)}
-    else
-      state
+    state =
+      cond do
+        color_mode != old_color_mode ->
+          color_timer_ref = maybe_start_color_timer(color_mode, color_interval, state.color_timer_ref)
+          %State{state | color_timer_ref: color_timer_ref, lerp_time: color_interval_s(state)}
+
+        color_mode == :random and color_interval != old_color_interval ->
+          state = reschedule_color_timer(state)
+          %State{state | lerp_time: color_interval_s(state)}
+
+        true ->
+          state
+      end
+
+    state
+  end
+
+  defp maybe_start_color_timer(:random, color_interval, existing_ref) do
+    if existing_ref, do: Process.cancel_timer(existing_ref)
+    Process.send_after(self(), :update_colors, color_interval_ms(color_interval))
+  end
+
+  defp maybe_start_color_timer(_color_mode, _color_interval, existing_ref) do
+    if existing_ref, do: Process.cancel_timer(existing_ref)
+    nil
+  end
+
+  defp coerce_config(config) when is_map(config) do
+    Map.new(config, fn
+      {:color_mode, value} -> {:color_mode, coerce_color_mode(value)}
+      {key, value} -> {key, value}
+    end)
+  end
+
+  defp coerce_color_mode(value) when is_atom(value), do: value
+
+  defp coerce_color_mode(value) when is_binary(value) do
+    case value do
+      "random" -> :random
+      "rainbow" -> :rainbow
+      _ -> :random
     end
   end
 
-  defp reschedule_color_timer(%State{} = state) do
+  defp coerce_color_mode(_), do: :random
+
+  defp reschedule_color_timer(%State{color_mode: :random} = state) do
     if ref = state.color_timer_ref do
       Process.cancel_timer(ref)
     end
@@ -435,6 +500,8 @@ defmodule Octopus.Apps.PixelFun do
     ref = Process.send_after(self(), :update_colors, color_interval_ms(state.color_interval))
     %State{state | color_timer_ref: ref}
   end
+
+  defp reschedule_color_timer(%State{} = state), do: state
 
   defp apply_scene_by_id(%State{} = state, scene_id) do
     mod = scene_presets()
@@ -480,7 +547,7 @@ defmodule Octopus.Apps.PixelFun do
   defp color_interval_s(%State{} = state), do: color_interval_ms(state.color_interval) / 1000.0
   defp color_interval_ms(interval) when is_number(interval), do: max(trunc(interval * 1000), 1)
 
-  def handle_info(:update_colors, %State{} = state) do
+  def handle_info(:update_colors, %State{color_mode: :random} = state) do
     colors = generate_random_colors()
     color_timer_ref = Process.send_after(self(), :update_colors, color_interval_ms(state.color_interval))
 
@@ -493,6 +560,8 @@ defmodule Octopus.Apps.PixelFun do
          color_timer_ref: color_timer_ref
      }}
   end
+
+  def handle_info(:update_colors, %State{} = state), do: {:noreply, state}
 
   def handle_info({:param_updated, :speed, new_value}, %State{} = state) do
     {:noreply, %{state | speed: new_value}}
@@ -575,9 +644,9 @@ defmodule Octopus.Apps.PixelFun do
       zoom: zoom,
       seconds: state.seconds,
       rotate_scale: state.rotate_scale,
-      sway_scale: state.sway_scale,
-      sway_speed: state.sway_speed,
-      sway_mode: state.sway_mode
+      sway_scale: state.sway_scale || 0.0,
+      sway_speed: state.sway_speed || @sway_defaults.sway_speed,
+      sway_mode: state.sway_mode || @sway_defaults.sway_mode
     }
 
     canvas = Canvas.new(display_info.width, display_info.height)
@@ -589,29 +658,50 @@ defmodule Octopus.Apps.PixelFun do
       hue_shift = proximity * 180 * 5
       interaction_factor = Map.get(state.panel_interaction_factors, index, 0.0)
 
-      {color_a, color_b} = state.colors
-
-      colors = {
-        %Chameleon.HSV{(%Chameleon.HSV{} = color_a) | h: rem(trunc(color_a.h + hue_shift), 360)},
-        %Chameleon.HSV{(%Chameleon.HSV{} = color_b) | h: rem(trunc(color_b.h + hue_shift), 360)}
-      }
+      pixel_time = state.seconds + interaction_factor * 5
+      audio = state.audio_input
 
       Enum.reduce(Enum.with_index(panel), canvas, fn {{x, y}, i}, canvas ->
         {x_scaled, y_scaled} = transform_pixel_coords(x, y, transform_params)
 
         color =
-          pixels(
-            state.program,
-            x_scaled,
-            y_scaled,
-            i,
-            state.seconds + interaction_factor * 5,
-            state.audio_input.low,
-            state.audio_input.mid,
-            state.audio_input.high,
-            colors,
-            &interpolate_colors_with_black/3
-          )
+          case state.color_mode do
+            :rainbow ->
+              value =
+                eval_pixel_value(
+                  state.program,
+                  x_scaled,
+                  y_scaled,
+                  i,
+                  pixel_time,
+                  audio.low,
+                  audio.mid,
+                  audio.high
+                )
+
+              rainbow_pixel_color(x_scaled, y_scaled, value, hue_shift)
+
+            _ ->
+              {color_a, color_b} = state.colors
+
+              colors = {
+                %Chameleon.HSV{(%Chameleon.HSV{} = color_a) | h: rem(trunc(color_a.h + hue_shift), 360)},
+                %Chameleon.HSV{(%Chameleon.HSV{} = color_b) | h: rem(trunc(color_b.h + hue_shift), 360)}
+              }
+
+              pixels(
+                state.program,
+                x_scaled,
+                y_scaled,
+                i,
+                pixel_time,
+                audio.low,
+                audio.mid,
+                audio.high,
+                colors,
+                &interpolate_colors_with_black/3
+              )
+          end
 
         Canvas.put_pixel(canvas, {x, y}, color)
       end)
@@ -733,6 +823,48 @@ defmodule Octopus.Apps.PixelFun do
     lerp_fn.(color_a, color_b, value)
   end
 
+  defp eval_pixel_value(expr, x, y, i, t, l, m, h) do
+    env = [
+      %{~c"x" => x, ~c"y" => y, ~c"i" => i, ~c"t" => t, ~c"l" => l, ~c"m" => m, ~c"h" => h},
+      @default_env
+    ]
+
+    expr
+    |> Program.eval(env)
+    |> max(-1.0)
+    |> min(1.0)
+  end
+
+  defp rainbow_pixel_color(_x, _y, value, _hue_shift) when value == 0.0, do: {0, 0, 0}
+
+  defp rainbow_pixel_color(x, y, value, hue_shift) do
+    hue = rainbow_hue(x, y, hue_shift)
+
+    saturation = param(:saturation_percent, 70) |> max(0) |> min(100)
+    brightness = trunc(param(:value_percent, 100) * abs(value)) |> max(0) |> min(100)
+
+    %Chameleon.RGB{r: r, g: g, b: b} =
+      Chameleon.HSV.new(hue, saturation, brightness) |> Chameleon.convert(Chameleon.RGB)
+
+    {r, g, b}
+  end
+
+  # Spread hue evenly across pattern space (both axes). Pure atan2 clusters
+  # two colours on flat/circular layouts where one axis barely varies.
+  defp rainbow_hue(x, y, hue_shift) do
+    w = max(Installation.width(), 1) * 1.0
+    h = max(Installation.height(), 1) * 1.0
+
+    x_frac = (x + w / 2) / w
+    y_frac = (y + h / 2) / h
+
+    hue = x_frac * 240.0 + y_frac * 120.0 + hue_shift
+    hue = :math.fmod(hue, 360.0)
+    hue = if hue < 0, do: hue + 360.0, else: hue
+
+    trunc(hue)
+  end
+
   defp interpolate_colors_with_black(%Chameleon.HSV{} = a, %Chameleon.HSV{} = b, value) do
     hsv =
       cond do
@@ -772,7 +904,7 @@ defmodule Octopus.Apps.PixelFun do
     (:math.sin(seconds * 0.1) * 0.5 + 0.5) * scale
   end
 
-  defp lerp_toward_target_colors(%State{} = state) do
+  defp lerp_toward_target_colors(%State{color_mode: :random} = state) do
     current_time = max(color_interval_s(state) - state.lerp_time, 0)
     t = current_time / color_interval_s(state)
     lerp_time = max(state.lerp_time - 1 / @fps, 0)
@@ -784,6 +916,8 @@ defmodule Octopus.Apps.PixelFun do
 
     %State{state | colors: {new_a, new_b}, lerp_time: lerp_time}
   end
+
+  defp lerp_toward_target_colors(%State{} = state), do: state
 
   defp lerp_rgb(a, b, value) do
     a_rgb = Chameleon.convert(a, Chameleon.RGB)

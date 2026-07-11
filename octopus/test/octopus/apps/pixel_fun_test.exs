@@ -137,6 +137,7 @@ defmodule Octopus.Apps.PixelFunTest do
         program: program,
         display_info: %{width: Installation.width(), height: Installation.height()},
         colors: {Chameleon.HSV.new(0, 70, 100), Chameleon.HSV.new(180, 70, 100)},
+        color_mode: :random,
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
@@ -153,6 +154,58 @@ defmodule Octopus.Apps.PixelFunTest do
 
       for x <- 0..63 do
         assert Canvas.get_pixel(canvas, {x, 0}) != {0, 0, 0}
+      end
+    end)
+  end
+
+  test "build_canvas/1 rainbow mode spreads hues across horizontal strip", _context do
+    with_installation(Octopus.TestInstallations.HorizontalStrip64, fn ->
+      {:ok, program} = Program.parse("1")
+
+      state = %State{
+        program: program,
+        display_info: %{width: Installation.width(), height: Installation.height()},
+        color_mode: :rainbow,
+        panel_proximities: %{0 => 0.0},
+        panel_interaction_factors: %{0 => 0.0},
+        seconds: 0.0,
+        translate_scale: 0.0,
+        rotate_scale: 0.0,
+        zoom_scale: 0.0,
+        offset: {0, 0},
+        audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
+      }
+
+      canvas = pixel_fun_build_canvas(state)
+
+      assert Canvas.get_pixel(canvas, {0, 0}) != {0, 0, 0}
+      assert Canvas.get_pixel(canvas, {63, 0}) != {0, 0, 0}
+      assert Canvas.get_pixel(canvas, {0, 0}) != Canvas.get_pixel(canvas, {63, 0})
+    end)
+  end
+
+  test "build_canvas/1 rainbow mode keeps formula zero black", _context do
+    with_installation(Octopus.TestInstallations.HorizontalStrip64, fn ->
+      {:ok, program} = Program.parse("0")
+
+      state = %State{
+        program: program,
+        display_info: %{width: Installation.width(), height: Installation.height()},
+        color_mode: :rainbow,
+        panel_proximities: %{0 => 0.0},
+        panel_interaction_factors: %{0 => 0.0},
+        seconds: 0.0,
+        translate_scale: 0.0,
+        rotate_scale: 0.0,
+        zoom_scale: 0.0,
+        offset: {0, 0},
+        audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
+      }
+
+      canvas = pixel_fun_build_canvas(state)
+
+      for x <- 0..63 do
+        assert Canvas.get_pixel(canvas, {x, 0}) == {0, 0, 0}
       end
     end)
   end
