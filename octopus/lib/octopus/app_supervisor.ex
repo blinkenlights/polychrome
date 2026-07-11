@@ -94,6 +94,8 @@ defmodule Octopus.AppSupervisor do
   end
 
   defp do_start_app(module, config) when is_atom(module) do
+    stop_other_apps(preserve_app_ids(config))
+
     app_id = generate_app_id()
     name = {:via, Registry, {Octopus.AppRegistry, app_id, module}}
 
@@ -221,5 +223,20 @@ defmodule Octopus.AppSupervisor do
   defp generate_app_id() do
     alphabet = Enum.to_list(?a..?z) ++ Enum.to_list(?0..?9)
     Enum.map(1..6, fn _ -> Enum.random(alphabet) end) |> to_string()
+  end
+
+  defp stop_other_apps(preserve_ids) when is_list(preserve_ids) do
+    running_apps()
+    |> Enum.map(fn {_, app_id} -> app_id end)
+    |> Enum.reject(&(&1 in preserve_ids))
+    |> Enum.each(&stop_app/1)
+  end
+
+  defp preserve_app_ids(config) do
+    case {AppManager.get_selected_app(), Map.get(config, :side)} do
+      {{_left, right}, :left} -> Enum.reject([right], &is_nil/1)
+      {{left, _right}, :right} -> Enum.reject([left], &is_nil/1)
+      _ -> []
+    end
   end
 end
