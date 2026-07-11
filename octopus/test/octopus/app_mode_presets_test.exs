@@ -14,7 +14,7 @@ defmodule Octopus.AppModePresetsTest do
     test "is idempotent and seeds all apps" do
       assert length(preset_list(PixelFun)) == 7
       assert length(preset_list(Collective)) == 6
-      assert length(preset_list(Matrix)) == 1
+      assert length(preset_list(Matrix)) == 2
       assert length(preset_list(Sand)) == 1
       assert length(preset_list(SparkleMist)) == 1
       assert length(preset_list(Wood)) == 2
@@ -81,6 +81,7 @@ defmodule Octopus.AppModePresetsTest do
 
       assert preset_normalize_mode_id(Collective, "storm") == "collective:storm"
       assert preset_normalize_mode_id(Matrix, "matrix") == "matrix:matrix"
+      assert preset_normalize_mode_id(Matrix, "matrix-ring") == "matrix:matrix-ring"
       assert preset_normalize_mode_id(Sand, "sand") == "sand:sand"
       assert preset_normalize_mode_id(SparkleMist, "mist") == "sparklemist:mist"
       assert preset_normalize_mode_id(Wood, "experiment") == "wood:experiment"
@@ -114,6 +115,17 @@ defmodule Octopus.AppModePresetsTest do
       assert mode.summary != ""
       assert mode.deletable
       assert mode.renamable
+    end
+
+    test "returns matrix tiles with summaries" do
+      modes = preset_list_modes(Matrix)
+      classic = Enum.find(modes, &(&1.id == "matrix:matrix"))
+      ring = Enum.find(modes, &(&1.id == "matrix:matrix-ring"))
+
+      assert classic.name == "matrix"
+      assert classic.summary != ""
+      assert ring.name == "matrix ring"
+      assert String.contains?(ring.summary, "ring")
     end
 
     test "returns wood tiles with summaries" do

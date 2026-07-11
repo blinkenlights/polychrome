@@ -363,7 +363,7 @@ defmodule Octopus.Apps.PixelFun do
       zoom_scale: config.zoom_scale,
       sway_scale: Map.get(config, :sway_scale, @sway_defaults.sway_scale),
       sway_speed: Map.get(config, :sway_speed, @sway_defaults.sway_speed),
-      sway_mode: config |> Map.get(:sway_mode, @sway_defaults.sway_mode) |> normalize_sway_mode(),
+      sway_mode: config |> Map.get(:sway_mode, @sway_defaults.sway_mode) |> Octopus.Sway.normalize_mode(),
       live_scene_id: scene_presets().id_for_config(config),
       offset: {0, 0},
       move: {0, 0},
@@ -441,7 +441,7 @@ defmodule Octopus.Apps.PixelFun do
         sway_mode:
           config
           |> Map.get(:sway_mode, state.sway_mode)
-          |> normalize_sway_mode(),
+          |> Octopus.Sway.normalize_mode(),
         color_mode: color_mode,
         color_interval: color_interval
     }
@@ -748,8 +748,8 @@ defmodule Octopus.Apps.PixelFun do
       if sway_scale == 0.0 do
         y_scaled
       else
-        {sway_amplitude, sway_phase} = sway_params(sway_scale, sway_speed, sway_mode, seconds)
-        y_scaled + sway_amplitude * :math.sin(x * tau / w - sway_phase)
+        {sway_amplitude, sway_phase} = Octopus.Sway.params(sway_scale, sway_speed, sway_mode, seconds)
+        y_scaled + Octopus.Sway.offset(x, w, sway_amplitude, sway_phase)
       end
 
     {x_scaled, y_final}
@@ -759,19 +759,6 @@ defmodule Octopus.Apps.PixelFun do
     rem = :math.fmod(value, period)
     if rem < 0, do: rem + period, else: rem
   end
-
-  defp sway_params(sway_scale, sway_speed, sway_mode, seconds) do
-    case normalize_sway_mode(sway_mode) do
-      :pendulum -> {sway_scale * :math.sin(seconds * sway_speed), 0.0}
-      _ -> {sway_scale, seconds * sway_speed}
-    end
-  end
-
-  defp normalize_sway_mode(:wobble), do: :wobble
-  defp normalize_sway_mode(:pendulum), do: :pendulum
-  defp normalize_sway_mode("wobble"), do: :wobble
-  defp normalize_sway_mode("pendulum"), do: :pendulum
-  defp normalize_sway_mode(_), do: :wobble
 
   @default_env %{
     ~c"pi" => :math.pi(),

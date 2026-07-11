@@ -84,6 +84,9 @@ defmodule Octopus.AppModePresets do
       key == "matrix" and mode_id in ["matrix", "default"] ->
         mode_id(app, "matrix")
 
+      key == "matrix" and mode_id == "matrix-ring" ->
+        mode_id(app, "matrix-ring")
+
       key == "perlinnoise" and mode_id in ["perlin", "default"] ->
         mode_id(app, "perlin")
 
