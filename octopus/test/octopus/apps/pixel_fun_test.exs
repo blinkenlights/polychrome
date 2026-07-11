@@ -210,6 +210,87 @@ defmodule Octopus.Apps.PixelFunTest do
     end)
   end
 
+  test "build_canvas/1 white mode outputs grayscale integers", _context do
+    with_installation(Octopus.TestInstallations.HorizontalStrip64, fn ->
+      {:ok, program} = Program.parse("1")
+
+      state = %State{
+        program: program,
+        display_info: %{width: Installation.width(), height: Installation.height()},
+        color_mode: :white,
+        panel_proximities: %{0 => 0.0},
+        panel_interaction_factors: %{0 => 0.0},
+        seconds: 0.0,
+        translate_scale: 0.0,
+        rotate_scale: 0.0,
+        zoom_scale: 0.0,
+        offset: {0, 0},
+        audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
+      }
+
+      canvas = pixel_fun_build_canvas(state)
+
+      assert canvas.mode == :grayscale
+
+      for x <- 0..63 do
+        assert is_integer(Canvas.get_pixel(canvas, {x, 0}))
+        assert Canvas.get_pixel(canvas, {x, 0}) == 255
+      end
+    end)
+  end
+
+  test "build_canvas/1 white mode keeps formula zero black", _context do
+    with_installation(Octopus.TestInstallations.HorizontalStrip64, fn ->
+      {:ok, program} = Program.parse("0")
+
+      state = %State{
+        program: program,
+        display_info: %{width: Installation.width(), height: Installation.height()},
+        color_mode: :white,
+        panel_proximities: %{0 => 0.0},
+        panel_interaction_factors: %{0 => 0.0},
+        seconds: 0.0,
+        translate_scale: 0.0,
+        rotate_scale: 0.0,
+        zoom_scale: 0.0,
+        offset: {0, 0},
+        audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
+      }
+
+      canvas = pixel_fun_build_canvas(state)
+
+      for x <- 0..63 do
+        assert Canvas.get_pixel(canvas, {x, 0}) == 0
+      end
+    end)
+  end
+
+  test "build_canvas/1 white mode uses abs for negative values", _context do
+    with_installation(Octopus.TestInstallations.HorizontalStrip64, fn ->
+      {:ok, program} = Program.parse("-1")
+
+      state = %State{
+        program: program,
+        display_info: %{width: Installation.width(), height: Installation.height()},
+        color_mode: :white,
+        panel_proximities: %{0 => 0.0},
+        panel_interaction_factors: %{0 => 0.0},
+        seconds: 0.0,
+        translate_scale: 0.0,
+        rotate_scale: 0.0,
+        zoom_scale: 0.0,
+        offset: {0, 0},
+        audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
+      }
+
+      canvas = pixel_fun_build_canvas(state)
+
+      for x <- 0..63 do
+        assert Canvas.get_pixel(canvas, {x, 0}) == 255
+      end
+    end)
+  end
+
   defp pixel_fun_compatible?, do: apply(@pixel_fun, :compatible?, [])
   defp pixel_fun_build_canvas(state), do: apply(@pixel_fun, :build_canvas, [state])
 end

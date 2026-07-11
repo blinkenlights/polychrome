@@ -133,6 +133,20 @@ defmodule OctopusWeb.ConsoleComponents do
       <button
         :if={@takeover?}
         class={[
+          "btn btn-error btn-square",
+          @compact && "btn-sm w-11 h-11",
+          !@compact && "w-11 h-11"
+        ]}
+        phx-click="resume_rotation"
+        phx-target={@target}
+        title="Stop"
+        aria-label="Stop"
+      >
+        ■
+      </button>
+      <button
+        :if={@takeover?}
+        class={[
           "btn btn-primary bg-[#6d7cff] border-[#6d7cff] hover:bg-[#5b6aff]",
           @compact && "btn-sm btn-circle w-11 h-11 text-xs",
           !@compact && "min-h-14 px-4"
@@ -415,38 +429,39 @@ defmodule OctopusWeb.ConsoleComponents do
         <div class="flex gap-2 mt-1">
           <button
             :if={@stop_takeover?}
-            class={["btn btn-sm btn-error min-h-11", @queueable? && "flex-1"]}
+            class="btn btn-sm btn-square btn-error min-h-11 min-w-11"
             phx-click="stop_takeover"
             phx-value-app={Atom.to_string(@app_module)}
             phx-value-mode_id={@mode.id}
             phx-target={@target}
-            title="End preview — resume playlist"
+            title="Stop"
           >
-            ■ Stop
+            ■
           </button>
           <button
             :if={!@stop_takeover?}
-            class={["btn btn-sm min-h-11", @queueable? && "flex-1"]}
+            class="btn btn-sm btn-square min-h-11 min-w-11"
             phx-click="play_now"
             phx-value-app={Atom.to_string(@app_module)}
             phx-value-mode_id={@mode.id}
             phx-target={@target}
             title={@play_now_title}
           >
-            ▶ Play now
+            ▶
           </button>
           <button
             :if={@queueable?}
             class={[
-              "btn btn-sm flex-1 min-h-11",
+              "btn btn-sm btn-square min-h-11 min-w-11",
               @queued_pos && "btn-primary bg-[#6d7cff] border-[#6d7cff]"
             ]}
             phx-click="queue_toggle"
             phx-value-app={Atom.to_string(@app_module)}
             phx-value-mode_id={@mode.id}
             phx-target={@target}
+            title={if @queued_pos, do: "In playlist", else: "Add to playlist"}
           >
-            {if @queued_pos, do: "✓ In playlist", else: "＋ Playlist"}
+            {if @queued_pos, do: "✓", else: "＋"}
           </button>
         </div>
       </div>

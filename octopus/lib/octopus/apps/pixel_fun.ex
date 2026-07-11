@@ -154,7 +154,7 @@ defmodule Octopus.Apps.PixelFun do
 
     Formula — expression evaluated per pixel. Pick a scene preset tile or type your own; saved scenes persist across restarts. Variables: x, y (position), t (time, scaled by global Speed), i (pixel index), l/m/h (audio bass/mid/high if present), pi, tau.
 
-    Colors — Random dual crossfades between random colour pairs; Rainbow spreads hue across the pattern (moves with drift/rotation). Palette crossfade applies only in Random dual mode.
+    Colors — Random dual crossfades between random colour pairs; Rainbow spreads hue across the pattern (moves with drift/rotation). White drives brightness on the warm W channel of the TM1814 LEDs (no RGB tint). Palette crossfade applies only in Random dual mode.
 
     Drift strength — automatic sin/cos panning of the pattern (0 = off). Not manual translation.
 
@@ -226,6 +226,7 @@ defmodule Octopus.Apps.PixelFun do
     palette =
       case color_mode do
         :rainbow -> "rainbow"
+        :white -> "white"
         _ -> "palette #{format_num(config[:color_interval])}s"
       end
 
@@ -258,7 +259,7 @@ defmodule Octopus.Apps.PixelFun do
         label: "Colors",
         type: :choice,
         default: :random,
-        options: [{:random, "Random dual"}, {:rainbow, "Rainbow"}]
+        options: [{:random, "Random dual"}, {:rainbow, "Rainbow"}, {:white, "White (W channel)"}]
       },
       %{
         key: :color_interval,
@@ -330,7 +331,7 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   def app_init(config) do
-    Octopus.App.configure_display(layout: :gapped_panels)
+    Octopus.App.configure_display(layout: :gapped_panels, supports_grayscale: true)
     Octopus.App.subscribe_to_button_events()
     Octopus.Params.Global.subscribe()
 
@@ -486,6 +487,7 @@ defmodule Octopus.Apps.PixelFun do
     case value do
       "random" -> :random
       "rainbow" -> :rainbow
+      "white" -> :white
       _ -> :random
     end
   end
@@ -591,9 +593,15 @@ defmodule Octopus.Apps.PixelFun do
     }
 
     canvas = state |> render()
+    easing_interval = trunc(param(:easing_interval, 200))
 
-    # Use new unified display API with dynamic easing_interval parameter
-    Octopus.App.update_display(canvas, :rgb, easing_interval: trunc(param(:easing_interval, 200)))
+    case state.color_mode do
+      :white ->
+        Octopus.App.update_display(canvas, :grayscale, easing_interval: easing_interval)
+
+      _ ->
+        Octopus.App.update_display(canvas, :rgb, easing_interval: easing_interval)
+    end
 
     {:noreply, state}
   end
@@ -649,7 +657,8 @@ defmodule Octopus.Apps.PixelFun do
       sway_mode: state.sway_mode || @sway_defaults.sway_mode
     }
 
-    canvas = Canvas.new(display_info.width, display_info.height)
+    canvas_mode = if state.color_mode == :white, do: :grayscale, else: :rgb
+    canvas = Canvas.new(display_info.width, display_info.height, canvas_mode)
 
     Installation.virtual_pixel_positions_per_panel()
     |> Enum.with_index()
@@ -664,8 +673,21 @@ defmodule Octopus.Apps.PixelFun do
       Enum.reduce(Enum.with_index(panel), canvas, fn {{x, y}, i}, canvas ->
         {x_scaled, y_scaled} = transform_pixel_coords(x, y, transform_params)
 
-        color =
+        pixel =
           case state.color_mode do
+            :white ->
+              state.program
+              |> eval_pixel_value(
+                x_scaled,
+                y_scaled,
+                i,
+                pixel_time,
+                audio.low,
+                audio.mid,
+                audio.high
+              )
+              |> white_pixel_value()
+
             :rainbow ->
               value =
                 eval_pixel_value(
@@ -703,7 +725,7 @@ defmodule Octopus.Apps.PixelFun do
               )
           end
 
-        Canvas.put_pixel(canvas, {x, y}, color)
+        Canvas.put_pixel(canvas, {x, y}, pixel)
       end)
     end)
   end
@@ -820,6 +842,16 @@ defmodule Octopus.Apps.PixelFun do
     |> Program.eval(env)
     |> max(-1.0)
     |> min(1.0)
+  end
+
+  defp white_pixel_value(value) do
+    value
+    |> abs()
+    |> Kernel.*(param(:value_percent, 100) / 100.0)
+    |> Kernel.*(255)
+    |> trunc()
+    |> max(0)
+    |> min(255)
   end
 
   defp rainbow_pixel_color(_x, _y, value, _hue_shift) when value == 0.0, do: {0, 0, 0}
