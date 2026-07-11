@@ -98,6 +98,8 @@ defmodule Octopus.Apps.PixelFun.Program do
 
   def do_eval({:call, [~c"abs", expr]}, env), do: expr |> do_eval(env) |> abs()
   def do_eval({:call, [~c"sqrt", expr]}, env), do: expr |> do_eval(env) |> :math.sqrt()
+  def do_eval({:call, [~c"exp", expr]}, env), do: expr |> do_eval(env) |> :math.exp()
+  def do_eval({:call, [~c"log", expr]}, env), do: expr |> do_eval(env) |> :math.log()
 
   def do_eval({:call, [~c"hypot", a, b]}, env),
     do: :math.sqrt(do_eval(a, env) ** 2 + do_eval(b, env) ** 2)
@@ -114,6 +116,9 @@ defmodule Octopus.Apps.PixelFun.Program do
   def do_eval({:call, [~c"asinh", expr]}, env), do: expr |> do_eval(env) |> :math.asinh()
   def do_eval({:call, [~c"acosh", expr]}, env), do: expr |> do_eval(env) |> :math.acosh()
   def do_eval({:call, [~c"atanh", expr]}, env), do: expr |> do_eval(env) |> :math.atanh()
+  def do_eval({:call, [~c"sinh", expr]}, env), do: expr |> do_eval(env) |> :math.sinh()
+  def do_eval({:call, [~c"cosh", expr]}, env), do: expr |> do_eval(env) |> :math.cosh()
+  def do_eval({:call, [~c"tanh", expr]}, env), do: expr |> do_eval(env) |> :math.tanh()
 
   def do_eval({:call, [~c"floor", expr]}, env), do: expr |> do_eval(env) |> Float.floor()
   def do_eval({:call, [~c"ceil", expr]}, env), do: expr |> do_eval(env) |> Float.ceil()

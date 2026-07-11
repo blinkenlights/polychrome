@@ -201,7 +201,7 @@ defmodule Octopus.Apps.PixelFun do
         label: "Formula",
         type: :formula,
         default: "sin(10*t-hypot(x,y))",
-        hint: "x y t i · l m h · pi tau"
+        hint: "x y t i · l m h · pi PI tau"
       },
       %{
         key: :color_interval,
@@ -541,7 +541,12 @@ defmodule Octopus.Apps.PixelFun do
     end)
   end
 
-  @default_env %{~c"pi" => :math.pi(), ~c"tau" => :math.pi() * 2}
+  @default_env %{
+    ~c"pi" => :math.pi(),
+    ~c"PI" => :math.pi(),
+    ~c"tau" => :math.pi() * 2,
+    ~c"Tau" => :math.pi() * 2
+  }
 
   def pixels(expr, x, y, i, t, color_a, color_b, lerp_fn \\ &interpolate_colors_with_black/3)
 

@@ -5,9 +5,9 @@ defmodule OctopusWeb.ConsoleComponents do
   alias Octopus.Apps.PixelFun.ScenePresets
 
   @known_formula_idents ~w(
-    x y t i l m h pi tau
-    rand random abs sqrt hypot sin cos tan asin acos atan atan2
-    asinh acosh atanh floor ceil round fract noise
+    x y t i l m h pi PI tau Tau
+    rand random abs sqrt exp log hypot sin cos tan asin acos atan atan2
+    asinh acosh atanh sinh cosh tanh floor ceil round fract noise
   )
 
   @interval_presets [
