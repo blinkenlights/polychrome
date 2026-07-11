@@ -296,6 +296,7 @@ defmodule Octopus.AppModePresets do
     keys =
       (Map.keys(base) ++ tweakable_keys(app, mode_id))
       |> Enum.uniq()
+      |> Enum.reject(&(&1 in runtime_tweakable_keys(app, mode_id)))
 
     config =
       base
@@ -468,6 +469,13 @@ defmodule Octopus.AppModePresets do
   defp tweakable_keys(app, mode_id) do
     app
     |> apply(:mode_tweakables, [mode_id])
+    |> Enum.map(& &1.key)
+  end
+
+  defp runtime_tweakable_keys(app, mode_id) do
+    app
+    |> apply(:mode_tweakables, [mode_id])
+    |> Enum.filter(&Map.get(&1, :runtime))
     |> Enum.map(& &1.key)
   end
 

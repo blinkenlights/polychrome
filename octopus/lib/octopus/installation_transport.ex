@@ -756,8 +756,10 @@ defmodule Octopus.InstallationTransport do
   end
 
   defp now_playing_dirty?(stored, overrides, tweakables) do
+    persistable_tweakables = Enum.reject(tweakables, &Map.get(&1, :runtime))
+
     map_size(overrides) > 0 and
-      Enum.any?(tweakables, fn %{key: key} ->
+      Enum.any?(persistable_tweakables, fn %{key: key} ->
         Map.has_key?(overrides, key) and not value_eq?(Map.get(stored, key), Map.get(overrides, key))
       end)
   end

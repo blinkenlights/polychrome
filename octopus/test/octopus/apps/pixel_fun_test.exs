@@ -346,6 +346,16 @@ defmodule Octopus.Apps.PixelFunTest do
     assert spec.default == 70
   end
 
+  test "mode_tweakables/1 exposes runtime freeze toggle" do
+    spec =
+      pixel_fun_mode_tweakables("classic_ripple")
+      |> Enum.find(&(&1.key == :time_frozen))
+
+    assert spec.label == "Freeze time"
+    assert spec.type == :toggle
+    assert spec.runtime == true
+  end
+
   test "build_canvas/1 lower saturation produces less vivid colours on random dual", _context do
     with_installation(Octopus.TestInstallations.HorizontalStrip64, fn ->
       {:ok, program} = Program.parse("1")

@@ -126,7 +126,8 @@ defmodule Octopus.Apps.PixelFun do
       :panel_proximities,
       :speed,
       :display_info,
-      :color_timer_ref
+      :color_timer_ref,
+      :time_frozen
     ]
   end
 
@@ -204,7 +205,8 @@ defmodule Octopus.Apps.PixelFun do
 
     Map.merge(scene, %{
       live_scene_id: live_scene_id(state, scene),
-      active_preset_id: running_preset_id(state, scene)
+      active_preset_id: running_preset_id(state, scene),
+      time_frozen: state.time_frozen || false
     })
   end
 
@@ -360,6 +362,13 @@ defmodule Octopus.Apps.PixelFun do
         type: :select,
         options: [{"Forward", :forward}, {"Backward", :backward}],
         default: :forward
+      },
+      %{
+        key: :time_frozen,
+        label: "Freeze time",
+        type: :toggle,
+        default: false,
+        runtime: true
       }
     ]
   end
@@ -382,7 +391,14 @@ defmodule Octopus.Apps.PixelFun do
     color_mode = Map.get(config, :color_mode, :random)
     saturation_percent = Map.get(config, :saturation_percent, 70)
     palette = generate_random_palette(color_mode, saturation_percent)
-    color_timer_ref = maybe_start_color_timer(color_mode, config.color_interval, nil)
+    time_frozen = Map.get(config, :time_frozen, false) |> coerce_time_frozen()
+
+    color_timer_ref =
+      if time_frozen do
+        nil
+      else
+        maybe_start_color_timer(color_mode, config.color_interval, nil)
+      end
 
     {seconds, micros} = NaiveDateTime.utc_now() |> NaiveDateTime.to_gregorian_seconds()
     seconds = seconds + micros / 1_000_000
@@ -417,7 +433,8 @@ defmodule Octopus.Apps.PixelFun do
       panel_proximities: Map.new(0..(Installation.num_panels() - 1), fn i -> {i, 0.0} end),
       speed: Octopus.Params.Global.speed(),
       display_info: display_info,
-      color_timer_ref: color_timer_ref
+      color_timer_ref: color_timer_ref,
+      time_frozen: time_frozen
     }
 
     {:ok, state}
@@ -425,6 +442,7 @@ defmodule Octopus.Apps.PixelFun do
 
   def handle_config(config, %State{} = state) do
     state = apply_scene_fields(state, config)
+    state = if state.time_frozen, do: push_frame(state), else: state
     broadcast_config(state)
     {:noreply, state}
   end
@@ -447,12 +465,15 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   def handle_cast({:update_program, program}, %State{} = state) do
-    {:noreply, %{state | program: program}}
+    state = %{state | program: program}
+    state = if state.time_frozen, do: push_frame(state), else: state
+    {:noreply, state}
   end
 
   def handle_cast({:apply_mode, scene_id}, %State{} = state) do
     state = apply_scene_by_id(state, scene_id)
     state = %State{state | live_scene_id: scene_id}
+    state = if state.time_frozen, do: push_frame(state), else: state
     broadcast_config(state)
     {:noreply, state}
   end
@@ -518,7 +539,36 @@ defmodule Octopus.Apps.PixelFun do
           state
       end
 
-    state
+    apply_time_frozen(state, config)
+  end
+
+  defp apply_time_frozen(%State{} = state, config) do
+    old_frozen = state.time_frozen || false
+    new_frozen = Map.get(config, :time_frozen, old_frozen) |> coerce_time_frozen()
+    state = %State{state | time_frozen: new_frozen}
+
+    cond do
+      not old_frozen and new_frozen ->
+        cancel_color_timer(state)
+
+      old_frozen and not new_frozen ->
+        %State{
+          state
+          | color_timer_ref:
+              maybe_start_color_timer(state.color_mode, state.color_interval, state.color_timer_ref)
+        }
+
+      true ->
+        state
+    end
+  end
+
+  defp cancel_color_timer(%State{} = state) do
+    if ref = state.color_timer_ref do
+      Process.cancel_timer(ref)
+    end
+
+    %State{state | color_timer_ref: nil}
   end
 
   defp maybe_start_color_timer(color_mode, color_interval, existing_ref)
@@ -537,6 +587,7 @@ defmodule Octopus.Apps.PixelFun do
       {:color_mode, value} -> {:color_mode, coerce_color_mode(value)}
       {:saturation_percent, value} -> {:saturation_percent, coerce_saturation_percent(value)}
       {:time_direction, value} -> {:time_direction, coerce_time_direction(value)}
+      {:time_frozen, value} -> {:time_frozen, coerce_time_frozen(value)}
       {key, value} -> {key, value}
     end)
   end
@@ -573,6 +624,13 @@ defmodule Octopus.Apps.PixelFun do
   defp coerce_time_direction("forward"), do: :forward
   defp coerce_time_direction("backward"), do: :backward
   defp coerce_time_direction(_), do: :forward
+
+  defp coerce_time_frozen(value) when value in [true, false], do: value
+  defp coerce_time_frozen("true"), do: true
+  defp coerce_time_frozen("false"), do: false
+  defp coerce_time_frozen(1), do: true
+  defp coerce_time_frozen(0), do: false
+  defp coerce_time_frozen(_), do: false
 
   defp time_sign(:backward), do: -1
   defp time_sign(_), do: 1
@@ -635,6 +693,8 @@ defmodule Octopus.Apps.PixelFun do
   defp color_interval_s(%State{} = state), do: color_interval_ms(state.color_interval) / 1000.0
   defp color_interval_ms(interval) when is_number(interval), do: max(trunc(interval * 1000), 1)
 
+  def handle_info(:update_colors, %State{time_frozen: true} = state), do: {:noreply, state}
+
   def handle_info(:update_colors, %State{color_mode: color_mode} = state)
       when color_mode in [:random, :white] do
     colors = generate_random_palette(color_mode, state.saturation_percent)
@@ -661,8 +721,19 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   def handle_info(:tick, %State{} = state) do
-    state = lerp_toward_target_colors(state)
+    state =
+      if state.time_frozen do
+        state
+      else
+        state
+        |> lerp_toward_target_colors()
+        |> advance_tick_state()
+      end
 
+    {:noreply, push_frame(state)}
+  end
+
+  defp advance_tick_state(%State{} = state) do
     {offset_x, offset_y} = state.offset
 
     panel_interaction_factors =
@@ -672,14 +743,16 @@ defmodule Octopus.Apps.PixelFun do
         {i, value}
       end)
 
-    state = %State{
+    %State{
       state
       | offset: {offset_x, offset_y},
         seconds: state.seconds + 1 / @fps * param(:time_scale, 1.0) * state.speed,
         panel_interaction_factors: panel_interaction_factors
     }
+  end
 
-    canvas = state |> render()
+  defp push_frame(%State{} = state) do
+    canvas = render(state)
     easing_interval = trunc(param(:easing_interval, 200))
 
     case state.color_mode do
@@ -690,7 +763,7 @@ defmodule Octopus.Apps.PixelFun do
         Octopus.App.update_display(canvas, :rgb, easing_interval: easing_interval)
     end
 
-    {:noreply, state}
+    state
   end
 
   def handle_event(%AudioEvent{bass: low, mid: mid, high: high}, %State{} = state) do

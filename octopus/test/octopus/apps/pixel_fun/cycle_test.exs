@@ -44,7 +44,9 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
           buttons: %{},
           panel_interaction_factors: %{},
           panel_proximities: %{},
-          speed: 1.0
+          speed: 1.0,
+          display_info: %{width: 8, height: 8},
+          time_frozen: false
         },
         overrides
       )
@@ -128,6 +130,57 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
       assert updated.saturation_percent == 30
       assert pixel_fun_get_config(updated).saturation_percent == 30
     end
+
+    test "exposes time_frozen in get_config" do
+      config = pixel_fun_get_config(base_state(%{time_frozen: true}))
+      assert config.time_frozen == true
+    end
+  end
+
+  describe "time freeze" do
+    test "freezing cancels color timer" do
+      ref = Process.send_after(self(), :noop, 60_000)
+      state = base_state(%{time_frozen: false, color_timer_ref: ref})
+
+      {:noreply, updated} = pixel_fun_handle_config(%{time_frozen: true}, state)
+
+      assert updated.time_frozen == true
+      assert updated.color_timer_ref == nil
+    end
+
+    test "unfreezing restarts color timer" do
+      state = base_state(%{time_frozen: true, color_timer_ref: nil, color_mode: :random})
+
+      {:noreply, updated} = pixel_fun_handle_config(%{time_frozen: false}, state)
+
+      assert updated.time_frozen == false
+      assert is_reference(updated.color_timer_ref)
+    end
+
+    test "tick does not advance time when frozen" do
+      state = base_state(%{time_frozen: true, seconds: 42.0, lerp_time: 3.0})
+
+      {:noreply, updated} = pixel_fun_handle_info(:tick, state)
+
+      assert updated.seconds == 42.0
+      assert updated.lerp_time == 3.0
+    end
+
+    test "tick advances time when not frozen" do
+      state = base_state(%{time_frozen: false, seconds: 10.0})
+
+      {:noreply, updated} = pixel_fun_handle_info(:tick, state)
+
+      assert updated.seconds > 10.0
+    end
+
+    test "update_colors is ignored while frozen" do
+      state = base_state(%{time_frozen: true, color_mode: :random, colors: {color(), color()}})
+
+      {:noreply, updated} = pixel_fun_handle_info(:update_colors, state)
+
+      assert updated.colors == state.colors
+    end
   end
 
   defp preset_sync_all!, do: apply(@presets, :sync_all!, [])
@@ -136,4 +189,5 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
   defp pixel_fun_mode_config(mode_id), do: apply(@pixel_fun, :mode_config, [mode_id])
   defp pixel_fun_handle_cast(message, state), do: apply(@pixel_fun, :handle_cast, [message, state])
   defp pixel_fun_handle_config(config, state), do: apply(@pixel_fun, :handle_config, [config, state])
+  defp pixel_fun_handle_info(message, state), do: apply(@pixel_fun, :handle_info, [message, state])
 end

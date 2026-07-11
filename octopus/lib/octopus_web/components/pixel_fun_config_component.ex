@@ -146,6 +146,22 @@ defmodule OctopusWeb.PixelFunConfigComponent do
 
         <div class="flex flex-wrap gap-2 items-center">
           <button
+            type="button"
+            class={[
+              "btn btn-sm",
+              @config[:time_frozen] && "btn-warning",
+              !@config[:time_frozen] && "btn-outline"
+            ]}
+            phx-click="toggle_time_frozen"
+            phx-target={@myself}
+            id={"#{@app_id}-toggle-time-frozen"}
+          >
+            {if @config[:time_frozen], do: "▶ Resume time", else: "⏸ Freeze time"}
+          </button>
+        </div>
+
+        <div class="flex flex-wrap gap-2 items-center">
+          <button
             class="btn btn-primary bg-[#6d7cff] border-[#6d7cff]"
             phx-click="open_save_preset_modal"
             phx-target={@myself}
@@ -304,6 +320,19 @@ defmodule OctopusWeb.PixelFunConfigComponent do
          |> assign(config: AppSupervisor.config(socket.assigns.app_id), selected_preset_id: id)
          |> assign_editor_view()}
     end
+  end
+
+  def handle_event("toggle_time_frozen", _params, socket) do
+    config =
+      socket.assigns.config
+      |> Map.put(:time_frozen, !(socket.assigns.config[:time_frozen] || false))
+
+    AppSupervisor.update_config(socket.assigns.app_id, config)
+
+    {:noreply,
+     socket
+     |> assign(config: AppSupervisor.config(socket.assigns.app_id))
+     |> assign_editor_view()}
   end
 
   def handle_event("change", params, socket) do
