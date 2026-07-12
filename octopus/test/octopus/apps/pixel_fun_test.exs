@@ -86,7 +86,7 @@ defmodule Octopus.Apps.PixelFunTest do
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
-        zoom_pulse: 0.0,
+        zoom_base: 0.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -113,7 +113,7 @@ defmodule Octopus.Apps.PixelFunTest do
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
-        zoom_pulse: 0.0,
+        zoom_base: 0.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -141,7 +141,7 @@ defmodule Octopus.Apps.PixelFunTest do
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
-        zoom_pulse: 0.0,
+        zoom_base: 0.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -168,7 +168,7 @@ defmodule Octopus.Apps.PixelFunTest do
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
-        zoom_pulse: 0.0,
+        zoom_base: 0.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -193,7 +193,7 @@ defmodule Octopus.Apps.PixelFunTest do
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
-        zoom_pulse: 0.0,
+        zoom_base: 0.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -219,7 +219,7 @@ defmodule Octopus.Apps.PixelFunTest do
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
-        zoom_pulse: 0.0,
+        zoom_base: 0.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -248,7 +248,7 @@ defmodule Octopus.Apps.PixelFunTest do
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
-        zoom_pulse: 0.0,
+        zoom_base: 0.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -274,7 +274,7 @@ defmodule Octopus.Apps.PixelFunTest do
         seconds: 5.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
-        zoom_pulse: 0.0,
+        zoom_base: 0.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -306,7 +306,7 @@ defmodule Octopus.Apps.PixelFunTest do
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
-        zoom_pulse: 0.0,
+        zoom_base: 0.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -373,7 +373,7 @@ defmodule Octopus.Apps.PixelFunTest do
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
-        zoom_pulse: 0.0,
+        zoom_base: 0.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -415,10 +415,7 @@ defmodule Octopus.Apps.PixelFunTest do
         roll_rate: 0.0,
         tilt_scale: 0.0,
         elev_base: 0.0,
-        elev_amp: 0.0,
         zoom_base: 0.0,
-        zoom_rate: 0.0,
-        zoom_pulse: 0.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -443,7 +440,9 @@ defmodule Octopus.Apps.PixelFunTest do
 
     assert migrated.tilt_scale == 2.0
     assert migrated.roll_rate == 1.0
-    assert migrated.elev_amp == 3.0
-    assert_in_delta migrated.zoom_pulse, 0.1, 0.0001
+    assert migrated.ty_auto == true
+    assert_in_delta migrated.ty_auto_range, 3.0, 0.0001
+    refute Map.has_key?(migrated, :elev_amp)
+    refute Map.has_key?(migrated, :zoom_pulse)
   end
 end

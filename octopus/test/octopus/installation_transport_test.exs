@@ -581,7 +581,7 @@ defmodule Octopus.InstallationTransportTest do
       playing = state().now_playing
       assert length(playing.tweakables) == length(PixelFun.mode_tweakables(@classic))
       assert Enum.any?(playing.tweakables, &(&1.key == :program and &1.type == :formula))
-      assert playing.effective[:program] == "sin(10*t-hypot(x,y))"
+      assert playing.effective[:program] == "sin(0.4*t-hypot(x,y))"
     end
 
     test "pixel fun formula tweak applies live and marks dirty" do
@@ -600,7 +600,7 @@ defmodule Octopus.InstallationTransportTest do
     end
 
     test "pixel fun invalid formula keeps last valid program on the wall" do
-      {:ok, original_ast} = Program.parse("sin(10*t-hypot(x,y))")
+      {:ok, original_ast} = Program.parse("sin(0.4*t-hypot(x,y))")
 
       InstallationTransport.play_now(PixelFun, @classic)
       InstallationTransport.set_tweakable(:program, "sin(+")
@@ -639,7 +639,7 @@ defmodule Octopus.InstallationTransportTest do
       end)
 
       playing = state().now_playing
-      assert playing.effective[:program] == "sin(10*t-hypot(x,y))"
+      assert playing.effective[:program] == "sin(0.4*t-hypot(x,y))"
       assert :ok = InstallationTransport.save_now_playing_as_new("Drifty ripple")
     end
 
@@ -648,16 +648,16 @@ defmodule Octopus.InstallationTransportTest do
       stale_id = state().now_playing.app_id
       AppSupervisor.stop_app(stale_id)
 
-      InstallationTransport.set_tweakable(:zoom_pulse, 1.5)
+      InstallationTransport.set_tweakable(:zoom_base, 1.5)
 
       s = state().now_playing
-      assert s.effective[:zoom_pulse] == 1.5
+      assert s.effective[:zoom_base] == 1.5
       assert is_binary(s.app_id)
       assert s.app_id != stale_id
 
       {:ok, app_id} = AppSupervisor.find_running_app(PixelFun)
       assert app_id == s.app_id
-      assert AppSupervisor.config(app_id)[:zoom_pulse] == 1.5
+      assert AppSupervisor.config(app_id)[:zoom_base] == 1.5
     end
 
     test "pixel fun rejects save when formula is invalid" do

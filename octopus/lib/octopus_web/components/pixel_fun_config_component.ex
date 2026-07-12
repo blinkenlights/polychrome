@@ -521,14 +521,25 @@ defmodule OctopusWeb.PixelFunConfigComponent do
       tilt_speed: config[:tilt_speed],
       tilt_mode: config[:tilt_mode],
       elev_base: config[:elev_base],
-      elev_amp: config[:elev_amp],
-      elev_speed: config[:elev_speed],
       zoom_base: config[:zoom_base],
-      zoom_rate: config[:zoom_rate],
-      zoom_pulse: config[:zoom_pulse],
-      zoom_pulse_speed: config[:zoom_pulse_speed],
       zoom_pivot: config[:zoom_pivot],
-      time_direction: config[:time_direction]
+      pattern_speed: config[:pattern_speed],
+      time_direction: config[:time_direction],
+      tx_auto: config[:tx_auto],
+      tx_auto_range: config[:tx_auto_range],
+      tx_auto_tempo: config[:tx_auto_tempo],
+      ty_auto: config[:ty_auto],
+      ty_auto_range: config[:ty_auto_range],
+      ty_auto_tempo: config[:ty_auto_tempo],
+      rot_auto: config[:rot_auto],
+      rot_auto_range: config[:rot_auto_range],
+      rot_auto_tempo: config[:rot_auto_tempo],
+      zoom_auto: config[:zoom_auto],
+      zoom_auto_range: config[:zoom_auto_range],
+      zoom_auto_tempo: config[:zoom_auto_tempo],
+      sway_auto: config[:sway_auto],
+      sway_auto_range: config[:sway_auto_range],
+      sway_auto_tempo: config[:sway_auto_tempo]
     }
   end
 

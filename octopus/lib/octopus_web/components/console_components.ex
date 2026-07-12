@@ -550,15 +550,17 @@ defmodule OctopusWeb.ConsoleComponents do
 
     formula_spec = Enum.find(visible_tweakables, &(&1.type == :formula))
     control_tweakables = Enum.reject(visible_tweakables, &(&1.type == :formula))
+    control_rows = group_now_playing_controls(control_tweakables, visible_tweakables)
 
     assigns =
       assign(assigns,
         visible_tweakables: visible_tweakables,
         formula_spec: formula_spec,
         control_tweakables: control_tweakables,
+        control_rows: control_rows,
         has_tweakables: visible_tweakables != [],
         has_formula: formula_spec != nil,
-        has_controls: control_tweakables != [],
+        has_controls: control_rows != [],
         show_countdown: assigns.rotating?,
         formula_valid: now_playing_formula_valid?(assigns.now_playing),
         formula_error: now_playing_formula_error(assigns.now_playing)
@@ -635,131 +637,187 @@ defmodule OctopusWeb.ConsoleComponents do
           phx-target={@target}
           class={["space-y-4", @has_formula && "mt-4"]}
         >
-          <div :for={spec <- @control_tweakables} class="space-y-1">
-            <%= cond do %>
-              <% spec.type == :slider -> %>
-              <div
-                id={"now-playing-slider-#{spec.key}-#{@id_suffix}"}
-                phx-hook=".NowPlayingSlider"
-                data-value={Map.get(@now_playing.effective, spec.key)}
-                data-unit={spec[:unit]}
-                class="space-y-1"
-              >
+          <div
+            :for={row <- @control_rows}
+            id={"now-playing-row-#{row_dom_id(row)}-#{@id_suffix}"}
+            class="space-y-1"
+          >
+            <%= case row do %>
+              <% {:slider, spec, auto_spec} -> %>
+                <div
+                  id={"now-playing-slider-#{spec.key}-#{@id_suffix}"}
+                  phx-hook=".NowPlayingSlider"
+                  data-value={Map.get(@now_playing.effective, spec.key)}
+                  data-step={spec.step}
+                  data-min={spec.min}
+                  data-max={spec.max}
+                  data-unit={spec[:unit]}
+                  class="space-y-1"
+                >
+                  <label class="text-sm" for={"now-playing-#{spec.key}-#{@id_suffix}"}>{spec.label}</label>
+                  <div class="flex items-center gap-2">
+                    <input
+                      type="range"
+                      id={"now-playing-#{spec.key}-#{@id_suffix}"}
+                      name={Atom.to_string(spec.key)}
+                      min={spec.min}
+                      max={spec.max}
+                      step={spec.step}
+                      value={Map.get(@now_playing.effective, spec.key)}
+                      phx-debounce="50"
+                      class="range range-primary range-sm min-w-0 flex-1"
+                    />
+                    <input
+                      type="number"
+                      data-number-input
+                      min={spec.min}
+                      max={spec.max}
+                      step={spec.step}
+                      value={format_tweak_number_raw(Map.get(@now_playing.effective, spec.key))}
+                      phx-debounce="150"
+                      class={[
+                        "input input-bordered input-sm w-16 shrink-0 console-mono text-xs tabular-nums px-1 text-center",
+                        now_playing_value_dirty?(@now_playing, spec.key) && "border-[#fcb700]"
+                      ]}
+                    />
+                    <label
+                      :if={auto_spec}
+                      class="flex items-center gap-1.5 shrink-0 cursor-pointer select-none"
+                      title={auto_spec.label}
+                    >
+                      <span class="text-[11px] opacity-70">{auto_spec.label}</span>
+                      <input
+                        type="hidden"
+                        name={Atom.to_string(auto_spec.key)}
+                        value="false"
+                      />
+                      <input
+                        type="checkbox"
+                        id={"now-playing-#{auto_spec.key}-#{@id_suffix}"}
+                        name={Atom.to_string(auto_spec.key)}
+                        value="true"
+                        checked={Map.get(@now_playing.effective, auto_spec.key) == true}
+                        class="toggle toggle-sm toggle-primary shrink-0"
+                      />
+                    </label>
+                  </div>
+                </div>
+              <% {:control, spec} -> %>
                 <div class="flex items-baseline justify-between gap-2">
                   <label class="text-sm" for={"now-playing-#{spec.key}-#{@id_suffix}"}>{spec.label}</label>
-                  <span
-                    data-value-display
-                    class={[
-                      "console-mono text-xs tabular-nums",
-                      now_playing_value_dirty?(@now_playing, spec.key) && "text-[#fcb700]",
-                      !now_playing_value_dirty?(@now_playing, spec.key) && "opacity-70"
-                    ]}
-                  >
+                  <span class={[
+                    "console-mono text-xs tabular-nums",
+                    now_playing_value_dirty?(@now_playing, spec.key) && "text-[#fcb700]",
+                    !now_playing_value_dirty?(@now_playing, spec.key) && "opacity-70"
+                  ]}>
                     {format_tweakable_value(spec, Map.get(@now_playing.effective, spec.key))}
                   </span>
                 </div>
-                <input
-                  type="range"
-                  id={"now-playing-#{spec.key}-#{@id_suffix}"}
-                  name={Atom.to_string(spec.key)}
-                  min={spec.min}
-                  max={spec.max}
-                  step={spec.step}
-                  value={Map.get(@now_playing.effective, spec.key)}
-                  phx-debounce="50"
-                  class="range range-primary range-sm w-full min-h-11"
-                />
-              </div>
-              <% true -> %>
-              <div class="flex items-baseline justify-between gap-2">
-                <label class="text-sm" for={"now-playing-#{spec.key}-#{@id_suffix}"}>{spec.label}</label>
-                <span class={[
-                  "console-mono text-xs tabular-nums",
-                  now_playing_value_dirty?(@now_playing, spec.key) && "text-[#fcb700]",
-                  !now_playing_value_dirty?(@now_playing, spec.key) && "opacity-70"
-                ]}>
-                  {format_tweakable_value(spec, Map.get(@now_playing.effective, spec.key))}
-                </span>
-              </div>
-              <%= cond do %>
-                <% spec.type == :toggle -> %>
-                  <input
-                    type="hidden"
-                    name={Atom.to_string(spec.key)}
-                    value="false"
-                  />
-                  <input
-                    type="checkbox"
-                    id={"now-playing-#{spec.key}-#{@id_suffix}"}
-                    name={Atom.to_string(spec.key)}
-                    value="true"
-                    checked={Map.get(@now_playing.effective, spec.key) == true}
-                    class="toggle toggle-primary"
-                  />
-                <% spec.type == :choice -> %>
-                  <div class="join flex-wrap">
-                    <button
-                      :for={{option, idx} <- Enum.with_index(spec.options)}
-                      type="button"
-                      class={[
-                        "btn btn-sm join-item min-h-11",
-                        Map.get(@now_playing.effective, spec.key) == elem(option, 0) && "btn-primary"
-                      ]}
-                      phx-click="now_playing_choice"
-                      phx-value-key={spec.key}
-                      phx-value-index={idx}
-                      phx-target={@target}
-                    >
-                      {elem(option, 1)}
-                    </button>
-                  </div>
-                <% spec.type == :color -> %>
-                  <input
-                    type="color"
-                    id={"now-playing-#{spec.key}-#{@id_suffix}"}
-                    name={Atom.to_string(spec.key)}
-                    value={Map.get(@now_playing.effective, spec.key, spec[:default] || "#ffffff")}
-                    phx-debounce="50"
-                    class="w-full h-11 min-h-11 cursor-pointer rounded-lg border border-base-300 bg-base-100"
-                  />
-                <% true -> %>
-              <% end %>
+                <%= cond do %>
+                  <% spec.type == :toggle -> %>
+                    <input
+                      type="hidden"
+                      name={Atom.to_string(spec.key)}
+                      value="false"
+                    />
+                    <input
+                      type="checkbox"
+                      id={"now-playing-#{spec.key}-#{@id_suffix}"}
+                      name={Atom.to_string(spec.key)}
+                      value="true"
+                      checked={Map.get(@now_playing.effective, spec.key) == true}
+                      class="toggle toggle-sm toggle-primary shrink-0"
+                    />
+                  <% spec.type == :choice -> %>
+                    <div class="join flex-wrap">
+                      <button
+                        :for={{option, idx} <- Enum.with_index(spec.options)}
+                        type="button"
+                        class={[
+                          "btn btn-sm join-item min-h-11",
+                          Map.get(@now_playing.effective, spec.key) == elem(option, 0) && "btn-primary"
+                        ]}
+                        phx-click="now_playing_choice"
+                        phx-value-key={spec.key}
+                        phx-value-index={idx}
+                        phx-target={@target}
+                      >
+                        {elem(option, 1)}
+                      </button>
+                    </div>
+                  <% spec.type == :color -> %>
+                    <input
+                      type="color"
+                      id={"now-playing-#{spec.key}-#{@id_suffix}"}
+                      name={Atom.to_string(spec.key)}
+                      value={Map.get(@now_playing.effective, spec.key, spec[:default] || "#ffffff")}
+                      phx-debounce="50"
+                      class="w-full h-11 min-h-11 cursor-pointer rounded-lg border border-base-300 bg-base-100"
+                    />
+                  <% true -> %>
+                <% end %>
             <% end %>
           </div>
         </form>
         <script :type={Phoenix.LiveView.ColocatedHook} name=".NowPlayingSlider">
-          function formatValue(value, unit) {
+          function formatRaw(value, step) {
             const num = Number(value)
-            const formatted = Number.isInteger(num) ? String(num) : num.toFixed(1)
-            return unit ? `${formatted} ${unit}` : formatted
+            if (!Number.isFinite(num)) return ""
+            const stepNum = Number(step)
+            if (Number.isInteger(stepNum) && stepNum >= 1) return String(Math.round(num))
+            // Match server tabular display for typical float steps
+            if (Math.abs(stepNum) >= 0.1) return num.toFixed(1)
+            return String(Math.round(num * 100) / 100)
+          }
+
+          function clamp(num, min, max) {
+            return Math.min(Math.max(num, min), max)
           }
 
           export default {
             mounted() {
               this.bindElements()
-              this.onInput = () => {
-                if (this.display) {
-                  this.display.textContent = formatValue(this.input.value, this.el.dataset.unit)
+              this.onRangeInput = () => {
+                if (this.number) {
+                  this.number.value = formatRaw(this.range.value, this.el.dataset.step)
                 }
               }
-              this.input.addEventListener("input", this.onInput)
+              this.onNumberChange = () => {
+                if (!this.range || !this.number) return
+                let num = Number(this.number.value)
+                if (!Number.isFinite(num)) {
+                  this.number.value = formatRaw(this.range.value, this.el.dataset.step)
+                  return
+                }
+                num = clamp(num, Number(this.el.dataset.min), Number(this.el.dataset.max))
+                this.range.value = String(num)
+                this.number.value = formatRaw(num, this.el.dataset.step)
+                this.range.dispatchEvent(new Event("input", { bubbles: true }))
+                this.range.dispatchEvent(new Event("change", { bubbles: true }))
+              }
+              this.range.addEventListener("input", this.onRangeInput)
+              this.number.addEventListener("change", this.onNumberChange)
             },
             updated() {
               this.bindElements()
-              if (!this.input || document.activeElement === this.input) return
-              this.input.value = this.el.dataset.value
-              if (this.display) {
-                this.display.textContent = formatValue(this.input.value, this.el.dataset.unit)
+              if (!this.range) return
+              if (document.activeElement === this.range || document.activeElement === this.number) return
+              this.range.value = this.el.dataset.value
+              if (this.number) {
+                this.number.value = formatRaw(this.range.value, this.el.dataset.step)
               }
             },
             destroyed() {
-              if (this.input && this.onInput) {
-                this.input.removeEventListener("input", this.onInput)
+              if (this.range && this.onRangeInput) {
+                this.range.removeEventListener("input", this.onRangeInput)
+              }
+              if (this.number && this.onNumberChange) {
+                this.number.removeEventListener("change", this.onNumberChange)
               }
             },
             bindElements() {
-              this.input = this.el.querySelector('input[type="range"]')
-              this.display = this.el.querySelector("[data-value-display]")
+              this.range = this.el.querySelector('input[type="range"]')
+              this.number = this.el.querySelector("[data-number-input]")
             }
           }
         </script>
@@ -955,11 +1013,48 @@ defmodule OctopusWeb.ConsoleComponents do
     Enum.filter(now_playing.tweakables, &now_playing_tweakable_visible?(&1, now_playing.effective))
   end
 
+  defp group_now_playing_controls(control_tweakables, all_visible) do
+    by_key = Map.new(all_visible, &{&1.key, &1})
+
+    companion_keys =
+      control_tweakables
+      |> Enum.filter(&Map.has_key?(&1, :auto_key))
+      |> MapSet.new(& &1.auto_key)
+
+    control_tweakables
+    |> Enum.reject(&(&1.key in companion_keys))
+    |> Enum.map(fn
+      %{type: :slider} = spec ->
+        auto_spec =
+          case spec[:auto_key] do
+            nil -> nil
+            key -> Map.get(by_key, key)
+          end
+
+        {:slider, spec, auto_spec}
+
+      spec ->
+        {:control, spec}
+    end)
+  end
+
+  defp row_dom_id({:slider, spec, _}), do: spec.key
+  defp row_dom_id({:control, spec}), do: spec.key
+
   defp now_playing_tweakable_visible?(%{visible_when: {dep_key, allowed}}, effective) do
     Map.get(effective, dep_key) in allowed
   end
 
   defp now_playing_tweakable_visible?(_, _), do: true
+
+  defp format_tweak_number_raw(value) when is_integer(value), do: Integer.to_string(value)
+
+  defp format_tweak_number_raw(value) when is_float(value) do
+    :erlang.float_to_binary(value, decimals: 2) |> String.trim_trailing("0") |> String.trim_trailing(".")
+  end
+
+  defp format_tweak_number_raw(value) when is_binary(value), do: value
+  defp format_tweak_number_raw(value), do: to_string(value)
 
   defp format_tweakable_value(%{type: :slider, unit: unit}, value) when is_binary(unit),
     do: "#{format_tweak_number(value)} #{unit}"

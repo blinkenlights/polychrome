@@ -20,13 +20,24 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
     tilt_speed: 0.5,
     tilt_mode: :wobble,
     elev_base: 0.0,
-    elev_amp: 0.0,
-    elev_speed: 0.2,
     zoom_base: 0.0,
-    zoom_rate: 0.0,
-    zoom_pulse: 0.0,
-    zoom_pulse_speed: 0.1,
-    zoom_pivot: 0
+    zoom_pivot: 0,
+    pattern_speed: 1.0,
+    tx_auto: false,
+    tx_auto_range: 1.0,
+    tx_auto_tempo: 0.5,
+    ty_auto: false,
+    ty_auto_range: 2.0,
+    ty_auto_tempo: 0.5,
+    rot_auto: false,
+    rot_auto_range: 1.0,
+    rot_auto_tempo: 0.5,
+    zoom_auto: false,
+    zoom_auto_range: 0.8,
+    zoom_auto_tempo: 0.5,
+    sway_auto: false,
+    sway_auto_range: 2.0,
+    sway_auto_tempo: 0.5
   }
 
   @sphere_keys Map.keys(@sphere_defaults)

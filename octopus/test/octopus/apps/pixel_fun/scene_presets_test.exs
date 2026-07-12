@@ -1,6 +1,7 @@
 defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
   use Octopus.DataCase, async: false
 
+  alias Octopus.Apps.PixelFun.Program
   alias Octopus.Apps.PixelFun.ScenePresets
 
   @presets Module.concat(["Octopus", "AppModePresets"])
@@ -16,7 +17,7 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
     color_interval: 5.0,
     orbit_rate: 0.0,
     roll_rate: 0.0,
-    zoom_pulse: 0.0
+    zoom_base: 0.0
   }
 
   describe "builtins/0" do
@@ -30,6 +31,12 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
         assert String.starts_with?(preset.id, "builtin:")
         assert Regex.match?(~r/^#[0-9A-F]{6}$/, preset.accent_color)
         assert ScenePresets.validate_formula(preset.formula) == :ok
+      end
+    end
+
+    test "normalized formulas parse via Program.parse" do
+      for preset <- ScenePresets.builtins() do
+        assert {:ok, _} = Program.parse(preset.formula)
       end
     end
   end
@@ -125,14 +132,12 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
       config = ScenePresets.to_config(preset)
 
       assert ScenePresets.config_matches?(config, preset)
-      refute ScenePresets.config_matches?(Map.put(config, :zoom_pulse, 2.0), preset)
+      refute ScenePresets.config_matches?(Map.put(config, :zoom_base, 2.0), preset)
     end
 
     test "treats legacy keys as migrated equivalents" do
       preset = ScenePresets.get("builtin:classic_ripple")
 
-      # Legacy zoom_scale 1.0 → zoom_pulse 0.1; builtins now store sphere keys
-      # with zoom_pulse 0.0, so compare a migrated legacy snapshot to itself.
       legacy_config = %{
         program: preset.formula,
         color_interval: preset.color_interval,
@@ -146,6 +151,38 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
 
       assert ScenePresets.config_matches?(legacy_config, legacy_config)
       assert ScenePresets.config_matches?(ScenePresets.to_config(preset), preset)
+    end
+
+    test "round-trips auto keys and pattern_speed" do
+      attrs =
+        Map.merge(@scene_attrs, %{
+          name: "Auto roundtrip",
+          tx_auto: true,
+          tx_auto_range: 1.2,
+          tx_auto_tempo: 0.4,
+          ty_auto: true,
+          ty_auto_range: 1.5,
+          ty_auto_tempo: 0.3,
+          rot_auto: false,
+          zoom_auto: true,
+          zoom_auto_range: 0.6,
+          zoom_auto_tempo: 0.7,
+          sway_auto: true,
+          sway_auto_range: 1.1,
+          sway_auto_tempo: 0.55,
+          pattern_speed: 1.25
+        })
+
+      assert {:ok, preset} = ScenePresets.create(attrs)
+      config = ScenePresets.to_config(preset)
+
+      assert config.tx_auto == true
+      assert_in_delta config.tx_auto_range, 1.2, 0.0001
+      assert_in_delta config.ty_auto_tempo, 0.3, 0.0001
+      assert config.zoom_auto == true
+      assert config.sway_auto == true
+      assert_in_delta config.pattern_speed, 1.25, 0.0001
+      assert ScenePresets.config_matches?(config, preset)
     end
   end
 
@@ -186,7 +223,7 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
       preset = ScenePresets.get("builtin:classic_ripple")
       summary = ScenePresets.summary(preset)
 
-      assert summary =~ "trans"
+      assert summary =~ "tx"
       assert summary =~ "palette"
       assert summary =~ "sin"
     end

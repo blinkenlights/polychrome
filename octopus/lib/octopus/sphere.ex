@@ -152,8 +152,6 @@ defmodule Octopus.Sphere do
 
   @doc """
   Conformal Möbius dilation toward attractor `a`. `sigma == 0` is identity.
-  `zoom_rate` flow is endless; pattern appearance is periodic only if the
-  formula cooperates — the flow itself never seams.
   """
   @spec dilate(vec3(), number(), mobius_basis()) :: vec3()
   def dilate(d, sigma, _basis) when sigma == 0, do: d
@@ -182,11 +180,9 @@ defmodule Octopus.Sphere do
     end
   end
 
-  @doc "Elevation offset in radians (pixel sliders × alpha)."
-  @spec elev_offset(number(), number(), number(), number(), number()) :: float()
-  def elev_offset(elev_base, elev_amp, elev_speed, t, alpha) do
-    (elev_base + elev_amp * :math.sin(elev_speed * t)) * alpha
-  end
+  @doc "Elevation offset in radians (pixel slider × alpha)."
+  @spec elev_offset(number(), number()) :: float()
+  def elev_offset(elev_base, alpha), do: elev_base * alpha
 
   @doc """
   Direction → pixel-unit chart coords. At neutral orientation this matches

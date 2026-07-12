@@ -25,7 +25,7 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
       Map.merge(
         %{
           program: 0,
-          source: "sin(10*t-hypot(x,y))",
+          source: "sin(0.4*t-hypot(x,y))",
           colors: {color(), color()},
           last_colors: {color(), color()},
           target_colors: {color(), color()},
@@ -37,13 +37,27 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
           tilt_speed: 0.5,
           tilt_mode: :wobble,
           elev_base: 0.0,
-          elev_amp: 0.0,
-          elev_speed: 0.2,
           zoom_base: 0.0,
-          zoom_rate: 0.0,
-          zoom_pulse: 0.0,
-          zoom_pulse_speed: 0.1,
           zoom_pivot: 0,
+          pattern_speed: 1.0,
+          tx_auto: false,
+          tx_auto_range: 1.0,
+          tx_auto_tempo: 0.5,
+          ty_auto: false,
+          ty_auto_range: 2.0,
+          ty_auto_tempo: 0.5,
+          rot_auto: false,
+          rot_auto_range: 1.0,
+          rot_auto_tempo: 0.5,
+          zoom_auto: false,
+          zoom_auto_range: 0.8,
+          zoom_auto_tempo: 0.5,
+          sway_auto: false,
+          sway_auto_range: 2.0,
+          sway_auto_tempo: 0.5,
+          auto_wanderers: %{},
+          yaw_angle: 0.0,
+          roll_angle: 0.0,
           color_mode: :random,
           saturation_percent: 70,
           color_interval: 5.0,
@@ -56,7 +70,9 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
           speed: 1.0,
           display_info: %{width: 8, height: 8},
           pixel_dirs: nil,
-          time_frozen: false
+          time_frozen: false,
+          show_advanced: false,
+          time_direction: :forward
         },
         overrides
       )
@@ -128,9 +144,9 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
       {:noreply, updated} =
         pixel_fun_handle_config(%{translate_scale: 4.0, rotate_scale: 2.0, zoom_scale: 5.0}, state)
 
-      assert updated.elev_amp == 4.0
+      assert updated.ty_auto == true
+      assert_in_delta updated.ty_auto_range, 4.0, 0.0001
       assert updated.roll_rate == 2.0
-      assert_in_delta updated.zoom_pulse, 0.5, 0.0001
     end
 
     test "reschedules color timer and resets lerp_time when color_interval changes" do
@@ -193,6 +209,44 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
       {:noreply, updated} = pixel_fun_handle_info(:tick, state)
 
       assert updated.seconds > 10.0
+    end
+
+    test "auto toggle on seeds wanderer at manual base; off clears wanderer" do
+      state = base_state(%{orbit_rate: 1.5, tx_auto: false, seconds: 5.0})
+
+      {:noreply, on} = pixel_fun_handle_config(%{tx_auto: true, orbit_rate: 1.5}, state)
+      assert on.tx_auto == true
+      assert %Octopus.Wander{value: v} = on.auto_wanderers[:tx]
+      assert_in_delta v, 1.5, 1.0e-12
+
+      {:noreply, stepped} = pixel_fun_handle_info(:tick, on)
+      assert_in_delta stepped.auto_wanderers[:tx].value, 1.5, 0.05
+
+      {:noreply, off} = pixel_fun_handle_config(%{tx_auto: false, orbit_rate: 1.5}, stepped)
+      assert off.tx_auto == false
+      refute Map.has_key?(off.auto_wanderers, :tx)
+      assert_in_delta off.orbit_rate, 1.5, 1.0e-12
+    end
+
+    test "frozen time does not advance wanderers" do
+      state =
+        base_state(%{
+          time_frozen: false,
+          tx_auto: true,
+          orbit_rate: 0.0,
+          tx_auto_range: 2.0,
+          tx_auto_tempo: 3.0,
+          seconds: 1.0,
+          auto_wanderers: %{tx: Octopus.Wander.new(0.0)}
+        })
+
+      {:noreply, running} = pixel_fun_handle_info(:tick, state)
+      w1 = running.auto_wanderers[:tx]
+
+      frozen = %{running | time_frozen: true}
+      {:noreply, still} = pixel_fun_handle_info(:tick, frozen)
+      assert still.auto_wanderers[:tx] == w1
+      assert still.seconds == running.seconds
     end
 
     test "update_colors is ignored while frozen" do

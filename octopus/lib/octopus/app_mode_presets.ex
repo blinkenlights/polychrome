@@ -554,14 +554,25 @@ defmodule Octopus.AppModePresets do
           :tilt_speed,
           :tilt_mode,
           :elev_base,
-          :elev_amp,
-          :elev_speed,
           :zoom_base,
-          :zoom_rate,
-          :zoom_pulse,
-          :zoom_pulse_speed,
           :zoom_pivot,
-          :time_direction
+          :pattern_speed,
+          :time_direction,
+          :tx_auto,
+          :tx_auto_range,
+          :tx_auto_tempo,
+          :ty_auto,
+          :ty_auto_range,
+          :ty_auto_tempo,
+          :rot_auto,
+          :rot_auto_range,
+          :rot_auto_tempo,
+          :zoom_auto,
+          :zoom_auto_range,
+          :zoom_auto_tempo,
+          :sway_auto,
+          :sway_auto_range,
+          :sway_auto_tempo
         ]
 
       Enum.all?(keys, fn key ->
@@ -569,7 +580,11 @@ defmodule Octopus.AppModePresets do
           :program -> left.program == right.program
           :tilt_mode -> left.tilt_mode == right.tilt_mode
           :time_direction -> left.time_direction == right.time_direction
-          _ -> float_eq?(Map.get(left, key), Map.get(right, key))
+          k when k in [:tx_auto, :ty_auto, :rot_auto, :zoom_auto, :sway_auto] ->
+            Map.get(left, k) == Map.get(right, k)
+
+          _ ->
+            float_eq?(Map.get(left, key), Map.get(right, key))
         end
       end)
     else
@@ -590,14 +605,25 @@ defmodule Octopus.AppModePresets do
       tilt_speed: Map.get(config, :tilt_speed, 0.5),
       tilt_mode: pixelfun_tilt_mode(Map.get(config, :tilt_mode, :wobble)),
       elev_base: Map.get(config, :elev_base, 0.0),
-      elev_amp: Map.get(config, :elev_amp, 0.0),
-      elev_speed: Map.get(config, :elev_speed, 0.2),
       zoom_base: Map.get(config, :zoom_base, 0.0),
-      zoom_rate: Map.get(config, :zoom_rate, 0.0),
-      zoom_pulse: Map.get(config, :zoom_pulse, 0.0),
-      zoom_pulse_speed: Map.get(config, :zoom_pulse_speed, 0.1),
       zoom_pivot: Map.get(config, :zoom_pivot, 0),
-      time_direction: pixelfun_time_direction(Map.get(config, :time_direction, :forward))
+      pattern_speed: Map.get(config, :pattern_speed, 1.0),
+      time_direction: pixelfun_time_direction(Map.get(config, :time_direction, :forward)),
+      tx_auto: Map.get(config, :tx_auto, false),
+      tx_auto_range: Map.get(config, :tx_auto_range, 1.0),
+      tx_auto_tempo: Map.get(config, :tx_auto_tempo, 0.5),
+      ty_auto: Map.get(config, :ty_auto, false),
+      ty_auto_range: Map.get(config, :ty_auto_range, 2.0),
+      ty_auto_tempo: Map.get(config, :ty_auto_tempo, 0.5),
+      rot_auto: Map.get(config, :rot_auto, false),
+      rot_auto_range: Map.get(config, :rot_auto_range, 1.0),
+      rot_auto_tempo: Map.get(config, :rot_auto_tempo, 0.5),
+      zoom_auto: Map.get(config, :zoom_auto, false),
+      zoom_auto_range: Map.get(config, :zoom_auto_range, 0.8),
+      zoom_auto_tempo: Map.get(config, :zoom_auto_tempo, 0.5),
+      sway_auto: Map.get(config, :sway_auto, false),
+      sway_auto_range: Map.get(config, :sway_auto_range, 2.0),
+      sway_auto_tempo: Map.get(config, :sway_auto_tempo, 0.5)
     }
   end
 
