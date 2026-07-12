@@ -125,6 +125,40 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
       assert updated.live_scene_id == @cross
       assert updated.source == pixel_fun_mode_config(@cross).program
     end
+
+    test "resets orientation and does not keep wandered sway on neutral scene" do
+      wanderer = Octopus.Wander.new(2.5)
+
+      state =
+        base_state(%{
+          live_scene_id: "builtin:marmor",
+          sway_auto: true,
+          tilt_scale: 0.0,
+          auto_wanderers: %{sway: wanderer},
+          yaw_angle: 1.2,
+          roll_angle: 0.8
+        })
+
+      {:noreply, updated} = pixel_fun_handle_cast({:apply_mode, "builtin:swaytest"}, state)
+
+      assert updated.sway_auto == false
+      assert_in_delta updated.tilt_scale, 0.0, 0.0001
+      assert_in_delta updated.yaw_angle, 0.0, 0.0001
+      assert_in_delta updated.roll_angle, 0.0, 0.0001
+      assert updated.source =~ "tanh"
+    end
+
+    test "loads wasserwaage sway from code builtin defs" do
+      state = base_state(%{tilt_scale: 0.0, tilt_speed: 0.5})
+
+      {:noreply, updated} =
+        pixel_fun_handle_cast({:apply_mode, "builtin:wasserwaage"}, state)
+
+      assert_in_delta updated.tilt_scale, 2.5, 0.0001
+      assert_in_delta updated.tilt_speed, 0.4, 0.0001
+      assert updated.tilt_mode == :wobble
+      assert updated.source == "tanh(y*1.8)"
+    end
   end
 
   describe "handle_config/2" do

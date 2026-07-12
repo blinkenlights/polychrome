@@ -99,6 +99,12 @@ defmodule Octopus.Apps.PixelFun.ProgramTest do
     assert :math.exp(1) == eval("exp(1)")
   end
 
+  test "eval/2 evaluates pow/2" do
+    assert 8.0 == eval("pow(2, 3)")
+    assert -1.0 == eval("pow(-1, 7)")
+    assert 0.0 == eval("pow(-2, 0.5)")
+  end
+
   test "eval/2 evaluates PI alias via env" do
     env = [%{}, %{~c"PI" => :math.pi()}]
     assert_in_delta 0.0, eval("sin(PI)", env), 0.001

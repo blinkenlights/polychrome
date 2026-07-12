@@ -166,14 +166,119 @@ defmodule Octopus.Apps.PixelFun3D do
     %{
       slug: "organic_swirl",
       name: "Organic swirl",
-      formula: "sin(x*y*0.06+sin(t*0.2)*x*0.2-t*0.4)*cos(hypot(x,y)*2+t*0.2)",
+      formula: "sin(x*y*0.06+sin(t*0.06)*x*0.2-t*0.12)*cos(hypot(x,y)*2+t*0.06)",
       accent_color: "#2ECC71"
     },
     %{
       slug: "swaytest",
       name: "Swaytest",
-      formula: "(tanh((y-0.3)*4)+tanh((y+0.3)*4))/2",
+      formula: "tanh(y*4)",
       accent_color: "#FF7043"
+    },
+    %{
+      slug: "kreiswelle",
+      name: "Kreiswelle",
+      formula: "sin(x*PI*6/156-t*0.4)*cos(y*0.7-t*0.26)",
+      accent_color: "#E74C3C"
+    },
+    %{
+      slug: "chaser",
+      name: "Chaser",
+      formula: "pow(sin(x*PI/156-t*0.4),7)",
+      accent_color: "#3498DB"
+    },
+    %{
+      slug: "doppelhelix",
+      name: "Doppelhelix",
+      formula: "sin(x*PI*3/156-t*0.4+y*0.4)*sin(x*PI*3/156+t*0.27-y*0.4)",
+      accent_color: "#9B59B6"
+    },
+    %{
+      slug: "nordlicht",
+      name: "Nordlicht",
+      formula: "sin(y*0.6+sin(x*PI*5/156+t*0.4)*3)*(0.6+0.4*sin(x*PI*2/156-t*0.3))",
+      accent_color: "#1ABC9C"
+    },
+    %{
+      slug: "wolkenzug",
+      name: "Wolkenzug",
+      formula:
+        "sin(x*PI*3/156+t*0.2)*0.5+sin(x*PI*7/156-t*0.13+y*0.4)*0.3+sin(x*PI*11/156+t*0.31+y*0.8)*0.25",
+      accent_color: "#F39C12"
+    },
+    %{
+      slug: "seegras",
+      name: "Seegras",
+      formula: "sin(x*PI*30/156+sin(t*0.4+y*0.6)*(3.5-y)*0.35)",
+      accent_color: "#E91E63"
+    },
+    %{
+      slug: "quallenpuls",
+      name: "Quallen-Puls",
+      formula:
+        "exp(-hypot(sin((x-78)*PI/312)*14,y)*0.25)*sin(hypot(sin((x-78)*PI/312)*14,y)*1.5-t*0.4)",
+      accent_color: "#2ECC71"
+    },
+    %{
+      slug: "weiche_blobs",
+      name: "Weiche Blobs",
+      formula: "sin(x*PI*6/156-t*0.4)*sin(y*0.75+sin(x*PI*2/156+t*0.23)*1.5)",
+      accent_color: "#FF7043"
+    },
+    %{
+      slug: "leuchtplankton",
+      name: "Leuchtplankton",
+      formula: "pow(sin(i*13.7+t*0.24)*sin(i*5.3-t*0.16),5)",
+      accent_color: "#E74C3C"
+    },
+    %{
+      slug: "wasserwaage",
+      name: "Wasserwaage",
+      formula: "tanh(y*1.8)",
+      accent_color: "#3498DB",
+      tilt_scale: 2.5,
+      tilt_speed: 0.4,
+      tilt_mode: :wobble
+    },
+    %{
+      slug: "sternenhimmel",
+      name: "Sternenhimmel",
+      formula: "pow(sin(i*13.7+t*0.24)*sin(i*5.3-t*0.16),5)",
+      accent_color: "#9B59B6",
+      orbit_rate: 2.0
+    },
+    %{
+      slug: "nebeldrift",
+      name: "Nebeldrift",
+      formula: "noise(nx*2,ny*2,nz*2+t*0.13)",
+      accent_color: "#1ABC9C",
+      color_mode: :rainbow,
+      trans_auto: true,
+      trans_auto_range_x: 4.0,
+      trans_auto_range_y: 1.5,
+      trans_auto_interval: 40
+    },
+    %{
+      slug: "facettenstrudel",
+      name: "Facetten-Strudel",
+      formula: "sin(nx*8+t*0.4)*sin(ny*8-t*0.27)",
+      accent_color: "#F39C12",
+      rot_auto: true,
+      rot_auto_range: 30,
+      rot_auto_interval: 30,
+      zoom_auto: true,
+      zoom_auto_range: 1.4,
+      zoom_auto_interval: 45
+    },
+    %{
+      slug: "marmor",
+      name: "Marmor",
+      formula: "sin(nx*6+noise(nx*2,ny*2,nz*2)*4+t*0.4)",
+      accent_color: "#E91E63",
+      color_mode: :white,
+      sway_auto: true,
+      sway_auto_range: 1.5,
+      sway_auto_interval: 35
     }
   ]
 
@@ -322,7 +427,7 @@ defmodule Octopus.Apps.PixelFun3D do
 
     Time direction — forward (default) or backward. Backward reverses formula animation and manual sphere motion. Auto wanderers and palette Auto ignore time direction (they keep advancing on wall-clock app time).
 
-    Scenes — pick a scene to play it on the wall. Add scenes to the queue to rotate through them at the chosen interval.
+    Scenes — pick a scene to play it on the wall. Add scenes to the queue to rotate through them at the chosen interval. Some builtins ship with active transforms or autos already on; i-based twinkles (Leuchtplankton / Sternenhimmel) are panel-synchronized by design.
     """
   end
 
@@ -401,8 +506,21 @@ defmodule Octopus.Apps.PixelFun3D do
         end
       else
         case ch do
-          :zoom -> "zoom ×#{format_num(Map.get(config, key, 1.0))}"
-          _ -> "#{label} #{format_num(Map.get(config, key, 0))}#{unit}"
+          :zoom ->
+            "zoom ×#{format_num(Map.get(config, key, 1.0))}"
+
+          :sway ->
+            scale = Map.get(config, key, 0)
+
+            if scale != 0 and scale != 0.0 do
+              mode = Map.get(config, :tilt_mode, :wobble)
+              "sway #{format_num(scale)}#{unit} #{mode}"
+            else
+              "sway #{format_num(scale)}#{unit}"
+            end
+
+          _ ->
+            "#{label} #{format_num(Map.get(config, key, 0))}#{unit}"
         end
       end
     end
@@ -1397,12 +1515,78 @@ defmodule Octopus.Apps.PixelFun3D do
   defp time_sign(_), do: 1
 
   defp apply_scene_by_id(%State{} = state, scene_id) do
-    mod = scene_presets()
+    case config_for_scene_id(scene_id) do
+      nil ->
+        state
 
-    case apply(mod, :get, [scene_id]) do
-      nil -> state
-      preset -> apply_scene_fields(state, apply(mod, :to_config, [preset]))
+      config ->
+        state
+        |> apply_scene_fields(config)
+        |> reset_orientation_from_scene(config)
     end
+  end
+
+  # Builtin playback prefers `@builtin_defs` over insert-only DB rows so recipe
+  # transforms (wasserwaage sway, etc.) stay in sync with code.
+  defp config_for_scene_id(scene_id) when is_binary(scene_id) do
+    slug =
+      cond do
+        String.starts_with?(scene_id, "builtin:") ->
+          String.replace_prefix(scene_id, "builtin:", "")
+
+        String.starts_with?(scene_id, "pixelfun3d:") ->
+          String.replace_prefix(scene_id, "pixelfun3d:", "")
+
+        true ->
+          nil
+      end
+
+    code =
+      if is_binary(slug) do
+        case legacy_mode_config(slug) do
+          %{} = c when map_size(c) > 0 -> migrate_legacy_config(c)
+          _ -> nil
+        end
+      end
+
+    cond do
+      code != nil and (String.starts_with?(scene_id, "builtin:") or builtin_slug?(slug)) ->
+        code
+
+      true ->
+        mod = scene_presets()
+
+        case apply(mod, :get, [scene_id]) do
+          nil -> nil
+          preset -> apply(mod, :to_config, [preset])
+        end
+    end
+  end
+
+  defp builtin_slug?(slug) when is_binary(slug) do
+    Enum.any?(@builtin_defs, &(&1.slug == slug))
+  end
+
+  defp builtin_slug?(_), do: false
+
+  # Scene load must win over auto-off handover and leftover integrated angles,
+  # otherwise a prior sway/orbit auto leaves a tilted "horizon" on neutral presets.
+  defp reset_orientation_from_scene(%State{} = state, config) do
+    %State{
+      state
+      | orbit_rate: Map.get(config, :orbit_rate, 0.0),
+        elev_base: Map.get(config, :elev_base, 0.0),
+        roll_rate: Map.get(config, :roll_rate, 0.0),
+        zoom_base: Map.get(config, :zoom_base, 1.0),
+        tilt_scale: Map.get(config, :tilt_scale, 0.0),
+        tilt_speed: Map.get(config, :tilt_speed, @tilt_defaults.tilt_speed),
+        tilt_mode:
+          config
+          |> Map.get(:tilt_mode, @tilt_defaults.tilt_mode)
+          |> Octopus.Sway.normalize_mode(),
+        yaw_angle: 0.0,
+        roll_angle: 0.0
+    }
   end
 
   defp broadcast_config(%State{} = state) do

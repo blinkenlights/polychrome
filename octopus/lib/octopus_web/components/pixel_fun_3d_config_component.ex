@@ -311,9 +311,8 @@ defmodule OctopusWeb.PixelFun3DConfigComponent do
       nil ->
         {:noreply, socket}
 
-      preset ->
-        config = ScenePresets.to_config(preset)
-        AppSupervisor.update_config(socket.assigns.app_id, config)
+      _preset ->
+        PixelFun3D.apply_mode(socket.assigns.app_id, id)
 
         {:noreply,
          socket

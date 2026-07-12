@@ -103,6 +103,17 @@ defmodule Octopus.Apps.PixelFun.Program do
   def do_eval({:call, [~c"hypot", a, b]}, env),
     do: :math.sqrt(do_eval(a, env) ** 2 + do_eval(b, env) ** 2)
 
+  def do_eval({:call, [~c"pow", a, b]}, env) do
+    base = do_eval(a, env)
+    exp = do_eval(b, env)
+
+    if base < 0 and exp != trunc(exp) do
+      0.0
+    else
+      :math.pow(base, exp)
+    end
+  end
+
   def do_eval({:call, [~c"sin", expr]}, env), do: expr |> do_eval(env) |> :math.sin()
   def do_eval({:call, [~c"cos", expr]}, env), do: expr |> do_eval(env) |> :math.cos()
   def do_eval({:call, [~c"tan", expr]}, env), do: expr |> do_eval(env) |> :math.tan()
