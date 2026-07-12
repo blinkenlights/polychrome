@@ -19,6 +19,9 @@ defmodule Octopus.Apps.Matrix do
     @tail_brightness_base 0.75
     @tail_decay 0.62
     @fade_duration 0.5
+    @residue_brightness 0.35
+    @residue_half_life 9.0
+    @residue_min 0.06
 
     defstruct [
       :canvas,
@@ -41,6 +44,7 @@ defmodule Octopus.Apps.Matrix do
       :seconds,
       :occupied_columns,
       :column_cooldowns,
+      :residue,
       :now
     ]
 
@@ -71,31 +75,42 @@ defmodule Octopus.Apps.Matrix do
     def update(%State{} = state, dt) do
       now = monotonic_now()
 
-      {particles, occupied, cooldowns} =
-        Enum.reduce(state.particles, {[], state.occupied_columns, state.column_cooldowns}, fn
-          particle, {acc, occupied, cooldowns} ->
-            was_above = particle.y < state.height
-            updated = advance_particle(particle, state, dt)
-            is_above = updated.y < state.height
+      {particles, occupied, cooldowns, residue} =
+        Enum.reduce(
+          state.particles,
+          {[], state.occupied_columns, state.column_cooldowns, state.residue || %{}},
+          fn
+            particle, {acc, occupied, cooldowns, residue} ->
+              was_above = particle.y < state.height
+              updated = advance_particle(particle, state, dt)
+              is_above = updated.y < state.height
 
-            {occupied, cooldowns} =
-              if state.direction == :classic and was_above and not is_above do
-                col = particle.column
+              residue =
+                if state.direction == :classic do
+                  deposit_residue(residue, particle, updated, state)
+                else
+                  residue
+                end
 
-                {
-                  MapSet.delete(occupied, col),
-                  Map.put(cooldowns, col, now + 0.2 + :rand.uniform() * 1.3)
-                }
+              {occupied, cooldowns} =
+                if state.direction == :classic and was_above and not is_above do
+                  col = particle.column
+
+                  {
+                    MapSet.delete(occupied, col),
+                    Map.put(cooldowns, col, now + 0.2 + :rand.uniform() * 1.3)
+                  }
+                else
+                  {occupied, cooldowns}
+                end
+
+              if alive?(updated, state) do
+                {[updated | acc], occupied, cooldowns, residue}
               else
-                {occupied, cooldowns}
+                {acc, occupied, cooldowns, residue}
               end
-
-            if alive?(updated, state) do
-              {[updated | acc], occupied, cooldowns}
-            else
-              {acc, occupied, cooldowns}
-            end
-        end)
+          end
+        )
 
       %State{
         state
@@ -103,6 +118,7 @@ defmodule Octopus.Apps.Matrix do
           particle_count: length(particles),
           occupied_columns: occupied,
           column_cooldowns: prune_cooldowns(cooldowns, now),
+          residue: decay_residue(residue, dt),
           now: now,
           seconds: (state.seconds || 0.0) + dt
       }
@@ -125,6 +141,7 @@ defmodule Octopus.Apps.Matrix do
     def render(%State{} = state) do
       canvas = Canvas.new(state.width, state.height)
       ctx = render_ctx(state)
+      canvas = draw_residue(canvas, state)
 
       canvas =
         state.particles
@@ -327,6 +344,36 @@ defmodule Octopus.Apps.Matrix do
       end
     end
 
+    # Re-rolls the resting glyph of every cell the head just crossed, so the
+    # static green field only changes where a drop actually falls through.
+    defp deposit_residue(residue, %Particle{} = old, %Particle{} = updated, state) do
+      col = trunc(updated.x)
+      from = max(trunc(old.y) + 1, 0)
+      to = min(trunc(updated.y), state.height - 1)
+
+      Enum.reduce(from..to//1, residue, fn row, acc ->
+        Map.put(acc, {col, row}, random_flicker())
+      end)
+    end
+
+    defp decay_residue(residue, dt) when dt <= 0, do: residue
+
+    defp decay_residue(residue, dt) do
+      factor = :math.pow(0.5, dt / @residue_half_life)
+
+      for {key, value} <- residue, value * factor > @residue_min, into: %{} do
+        {key, value * factor}
+      end
+    end
+
+    defp draw_residue(canvas, %State{direction: :classic, residue: residue}) when is_map(residue) do
+      Enum.reduce(residue, canvas, fn {{x, y}, value}, acc ->
+        Matrix.add_pixel(acc, {x, y}, Matrix.scale_color(@tail_base, value * @residue_brightness))
+      end)
+    end
+
+    defp draw_residue(canvas, _state), do: canvas
+
     defp pick_classic_column(state) do
       now = state.now || monotonic_now()
 
@@ -418,11 +465,13 @@ defmodule Octopus.Apps.Matrix do
 
     defp random_flicker, do: :rand.uniform() * 0.25 + 0.75
 
+    # Wide per-drop variance so white heads don't all fall at the same pace.
+    # Slow crawlers (~2.5–5), normal (~5–14), occasional fast streaks (~14–28).
     defp random_particle_speed do
-      if :rand.uniform() > 0.9 do
-        18.0
-      else
-        3.0 + :rand.uniform() * 12.0
+      case :rand.uniform() do
+        r when r < 0.2 -> 2.5 + :rand.uniform() * 2.5
+        r when r < 0.85 -> 5.0 + :rand.uniform() * 9.0
+        _ -> 14.0 + :rand.uniform() * 14.0
       end
     end
 
@@ -482,7 +531,7 @@ defmodule Octopus.Apps.Matrix do
     |> Map.update(:direction, :classic, &coerce_direction/1)
     |> Map.update(:tail_length, 4, &trunc/1)
     |> Map.update(:counterflow, 0.0, &coerce_float/1)
-    |> Map.update(:speed, 1.0, &coerce_float/1)
+    |> Map.update(:speed, 0.35, &coerce_float/1)
     |> Map.update(:density, 3, &trunc/1)
     |> Map.update(:max_particles, 200, &trunc/1)
     |> Map.update(:sway_scale, 0.0, &coerce_float/1)
@@ -510,7 +559,7 @@ defmodule Octopus.Apps.Matrix do
   def legacy_mode_config("matrix") do
     %{
       direction: :classic,
-      speed: 1.0,
+      speed: 0.35,
       density: 3,
       max_particles: 200,
       tail_length: 4,
@@ -524,7 +573,7 @@ defmodule Octopus.Apps.Matrix do
   def legacy_mode_config("matrix-ring") do
     %{
       direction: :ring,
-      speed: 1.8,
+      speed: 0.6,
       density: 4,
       max_particles: 200,
       tail_length: 8,
@@ -558,8 +607,8 @@ defmodule Octopus.Apps.Matrix do
         type: :slider,
         min: 0.1,
         max: 3.0,
-        step: 0.1,
-        default: 1.0
+        step: 0.05,
+        default: 0.35
       },
       %{
         key: :density,
@@ -722,7 +771,7 @@ defmodule Octopus.Apps.Matrix do
         pitch: pitch,
         panel_width: installation.panel_width,
         global_speed: global_speed,
-        speed: 1.0,
+        speed: 0.35,
         density: 3,
         max_particles: 200,
         direction: :classic,
@@ -734,6 +783,7 @@ defmodule Octopus.Apps.Matrix do
         seconds: 0.0,
         occupied_columns: MapSet.new(),
         column_cooldowns: %{},
+        residue: %{},
         now: 0.0
       }
       |> apply_config(normalize_mode_config(config))
@@ -830,7 +880,8 @@ defmodule Octopus.Apps.Matrix do
       | particles: [],
         particle_count: 0,
         occupied_columns: MapSet.new(),
-        column_cooldowns: %{}
+        column_cooldowns: %{},
+        residue: %{}
     }
   end
 
