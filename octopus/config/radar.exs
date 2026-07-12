@@ -95,7 +95,7 @@ setups = %{
       start_angle_deg: 0,
       distance_cm: 300,
       rotation_deg: 90,
-      height_cm: 250
+      height_cm: 500
     ],
     # Mock mode never opens these ports for real, so placeholder paths are fine.
     ports: [
@@ -135,7 +135,13 @@ setups = %{
       sensitivity: 4,
       moving_decisecs: 110,
       static_decisecs: 100,
-      exit_decisecs: 5
+      exit_decisecs: 5,
+      height_cm: 500,
+      range_cm: 500,
+      x_pos_cm: 500,
+      x_neg_cm: -500,
+      y_pos_cm: 500,
+      y_neg_cm: -500
     ],
     adapters: [
       [
