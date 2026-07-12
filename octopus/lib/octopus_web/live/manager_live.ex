@@ -142,6 +142,15 @@ defmodule OctopusWeb.ManagerLive do
     {:noreply, socket}
   end
 
+  def handle_info({:apps, {:transform_live, app_id, values}}, socket) do
+    send_update(OctopusWeb.InstallationConsoleComponent,
+      id: "installation-console",
+      transform_live: Map.put(values, :app_id, app_id)
+    )
+
+    {:noreply, socket}
+  end
+
   def handle_info({:apps, _}, socket) do
     send_update(OctopusWeb.InstallationConsoleComponent,
       id: "installation-console",

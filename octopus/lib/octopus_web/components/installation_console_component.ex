@@ -31,7 +31,8 @@ defmodule OctopusWeb.InstallationConsoleComponent do
        browse_apps: [],
        browse_app_count: 0,
        console_theme: "light",
-       library_sections: nil
+       library_sections: nil,
+       transform_live: nil
      )}
   end
 
@@ -40,14 +41,24 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
     socket =
       socket
-      |> assign(Map.drop(assigns, [:refresh_running, :transport, :refresh_library]))
+      |> assign(Map.drop(assigns, [:refresh_running, :transport, :refresh_library, :transform_live]))
       |> maybe_assign_transport(assigns)
+      |> maybe_assign_transform_live(assigns)
       |> assign_transport_view()
       |> maybe_refresh_library(assigns, initial_load?)
       |> maybe_assign_running(assigns, initial_load?)
 
     {:ok, socket}
   end
+
+  defp maybe_assign_transform_live(socket, %{transform_live: %{app_id: app_id} = live}) do
+    case socket.assigns.transport.now_playing do
+      %{app_id: ^app_id} -> assign(socket, transform_live: live)
+      _ -> socket
+    end
+  end
+
+  defp maybe_assign_transform_live(socket, _), do: socket
 
   def render(assigns) do
     ~H"""
@@ -942,8 +953,17 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   end
 
   defp now_playing_assigns(assigns) do
+    np = assigns.transport.now_playing
+
+    np =
+      if np && assigns[:transform_live] do
+        Map.put(np, :transform_live, assigns.transform_live)
+      else
+        np
+      end
+
     %{
-      now_playing: assigns.transport.now_playing,
+      now_playing: np,
       live: assigns.transport.live,
       rotating?: assigns.rotating?,
       playing: assigns.playing,

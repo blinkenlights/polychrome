@@ -274,15 +274,16 @@ defmodule Octopus.Apps.PixelFunTest do
         seconds: 5.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
-        zoom_base: 0.0,
+        zoom_base: 1.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
+      # Continuous clock: same wall seconds, opposite formula_seconds after running each way.
       forward =
-        struct(State, Map.put(base, :time_direction, :forward))
+        struct(State, Map.merge(base, %{time_direction: :forward, formula_seconds: 5.0}))
 
       backward =
-        struct(State, Map.put(base, :time_direction, :backward))
+        struct(State, Map.merge(base, %{time_direction: :backward, formula_seconds: -5.0}))
 
       forward_canvas = pixel_fun_build_canvas(forward)
       backward_canvas = pixel_fun_build_canvas(backward)
@@ -347,6 +348,16 @@ defmodule Octopus.Apps.PixelFunTest do
     tempo = Enum.find(tweaks, &(&1.key == :color_interval))
     assert tempo.label == "Tempo"
     assert tempo.visible_when == {:palette_auto, [true]}
+  end
+
+  test "mode_tweakables/1 exposes disabled_when on transform sliders" do
+    tweaks = pixel_fun_mode_tweakables("classic_ripple")
+
+    assert Enum.find(tweaks, &(&1.key == :orbit_rate)).disabled_when == {:trans_auto, [true]}
+    assert Enum.find(tweaks, &(&1.key == :elev_base)).disabled_when == {:trans_auto, [true]}
+    assert Enum.find(tweaks, &(&1.key == :roll_rate)).disabled_when == {:rot_auto, [true]}
+    assert Enum.find(tweaks, &(&1.key == :zoom_base)).disabled_when == {:zoom_auto, [true]}
+    assert Enum.find(tweaks, &(&1.key == :tilt_scale)).disabled_when == {:sway_auto, [true]}
   end
 
   test "mode_tweakables/1 exposes saturation with color_mode visibility" do

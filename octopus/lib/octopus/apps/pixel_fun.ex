@@ -227,7 +227,8 @@ defmodule Octopus.Apps.PixelFun do
       :display_info,
       :pixel_dirs,
       :time_frozen,
-      :show_advanced
+      :show_advanced,
+      :formula_seconds
     ]
   end
 
@@ -514,7 +515,8 @@ defmodule Octopus.Apps.PixelFun do
         step: 0.5,
         default: 0.0,
         unit: "px/s",
-        auto_key: :trans_auto
+        auto_key: :trans_auto,
+        disabled_when: {:trans_auto, [true]}
       },
       %{key: :trans_auto, label: "Auto", type: :toggle, default: false, companion_of: :orbit_rate},
       %{
@@ -558,7 +560,8 @@ defmodule Octopus.Apps.PixelFun do
         max: 4.0,
         step: 0.1,
         default: 0.0,
-        unit: "px"
+        unit: "px",
+        disabled_when: {:trans_auto, [true]}
       },
       %{
         key: :roll_rate,
@@ -569,7 +572,8 @@ defmodule Octopus.Apps.PixelFun do
         step: 1.0,
         default: 0.0,
         unit: "°/s",
-        auto_key: :rot_auto
+        auto_key: :rot_auto,
+        disabled_when: {:rot_auto, [true]}
       },
       %{key: :rot_auto, label: "Auto", type: :toggle, default: false, companion_of: :roll_rate},
       %{
@@ -603,7 +607,8 @@ defmodule Octopus.Apps.PixelFun do
         step: 0.05,
         default: 1.0,
         unit: "×",
-        auto_key: :zoom_auto
+        auto_key: :zoom_auto,
+        disabled_when: {:zoom_auto, [true]}
       },
       %{key: :zoom_auto, label: "Auto", type: :toggle, default: false, companion_of: :zoom_base},
       %{
@@ -637,7 +642,8 @@ defmodule Octopus.Apps.PixelFun do
         step: 0.1,
         default: 0.0,
         unit: "px",
-        auto_key: :sway_auto
+        auto_key: :sway_auto,
+        disabled_when: {:sway_auto, [true]}
       },
       %{key: :sway_auto, label: "Auto", type: :toggle, default: false, companion_of: :tilt_scale},
       %{
@@ -810,6 +816,7 @@ defmodule Octopus.Apps.PixelFun do
       live_scene_id: scene_presets().id_for_config(config),
       audio_input: %{low: 0.0, mid: 0.0, high: 0.0},
       seconds: seconds,
+      formula_seconds: seconds,
       buttons: %{},
       panel_interaction_factors: panel_interaction_factors,
       panel_proximities: Map.new(0..(Installation.num_panels() - 1), fn i -> {i, 0.0} end),
@@ -1318,17 +1325,17 @@ defmodule Octopus.Apps.PixelFun do
   defp coerce_time_direction("backward"), do: :backward
   defp coerce_time_direction(_), do: :forward
 
-  defp coerce_time_frozen(value) when value in [true, false], do: value
-  defp coerce_time_frozen("true"), do: true
-  defp coerce_time_frozen("false"), do: false
-  defp coerce_time_frozen(1), do: true
-  defp coerce_time_frozen(0), do: false
-  defp coerce_time_frozen(_), do: false
+  defp coerce_time_frozen(value), do: coerce_boolean(value)
+
+  defp coerce_boolean(value) when value in [true, false], do: value
+  defp coerce_boolean("true"), do: true
+  defp coerce_boolean("false"), do: false
+  defp coerce_boolean(1), do: true
+  defp coerce_boolean(0), do: false
+  defp coerce_boolean(_), do: false
 
   defp time_sign(:backward), do: -1
   defp time_sign(_), do: 1
-
-  defp effective_seconds(%State{} = state), do: state.seconds * time_sign(state.time_direction)
 
   defp apply_scene_by_id(%State{} = state, scene_id) do
     mod = scene_presets()
@@ -1387,9 +1394,39 @@ defmodule Octopus.Apps.PixelFun do
         state
         |> advance_palette_phase()
         |> advance_tick_state()
+        |> maybe_broadcast_transform_live()
       end
 
     {:noreply, push_frame(state)}
+  end
+
+  defp maybe_broadcast_transform_live(%State{} = state) do
+    # 4 Hz at 60 fps
+    if any_auto?(state) and rem(trunc(state.seconds * @fps), 15) == 0 do
+      case AppSupervisor.lookup_app_id(self()) do
+        nil ->
+          :ok
+
+        app_id ->
+          eff = effective_transform_values(state)
+
+          Phoenix.PubSub.broadcast(
+            Octopus.PubSub,
+            "apps",
+            {:apps,
+             {:transform_live, app_id,
+              %{
+                orbit_rate: eff.orbit_rate,
+                elev_base: eff.elev_base,
+                roll_rate: eff.roll_rate,
+                zoom_factor: eff.zoom_base,
+                tilt_scale: eff.tilt_scale
+              }}}
+          )
+      end
+    end
+
+    state
   end
 
   defp advance_tick_state(%State{} = state) do
@@ -1402,10 +1439,12 @@ defmodule Octopus.Apps.PixelFun do
 
     dt_signed = (1 / @fps) * param(:time_scale, 1.0) * state.speed * time_sign(state.time_direction)
     seconds = state.seconds + (1 / @fps) * param(:time_scale, 1.0) * state.speed
+    formula_seconds = (state.formula_seconds || state.seconds) + dt_signed
 
     state = %State{
       state
       | seconds: seconds,
+        formula_seconds: formula_seconds,
         panel_interaction_factors: panel_interaction_factors
     }
 
@@ -1558,8 +1597,8 @@ defmodule Octopus.Apps.PixelFun do
   defp render(%State{} = state), do: render_canvas(state)
 
   defp render_canvas(%State{display_info: display_info} = state) do
-    # Deterministic motion (tilt) uses signed time; auto wanderers use state.seconds.
-    seconds = effective_seconds(state)
+    # Deterministic motion (tilt) uses signed formula clock; auto wanderers use state.seconds.
+    seconds = state.formula_seconds || state.seconds
     transform_params = build_transform_params(state, seconds)
 
     canvas_mode = if state.color_mode == :white, do: :grayscale, else: :rgb
@@ -1580,9 +1619,8 @@ defmodule Octopus.Apps.PixelFun do
       hue_shift = proximity * 180 * 5
       interaction_factor = Map.get(state.panel_interaction_factors, index, 0.0)
 
-      # pattern_speed scales formula time before time_sign; interaction kick unscaled.
-      pixel_time =
-        (state.seconds * pattern_speed + interaction_factor * 5) * time_sign(state.time_direction)
+      # pattern_speed scales formula time; interaction kick unscaled.
+      pixel_time = seconds * pattern_speed + interaction_factor * 5
 
       audio = state.audio_input
 
@@ -1880,25 +1918,50 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   defp sync_auto_wanderers(%State{} = state, old_flags) do
-    wanderers =
-      Enum.reduce(@auto_channels, state.auto_wanderers || %{}, fn ch, acc ->
+    {wanderers, %State{} = state} =
+      Enum.reduce(@auto_channels, {state.auto_wanderers || %{}, state}, fn ch, {acc, st} ->
         was = Map.get(old_flags, ch, false)
-        now? = Map.get(state, :"#{ch}_auto") || false
+        now? = Map.get(st, :"#{ch}_auto") || false
 
         cond do
           now? and not was ->
-            Map.put(acc, ch, new_channel_wanderer(state, ch))
+            {Map.put(acc, ch, new_channel_wanderer(st, ch)), st}
 
           not now? and was ->
-            Map.delete(acc, ch)
+            st = handover_wanderer_value(st, ch, Map.get(acc, ch))
+            {Map.delete(acc, ch), st}
 
           true ->
-            acc
+            {acc, st}
         end
       end)
 
-    %State{state | auto_wanderers: wanderers}
+    state = %State{state | auto_wanderers: wanderers}
+
+    turned_off? =
+      Enum.any?(@auto_channels, fn ch ->
+        Map.get(old_flags, ch, false) and not (Map.get(state, :"#{ch}_auto") || false)
+      end)
+
+    if turned_off?, do: broadcast_config(state)
+    state
   end
+
+  defp handover_wanderer_value(%State{} = state, _ch, nil), do: state
+
+  defp handover_wanderer_value(%State{} = state, :trans, %Wander{value: {ox, ey}}) do
+    %State{state | orbit_rate: ox, elev_base: ey}
+  end
+
+  defp handover_wanderer_value(%State{} = state, :zoom, %Wander{value: {sigma}}) do
+    %State{state | zoom_base: :math.exp(sigma)}
+  end
+
+  defp handover_wanderer_value(%State{} = state, ch, %Wander{value: {v}}) do
+    Map.put(state, @channel_base_key[ch], v)
+  end
+
+  defp handover_wanderer_value(%State{} = state, _ch, _), do: state
 
   defp any_auto?(%State{} = state) do
     Enum.any?(@auto_channels, &(Map.get(state, :"#{&1}_auto") || false))

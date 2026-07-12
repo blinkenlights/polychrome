@@ -533,6 +533,7 @@ defmodule OctopusWeb.ConsoleComponents do
 
   attr :now_playing, :map, default: nil
   attr :live, :map, default: nil
+  attr :transform_live, :map, default: nil
   attr :rotating?, :boolean, default: false
   attr :playing, :boolean, default: true
   attr :countdown_percent, :integer, default: 0
@@ -664,9 +665,13 @@ defmodule OctopusWeb.ConsoleComponents do
                         min={spec.min}
                         max={spec.max}
                         step={spec.step}
-                        value={Map.get(@now_playing.effective, spec.key)}
+                        value={now_playing_slider_value(@now_playing, spec)}
+                        disabled={now_playing_disabled?(@now_playing, spec)}
                         phx-debounce="50"
-                        class="range range-primary range-sm min-w-0 flex-1"
+                        class={[
+                          "range range-primary range-sm min-w-0 flex-1",
+                          now_playing_disabled?(@now_playing, spec) && "opacity-40"
+                        ]}
                       />
                       <input
                         type="number"
@@ -674,11 +679,13 @@ defmodule OctopusWeb.ConsoleComponents do
                         min={spec.min}
                         max={spec.max}
                         step={spec.step}
-                        value={format_tweak_number_raw(Map.get(@now_playing.effective, spec.key))}
+                        value={now_playing_slider_display(@now_playing, spec)}
+                        disabled={now_playing_disabled?(@now_playing, spec)}
                         phx-debounce="150"
                         class={[
                           "input input-bordered input-sm w-16 shrink-0 console-mono text-xs tabular-nums px-1 text-center",
-                          now_playing_value_dirty?(@now_playing, spec.key) && "border-[#fcb700]"
+                          now_playing_value_dirty?(@now_playing, spec.key) && "border-[#fcb700]",
+                          now_playing_disabled?(@now_playing, spec) && "opacity-40"
                         ]}
                       />
                       <span :if={spec[:unit]} class="text-[11px] opacity-60 shrink-0 w-8">{spec[:unit]}</span>
@@ -1130,6 +1137,43 @@ defmodule OctopusWeb.ConsoleComponents do
   end
 
   defp now_playing_tweakable_visible?(_, _), do: true
+
+  defp now_playing_disabled?(%{effective: effective}, %{disabled_when: {dep_key, allowed}}) do
+    Map.get(effective, dep_key) in allowed
+  end
+
+  defp now_playing_disabled?(_, _), do: false
+
+  defp now_playing_slider_value(now_playing, spec) do
+    live = Map.get(now_playing, :transform_live) || %{}
+
+    cond do
+      now_playing_disabled?(now_playing, spec) and spec.key == :zoom_base and
+          is_number(Map.get(live, :zoom_factor)) ->
+        Map.get(live, :zoom_factor)
+
+      now_playing_disabled?(now_playing, spec) and is_number(Map.get(live, spec.key)) ->
+        Map.get(live, spec.key)
+
+      true ->
+        Map.get(now_playing.effective, spec.key)
+    end
+  end
+
+  defp now_playing_slider_display(now_playing, spec) do
+    value = now_playing_slider_value(now_playing, spec)
+
+    cond do
+      spec.key == :zoom_base and is_number(value) ->
+        "×" <> format_tweak_number_raw(Float.round(value * 1.0, 1))
+
+      now_playing_disabled?(now_playing, spec) and is_number(value) ->
+        format_tweak_number_raw(Float.round(value * 1.0, 1))
+
+      true ->
+        format_tweak_number_raw(value)
+    end
+  end
 
   defp format_tweak_number_raw(value) when is_integer(value), do: Integer.to_string(value)
 

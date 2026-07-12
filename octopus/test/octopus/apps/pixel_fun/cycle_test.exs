@@ -72,7 +72,8 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
           pixel_dirs: nil,
           time_frozen: false,
           show_advanced: false,
-          time_direction: :forward
+          time_direction: :forward,
+          formula_seconds: 0.0
         },
         overrides
       )
@@ -292,6 +293,53 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
       {:noreply, still} = pixel_fun_handle_info(:tick, frozen)
       assert still.auto_wanderers[:trans] == w1
       assert still.seconds == running.seconds
+    end
+    test "toggle-off hands live wanderer values to sliders" do
+      state =
+        base_state(%{
+          orbit_rate: 0.0,
+          elev_base: 0.0,
+          trans_auto: true,
+          seconds: 5.0,
+          auto_wanderers: %{
+            trans: %Octopus.Wander{
+              value: {2.5, -1.0},
+              seg_from: {0.0, 0.0},
+              target: {2.5, -1.0},
+              seg_start: 0.0,
+              seg_dur: 1.0,
+              easing: :smoothstep
+            }
+          }
+        })
+
+      {:noreply, off} =
+        pixel_fun_handle_config(%{trans_auto: false, pixel_fun_units: 2}, state)
+
+      assert off.trans_auto == false
+      assert_in_delta off.orbit_rate, 2.5, 1.0e-12
+      assert_in_delta off.elev_base, -1.0, 1.0e-12
+      refute Map.has_key?(off.auto_wanderers, :trans)
+    end
+
+    test "formula_seconds reverses continuously without jump" do
+      state = base_state(%{time_direction: :forward, seconds: 10.0, formula_seconds: 10.0, speed: 1.0})
+
+      state =
+        Enum.reduce(1..100, state, fn _, s ->
+          {:noreply, next} = pixel_fun_handle_info(:tick, s)
+          next
+        end)
+
+      before = state.formula_seconds
+      dt = 1 / 60
+
+      {:noreply, flipped} =
+        pixel_fun_handle_config(%{time_direction: :backward, pixel_fun_units: 2}, state)
+
+      {:noreply, after_tick} = pixel_fun_handle_info(:tick, flipped)
+
+      assert_in_delta after_tick.formula_seconds - before, -dt, 1.0e-6
     end
   end
 
