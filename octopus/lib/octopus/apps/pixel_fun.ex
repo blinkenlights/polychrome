@@ -771,9 +771,9 @@ defmodule Octopus.Apps.PixelFun do
     saturation_percent = Map.get(config, :saturation_percent, 70)
     palette_phase = coerce_palette_phase(Map.get(config, :palette_phase, 0.0))
     palette = palette_from_phase(palette_phase, color_mode, saturation_percent)
-    time_frozen = Map.get(config, :time_frozen, false) |> coerce_time_frozen()
+    time_frozen = Map.get(config, :time_frozen, false) |> coerce_boolean()
 
-    palette_auto = Map.get(config, :palette_auto, true) |> coerce_time_frozen()
+    palette_auto = Map.get(config, :palette_auto, true) |> coerce_boolean()
 
     {seconds, micros} = NaiveDateTime.utc_now() |> NaiveDateTime.to_gregorian_seconds()
     seconds = seconds + micros / 1_000_000
@@ -824,7 +824,7 @@ defmodule Octopus.Apps.PixelFun do
       display_info: display_info,
       pixel_dirs: pixel_dirs,
       time_frozen: time_frozen,
-      show_advanced: Map.get(config, :show_advanced, false) |> coerce_time_frozen(),
+      show_advanced: Map.get(config, :show_advanced, false) |> coerce_boolean(),
       yaw_angle: 0.0,
       roll_angle: 0.0
     }
@@ -890,7 +890,7 @@ defmodule Octopus.Apps.PixelFun do
     saturation_percent = Map.get(config, :saturation_percent, state.saturation_percent || 70)
     palette_phase = coerce_palette_phase(Map.get(config, :palette_phase, state.palette_phase || 0.0))
     palette_auto =
-      Map.get(config, :palette_auto, state.palette_auto != false) |> coerce_time_frozen()
+      Map.get(config, :palette_auto, state.palette_auto != false) |> coerce_boolean()
 
     old_autos = auto_flags(state)
 
@@ -921,7 +921,7 @@ defmodule Octopus.Apps.PixelFun do
         color_interval: color_interval,
         palette_auto: palette_auto,
         show_advanced:
-          Map.get(config, :show_advanced, state.show_advanced || false) |> coerce_time_frozen()
+          Map.get(config, :show_advanced, state.show_advanced || false) |> coerce_boolean()
     }
 
     state = state |> put_auto_fields(config) |> sync_auto_wanderers(old_autos)
@@ -937,7 +937,7 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   defp apply_time_frozen(%State{} = state, config) do
-    new_frozen = Map.get(config, :time_frozen, state.time_frozen || false) |> coerce_time_frozen()
+    new_frozen = Map.get(config, :time_frozen, state.time_frozen || false) |> coerce_boolean()
     %State{state | time_frozen: new_frozen}
   end
 
@@ -949,8 +949,8 @@ defmodule Octopus.Apps.PixelFun do
       {:saturation_percent, value} -> {:saturation_percent, coerce_saturation_percent(value)}
       {:palette_phase, value} -> {:palette_phase, coerce_palette_phase(value)}
       {:time_direction, value} -> {:time_direction, coerce_time_direction(value)}
-      {:time_frozen, value} -> {:time_frozen, coerce_time_frozen(value)}
-      {:palette_auto, value} -> {:palette_auto, coerce_time_frozen(value)}
+      {:time_frozen, value} -> {:time_frozen, coerce_boolean(value)}
+      {:palette_auto, value} -> {:palette_auto, coerce_boolean(value)}
       {:tilt_mode, value} -> {:tilt_mode, Octopus.Sway.normalize_mode(value)}
       {key, value} -> {key, value}
     end)
@@ -1324,8 +1324,6 @@ defmodule Octopus.Apps.PixelFun do
   defp coerce_time_direction("forward"), do: :forward
   defp coerce_time_direction("backward"), do: :backward
   defp coerce_time_direction(_), do: :forward
-
-  defp coerce_time_frozen(value), do: coerce_boolean(value)
 
   defp coerce_boolean(value) when value in [true, false], do: value
   defp coerce_boolean("true"), do: true
@@ -1861,7 +1859,7 @@ defmodule Octopus.Apps.PixelFun do
         acc
         |> Map.put(
           auto_key,
-          coerce_time_frozen(Map.get(config, auto_key, Map.get(acc, auto_key) || false))
+          coerce_boolean(Map.get(config, auto_key, Map.get(acc, auto_key) || false))
         )
         |> Map.put(
           interval_key,
