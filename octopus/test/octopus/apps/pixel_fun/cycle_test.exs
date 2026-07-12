@@ -42,25 +42,27 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
           pattern_speed: 1.0,
           tx_auto: false,
           tx_auto_range: 1.0,
-          tx_auto_tempo: 0.5,
+          tx_auto_tempo: 0.25,
           ty_auto: false,
           ty_auto_range: 2.0,
-          ty_auto_tempo: 0.5,
+          ty_auto_tempo: 0.25,
           rot_auto: false,
           rot_auto_range: 1.0,
-          rot_auto_tempo: 0.5,
+          rot_auto_tempo: 0.25,
           zoom_auto: false,
           zoom_auto_range: 0.8,
-          zoom_auto_tempo: 0.5,
+          zoom_auto_tempo: 0.25,
           sway_auto: false,
           sway_auto_range: 2.0,
-          sway_auto_tempo: 0.5,
+          sway_auto_tempo: 0.25,
           auto_wanderers: %{},
           yaw_angle: 0.0,
           roll_angle: 0.0,
           color_mode: :random,
           saturation_percent: 70,
+          palette_phase: 0.0,
           color_interval: 5.0,
+          palette_auto: true,
           live_scene_id: nil,
           audio_input: %{low: 0.0, mid: 0.0, high: 0.0},
           seconds: 0.0,
@@ -149,14 +151,17 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
       assert updated.roll_rate == 2.0
     end
 
-    test "reschedules color timer and resets lerp_time when color_interval changes" do
-      state = base_state(%{live_scene_id: @classic, color_interval: 5.0, lerp_time: 2.0, color_timer_ref: nil})
+    test "applies color_interval and palette_phase via handle_config" do
+      state = base_state(%{live_scene_id: @classic, color_interval: 5.0, palette_phase: 0.0})
 
-      {:noreply, updated} = pixel_fun_handle_config(%{color_interval: 10.0}, state)
+      {:noreply, updated} =
+        pixel_fun_handle_config(%{color_interval: 10.0, palette_phase: 0.25}, state)
 
       assert updated.color_interval == 10.0
-      assert updated.lerp_time == 10.0
-      assert is_reference(Map.get(updated, :color_timer_ref))
+      assert_in_delta updated.palette_phase, 0.25, 1.0e-6
+      {a, b} = updated.colors
+      assert a.h == 90
+      assert b.h == 270
     end
 
     test "applies saturation_percent via handle_config" do
@@ -175,32 +180,33 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
   end
 
   describe "time freeze" do
-    test "freezing cancels color timer" do
-      ref = Process.send_after(self(), :noop, 60_000)
-      state = base_state(%{time_frozen: false, color_timer_ref: ref})
+    test "freezing stops palette phase advance" do
+      state =
+        base_state(%{
+          time_frozen: false,
+          color_mode: :random,
+          palette_auto: true,
+          palette_phase: 0.1,
+          color_interval: 5.0,
+          speed: 1.0
+        })
 
-      {:noreply, updated} = pixel_fun_handle_config(%{time_frozen: true}, state)
+      {:noreply, running} = pixel_fun_handle_info(:tick, state)
+      assert running.palette_phase > 0.1
 
-      assert updated.time_frozen == true
-      assert updated.color_timer_ref == nil
-    end
-
-    test "unfreezing restarts color timer" do
-      state = base_state(%{time_frozen: true, color_timer_ref: nil, color_mode: :random})
-
-      {:noreply, updated} = pixel_fun_handle_config(%{time_frozen: false}, state)
-
-      assert updated.time_frozen == false
-      assert is_reference(updated.color_timer_ref)
+      {:noreply, frozen} = pixel_fun_handle_config(%{time_frozen: true}, running)
+      phase = frozen.palette_phase
+      {:noreply, still} = pixel_fun_handle_info(:tick, frozen)
+      assert_in_delta still.palette_phase, phase, 1.0e-12
     end
 
     test "tick does not advance time when frozen" do
-      state = base_state(%{time_frozen: true, seconds: 42.0, lerp_time: 3.0})
+      state = base_state(%{time_frozen: true, seconds: 42.0, palette_phase: 0.3})
 
       {:noreply, updated} = pixel_fun_handle_info(:tick, state)
 
       assert updated.seconds == 42.0
-      assert updated.lerp_time == 3.0
+      assert_in_delta updated.palette_phase, 0.3, 1.0e-12
     end
 
     test "tick advances time when not frozen" do
@@ -209,6 +215,37 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
       {:noreply, updated} = pixel_fun_handle_info(:tick, state)
 
       assert updated.seconds > 10.0
+    end
+
+    test "palette auto advances phase and updates complementary hues" do
+      state =
+        base_state(%{
+          color_mode: :random,
+          palette_auto: true,
+          palette_phase: 0.0,
+          color_interval: 1.0,
+          saturation_percent: 70,
+          speed: 1.0
+        })
+
+      {:noreply, updated} = pixel_fun_handle_info(:tick, state)
+      assert updated.palette_phase > 0.0
+      {a, b} = updated.colors
+      assert rem(a.h + 180, 360) == b.h
+    end
+
+    test "palette auto off keeps phase fixed" do
+      state =
+        base_state(%{
+          color_mode: :random,
+          palette_auto: false,
+          palette_phase: 0.4,
+          color_interval: 1.0,
+          speed: 1.0
+        })
+
+      {:noreply, updated} = pixel_fun_handle_info(:tick, state)
+      assert_in_delta updated.palette_phase, 0.4, 1.0e-12
     end
 
     test "auto toggle on seeds wanderer at manual base; off clears wanderer" do
@@ -247,14 +284,6 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
       {:noreply, still} = pixel_fun_handle_info(:tick, frozen)
       assert still.auto_wanderers[:tx] == w1
       assert still.seconds == running.seconds
-    end
-
-    test "update_colors is ignored while frozen" do
-      state = base_state(%{time_frozen: true, color_mode: :random, colors: {color(), color()}})
-
-      {:noreply, updated} = pixel_fun_handle_info(:update_colors, state)
-
-      assert updated.colors == state.colors
     end
   end
 

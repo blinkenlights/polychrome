@@ -62,3 +62,55 @@
     color: black !important;
     opacity: 0.6;
 }
+
+/*
+ * @tailwindcss/forms applies a focus ring via box-shadow on checkboxes.
+ * That clobbers daisyUI's inset handle shadow, so focused toggles look
+ * like a solid gray pill with a blue outline. Keep on/off only.
+ */
+.toggle[type="checkbox"]:focus,
+.toggle[type="checkbox"]:focus-visible {
+    outline: none;
+    --tw-ring-offset-shadow: 0 0 #0000;
+    --tw-ring-shadow: 0 0 #0000;
+    box-shadow:
+        var(--handleoffsetcalculator) 0 0 2px var(--tglbg) inset,
+        0 0 0 2px var(--tglbg) inset,
+        var(--togglehandleborder);
+}
+
+/* Compact nested Range/Tempo: thinner track + smaller thumb, no clipping.
+ * daisyUI .range uses overflow:hidden, so input height must be >= thumb. */
+.range.range-nested {
+    height: 0.65rem;
+    overflow: hidden;
+}
+
+.range.range-nested::-webkit-slider-runnable-track {
+    height: 0.125rem;
+}
+
+.range.range-nested::-moz-range-track {
+    height: 0.125rem;
+}
+
+.range.range-nested::-webkit-slider-thumb {
+    height: 0.55rem;
+    width: 0.55rem;
+    --filler-offset: 0.22rem;
+    box-shadow:
+        0 0 0 2px var(--range-shdw) inset,
+        var(--focus-shadow, 0 0),
+        calc(var(--filler-size) * -1 - var(--filler-offset)) 0 0 var(--filler-size);
+}
+
+.range.range-nested::-moz-range-thumb {
+    height: 0.55rem;
+    width: 0.55rem;
+    --filler-offset: 0.2rem;
+    box-shadow:
+        0 0 0 2px var(--range-shdw) inset,
+        var(--focus-shadow, 0 0),
+        calc(var(--filler-size) * -1 - var(--filler-offset)) 0 0 var(--filler-size);
+}
+

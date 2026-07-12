@@ -318,13 +318,35 @@ defmodule Octopus.Apps.PixelFunTest do
     end)
   end
 
-  test "generate_random_white_levels/0 respects min gap and min level", _context do
-    for _ <- 1..100 do
-      {a, b} = pixel_fun_generate_random_white_levels()
-      assert abs(a.v - b.v) >= 30
-      assert a.v >= 32
-      assert b.v >= 32
+  test "palette_from_phase/3 complementary hues and white gap", _context do
+    {a, b} = pixel_fun_palette_from_phase(0.0, :random, 70)
+    assert a.h == 0
+    assert b.h == 180
+    assert a.s == 70
+
+    {a, b} = pixel_fun_palette_from_phase(0.5, :random, 100)
+    assert a.h == 180
+    assert b.h == 0
+
+    for t <- 0..20 do
+      {wa, wb} = pixel_fun_palette_from_phase(t / 20, :white)
+      assert abs(wa.v - wb.v) >= 30
+      assert wa.v >= 32
+      assert wb.v >= 32
     end
+  end
+
+  test "mode_tweakables/1 exposes palette phase with auto tempo nest" do
+    tweaks = pixel_fun_mode_tweakables("classic_ripple")
+
+    phase = Enum.find(tweaks, &(&1.key == :palette_phase))
+    assert phase.label == "Palette"
+    assert phase.auto_key == :palette_auto
+    assert phase.visible_when == {:color_mode, [:random, :white]}
+
+    tempo = Enum.find(tweaks, &(&1.key == :color_interval))
+    assert tempo.label == "Tempo"
+    assert tempo.visible_when == {:palette_auto, [true]}
   end
 
   test "mode_tweakables/1 exposes saturation with color_mode visibility" do
@@ -396,8 +418,8 @@ defmodule Octopus.Apps.PixelFunTest do
   defp pixel_fun_build_canvas(state), do: apply(@pixel_fun, :build_canvas, [state])
   defp pixel_fun_mode_tweakables(mode_id), do: apply(@pixel_fun, :mode_tweakables, [mode_id])
 
-  defp pixel_fun_generate_random_white_levels,
-    do: apply(@pixel_fun, :generate_random_white_levels, [])
+  defp pixel_fun_palette_from_phase(phase, mode, sat \\ 70),
+    do: apply(@pixel_fun, :palette_from_phase, [phase, mode, sat])
 
   test "nx ny nz are available and unit length in formulas", _context do
     with_installation(Octopus.Installation.Nation2026, fn ->

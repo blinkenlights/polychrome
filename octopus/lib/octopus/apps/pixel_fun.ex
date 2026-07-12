@@ -21,19 +21,19 @@ defmodule Octopus.Apps.PixelFun do
   @auto_defaults %{
     tx_auto: false,
     tx_auto_range: 1.0,
-    tx_auto_tempo: 0.5,
+    tx_auto_tempo: 0.25,
     ty_auto: false,
     ty_auto_range: 2.0,
-    ty_auto_tempo: 0.5,
+    ty_auto_tempo: 0.25,
     rot_auto: false,
     rot_auto_range: 1.0,
-    rot_auto_tempo: 0.5,
+    rot_auto_tempo: 0.25,
     zoom_auto: false,
     zoom_auto_range: 0.8,
-    zoom_auto_tempo: 0.5,
+    zoom_auto_tempo: 0.25,
     sway_auto: false,
     sway_auto_range: 2.0,
-    sway_auto_tempo: 0.5
+    sway_auto_tempo: 0.25
   }
 
   @channel_bounds %{
@@ -55,7 +55,9 @@ defmodule Octopus.Apps.PixelFun do
   @default_scene %{
     color_mode: :random,
     saturation_percent: 70,
+    palette_phase: 0.0,
     color_interval: 5.0,
+    palette_auto: true,
     orbit_rate: 0.0,
     roll_rate: 0.0,
     roll_pivot: 0,
@@ -78,7 +80,9 @@ defmodule Octopus.Apps.PixelFun do
   @builtin_scene_keys ([
                         :color_mode,
                         :saturation_percent,
+                        :palette_phase,
                         :color_interval,
+                        :palette_auto,
                         :orbit_rate,
                         :roll_rate,
                         :roll_pivot,
@@ -203,7 +207,9 @@ defmodule Octopus.Apps.PixelFun do
       :time_direction,
       :color_mode,
       :saturation_percent,
+      :palette_phase,
       :color_interval,
+      :palette_auto,
       # Id of the scene currently rendered on the wall.
       :live_scene_id,
       :audio_input,
@@ -214,7 +220,6 @@ defmodule Octopus.Apps.PixelFun do
       :speed,
       :display_info,
       :pixel_dirs,
-      :color_timer_ref,
       :time_frozen,
       :show_advanced
     ]
@@ -231,8 +236,9 @@ defmodule Octopus.Apps.PixelFun do
       program: {"Formula", :string, %{default: "sin(0.4*t-hypot(x,y))"}},
       color_mode: {"Colors", :atom, %{default: :random}},
       saturation_percent: {"Saturation", :int, %{default: 70, min: 0, max: 100}},
-      color_interval:
-        {"Palette crossfade (s)", :float, %{default: 5, min: 1, max: 20, step: 0.5}},
+      palette_phase: {"Palette", :float, %{default: 0.0, min: 0.0, max: 1.0, step: 0.01}},
+      color_interval: {"Palette tempo (s)", :float, %{default: 5, min: 1, max: 20, step: 0.5}},
+      palette_auto: {"Palette Auto", :boolean, %{default: true}},
       orbit_rate: {"Translate X", :float, %{default: 0.0, min: -4, max: 4, step: 0.01}},
       elev_base: {"Translate Y", :float, %{default: 0.0, min: -4, max: 4, step: 0.1}},
       roll_rate: {"Rotation", :float, %{default: 0.0, min: -4, max: 4, step: 0.01}},
@@ -240,19 +246,19 @@ defmodule Octopus.Apps.PixelFun do
       tilt_scale: {"Sway", :float, %{default: 0.0, min: 0, max: 4, step: 0.1}},
       tx_auto: {"Translate X Auto", :boolean, %{default: false}},
       tx_auto_range: {"Translate X Range", :float, %{default: 1.0, min: 0, max: 4, step: 0.05}},
-      tx_auto_tempo: {"Translate X Tempo", :float, %{default: 0.5, min: 0, max: 3, step: 0.05}},
+      tx_auto_tempo: {"Translate X Tempo", :float, %{default: 0.25, min: 0, max: 3, step: 0.05}},
       ty_auto: {"Translate Y Auto", :boolean, %{default: false}},
       ty_auto_range: {"Translate Y Range", :float, %{default: 2.0, min: 0, max: 4, step: 0.05}},
-      ty_auto_tempo: {"Translate Y Tempo", :float, %{default: 0.5, min: 0, max: 3, step: 0.05}},
+      ty_auto_tempo: {"Translate Y Tempo", :float, %{default: 0.25, min: 0, max: 3, step: 0.05}},
       rot_auto: {"Rotation Auto", :boolean, %{default: false}},
       rot_auto_range: {"Rotation Range", :float, %{default: 1.0, min: 0, max: 4, step: 0.05}},
-      rot_auto_tempo: {"Rotation Tempo", :float, %{default: 0.5, min: 0, max: 3, step: 0.05}},
+      rot_auto_tempo: {"Rotation Tempo", :float, %{default: 0.25, min: 0, max: 3, step: 0.05}},
       zoom_auto: {"Zoom Auto", :boolean, %{default: false}},
       zoom_auto_range: {"Zoom Range", :float, %{default: 0.8, min: 0, max: 2, step: 0.05}},
-      zoom_auto_tempo: {"Zoom Tempo", :float, %{default: 0.5, min: 0, max: 3, step: 0.05}},
+      zoom_auto_tempo: {"Zoom Tempo", :float, %{default: 0.25, min: 0, max: 3, step: 0.05}},
       sway_auto: {"Sway Auto", :boolean, %{default: false}},
       sway_auto_range: {"Sway Range", :float, %{default: 2.0, min: 0, max: 4, step: 0.05}},
-      sway_auto_tempo: {"Sway Tempo", :float, %{default: 0.5, min: 0, max: 3, step: 0.05}},
+      sway_auto_tempo: {"Sway Tempo", :float, %{default: 0.25, min: 0, max: 3, step: 0.05}},
       roll_pivot: {"Rotation pivot (panel)", :float, %{default: 0, min: 0, max: 12, step: 1}},
       tilt_speed: {"Sway speed", :float, %{default: 0.5, min: 0, max: 3, step: 0.05}},
       tilt_mode:
@@ -279,7 +285,7 @@ defmodule Octopus.Apps.PixelFun do
 
     Formula — expression evaluated per pixel. Pick a scene preset tile or type your own; saved scenes persist across restarts. Variables: x, y (chart position on the sphere band), nx/ny/nz (unit view direction — seamless under all transforms), t (time, scaled by global Speed and Pattern speed), i (pixel index), l/m/h (audio bass/mid/high if present), pi, tau. Classic formulas in x remain ring-periodic (azimuth wraps). Builtin formulas are normalized to ~0.4 rad/s; use Pattern speed (Advanced) to deviate per scene.
 
-    Colors — Random dual crossfades between random colour pairs; Rainbow spreads hue across the pattern (moves with orbit/rotation). White dual maps positive/negative lobes to two brightness levels on the warm W channel of the TM1814 LEDs (no RGB tint). Palette crossfade applies in Random dual and White dual modes.
+    Colors — Random dual maps positive/negative lobes to a complementary hue pair on the colour circle; scrub Palette to pick the hue, Auto advances it (Tempo = seconds per full circle). Rainbow spreads hue across the pattern (moves with orbit/rotation). White dual maps lobes to two brightness levels on the warm W channel of the TM1814 LEDs (no RGB tint); Palette/Auto work the same for brightness pairs.
 
     Saturation — colour vividness for Random dual and Rainbow (0 = grey, 100 = full; default 70). White dual ignores saturation.
 
@@ -293,7 +299,7 @@ defmodule Octopus.Apps.PixelFun do
 
     Sway — small-angle tilt about a horizontal axis (Wobble precesses; Pendulum oscillates amplitude). Strength is in pixel units. Auto wanders strength; Sway speed/mode live in Advanced.
 
-    Time direction — forward (default) or backward. Backward reverses formula animation and manual sphere motion. Auto wanderers ignore time direction (they keep advancing on wall-clock app time). Palette crossfade is unaffected.
+    Time direction — forward (default) or backward. Backward reverses formula animation and manual sphere motion. Auto wanderers and palette Auto ignore time direction (they keep advancing on wall-clock app time).
 
     Scenes — pick a scene to play it on the wall. Add scenes to the queue to rotate through them at the chosen interval.
     """
@@ -305,7 +311,9 @@ defmodule Octopus.Apps.PixelFun do
         program: state.source,
         color_mode: state.color_mode,
         saturation_percent: state.saturation_percent,
+        palette_phase: state.palette_phase || 0.0,
         color_interval: state.color_interval,
+        palette_auto: state.palette_auto != false,
         orbit_rate: state.orbit_rate,
         roll_rate: state.roll_rate,
         roll_pivot: state.roll_pivot,
@@ -380,9 +388,22 @@ defmodule Octopus.Apps.PixelFun do
 
     palette =
       case color_mode do
-        :rainbow -> "rainbow"
-        :white -> "white #{format_num(config[:color_interval])}s"
-        _ -> "palette #{format_num(config[:color_interval])}s"
+        :rainbow ->
+          "rainbow"
+
+        :white ->
+          if Map.get(config, :palette_auto, true) do
+            "white auto #{format_num(config[:color_interval])}s"
+          else
+            "white #{format_phase(config[:palette_phase])}"
+          end
+
+        _ ->
+          if Map.get(config, :palette_auto, true) do
+            "palette auto #{format_num(config[:color_interval])}s"
+          else
+            "palette #{format_phase(config[:palette_phase])}"
+          end
       end
 
     sliders =
@@ -408,6 +429,10 @@ defmodule Octopus.Apps.PixelFun do
   defp format_num(n) when is_float(n), do: :erlang.float_to_binary(n, decimals: 1)
   defp format_num(n) when is_integer(n), do: Integer.to_string(n)
   defp format_num(n), do: to_string(n)
+
+  defp format_phase(nil), do: "0°"
+  defp format_phase(phase) when is_number(phase), do: "#{trunc(wrap_unit(phase) * 360)}°"
+  defp format_phase(_), do: "0°"
 
   def mode_tweakables(_mode_id) do
     [
@@ -436,14 +461,33 @@ defmodule Octopus.Apps.PixelFun do
         visible_when: {:color_mode, [:random, :rainbow]}
       },
       %{
+        key: :palette_phase,
+        label: "Palette",
+        type: :slider,
+        min: 0.0,
+        max: 1.0,
+        step: 0.01,
+        default: 0.0,
+        auto_key: :palette_auto,
+        visible_when: {:color_mode, [:random, :white]}
+      },
+      %{
+        key: :palette_auto,
+        label: "Auto",
+        type: :toggle,
+        default: true,
+        companion_of: :palette_phase
+      },
+      %{
         key: :color_interval,
-        label: "Palette crossfade",
+        label: "Tempo",
         type: :slider,
         min: 1.0,
         max: 20.0,
         step: 0.5,
         unit: "s",
-        default: 5.0
+        default: 5.0,
+        visible_when: {:palette_auto, [true]}
       },
       %{
         key: :orbit_rate,
@@ -473,7 +517,7 @@ defmodule Octopus.Apps.PixelFun do
         min: 0.0,
         max: 3.0,
         step: 0.05,
-        default: 0.5,
+        default: 0.25,
         visible_when: {:tx_auto, [true]}
       },
       %{
@@ -504,7 +548,7 @@ defmodule Octopus.Apps.PixelFun do
         min: 0.0,
         max: 3.0,
         step: 0.05,
-        default: 0.5,
+        default: 0.25,
         visible_when: {:ty_auto, [true]}
       },
       %{
@@ -535,7 +579,7 @@ defmodule Octopus.Apps.PixelFun do
         min: 0.0,
         max: 3.0,
         step: 0.05,
-        default: 0.5,
+        default: 0.25,
         visible_when: {:rot_auto, [true]}
       },
       %{
@@ -566,7 +610,7 @@ defmodule Octopus.Apps.PixelFun do
         min: 0.0,
         max: 3.0,
         step: 0.05,
-        default: 0.5,
+        default: 0.25,
         visible_when: {:zoom_auto, [true]}
       },
       %{
@@ -597,7 +641,7 @@ defmodule Octopus.Apps.PixelFun do
         min: 0.0,
         max: 3.0,
         step: 0.05,
-        default: 0.5,
+        default: 0.25,
         visible_when: {:sway_auto, [true]}
       },
       %{
@@ -658,9 +702,10 @@ defmodule Octopus.Apps.PixelFun do
       %{
         key: :time_direction,
         label: "Time direction",
-        type: :select,
-        options: [{"Forward", :forward}, {"Backward", :backward}],
-        default: :forward
+        type: :choice,
+        options: [{:forward, "Forward"}, {:backward, "Backward"}],
+        default: :forward,
+        visible_when: {:show_advanced, [true]}
       },
       %{
         key: :bleeding,
@@ -700,15 +745,11 @@ defmodule Octopus.Apps.PixelFun do
     :timer.send_interval(@frame_time_ms, :tick)
     color_mode = Map.get(config, :color_mode, :random)
     saturation_percent = Map.get(config, :saturation_percent, 70)
-    palette = generate_random_palette(color_mode, saturation_percent)
+    palette_phase = coerce_palette_phase(Map.get(config, :palette_phase, 0.0))
+    palette = palette_from_phase(palette_phase, color_mode, saturation_percent)
     time_frozen = Map.get(config, :time_frozen, false) |> coerce_time_frozen()
 
-    color_timer_ref =
-      if time_frozen do
-        nil
-      else
-        maybe_start_color_timer(color_mode, config.color_interval, nil)
-      end
+    palette_auto = Map.get(config, :palette_auto, true) |> coerce_time_frozen()
 
     {seconds, micros} = NaiveDateTime.utc_now() |> NaiveDateTime.to_gregorian_seconds()
     seconds = seconds + micros / 1_000_000
@@ -731,10 +772,12 @@ defmodule Octopus.Apps.PixelFun do
       colors: palette,
       last_colors: palette,
       target_colors: palette,
-      lerp_time: config.color_interval,
+      lerp_time: 0.0,
       color_mode: color_mode,
       saturation_percent: saturation_percent,
+      palette_phase: palette_phase,
       color_interval: config.color_interval,
+      palette_auto: palette_auto,
       orbit_rate: config.orbit_rate,
       roll_rate: config.roll_rate,
       roll_pivot: config.roll_pivot,
@@ -755,7 +798,6 @@ defmodule Octopus.Apps.PixelFun do
       speed: Octopus.Params.Global.speed(),
       display_info: display_info,
       pixel_dirs: pixel_dirs,
-      color_timer_ref: color_timer_ref,
       time_frozen: time_frozen,
       show_advanced: Map.get(config, :show_advanced, false) |> coerce_time_frozen(),
       yaw_angle: 0.0,
@@ -818,11 +860,12 @@ defmodule Octopus.Apps.PixelFun do
         _ -> state.program
       end
 
-    old_color_interval = state.color_interval
-    old_color_mode = state.color_mode
-    color_interval = Map.get(config, :color_interval, old_color_interval)
-    color_mode = Map.get(config, :color_mode, old_color_mode)
+    color_interval = Map.get(config, :color_interval, state.color_interval)
+    color_mode = Map.get(config, :color_mode, state.color_mode)
     saturation_percent = Map.get(config, :saturation_percent, state.saturation_percent || 70)
+    palette_phase = coerce_palette_phase(Map.get(config, :palette_phase, state.palette_phase || 0.0))
+    palette_auto =
+      Map.get(config, :palette_auto, state.palette_auto != false) |> coerce_time_frozen()
 
     old_autos = auto_flags(state)
 
@@ -849,7 +892,9 @@ defmodule Octopus.Apps.PixelFun do
           |> coerce_time_direction(),
         color_mode: color_mode,
         saturation_percent: saturation_percent,
+        palette_phase: palette_phase,
         color_interval: color_interval,
+        palette_auto: palette_auto,
         show_advanced:
           Map.get(config, :show_advanced, state.show_advanced || false) |> coerce_time_frozen()
     }
@@ -857,69 +902,18 @@ defmodule Octopus.Apps.PixelFun do
     state = state |> put_auto_fields(config) |> sync_auto_wanderers(old_autos)
 
     state =
-      cond do
-        color_mode != old_color_mode ->
-          palette = generate_random_palette(color_mode, saturation_percent)
-          color_timer_ref = maybe_start_color_timer(color_mode, color_interval, state.color_timer_ref)
-
-          %State{
-            state
-            | colors: palette,
-              last_colors: palette,
-              target_colors: palette,
-              color_timer_ref: color_timer_ref,
-              lerp_time: color_interval_s(state)
-          }
-
-        color_mode in [:random, :white] and color_interval != old_color_interval ->
-          state = reschedule_color_timer(state)
-          %State{state | lerp_time: color_interval_s(state)}
-
-        true ->
-          state
+      if color_mode in [:random, :white] do
+        apply_palette_colors(state)
+      else
+        state
       end
 
     apply_time_frozen(state, config)
   end
 
   defp apply_time_frozen(%State{} = state, config) do
-    old_frozen = state.time_frozen || false
-    new_frozen = Map.get(config, :time_frozen, old_frozen) |> coerce_time_frozen()
-    state = %State{state | time_frozen: new_frozen}
-
-    cond do
-      not old_frozen and new_frozen ->
-        cancel_color_timer(state)
-
-      old_frozen and not new_frozen ->
-        %State{
-          state
-          | color_timer_ref:
-              maybe_start_color_timer(state.color_mode, state.color_interval, state.color_timer_ref)
-        }
-
-      true ->
-        state
-    end
-  end
-
-  defp cancel_color_timer(%State{} = state) do
-    if ref = state.color_timer_ref do
-      Process.cancel_timer(ref)
-    end
-
-    %State{state | color_timer_ref: nil}
-  end
-
-  defp maybe_start_color_timer(color_mode, color_interval, existing_ref)
-       when color_mode in [:random, :white] do
-    if existing_ref, do: Process.cancel_timer(existing_ref)
-    Process.send_after(self(), :update_colors, color_interval_ms(color_interval))
-  end
-
-  defp maybe_start_color_timer(_color_mode, _color_interval, existing_ref) do
-    if existing_ref, do: Process.cancel_timer(existing_ref)
-    nil
+    new_frozen = Map.get(config, :time_frozen, state.time_frozen || false) |> coerce_time_frozen()
+    %State{state | time_frozen: new_frozen}
   end
 
   defp coerce_config(config) when is_map(config) do
@@ -928,8 +922,10 @@ defmodule Octopus.Apps.PixelFun do
     |> Map.new(fn
       {:color_mode, value} -> {:color_mode, coerce_color_mode(value)}
       {:saturation_percent, value} -> {:saturation_percent, coerce_saturation_percent(value)}
+      {:palette_phase, value} -> {:palette_phase, coerce_palette_phase(value)}
       {:time_direction, value} -> {:time_direction, coerce_time_direction(value)}
       {:time_frozen, value} -> {:time_frozen, coerce_time_frozen(value)}
+      {:palette_auto, value} -> {:palette_auto, coerce_time_frozen(value)}
       {:tilt_mode, value} -> {:tilt_mode, Octopus.Sway.normalize_mode(value)}
       {key, value} -> {key, value}
     end)
@@ -1083,18 +1079,6 @@ defmodule Octopus.Apps.PixelFun do
 
   defp effective_seconds(%State{} = state), do: state.seconds * time_sign(state.time_direction)
 
-  defp reschedule_color_timer(%State{color_mode: color_mode} = state)
-       when color_mode in [:random, :white] do
-    if ref = state.color_timer_ref do
-      Process.cancel_timer(ref)
-    end
-
-    ref = Process.send_after(self(), :update_colors, color_interval_ms(state.color_interval))
-    %State{state | color_timer_ref: ref}
-  end
-
-  defp reschedule_color_timer(%State{} = state), do: state
-
   defp apply_scene_by_id(%State{} = state, scene_id) do
     mod = scene_presets()
 
@@ -1136,28 +1120,6 @@ defmodule Octopus.Apps.PixelFun do
     |> Map.merge(Map.take(def, @builtin_scene_keys))
   end
 
-  defp color_interval_s(%State{} = state), do: color_interval_ms(state.color_interval) / 1000.0
-  defp color_interval_ms(interval) when is_number(interval), do: max(trunc(interval * 1000), 1)
-
-  def handle_info(:update_colors, %State{time_frozen: true} = state), do: {:noreply, state}
-
-  def handle_info(:update_colors, %State{color_mode: color_mode} = state)
-      when color_mode in [:random, :white] do
-    colors = generate_random_palette(color_mode, state.saturation_percent)
-    color_timer_ref = Process.send_after(self(), :update_colors, color_interval_ms(state.color_interval))
-
-    {:noreply,
-     %State{
-       state
-       | last_colors: state.colors,
-         target_colors: colors,
-         lerp_time: color_interval_s(state),
-         color_timer_ref: color_timer_ref
-     }}
-  end
-
-  def handle_info(:update_colors, %State{} = state), do: {:noreply, state}
-
   def handle_info({:param_updated, :speed, new_value}, %State{} = state) do
     {:noreply, %{state | speed: new_value}}
   end
@@ -1172,7 +1134,7 @@ defmodule Octopus.Apps.PixelFun do
         state
       else
         state
-        |> lerp_toward_target_colors()
+        |> advance_palette_phase()
         |> advance_tick_state()
       end
 
@@ -1804,69 +1766,75 @@ defmodule Octopus.Apps.PixelFun do
     {r, g, b}
   end
 
-  defp lerp_toward_target_colors(%State{color_mode: color_mode} = state)
-       when color_mode in [:random, :white] do
-    current_time = max(color_interval_s(state) - state.lerp_time, 0)
-    t = current_time / color_interval_s(state)
-    lerp_time = max(state.lerp_time - 1 / @fps, 0)
-
-    {last_a, last_b} = state.last_colors
-    {target_a, target_b} = state.target_colors
-    new_a = lerp_rgb(last_a, target_a, t)
-    new_b = lerp_rgb(last_b, target_b, t)
-
-    %State{state | colors: {new_a, new_b}, lerp_time: lerp_time}
-  end
-
-  defp lerp_toward_target_colors(%State{} = state), do: state
-
-  defp lerp_rgb(a, b, value) do
-    a_rgb = Chameleon.convert(a, Chameleon.RGB)
-    b_rgb = Chameleon.convert(b, Chameleon.RGB)
-
-    r = lerp(a_rgb.r, b_rgb.r, value) |> trunc()
-    g = lerp(a_rgb.g, b_rgb.g, value) |> trunc()
-    b = lerp(a_rgb.b, b_rgb.b, value) |> trunc()
-
-    Chameleon.RGB.new(r, g, b)
-    |> Chameleon.convert(Chameleon.HSV)
-  end
-
   defp lerp(a, b, t) do
     (1 - t) * a + t * b
   end
 
-  defp generate_random_palette(:white, _saturation_percent), do: generate_random_white_levels()
-  defp generate_random_palette(_color_mode, saturation_percent), do: generate_random_colors(saturation_percent)
+  defp advance_palette_phase(%State{} = state) do
+    if state.color_mode in [:random, :white] and state.palette_auto != false do
+      period = max(state.color_interval || 5.0, 0.1)
+      dt = (1 / @fps) * param(:time_scale, 1.0) * state.speed
+      phase = wrap_unit((state.palette_phase || 0.0) + dt / period)
+
+      apply_palette_colors(%State{state | palette_phase: phase})
+    else
+      state
+    end
+  end
+
+  defp apply_palette_colors(%State{color_mode: mode} = state) when mode in [:random, :white] do
+    palette =
+      palette_from_phase(state.palette_phase || 0.0, mode, state.saturation_percent || 70)
+
+    %State{state | colors: palette, last_colors: palette, target_colors: palette}
+  end
+
+  defp apply_palette_colors(%State{} = state), do: state
+
+  defp wrap_unit(x) when is_number(x), do: x - :math.floor(x)
+  defp wrap_unit(_), do: 0.0
+
+  defp coerce_palette_phase(value) when is_number(value), do: wrap_unit(value)
+
+  defp coerce_palette_phase(value) when is_binary(value) do
+    case Float.parse(value) do
+      {n, _} -> wrap_unit(n)
+      :error -> 0.0
+    end
+  end
+
+  defp coerce_palette_phase(_), do: 0.0
 
   @doc false
-  def generate_random_white_levels do
-    low_max = 100 - @min_white_level_gap
-    low = @min_white_level + :rand.uniform(low_max - @min_white_level + 1) - 1
-    extra = 100 - low - @min_white_level_gap
+  def palette_from_phase(phase, color_mode, saturation_percent \\ 70)
 
-    high =
-      if extra <= 0 do
-        100
-      else
-        low + @min_white_level_gap + :rand.uniform(extra)
-      end
+  def palette_from_phase(phase, :white, _saturation_percent) do
+    t = wrap_unit(phase)
+    # Continuous brightness pair with guaranteed gap (≥ @min_white_level_gap).
+    center = 50.0 + 15.0 * :math.sin(t * :math.pi() * 2)
+    half = @min_white_level_gap / 2 + 10.0 + 8.0 * :math.cos(t * :math.pi() * 2)
+    a = trunc(max(@min_white_level, min(100, center - half)))
+    b = trunc(max(@min_white_level, min(100, center + half)))
 
     {a, b} =
-      case :rand.uniform(2) do
-        1 -> {low, high}
-        2 -> {high, low}
+      if abs(a - b) < @min_white_level_gap do
+        if a <= b do
+          {a, min(100, a + @min_white_level_gap)}
+        else
+          {min(100, b + @min_white_level_gap), b}
+        end
+      else
+        {a, b}
       end
 
     {%Chameleon.HSV{h: 0, s: 0, v: a}, %Chameleon.HSV{h: 0, s: 0, v: b}}
   end
 
-  defp generate_random_colors(saturation_percent) do
-    hue_a = :rand.uniform(360) - 1
-    hue_b = Integer.mod(hue_a + 60 + :rand.uniform(180) - 1, 360)
+  def palette_from_phase(phase, _color_mode, saturation_percent) do
+    t = wrap_unit(phase)
+    hue_a = trunc(t * 360) |> rem(360)
+    hue_b = rem(hue_a + 180, 360)
     sat = saturation_percent |> max(0) |> min(100)
-    hsv_a = Chameleon.HSV.new(hue_a, sat, 100)
-    hsv_b = Chameleon.HSV.new(hue_b, sat, 100)
-    {hsv_a, hsv_b}
+    {Chameleon.HSV.new(hue_a, sat, 100), Chameleon.HSV.new(hue_b, sat, 100)}
   end
 end

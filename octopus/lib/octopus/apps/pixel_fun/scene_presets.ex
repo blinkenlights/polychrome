@@ -25,19 +25,19 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
     pattern_speed: 1.0,
     tx_auto: false,
     tx_auto_range: 1.0,
-    tx_auto_tempo: 0.5,
+    tx_auto_tempo: 0.25,
     ty_auto: false,
     ty_auto_range: 2.0,
-    ty_auto_tempo: 0.5,
+    ty_auto_tempo: 0.25,
     rot_auto: false,
     rot_auto_range: 1.0,
-    rot_auto_tempo: 0.5,
+    rot_auto_tempo: 0.25,
     zoom_auto: false,
     zoom_auto_range: 0.8,
-    zoom_auto_tempo: 0.5,
+    zoom_auto_tempo: 0.25,
     sway_auto: false,
     sway_auto_range: 2.0,
-    sway_auto_tempo: 0.5
+    sway_auto_tempo: 0.25
   }
 
   @sphere_keys Map.keys(@sphere_defaults)
@@ -79,7 +79,9 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
     config =
       %{
         program: Map.get(attrs, :formula) || Map.get(attrs, :program),
+        palette_phase: Map.get(attrs, :palette_phase, 0.0),
         color_interval: Map.get(attrs, :color_interval, 5.0),
+        palette_auto: Map.get(attrs, :palette_auto, true),
         time_direction: Map.get(attrs, :time_direction, :forward)
       }
       |> Map.merge(sphere_attrs_from(attrs))
@@ -135,7 +137,9 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
   def to_config(%{} = preset) do
     %{
       program: preset.formula,
+      palette_phase: Map.get(preset, :palette_phase, 0.0),
       color_interval: preset.color_interval,
+      palette_auto: Map.get(preset, :palette_auto, true),
       time_direction: normalize_time_direction(Map.get(preset, :time_direction, :forward))
     }
     |> Map.merge(Map.take(preset, @sphere_keys))
@@ -150,7 +154,9 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
 
     %{
       formula: Map.get(config, :program, ""),
+      palette_phase: Map.get(config, :palette_phase, 0.0),
       color_interval: Map.get(config, :color_interval, 5.0),
+      palette_auto: Map.get(config, :palette_auto, true),
       time_direction: Map.get(config, :time_direction, :forward)
     }
     |> Map.merge(Map.take(config, @sphere_keys))
@@ -162,13 +168,17 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
     right = effective_scene_config(normalize_snapshot(preset_or_snapshot))
 
     Enum.all?(
-      [:program, :color_interval, :time_direction | @sphere_keys],
+      [:program, :color_interval, :palette_auto, :time_direction | @sphere_keys],
       fn key ->
         case key do
           :program -> left.program == right.program
           :tilt_mode -> left.tilt_mode == right.tilt_mode
           :time_direction -> left.time_direction == right.time_direction
-          _ -> float_eq?(Map.get(left, key), Map.get(right, key))
+          k when k in [:tx_auto, :ty_auto, :rot_auto, :zoom_auto, :sway_auto, :palette_auto] ->
+            Map.get(left, k) == Map.get(right, k)
+
+          _ ->
+            float_eq?(Map.get(left, key), Map.get(right, key))
         end
       end
     )
@@ -205,10 +215,12 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
       id: legacy_id(preset),
       name: preset.name,
       formula: config[:program],
+      palette_phase: Map.get(config, :palette_phase, 0.0),
       color_interval: config[:color_interval],
       time_direction: Map.get(config, :time_direction, :forward),
       accent_color: preset.accent_color,
-      builtin: preset.builtin
+      builtin: preset.builtin,
+      palette_auto: Map.get(config, :palette_auto, true)
     }
     |> Map.merge(Map.take(config, @sphere_keys))
   end
@@ -227,7 +239,9 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
   defp flat_attrs_to_config(attrs) do
     %{}
     |> maybe_config_put(:program, Map.get(attrs, :formula) || Map.get(attrs, :program))
+    |> maybe_config_put(:palette_phase, Map.get(attrs, :palette_phase))
     |> maybe_config_put(:color_interval, Map.get(attrs, :color_interval))
+    |> maybe_config_put(:palette_auto, Map.get(attrs, :palette_auto))
     |> maybe_config_put(:time_direction, Map.get(attrs, :time_direction))
     |> then(fn config -> Map.merge(config, sphere_attrs_from(attrs)) end)
   end
@@ -271,6 +285,7 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
     %{
       program: Map.get(config, :program),
       color_interval: Map.get(config, :color_interval, 5.0),
+      palette_auto: Map.get(config, :palette_auto, true),
       time_direction: normalize_time_direction(Map.get(config, :time_direction, :forward)),
       tilt_mode: Octopus.Sway.normalize_mode(Map.get(config, :tilt_mode, :wobble))
     }

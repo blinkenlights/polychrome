@@ -514,6 +514,8 @@ defmodule OctopusWeb.PixelFunConfigComponent do
       name: name,
       formula: config[:program],
       color_interval: config[:color_interval],
+      palette_auto: config[:palette_auto],
+      palette_phase: config[:palette_phase],
       orbit_rate: config[:orbit_rate],
       roll_rate: config[:roll_rate],
       roll_pivot: config[:roll_pivot],
