@@ -16,7 +16,7 @@ defmodule Octopus.Apps.PixelFun3D do
 
   @app_mode_presets "Elixir.Octopus.AppModePresets"
 
-  @auto_channels [:trans, :rot, :zoom, :sway]
+  @auto_channels [:trans, :rot, :zoom, :sway, :sat]
 
   @auto_defaults %{
     trans_auto: false,
@@ -31,14 +31,19 @@ defmodule Octopus.Apps.PixelFun3D do
     zoom_auto_interval: 30.0,
     sway_auto: false,
     sway_auto_range: 2.0,
-    sway_auto_interval: 30.0
+    sway_auto_interval: 30.0,
+    sat_auto: false,
+    sat_auto_min: 20.0,
+    sat_auto_max: 100.0,
+    sat_auto_interval: 30.0
   }
 
   @channel_bounds %{
     trans_x: {-30.0, 30.0},
     trans_y: {-4.0, 4.0},
     rot: {-180.0, 180.0},
-    sway: {0.0, 4.0}
+    sway: {0.0, 4.0},
+    sat: {0.0, 100.0}
   }
 
   @zoom_factor_min 0.25
@@ -47,7 +52,8 @@ defmodule Octopus.Apps.PixelFun3D do
   @channel_base_key %{
     rot: :roll_rate,
     zoom: :zoom_base,
-    sway: :tilt_scale
+    sway: :tilt_scale,
+    sat: :saturation_percent
   }
 
   @default_scene %{
@@ -207,6 +213,10 @@ defmodule Octopus.Apps.PixelFun3D do
       :sway_auto,
       :sway_auto_range,
       :sway_auto_interval,
+      :sat_auto,
+      :sat_auto_min,
+      :sat_auto_max,
+      :sat_auto_interval,
       :auto_wanderers,
       :yaw_angle,
       :roll_angle,
@@ -243,6 +253,10 @@ defmodule Octopus.Apps.PixelFun3D do
       program: {"Formula", :string, %{default: "sin(0.4*t-hypot(x,y))"}},
       color_mode: {"Colors", :atom, %{default: :random}},
       saturation_percent: {"Saturation", :int, %{default: 70, min: 0, max: 100}},
+      sat_auto: {"Saturation Auto", :boolean, %{default: false}},
+      sat_auto_min: {"Saturation Min", :float, %{default: 20.0, min: 0, max: 100, step: 1}},
+      sat_auto_max: {"Saturation Max", :float, %{default: 100.0, min: 0, max: 100, step: 1}},
+      sat_auto_interval: {"Saturation Interval", :float, %{default: 30.0, min: 4, max: 60, step: 1}},
       palette_phase: {"Palette", :float, %{default: 0.0, min: 0.0, max: 1.0, step: 0.01}},
       color_interval: {"Palette tempo (s)", :float, %{default: 5, min: 1, max: 20, step: 0.5}},
       palette_auto: {"Palette Auto", :boolean, %{default: true}},
@@ -292,7 +306,7 @@ defmodule Octopus.Apps.PixelFun3D do
 
     Colors — Random dual maps positive/negative lobes to a complementary hue pair on the colour circle; scrub Palette to pick the hue, Auto advances it (Tempo = seconds per full circle). Rainbow spreads hue across the pattern (moves with orbit/rotation). White dual maps lobes to two brightness levels on the warm W channel of the TM1814 LEDs (no RGB tint); Palette/Auto work the same for brightness pairs.
 
-    Saturation — colour vividness for Random dual and Rainbow (0 = grey, 100 = full; default 70). White dual ignores saturation.
+    Saturation — colour vividness for Random dual and Rainbow (0 = grey, 100 = full; default 70). Auto wanders between Min and Max. White dual ignores saturation.
 
     Translate X — ring yaw drift in px/s (8 px/s ≈ one panel per second). Auto wanders the rate (± Range X).
 
@@ -430,6 +444,11 @@ defmodule Octopus.Apps.PixelFun3D do
           channel_bit.(:rot, "rot", :roll_rate, "°/s"),
           channel_bit.(:zoom, "zoom", :zoom_base, ""),
           channel_bit.(:sway, "sway", :tilt_scale, "px"),
+          if Map.get(config, :sat_auto, false) do
+            "sat auto #{format_num(Map.get(config, :sat_auto_min, 20))}–#{format_num(Map.get(config, :sat_auto_max, 100))}%"
+          else
+            "sat #{format_num(Map.get(config, :saturation_percent, 70))}%"
+          end,
           palette
         ],
         " · "
@@ -475,7 +494,44 @@ defmodule Octopus.Apps.PixelFun3D do
         max: 100,
         step: 1,
         default: 70,
+        unit: "%",
+        auto_key: :sat_auto,
+        disabled_when: {:sat_auto, [true]},
         visible_when: {:color_mode, [:random, :rainbow]}
+      },
+      %{key: :sat_auto, label: "Auto", type: :toggle, default: false, companion_of: :saturation_percent},
+      %{
+        key: :sat_auto_min,
+        label: "Min",
+        type: :slider,
+        min: 0.0,
+        max: 100.0,
+        step: 1.0,
+        default: 20.0,
+        unit: "%",
+        visible_when: {:sat_auto, [true]}
+      },
+      %{
+        key: :sat_auto_max,
+        label: "Max",
+        type: :slider,
+        min: 0.0,
+        max: 100.0,
+        step: 1.0,
+        default: 100.0,
+        unit: "%",
+        visible_when: {:sat_auto, [true]}
+      },
+      %{
+        key: :sat_auto_interval,
+        label: "Interval",
+        type: :slider,
+        min: 4.0,
+        max: 60.0,
+        step: 1.0,
+        default: 30.0,
+        unit: "s",
+        visible_when: {:sat_auto, [true]}
       },
       %{
         key: :palette_phase,
@@ -953,6 +1009,9 @@ defmodule Octopus.Apps.PixelFun3D do
       {:time_direction, value} -> {:time_direction, coerce_time_direction(value)}
       {:time_frozen, value} -> {:time_frozen, coerce_boolean(value)}
       {:palette_auto, value} -> {:palette_auto, coerce_boolean(value)}
+      {:sat_auto, value} -> {:sat_auto, coerce_boolean(value)}
+      {:sat_auto_min, value} -> {:sat_auto_min, coerce_saturation_percent(value) * 1.0}
+      {:sat_auto_max, value} -> {:sat_auto_max, coerce_saturation_percent(value) * 1.0}
       {:tilt_mode, value} -> {:tilt_mode, Octopus.Sway.normalize_mode(value)}
       {key, value} -> {key, value}
     end)
@@ -1410,18 +1469,26 @@ defmodule Octopus.Apps.PixelFun3D do
         app_id ->
           eff = effective_transform_values(state)
 
+          live =
+            %{
+              orbit_rate: eff.orbit_rate,
+              elev_base: eff.elev_base,
+              roll_rate: eff.roll_rate,
+              zoom_factor: eff.zoom_base,
+              tilt_scale: eff.tilt_scale
+            }
+
+          live =
+            if state.sat_auto do
+              Map.put(live, :saturation_percent, effective_saturation_percent(state))
+            else
+              live
+            end
+
           Phoenix.PubSub.broadcast(
             Octopus.PubSub,
             "apps",
-            {:apps,
-             {:transform_live, app_id,
-              %{
-                orbit_rate: eff.orbit_rate,
-                elev_base: eff.elev_base,
-                roll_rate: eff.roll_rate,
-                zoom_factor: eff.zoom_base,
-                tilt_scale: eff.tilt_scale
-              }}}
+            {:apps, {:transform_live, app_id, live}}
           )
       end
     end
@@ -1509,6 +1576,10 @@ defmodule Octopus.Apps.PixelFun3D do
     Wander.new(:math.log(factor))
   end
 
+  defp new_channel_wanderer(%State{} = state, :sat) do
+    Wander.new((state.saturation_percent || 70) * 1.0)
+  end
+
   defp new_channel_wanderer(%State{} = state, ch) do
     Wander.new(Map.get(state, @channel_base_key[ch]) || 0.0)
   end
@@ -1536,6 +1607,11 @@ defmodule Octopus.Apps.PixelFun3D do
     Wander.step(w, now, %{min: lo, max: hi, interval: interval})
   end
 
+  defp step_channel_wanderer(w, now, state, :sat, interval) do
+    {lo, hi} = ordered_sat_bounds(state)
+    Wander.step(w, now, %{min: lo, max: hi, interval: interval})
+  end
+
   defp step_channel_wanderer(w, now, state, ch, interval) do
     base = Map.get(state, @channel_base_key[ch]) || 0.0
     range = Map.get(state, :"#{ch}_auto_range") || @auto_defaults[:"#{ch}_auto_range"]
@@ -1543,6 +1619,15 @@ defmodule Octopus.Apps.PixelFun3D do
     min_v = max(base - range, lo)
     max_v = min(base + range, hi)
     Wander.step(w, now, %{min: min_v, max: max_v, interval: interval})
+  end
+
+  defp ordered_sat_bounds(%State{} = state) do
+    {chan_lo, chan_hi} = @channel_bounds.sat
+    a = Map.get(state, :sat_auto_min) || @auto_defaults.sat_auto_min
+    b = Map.get(state, :sat_auto_max) || @auto_defaults.sat_auto_max
+    lo = min(a, b) |> max(chan_lo) |> min(chan_hi)
+    hi = max(a, b) |> max(chan_lo) |> min(chan_hi)
+    {lo, hi}
   end
 
   defp push_frame(%State{} = state) do
@@ -1603,7 +1688,7 @@ defmodule Octopus.Apps.PixelFun3D do
 
     canvas_mode = if state.color_mode == :white, do: :grayscale, else: :rgb
     canvas = Canvas.new(display_info.width, display_info.height, canvas_mode)
-    saturation_percent = state.saturation_percent || 70
+    saturation_percent = effective_saturation_percent(state)
     pattern_speed = state.pattern_speed || 1.0
 
     lerp_fn = fn a, b, v ->
@@ -1814,6 +1899,7 @@ defmodule Octopus.Apps.PixelFun3D do
       rot_auto: false,
       zoom_auto: false,
       sway_auto: false,
+      sat_auto: false,
       yaw_angle: nil,
       roll_angle: nil,
       auto_wanderers: %{}
@@ -1841,6 +1927,11 @@ defmodule Octopus.Apps.PixelFun3D do
             :trans_auto_range_y,
             Map.get(state, :trans_auto_range_y) || @auto_defaults.trans_auto_range_y
           )
+
+        :sat ->
+          acc
+          |> Map.put(:sat_auto_min, Map.get(state, :sat_auto_min) || @auto_defaults.sat_auto_min)
+          |> Map.put(:sat_auto_max, Map.get(state, :sat_auto_max) || @auto_defaults.sat_auto_max)
 
         _ ->
           Map.put(
@@ -1886,6 +1977,17 @@ defmodule Octopus.Apps.PixelFun3D do
               :trans_auto_range_y,
               Map.get(acc, :trans_auto_range_y) || @auto_defaults.trans_auto_range_y
             )
+          )
+
+        :sat ->
+          acc
+          |> Map.put(
+            :sat_auto_min,
+            Map.get(config, :sat_auto_min, Map.get(acc, :sat_auto_min) || @auto_defaults.sat_auto_min)
+          )
+          |> Map.put(
+            :sat_auto_max,
+            Map.get(config, :sat_auto_max, Map.get(acc, :sat_auto_max) || @auto_defaults.sat_auto_max)
           )
 
         _ ->
@@ -1957,6 +2059,10 @@ defmodule Octopus.Apps.PixelFun3D do
     %State{state | zoom_base: :math.exp(sigma)}
   end
 
+  defp handover_wanderer_value(%State{} = state, :sat, %Wander{value: {v}}) do
+    %State{state | saturation_percent: coerce_saturation_percent(v)}
+  end
+
   defp handover_wanderer_value(%State{} = state, ch, %Wander{value: {v}}) do
     Map.put(state, @channel_base_key[ch], v)
   end
@@ -1965,6 +2071,19 @@ defmodule Octopus.Apps.PixelFun3D do
 
   defp any_auto?(%State{} = state) do
     Enum.any?(@auto_channels, &(Map.get(state, :"#{&1}_auto") || false))
+  end
+
+  defp effective_saturation_percent(%State{} = state) do
+    base = state.saturation_percent || 70
+
+    if state.sat_auto do
+      case state.auto_wanderers do
+        %{sat: %Wander{value: {v}}} -> coerce_saturation_percent(v)
+        _ -> base
+      end
+    else
+      base
+    end
   end
 
   defp effective_transform_values(%State{} = state) do
@@ -2195,7 +2314,7 @@ defmodule Octopus.Apps.PixelFun3D do
 
   defp apply_palette_colors(%State{color_mode: mode} = state) when mode in [:random, :white] do
     palette =
-      palette_from_phase(state.palette_phase || 0.0, mode, state.saturation_percent || 70)
+      palette_from_phase(state.palette_phase || 0.0, mode, effective_saturation_percent(state))
 
     %State{state | colors: palette, last_colors: palette, target_colors: palette}
   end

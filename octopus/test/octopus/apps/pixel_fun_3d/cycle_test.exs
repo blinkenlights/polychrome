@@ -272,6 +272,51 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
       assert_in_delta off.orbit_rate, 1.5, 1.0e-12
     end
 
+    test "sat auto wanders between min/max; off hands live value to slider" do
+      state =
+        base_state(%{
+          saturation_percent: 70,
+          sat_auto: false,
+          sat_auto_min: 10.0,
+          sat_auto_max: 90.0,
+          sat_auto_interval: 4.0,
+          seconds: 1.0
+        })
+
+      {:noreply, on} =
+        pixel_fun_handle_config(
+          %{
+            sat_auto: true,
+            saturation_percent: 70,
+            sat_auto_min: 10.0,
+            sat_auto_max: 90.0,
+            sat_auto_interval: 4.0,
+            pixel_fun_units: 2
+          },
+          state
+        )
+
+      assert on.sat_auto == true
+      assert %Octopus.Wander{value: {v0}} = on.auto_wanderers[:sat]
+      assert_in_delta v0, 70.0, 1.0e-12
+
+      {:noreply, stepped} =
+        Enum.reduce(1..20, {:noreply, on}, fn _, {:noreply, s} ->
+          pixel_fun_handle_info(:tick, s)
+        end)
+
+      assert %Octopus.Wander{value: {live}} = stepped.auto_wanderers[:sat]
+      assert live >= 10.0 - 1.0e-6
+      assert live <= 90.0 + 1.0e-6
+
+      {:noreply, off} =
+        pixel_fun_handle_config(%{sat_auto: false, pixel_fun_units: 2}, stepped)
+
+      assert off.sat_auto == false
+      refute Map.has_key?(off.auto_wanderers, :sat)
+      assert off.saturation_percent == trunc(live)
+    end
+
     test "frozen time does not advance wanderers" do
       state =
         base_state(%{

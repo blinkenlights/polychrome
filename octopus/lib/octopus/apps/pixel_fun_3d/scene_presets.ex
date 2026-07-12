@@ -35,7 +35,11 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresets do
     zoom_auto_interval: 30.0,
     sway_auto: false,
     sway_auto_range: 2.0,
-    sway_auto_interval: 30.0
+    sway_auto_interval: 30.0,
+    sat_auto: false,
+    sat_auto_min: 20.0,
+    sat_auto_max: 100.0,
+    sat_auto_interval: 30.0
   }
 
   @sphere_keys Map.keys(@sphere_defaults)
@@ -172,7 +176,7 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresets do
           :program -> left.program == right.program
           :tilt_mode -> left.tilt_mode == right.tilt_mode
           :time_direction -> left.time_direction == right.time_direction
-          k when k in [:trans_auto, :rot_auto, :zoom_auto, :sway_auto, :palette_auto] ->
+          k when k in [:trans_auto, :rot_auto, :zoom_auto, :sway_auto, :sat_auto, :palette_auto] ->
             Map.get(left, k) == Map.get(right, k)
 
           _ ->
