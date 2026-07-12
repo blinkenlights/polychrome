@@ -1807,7 +1807,7 @@ defmodule Octopus.Apps.PixelFun do
       tilt_speed: 0.5,
       tilt_mode: :wobble,
       elev_base: 0.0,
-      zoom_base: 0.0,
+      zoom_base: 1.0,
       zoom_pivot: 0,
       pattern_speed: 1.0,
       trans_auto: false,
@@ -1971,7 +1971,7 @@ defmodule Octopus.Apps.PixelFun do
     orbit = state.orbit_rate || 0.0
     elev = state.elev_base || 0.0
     roll = state.roll_rate || 0.0
-    zoom = state.zoom_base || 0.0
+    zoom = state.zoom_base || 1.0
     sway = state.tilt_scale || 0.0
 
     {orbit, elev} =
