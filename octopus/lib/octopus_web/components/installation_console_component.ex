@@ -5,8 +5,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   import OctopusWeb.ConsoleComponents
 
   alias Octopus.{AppManager, AppSupervisor, InstallationTransport}
-  alias Octopus.Apps.{PixelFun, PixieDebug}
-  alias Octopus.Apps.{PixelFun, PixieDebug}
+  alias Octopus.Apps.{PixelFun3D, PixieDebug}
 
   @app Module.concat(["Octopus", "App"])
   @app_mode_presets Module.concat(["Octopus", "AppModePresets"])
@@ -828,18 +827,18 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
   defp assign_library(socket) do
     transport = socket.assigns.transport
-    pixel_fun_app_id = AppSupervisor.find_running_app(PixelFun) |> elem_or_nil()
+    pixel_fun_3d_app_id = AppSupervisor.find_running_app(PixelFun3D) |> elem_or_nil()
 
     pixel_section = %{
-      title: "Pixel Fun",
-      app: PixelFun,
-      new_scene_path: if(pixel_fun_app_id, do: ~p"/app/#{pixel_fun_app_id}", else: nil),
+      title: "Pixel Fun 3D",
+      app: PixelFun3D,
+      new_scene_path: if(pixel_fun_3d_app_id, do: ~p"/app/#{pixel_fun_3d_app_id}", else: nil),
       soon: [],
-      tiles: tile_list(PixelFun, app_list_modes(PixelFun), transport)
+      tiles: tile_list(PixelFun3D, app_list_modes(PixelFun3D), transport)
     }
 
     more_sections =
-      for app <- persistable_apps(), app != PixelFun do
+      for app <- persistable_apps(), app != PixelFun3D do
         %{
           title: app_name(app),
           app: app,

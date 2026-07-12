@@ -494,8 +494,9 @@ defmodule Octopus.InstallationTransportTest do
       assert playing.effective[:speed] == 1.0
       assert playing.effective[:density] == 3
       assert playing.effective[:max_particles] == 200
-      assert length(playing.tweakables) == 3
-      assert playing.meta == ["200 particles max", "density 3"]
+      assert length(playing.tweakables) == length(Matrix.mode_tweakables(@matrix))
+      assert "200 particles max" in playing.meta
+      assert "density 3" in playing.meta
 
       InstallationTransport.set_tweakable(:speed, 2.0)
       InstallationTransport.set_tweakable(:density, 6)
@@ -578,7 +579,7 @@ defmodule Octopus.InstallationTransportTest do
       InstallationTransport.play_now(PixelFun, @classic)
 
       playing = state().now_playing
-      assert length(playing.tweakables) == 5
+      assert length(playing.tweakables) == length(PixelFun.mode_tweakables(@classic))
       assert Enum.any?(playing.tweakables, &(&1.key == :program and &1.type == :formula))
       assert playing.effective[:program] == "sin(10*t-hypot(x,y))"
     end

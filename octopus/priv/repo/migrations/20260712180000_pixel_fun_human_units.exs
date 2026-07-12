@@ -14,7 +14,7 @@ defmodule Octopus.Repo.Migrations.PixelFunHumanUnits do
     rows =
       Octopus.Repo.all(
         from p in "app_mode_presets",
-          where: p.app in ["pixelfun", "Octopus.Apps.PixelFun"],
+          where: p.app in ["pixelfun3d", "Octopus.Apps.PixelFun3D"],
           select: {p.id, p.config}
       )
 
@@ -28,7 +28,7 @@ defmodule Octopus.Repo.Migrations.PixelFunHumanUnits do
 
       migrated =
         config
-        |> Octopus.Apps.PixelFun.migrate_legacy_config()
+        |> Octopus.Apps.PixelFun3D.migrate_legacy_config()
         |> encode_config()
 
       Octopus.Repo.update_all(

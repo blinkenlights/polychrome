@@ -2,7 +2,7 @@ defmodule OctopusWeb.ConsoleComponents do
   @moduledoc false
   use OctopusWeb, :html
 
-  alias Octopus.Apps.PixelFun.ScenePresets
+  alias Octopus.Apps.PixelFun.Program
 
   @known_formula_idents ~w(
     x y t i l m h pi PI tau Tau
@@ -1224,7 +1224,7 @@ defmodule OctopusWeb.ConsoleComponents do
   defp now_playing_formula_valid?(%{tweakables: tweakables, effective: effective}) do
     case Enum.find(tweakables, &(&1.type == :formula)) do
       nil -> true
-      %{key: key} -> ScenePresets.validate_formula(now_playing_formula_value(effective, key)) == :ok
+      %{key: key} -> validate_formula(now_playing_formula_value(effective, key)) == :ok
     end
   end
 
@@ -1255,7 +1255,7 @@ defmodule OctopusWeb.ConsoleComponents do
   end
 
   defp formula_error_token(formula) when is_binary(formula) do
-    case ScenePresets.validate_formula(formula) do
+    case validate_formula(formula) do
       :ok ->
         nil
 
@@ -1268,6 +1268,15 @@ defmodule OctopusWeb.ConsoleComponents do
   end
 
   defp formula_error_token(_), do: "?"
+
+  defp validate_formula(formula) when is_binary(formula) do
+    case Program.parse(formula) do
+      {:ok, _} -> :ok
+      _ -> :error
+    end
+  end
+
+  defp validate_formula(_), do: :error
 
   attr :show, :boolean, required: true
   attr :target, :any, default: nil

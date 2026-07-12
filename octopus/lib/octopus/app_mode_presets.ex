@@ -1,10 +1,11 @@
 defmodule Octopus.AppModePresets do
   @moduledoc """
-  DB-backed mode presets for foyer apps (Pixel Fun, Collective, Matrix, Perlin Noise, Ocean, Sand, Sparkle Mist, Wood).
+  DB-backed mode presets for foyer apps (Pixel Fun, Pixel Fun 3D, Collective, Matrix,
+  Perlin Noise, Ocean, Sand, Sparkle Mist, Wood).
 
-  Mode ids use `app_key:slug`, e.g. `pixelfun:classic_ripple`, `collective:storm`.
-  Legacy Pixel Fun ids (`builtin:…`, `user:…`) and bare Collective slugs are
-  accepted via `normalize_mode_id/2`.
+  Mode ids use `app_key:slug`, e.g. `pixelfun:classic_ripple`, `pixelfun3d:classic_ripple`,
+  `collective:storm`. Legacy Pixel Fun ids (`builtin:…`, `user:…`) and bare Collective
+  slugs are accepted via `normalize_mode_id/2`.
   """
 
   import Ecto.Query, only: [order_by: 2, where: 3]
@@ -18,6 +19,7 @@ defmodule Octopus.AppModePresets do
   # String module names avoid compile-time deps on app modules that call back into this module.
   @app_keys %{
     "Elixir.Octopus.Apps.PixelFun" => "pixelfun",
+    "Elixir.Octopus.Apps.PixelFun3D" => "pixelfun3d",
     "Elixir.Octopus.Apps.Collective" => "collective",
     "Elixir.Octopus.Apps.Matrix" => "matrix",
     "Elixir.Octopus.Apps.PerlinNoise" => "perlinnoise",
@@ -26,6 +28,8 @@ defmodule Octopus.AppModePresets do
     "Elixir.Octopus.Apps.SparkleMist" => "sparklemist",
     "Elixir.Octopus.Apps.Wood" => "wood"
   }
+
+  @formula_app_keys ~w(pixelfun pixelfun3d)
 
   @doc false
   def persistable_apps do
@@ -68,11 +72,11 @@ defmodule Octopus.AppModePresets do
       String.starts_with?(mode_id, key <> ":") ->
         mode_id
 
-      key == "pixelfun" and String.starts_with?(mode_id, "builtin:") ->
+      formula_app_key?(key) and String.starts_with?(mode_id, "builtin:") ->
         slug = String.replace_prefix(mode_id, "builtin:", "")
         mode_id(app, slug)
 
-      key == "pixelfun" and String.starts_with?(mode_id, "user:") ->
+      formula_app_key?(key) and String.starts_with?(mode_id, "user:") ->
         case Integer.parse(String.replace_prefix(mode_id, "user:", "")) do
           {id, ""} -> mode_id(app, "user_#{id}")
           _ -> mode_id
@@ -270,15 +274,8 @@ defmodule Octopus.AppModePresets do
           |> preset_changeset(attrs)
           |> Repo.insert()
 
-        record ->
-          # Refresh PixelFun builtins so sphere-channel defaults replace legacy keys.
-          if app_key(app) == "pixelfun" do
-            record
-            |> preset_changeset(Map.take(attrs, [:name, :config, :accent_color]))
-            |> Repo.update()
-          else
-            :ok
-          end
+        _record ->
+          :ok
       end
     end)
 
@@ -311,7 +308,7 @@ defmodule Octopus.AppModePresets do
       base
       |> Map.merge(Map.take(effective, keys))
 
-    if app_key(app) == "pixelfun" do
+    if formula_app?(app) do
       %{
         config: config,
         name: nil,
@@ -326,7 +323,7 @@ defmodule Octopus.AppModePresets do
   @doc false
   def summary(app, preset) when is_atom(app) do
     case app_key(app) do
-      "pixelfun" ->
+      key when key in @formula_app_keys ->
         apply(app, :summary_for_preset, [preset])
 
       nil ->
@@ -347,7 +344,7 @@ defmodule Octopus.AppModePresets do
 
   @doc false
   def preset_label(app) when is_atom(app) do
-    if app_key(app) == "pixelfun", do: "scene", else: "preset"
+    if formula_app?(app), do: "scene", else: "preset"
   end
 
   @doc false
@@ -399,7 +396,7 @@ defmodule Octopus.AppModePresets do
       renamable: true
     }
 
-    if app_key(app) == "pixelfun" do
+    if formula_app?(app) do
       Map.put(tile, :formula, preset.config[:program] || "")
     else
       tile
@@ -427,7 +424,7 @@ defmodule Octopus.AppModePresets do
         attrs
       end
 
-    if app_key(app) == "pixelfun" do
+    if formula_app?(app) do
       config = Map.get(attrs, :config, %{})
 
       attrs
@@ -458,7 +455,7 @@ defmodule Octopus.AppModePresets do
   end
 
   defp validate_config(app, config) do
-    if app_key(app) == "pixelfun" do
+    if formula_app?(app) do
       case validate_formula(Map.get(config, :program, "")) do
         :ok -> :ok
         :error -> {:error, :invalid_formula}
@@ -539,60 +536,111 @@ defmodule Octopus.AppModePresets do
   end
 
   defp config_matches?(app, config, preset_config) do
-    if app_key(app) == "pixelfun" do
-      left = pixelfun_effective_config(config)
-      right = pixelfun_effective_config(preset_config)
+    case app_key(app) do
+      "pixelfun" ->
+        pixelfun_config_matches?(config, preset_config)
 
-      keys =
-        [
-          :program,
-          :color_interval,
-          :palette_auto,
-          :orbit_rate,
-          :roll_rate,
-          :roll_pivot,
-          :tilt_scale,
-          :tilt_speed,
-          :tilt_mode,
-          :elev_base,
-          :zoom_base,
-          :zoom_pivot,
-          :pattern_speed,
-          :time_direction,
-          :trans_auto,
-          :trans_auto_range_x,
-          :trans_auto_range_y,
-          :trans_auto_interval,
-          :rot_auto,
-          :rot_auto_range,
-          :rot_auto_interval,
-          :zoom_auto,
-          :zoom_auto_range,
-          :zoom_auto_interval,
-          :sway_auto,
-          :sway_auto_range,
-          :sway_auto_interval
-        ]
+      "pixelfun3d" ->
+        pixelfun3d_config_matches?(config, preset_config)
 
-      Enum.all?(keys, fn key ->
-        case key do
-          :program -> left.program == right.program
-          :tilt_mode -> left.tilt_mode == right.tilt_mode
-          :time_direction -> left.time_direction == right.time_direction
-          k when k in [:trans_auto, :rot_auto, :zoom_auto, :sway_auto, :palette_auto] ->
-            Map.get(left, k) == Map.get(right, k)
-
-          _ ->
-            float_eq?(Map.get(left, key), Map.get(right, key))
-        end
-      end)
-    else
-      float_eq_maps?(config, preset_config)
+      _ ->
+        float_eq_maps?(config, preset_config)
     end
   end
 
+  defp pixelfun_config_matches?(config, preset_config) do
+    left = pixelfun_effective_config(config)
+    right = pixelfun_effective_config(preset_config)
+
+    Enum.all?(
+      [
+        :program,
+        :color_interval,
+        :translate_scale,
+        :rotate_scale,
+        :zoom_scale,
+        :sway_scale,
+        :sway_speed,
+        :sway_mode,
+        :time_direction
+      ],
+      fn key ->
+        case key do
+          :program -> left.program == right.program
+          :sway_mode -> left.sway_mode == right.sway_mode
+          :time_direction -> left.time_direction == right.time_direction
+          _ -> float_eq?(Map.get(left, key), Map.get(right, key))
+        end
+      end
+    )
+  end
+
+  defp pixelfun3d_config_matches?(config, preset_config) do
+    left = pixelfun3d_effective_config(config)
+    right = pixelfun3d_effective_config(preset_config)
+
+    keys = [
+      :program,
+      :color_interval,
+      :palette_auto,
+      :orbit_rate,
+      :roll_rate,
+      :roll_pivot,
+      :tilt_scale,
+      :tilt_speed,
+      :tilt_mode,
+      :elev_base,
+      :zoom_base,
+      :zoom_pivot,
+      :pattern_speed,
+      :time_direction,
+      :trans_auto,
+      :trans_auto_range_x,
+      :trans_auto_range_y,
+      :trans_auto_interval,
+      :rot_auto,
+      :rot_auto_range,
+      :rot_auto_interval,
+      :zoom_auto,
+      :zoom_auto_range,
+      :zoom_auto_interval,
+      :sway_auto,
+      :sway_auto_range,
+      :sway_auto_interval
+    ]
+
+    Enum.all?(keys, fn key ->
+      case key do
+        :program -> left.program == right.program
+        :tilt_mode -> left.tilt_mode == right.tilt_mode
+        :time_direction -> left.time_direction == right.time_direction
+        k when k in [:trans_auto, :rot_auto, :zoom_auto, :sway_auto, :palette_auto] ->
+          Map.get(left, k) == Map.get(right, k)
+
+        _ ->
+          float_eq?(Map.get(left, key), Map.get(right, key))
+      end
+    end)
+  end
+
+  @sway_defaults %{sway_scale: 0.0, sway_speed: 0.5, sway_mode: :wobble}
+
   defp pixelfun_effective_config(config) do
-    config = Octopus.Apps.PixelFun.migrate_legacy_config(config)
+    %{
+      program: Map.get(config, :program),
+      color_interval: Map.get(config, :color_interval, 5.0),
+      translate_scale: Map.get(config, :translate_scale, 0.0),
+      rotate_scale: Map.get(config, :rotate_scale, 0.0),
+      zoom_scale: Map.get(config, :zoom_scale, 1.0),
+      sway_scale: Map.get(config, :sway_scale, @sway_defaults.sway_scale),
+      sway_speed: Map.get(config, :sway_speed, @sway_defaults.sway_speed),
+      sway_mode: pixelfun_sway_mode(Map.get(config, :sway_mode, @sway_defaults.sway_mode)),
+      time_direction: pixelfun_time_direction(Map.get(config, :time_direction, :forward))
+    }
+  end
+
+  defp pixelfun3d_effective_config(config) do
+    config = Octopus.Apps.PixelFun3D.migrate_legacy_config(config)
 
     %{
       program: Map.get(config, :program),
@@ -624,6 +672,16 @@ defmodule Octopus.AppModePresets do
       sway_auto_interval: Map.get(config, :sway_auto_interval, 30.0)
     }
   end
+
+  defp formula_app?(app), do: formula_app_key?(app_key(app))
+  defp formula_app_key?(key) when is_binary(key), do: key in @formula_app_keys
+  defp formula_app_key?(_), do: false
+
+  defp pixelfun_sway_mode(:wobble), do: :wobble
+  defp pixelfun_sway_mode(:pendulum), do: :pendulum
+  defp pixelfun_sway_mode("wobble"), do: :wobble
+  defp pixelfun_sway_mode("pendulum"), do: :pendulum
+  defp pixelfun_sway_mode(_), do: :wobble
 
   defp pixelfun_tilt_mode(:wobble), do: :wobble
   defp pixelfun_tilt_mode(:pendulum), do: :pendulum
