@@ -16,8 +16,12 @@ defmodule Octopus.Recording.Supervisor do
 
   @impl true
   def init(_opts) do
+    # Recorders start before the session so the session can drive them (and
+    # auto-start) once they are up.
     children = [
-      Octopus.Recording.PanelRecorder
+      Octopus.Recording.PanelRecorder,
+      Octopus.Recording.RadarRecorder,
+      Octopus.Recording.Session
     ]
 
     Supervisor.init(children, strategy: :one_for_one)

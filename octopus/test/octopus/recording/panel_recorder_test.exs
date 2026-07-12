@@ -1,9 +1,8 @@
 defmodule Octopus.Recording.PanelRecorderTest do
   use ExUnit.Case, async: false
 
-  alias Octopus.{Installation, Recording}
-  alias Octopus.Recording.Format
-  alias Octopus.Recording.Sink
+  alias Octopus.Installation
+  alias Octopus.Recording.{Format, PanelRecorder, Sink}
   alias Octopus.Protobuf.{RGBFrame, WFrame}
 
   @mixer_topic "mixer"
@@ -15,13 +14,13 @@ defmodule Octopus.Recording.PanelRecorderTest do
       start_supervised!({Phoenix.PubSub, name: Octopus.PubSub})
     end
 
-    unless Process.whereis(Recording.PanelRecorder) do
-      start_supervised!(Recording.PanelRecorder)
+    unless Process.whereis(PanelRecorder) do
+      start_supervised!(PanelRecorder)
     end
 
     # Ensure we begin idle regardless of what previous tests did.
-    _ = Recording.stop()
-    on_exit(fn -> _ = Recording.stop() end)
+    _ = PanelRecorder.stop_recording()
+    on_exit(fn -> _ = PanelRecorder.stop_recording() end)
 
     :ok
   end
@@ -44,7 +43,7 @@ defmodule Octopus.Recording.PanelRecorderTest do
     expected_b = frame_b.data
     expected_w = :binary.copy(<<50>>, rgb_size)
 
-    assert {:ok, "file:" <> path} = Recording.start(dir: dir)
+    assert {:ok, "file:" <> path} = PanelRecorder.start_recording(dir: dir)
 
     # A duplicate immediately follows A (as the mixer does per UDP split part)
     # and must be de-duplicated.
@@ -53,9 +52,9 @@ defmodule Octopus.Recording.PanelRecorderTest do
     broadcast(frame_b)
     broadcast(wframe)
 
-    # stop/0 is a synchronous call to the recorder; all frames broadcast before
+    # stop is a synchronous call to the recorder; all frames broadcast before
     # it are guaranteed to have been processed by the time it returns.
-    assert :ok = Recording.stop()
+    assert :ok = PanelRecorder.stop_recording()
 
     assert {:ok, header, records} = Format.parse(File.read!(path))
     assert header.num_panels == num_panels
@@ -76,23 +75,23 @@ defmodule Octopus.Recording.PanelRecorderTest do
     dir = Path.join(System.tmp_dir!(), "octorec-#{System.unique_integer([:positive])}")
     on_exit(fn -> File.rm_rf(dir) end)
 
-    assert %{active: false} = Recording.status()
+    assert %{active: false} = PanelRecorder.status()
 
-    assert {:ok, _target} = Recording.start(dir: dir)
-    status = Recording.status()
+    assert {:ok, _target} = PanelRecorder.start_recording(dir: dir)
+    status = PanelRecorder.status()
     assert status.active == true
     assert status.num_panels == Installation.num_panels()
 
-    assert :ok = Recording.stop()
-    assert %{active: false} = Recording.status()
+    assert :ok = PanelRecorder.stop_recording()
+    assert %{active: false} = PanelRecorder.status()
   end
 
-  test "start/1 twice returns already_recording" do
+  test "start twice returns already_recording" do
     dir = Path.join(System.tmp_dir!(), "octorec-#{System.unique_integer([:positive])}")
     on_exit(fn -> File.rm_rf(dir) end)
 
-    assert {:ok, _} = Recording.start(dir: dir)
-    assert {:error, :already_recording} = Recording.start(dir: dir)
+    assert {:ok, _} = PanelRecorder.start_recording(dir: dir)
+    assert {:error, :already_recording} = PanelRecorder.start_recording(dir: dir)
   end
 
   test "streams the recording to a remote TCP server" do
@@ -117,13 +116,16 @@ defmodule Octopus.Recording.PanelRecorderTest do
     frame_b = %RGBFrame{data: :binary.copy(<<123>>, rgb_size)}
 
     assert {:ok, "tcp://127.0.0.1:" <> _} =
-             Recording.start(sink_mod: Sink.Remote, sink_opts: [host: {127, 0, 0, 1}, port: port])
+             PanelRecorder.start_recording(
+               sink_mod: Sink.Remote,
+               sink_opts: [host: {127, 0, 0, 1}, port: port]
+             )
 
     broadcast(frame_a)
     broadcast(frame_b)
 
     # Closing the socket on stop lets the server's recv loop finish.
-    assert :ok = Recording.stop()
+    assert :ok = PanelRecorder.stop_recording()
 
     assert_receive {:received, data}, 2000
     assert {:ok, header, records} = Format.parse(data)

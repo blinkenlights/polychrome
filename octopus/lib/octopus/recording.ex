@@ -25,15 +25,24 @@ defmodule Octopus.Recording do
 
   ## Runtime control
 
-      Octopus.Recording.start()          # start recording using the default sink
+  `start/1`, `stop/0` and `status/0` operate on a whole *session* — the panel
+  and radar recorders together, sharing one clock and one session directory
+  (see `Octopus.Recording.Session`):
+
+      Octopus.Recording.start()          # -> {:ok, %{dir: ..., panels: ..., radar: ...}}
       Octopus.Recording.start(dir: "/tmp/rec")
-      Octopus.Recording.start(sink_mod: Octopus.Recording.Sink.Remote,
-        sink_opts: [host: "10.0.0.5", port: 7000])
+      Octopus.Recording.start(radar: false)
       Octopus.Recording.status()
       Octopus.Recording.stop()
+
+  To stream a single stream to a remote server, drive the low-level recorders
+  directly:
+
+      Octopus.Recording.PanelRecorder.start_recording(
+        sink_mod: Octopus.Recording.Sink.Remote, sink_opts: [host: "10.0.0.5", port: 7000])
   """
 
-  alias Octopus.Recording.PanelRecorder
+  alias Octopus.Recording.Session
 
   @default_output_dir "recordings"
   @default_max_queue 600
@@ -62,21 +71,21 @@ defmodule Octopus.Recording do
   def sink_spec, do: config()[:sink] || {:file, []}
 
   @doc """
-  Start recording. See `Octopus.Recording.PanelRecorder.start_recording/1` for
-  options. Returns `{:ok, target}` or `{:error, reason}`.
+  Start a recording session (panels + radar). See `Octopus.Recording.Session.start/1`
+  for options. Returns `{:ok, %{dir:, panels:, radar:}}` or `{:error, reason}`.
   """
-  @spec start(keyword()) :: {:ok, String.t()} | {:error, term()}
-  def start(opts \\ []), do: PanelRecorder.start_recording(opts)
+  @spec start(keyword()) :: {:ok, map()} | {:error, term()}
+  def start(opts \\ []), do: Session.start(opts)
 
-  @doc "Stop the current recording."
+  @doc "Stop the current session."
   @spec stop() :: :ok | {:error, :not_recording}
-  def stop, do: PanelRecorder.stop_recording()
+  def stop, do: Session.stop()
 
-  @doc "Return the recorder status map."
+  @doc "Return the session status map."
   @spec status() :: map()
-  def status, do: PanelRecorder.status()
+  def status, do: Session.status()
 
-  @doc "Whether a recording is currently active."
+  @doc "Whether a recording session is currently active."
   @spec recording?() :: boolean()
   def recording?, do: match?(%{active: true}, status())
 end

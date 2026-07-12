@@ -2,12 +2,19 @@ defmodule Mix.Tasks.Octopus.Recording.Encode do
   @shortdoc "Encode a .octorec panel recording into per-panel and mixed videos"
 
   @moduledoc """
-  Convert a panel recording produced by `Octopus.Recording` into video.
+  Convert a recording produced by `Octopus.Recording` into video.
 
-      mix octopus.recording.encode RECORDING.octorec [options]
+      mix octopus.recording.encode PATH [options]
 
-  By default this writes one video per panel plus a single mixed video (all
-  panels laid out side by side) into a directory named after the recording.
+  `PATH` may be:
+
+    * a `.octorec` panel recording -> per-panel videos + a mixed video
+    * a `.jsonl` radar recording -> a top-down radar scope video
+    * a session directory (containing `panels.octorec` and/or `radar.jsonl`)
+      -> both of the above, encoded into that directory
+
+  For panel recordings this writes one video per panel plus a single mixed
+  video (all panels laid out side by side).
 
   ## Options
 
@@ -27,12 +34,13 @@ defmodule Mix.Tasks.Octopus.Recording.Encode do
 
   use Mix.Task
 
-  alias Octopus.Recording.Encoder
+  alias Octopus.Recording.{Encoder, RadarEncoder}
 
   @switches [
     out: :string,
     fps: :integer,
     scale: :integer,
+    size: :integer,
     panels: :boolean,
     mixed: :boolean,
     ffmpeg: :string
@@ -44,20 +52,44 @@ defmodule Mix.Tasks.Octopus.Recording.Encode do
 
     input =
       case args do
-        [input | _] ->
-          input
-
-        [] ->
-          Mix.raise("Missing recording file. Usage: mix octopus.recording.encode FILE.octorec")
+        [input | _] -> input
+        [] -> Mix.raise("Missing path. Usage: mix octopus.recording.encode PATH")
       end
 
-    unless File.regular?(input) do
-      Mix.raise("Recording file not found: #{input}")
+    cond do
+      File.dir?(input) -> encode_session(input, opts)
+      File.regular?(input) -> encode_file(input, opts)
+      true -> Mix.raise("Recording not found: #{input}")
+    end
+  end
+
+  defp encode_session(dir, opts) do
+    panels = Path.join(dir, "panels.octorec")
+    radar = Path.join(dir, "radar.jsonl")
+
+    found? = File.regular?(panels) or File.regular?(radar)
+
+    unless found? do
+      Mix.raise("No panels.octorec or radar.jsonl found in session directory: #{dir}")
     end
 
+    # Default the session outputs into the session directory itself.
+    opts = Keyword.put_new(opts, :out, dir)
+
+    if File.regular?(panels), do: encode_file(panels, opts)
+    if File.regular?(radar), do: encode_file(radar, opts)
+  end
+
+  defp encode_file(input, opts) do
     Mix.shell().info("Encoding #{input} ...")
 
-    case Encoder.encode(input, opts) do
+    result =
+      case Path.extname(input) do
+        ".jsonl" -> RadarEncoder.encode(input, opts)
+        _ -> Encoder.encode(input, opts)
+      end
+
+    case result do
       {:ok, outputs} ->
         Mix.shell().info("Wrote #{length(outputs)} file(s):")
         Enum.each(outputs, &Mix.shell().info("  #{&1}"))

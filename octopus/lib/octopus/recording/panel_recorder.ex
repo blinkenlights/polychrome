@@ -103,24 +103,10 @@ defmodule Octopus.Recording.PanelRecorder do
 
   @impl true
   def init(_opts) do
-    {:ok, %State{max_queue: Recording.max_queue()}, {:continue, :maybe_autostart}}
-  end
-
-  @impl true
-  def handle_continue(:maybe_autostart, %State{} = state) do
-    if Recording.enabled?() do
-      case do_start(state, []) do
-        {:ok, new_state, path} ->
-          Logger.info("[recording] Auto-started panel recording -> #{path}")
-          {:noreply, new_state}
-
-        {:error, reason} ->
-          Logger.warning("[recording] Auto-start failed: #{inspect(reason)}. Staying idle.")
-          {:noreply, state}
-      end
-    else
-      {:noreply, state}
-    end
+    # Autostart is coordinated by Octopus.Recording.Session so the panel and
+    # radar recorders share one clock; this recorder just idles until told to
+    # start.
+    {:ok, %State{max_queue: Recording.max_queue()}}
   end
 
   @impl true
@@ -172,7 +158,8 @@ defmodule Octopus.Recording.PanelRecorder do
     panel_width = Installation.panel_width()
     panel_height = Installation.panel_height()
 
-    started_at_ms = System.system_time(:millisecond)
+    started_at_ms = Keyword.get(opts, :started_at_ms) || System.system_time(:millisecond)
+    start_mono_ms = Keyword.get(opts, :start_mono_ms) || System.monotonic_time(:millisecond)
     {sink_mod, sink_opts} = resolve_sink(opts, started_at_ms)
 
     with {:ok, sink} <- sink_mod.open(sink_opts),
@@ -186,7 +173,7 @@ defmodule Octopus.Recording.PanelRecorder do
           sink_mod: sink_mod,
           sink: sink,
           path: sink_mod.describe(sink),
-          start_mono_ms: System.monotonic_time(:millisecond),
+          start_mono_ms: start_mono_ms,
           started_at_ms: started_at_ms,
           num_panels: num_panels,
           panel_width: panel_width,
