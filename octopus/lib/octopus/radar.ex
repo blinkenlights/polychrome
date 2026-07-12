@@ -113,8 +113,7 @@ defmodule Octopus.Radar do
   use Supervisor
   require Logger
 
-  alias Octopus.Radar.{Runtime, Sensor}
-  alias Octopus.Radar.Mock
+  alias Octopus.Radar.{DebugLog, LogFormat, Mock, Runtime, Sensor}
 
   @topic "radar:hlk6001"
   @supported_types [:ld6001a]
@@ -131,6 +130,14 @@ defmodule Octopus.Radar do
   @doc "Global PubSub topic — fan-in of frames from all sensors."
   @spec topic() :: String.t()
   def topic, do: @topic
+
+  @doc "Map 1-based device_id to UI letter (1 → A, 2 → B, …)."
+  @spec device_letter(pos_integer()) :: String.t()
+  defdelegate device_letter(device_id), to: LogFormat
+
+  @doc false
+  @spec short_port(String.t()) :: String.t()
+  defdelegate short_port(path), to: LogFormat
 
   @doc "PubSub topic for a single sensor identified by `device_id`."
   @spec topic(pos_integer()) :: String.t()
@@ -463,17 +470,56 @@ defmodule Octopus.Radar do
   @spec sensor_status(pos_integer()) ::
           :inactive | :unavailable | :probing | :initializing | :working | :stale
   def sensor_status(device_id) do
-    if enabled?() and Runtime.enabled?(device_id) do
-      case Sensor.get_phase(device_id) do
-        {:ok, :running} -> :working
-        {:ok, :stale} -> :stale
-        {:ok, :probing} -> :probing
-        {:ok, :configuring} -> :initializing
-        {:ok, :opening} -> :unavailable
-        {:error, _} -> :unavailable
-      end
-    else
-      :inactive
+    cond do
+      not enabled?() ->
+        # #region agent log
+        DebugLog.write(
+          "H5",
+          "radar.ex:sensor_status",
+          "radar disabled",
+          DebugLog.sensor_data(device_id, nil, ui_status: :inactive)
+        )
+
+        # #endregion
+        :inactive
+
+      not Runtime.enabled?(device_id) ->
+        # #region agent log
+        DebugLog.write(
+          "H5",
+          "radar.ex:sensor_status",
+          "runtime disabled",
+          DebugLog.sensor_data(device_id, nil, ui_status: :inactive)
+        )
+
+        # #endregion
+        :inactive
+
+      true ->
+        ui_result = Sensor.get_ui_status(device_id)
+
+        ui_status =
+          case ui_result do
+            {:ok, status} -> status
+            {:error, _} -> :unavailable
+          end
+
+        if ui_status == :unavailable do
+          # #region agent log
+          DebugLog.write(
+            "H2",
+            "radar.ex:sensor_status",
+            "mapped to unavailable",
+            DebugLog.sensor_data(device_id, nil,
+              ui_result: inspect(ui_result),
+              ui_status: ui_status
+            )
+          )
+
+          # #endregion
+        end
+
+        ui_status
     end
   end
 
@@ -490,6 +536,16 @@ defmodule Octopus.Radar do
   @doc "Broadcast a sensor status change. Called internally by `Octopus.Radar.Sensor`."
   @spec broadcast_status(pos_integer(), atom()) :: :ok | {:error, term()}
   def broadcast_status(device_id, status) do
+    # #region agent log
+    DebugLog.write(
+      "H1",
+      "radar.ex:broadcast_status",
+      "status broadcast",
+      DebugLog.sensor_data(device_id, nil, status: status)
+    )
+
+    # #endregion
+
     Phoenix.PubSub.broadcast(
       Octopus.PubSub,
       status_topic(device_id),
@@ -604,13 +660,13 @@ defmodule Octopus.Radar do
 
       cond do
         not enabled? ->
-          Logger.info("[radar #{device_id} #{port}] Sensor disabled in config — skipping")
+          Logger.info("#{LogFormat.tag(device_id, port)} Sensor disabled in config — skipping")
           []
 
         true ->
           if mode == :off and not File.exists?(port) do
             Logger.info(
-              "[radar #{device_id} #{port}] Configured port not present at boot — starting sensor (will retry until available)"
+              "#{LogFormat.tag(device_id, port)} Configured port not present at boot — starting sensor (will retry until available)"
             )
           end
 
@@ -630,7 +686,7 @@ defmodule Octopus.Radar do
 
       type ->
         Logger.warning(
-          "[radar #{device_id} #{Keyword.fetch!(config, :port)}] Unknown sensor type #{inspect(type)} — skipping"
+          "#{LogFormat.tag(device_id, Keyword.fetch!(config, :port))} Unknown sensor type #{inspect(type)} — skipping"
         )
 
         []
@@ -690,7 +746,7 @@ defmodule Octopus.Radar do
         {:ok, _} -> :ok
         {:error, {:already_started, _}} -> :ok
         {:error, :already_present} -> :ok
-        error -> Logger.warning("[radar #{device_id}] start_child failed: #{inspect(error)}")
+        error -> Logger.warning("#{LogFormat.device_letter(device_id)} start_child failed: #{inspect(error)}")
       end
     end)
   end
@@ -723,7 +779,8 @@ defmodule Octopus.Radar do
             pose =
               "pose=#{Keyword.fetch!(cfg, :angle_deg)}°/#{Keyword.fetch!(cfg, :distance_cm)}cm/r#{Keyword.fetch!(cfg, :rotation_deg)}°"
 
-            "##{id} #{Keyword.fetch!(cfg, :port)} (#{status}, #{pose})"
+            port = Keyword.fetch!(cfg, :port)
+            "#{LogFormat.device_letter(id)} #{LogFormat.short_port(port)} (#{status}, #{pose})"
           end)
           |> Enum.join("; ")
 
