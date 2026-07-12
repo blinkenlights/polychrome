@@ -84,9 +84,10 @@ defmodule Octopus.Apps.PixelFunTest do
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        orbit_rate: 0.0,
-        roll_rate: 0.0,
-        zoom_base: 0.0,
+        translate_scale: 0.0,
+        rotate_scale: 0.0,
+        zoom_scale: 0.0,
+        offset: {0, 0},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -111,9 +112,10 @@ defmodule Octopus.Apps.PixelFunTest do
         panel_proximities: %{0 => 0.0, 1 => 0.0},
         panel_interaction_factors: %{0 => 0.0, 1 => 0.0},
         seconds: 0.0,
-        orbit_rate: 0.0,
-        roll_rate: 0.0,
-        zoom_base: 0.0,
+        translate_scale: 0.0,
+        rotate_scale: 0.0,
+        zoom_scale: 0.0,
+        offset: {0, 0},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -139,9 +141,10 @@ defmodule Octopus.Apps.PixelFunTest do
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        orbit_rate: 0.0,
-        roll_rate: 0.0,
-        zoom_base: 0.0,
+        translate_scale: 0.0,
+        rotate_scale: 0.0,
+        zoom_scale: 0.0,
+        offset: {0, 0},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -166,9 +169,10 @@ defmodule Octopus.Apps.PixelFunTest do
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        orbit_rate: 0.0,
-        roll_rate: 0.0,
-        zoom_base: 0.0,
+        translate_scale: 0.0,
+        rotate_scale: 0.0,
+        zoom_scale: 0.0,
+        offset: {0, 0},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -191,9 +195,10 @@ defmodule Octopus.Apps.PixelFunTest do
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        orbit_rate: 0.0,
-        roll_rate: 0.0,
-        zoom_base: 0.0,
+        translate_scale: 0.0,
+        rotate_scale: 0.0,
+        zoom_scale: 0.0,
+        offset: {0, 0},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -217,9 +222,10 @@ defmodule Octopus.Apps.PixelFunTest do
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        orbit_rate: 0.0,
-        roll_rate: 0.0,
-        zoom_base: 0.0,
+        translate_scale: 0.0,
+        rotate_scale: 0.0,
+        zoom_scale: 0.0,
+        offset: {0, 0},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -246,9 +252,10 @@ defmodule Octopus.Apps.PixelFunTest do
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        orbit_rate: 0.0,
-        roll_rate: 0.0,
-        zoom_base: 0.0,
+        translate_scale: 0.0,
+        rotate_scale: 0.0,
+        zoom_scale: 0.0,
+        offset: {0, 0},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -272,18 +279,18 @@ defmodule Octopus.Apps.PixelFunTest do
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 5.0,
-        orbit_rate: 0.0,
-        roll_rate: 0.0,
-        zoom_base: 1.0,
+        translate_scale: 0.0,
+        rotate_scale: 0.0,
+        zoom_scale: 0.0,
+        offset: {0, 0},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
-      # Continuous clock: same wall seconds, opposite formula_seconds after running each way.
       forward =
-        struct(State, Map.merge(base, %{time_direction: :forward, formula_seconds: 5.0}))
+        struct(State, Map.put(base, :time_direction, :forward))
 
       backward =
-        struct(State, Map.merge(base, %{time_direction: :backward, formula_seconds: -5.0}))
+        struct(State, Map.put(base, :time_direction, :backward))
 
       forward_canvas = pixel_fun_build_canvas(forward)
       backward_canvas = pixel_fun_build_canvas(backward)
@@ -305,9 +312,10 @@ defmodule Octopus.Apps.PixelFunTest do
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        orbit_rate: 0.0,
-        roll_rate: 0.0,
-        zoom_base: 0.0,
+        translate_scale: 0.0,
+        rotate_scale: 0.0,
+        zoom_scale: 0.0,
+        offset: {0, 0},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -319,45 +327,13 @@ defmodule Octopus.Apps.PixelFunTest do
     end)
   end
 
-  test "palette_from_phase/3 complementary hues and white gap", _context do
-    {a, b} = pixel_fun_palette_from_phase(0.0, :random, 70)
-    assert a.h == 0
-    assert b.h == 180
-    assert a.s == 70
-
-    {a, b} = pixel_fun_palette_from_phase(0.5, :random, 100)
-    assert a.h == 180
-    assert b.h == 0
-
-    for t <- 0..20 do
-      {wa, wb} = pixel_fun_palette_from_phase(t / 20, :white)
-      assert abs(wa.v - wb.v) >= 30
-      assert wa.v >= 32
-      assert wb.v >= 32
+  test "generate_random_white_levels/0 respects min gap and min level", _context do
+    for _ <- 1..100 do
+      {a, b} = pixel_fun_generate_random_white_levels()
+      assert abs(a.v - b.v) >= 30
+      assert a.v >= 32
+      assert b.v >= 32
     end
-  end
-
-  test "mode_tweakables/1 exposes palette phase with auto tempo nest" do
-    tweaks = pixel_fun_mode_tweakables("classic_ripple")
-
-    phase = Enum.find(tweaks, &(&1.key == :palette_phase))
-    assert phase.label == "Palette"
-    assert phase.auto_key == :palette_auto
-    assert phase.visible_when == {:color_mode, [:random, :white]}
-
-    tempo = Enum.find(tweaks, &(&1.key == :color_interval))
-    assert tempo.label == "Tempo"
-    assert tempo.visible_when == {:palette_auto, [true]}
-  end
-
-  test "mode_tweakables/1 exposes disabled_when on transform sliders" do
-    tweaks = pixel_fun_mode_tweakables("classic_ripple")
-
-    assert Enum.find(tweaks, &(&1.key == :orbit_rate)).disabled_when == {:trans_auto, [true]}
-    assert Enum.find(tweaks, &(&1.key == :elev_base)).disabled_when == {:trans_auto, [true]}
-    assert Enum.find(tweaks, &(&1.key == :roll_rate)).disabled_when == {:rot_auto, [true]}
-    assert Enum.find(tweaks, &(&1.key == :zoom_base)).disabled_when == {:zoom_auto, [true]}
-    assert Enum.find(tweaks, &(&1.key == :tilt_scale)).disabled_when == {:sway_auto, [true]}
   end
 
   test "mode_tweakables/1 exposes saturation with color_mode visibility" do
@@ -404,9 +380,10 @@ defmodule Octopus.Apps.PixelFunTest do
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        orbit_rate: 0.0,
-        roll_rate: 0.0,
-        zoom_base: 0.0,
+        translate_scale: 0.0,
+        rotate_scale: 0.0,
+        zoom_scale: 0.0,
+        offset: {0, 0},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -429,53 +406,6 @@ defmodule Octopus.Apps.PixelFunTest do
   defp pixel_fun_build_canvas(state), do: apply(@pixel_fun, :build_canvas, [state])
   defp pixel_fun_mode_tweakables(mode_id), do: apply(@pixel_fun, :mode_tweakables, [mode_id])
 
-  defp pixel_fun_palette_from_phase(phase, mode, sat \\ 70),
-    do: apply(@pixel_fun, :palette_from_phase, [phase, mode, sat])
-
-  test "nx ny nz are available and unit length in formulas", _context do
-    with_installation(Octopus.Installation.Nation2026, fn ->
-      {:ok, program} = Program.parse("nx*nx+ny*ny+nz*nz")
-
-      state = %State{
-        program: program,
-        display_info: %{width: Installation.width(), height: Installation.height()},
-        colors: {Chameleon.HSV.new(0, 70, 100), Chameleon.HSV.new(180, 70, 100)},
-        color_mode: :random,
-        panel_proximities: Map.new(0..(Installation.num_panels() - 1), &{&1, 0.0}),
-        panel_interaction_factors: Map.new(0..(Installation.num_panels() - 1), &{&1, 0.0}),
-        seconds: 0.0,
-        orbit_rate: 0.0,
-        roll_rate: 0.0,
-        tilt_scale: 0.0,
-        elev_base: 0.0,
-        zoom_base: 0.0,
-        audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
-      }
-
-      # Formula returns ~1.0 everywhere → positive lobe → non-black pixels
-      canvas = pixel_fun_build_canvas(state)
-      {x, y} = hd(List.flatten(Installation.virtual_pixel_positions_per_panel()))
-      refute Canvas.get_pixel(canvas, {x, y}) == {0, 0, 0}
-    end)
-  end
-
-  test "migrate_legacy_config maps old preset keys", _context do
-    migrated =
-      apply(@pixel_fun, :migrate_legacy_config, [
-        %{
-          program: "sin(x)",
-          sway_scale: 2.0,
-          rotate_scale: 1.0,
-          translate_scale: 3.0,
-          zoom_scale: 1.0
-        }
-      ])
-
-    assert migrated.tilt_scale == 2.0
-    assert_in_delta migrated.roll_rate, 1.0 * 180 / :math.pi(), 0.1
-    assert migrated.trans_auto == true
-    assert_in_delta migrated.trans_auto_range_y, 3.0, 0.0001
-    refute Map.has_key?(migrated, :elev_amp)
-    refute Map.has_key?(migrated, :zoom_pulse)
-  end
+  defp pixel_fun_generate_random_white_levels,
+    do: apply(@pixel_fun, :generate_random_white_levels, [])
 end

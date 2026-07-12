@@ -25,43 +25,20 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
       Map.merge(
         %{
           program: 0,
-          source: "sin(0.4*t-hypot(x,y))",
+          source: "sin(10*t-hypot(x,y))",
           colors: {color(), color()},
           last_colors: {color(), color()},
           target_colors: {color(), color()},
           lerp_time: 5.0,
-          orbit_rate: 0.0,
-          roll_rate: 0.0,
-          roll_pivot: 0,
-          tilt_scale: 0.0,
-          tilt_speed: 0.5,
-          tilt_mode: :wobble,
-          elev_base: 0.0,
-          zoom_base: 0.0,
-          zoom_pivot: 0,
-          pattern_speed: 1.0,
-          trans_auto: false,
-          trans_auto_range_x: 1.0,
-          trans_auto_range_y: 2.0,
-          trans_auto_interval: 30.0,
-          rot_auto: false,
-          rot_auto_range: 1.0,
-          rot_auto_interval: 30.0,
-          zoom_auto: false,
-          zoom_auto_range: 0.8,
-          zoom_auto_interval: 30.0,
-          sway_auto: false,
-          sway_auto_range: 2.0,
-          sway_auto_interval: 30.0,
-          auto_wanderers: %{},
-          yaw_angle: 0.0,
-          roll_angle: 0.0,
+          translate_scale: 0.0,
+          rotate_scale: 0.0,
+          zoom_scale: 1.0,
           color_mode: :random,
           saturation_percent: 70,
-          palette_phase: 0.0,
           color_interval: 5.0,
-          palette_auto: true,
           live_scene_id: nil,
+          offset: {0, 0},
+          move: {0, 0},
           audio_input: %{low: 0.0, mid: 0.0, high: 0.0},
           seconds: 0.0,
           buttons: %{},
@@ -69,11 +46,7 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
           panel_proximities: %{},
           speed: 1.0,
           display_info: %{width: 8, height: 8},
-          pixel_dirs: nil,
-          time_frozen: false,
-          show_advanced: false,
-          time_direction: :forward,
-          formula_seconds: 0.0
+          time_frozen: false
         },
         overrides
       )
@@ -128,39 +101,25 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
   end
 
   describe "handle_config/2" do
-    test "applies orbit, roll, and zoom immediately" do
-      state = base_state(%{live_scene_id: @classic})
-
-      {:noreply, updated} =
-        pixel_fun_handle_config(%{orbit_rate: 1.5, roll_rate: 2.0, zoom_base: 0.5}, state)
-
-      assert updated.orbit_rate == 1.5
-      assert updated.roll_rate == 2.0
-      assert updated.zoom_base == 0.5
-    end
-
-    test "migrates legacy transform keys on handle_config" do
+    test "applies drift, rotation, and zoom immediately" do
       state = base_state(%{live_scene_id: @classic})
 
       {:noreply, updated} =
         pixel_fun_handle_config(%{translate_scale: 4.0, rotate_scale: 2.0, zoom_scale: 5.0}, state)
 
-      assert updated.trans_auto == true
-      assert_in_delta updated.trans_auto_range_y, 4.0, 0.0001
-      assert_in_delta updated.roll_rate, 2.0 * 180 / :math.pi(), 0.1
+      assert updated.translate_scale == 4.0
+      assert updated.rotate_scale == 2.0
+      assert updated.zoom_scale == 5.0
     end
 
-    test "applies color_interval and palette_phase via handle_config" do
-      state = base_state(%{live_scene_id: @classic, color_interval: 5.0, palette_phase: 0.0})
+    test "reschedules color timer and resets lerp_time when color_interval changes" do
+      state = base_state(%{live_scene_id: @classic, color_interval: 5.0, lerp_time: 2.0, color_timer_ref: nil})
 
-      {:noreply, updated} =
-        pixel_fun_handle_config(%{color_interval: 10.0, palette_phase: 0.25}, state)
+      {:noreply, updated} = pixel_fun_handle_config(%{color_interval: 10.0}, state)
 
       assert updated.color_interval == 10.0
-      assert_in_delta updated.palette_phase, 0.25, 1.0e-6
-      {a, b} = updated.colors
-      assert a.h == 90
-      assert b.h == 270
+      assert updated.lerp_time == 10.0
+      assert is_reference(Map.get(updated, :color_timer_ref))
     end
 
     test "applies saturation_percent via handle_config" do
@@ -179,33 +138,32 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
   end
 
   describe "time freeze" do
-    test "freezing stops palette phase advance" do
-      state =
-        base_state(%{
-          time_frozen: false,
-          color_mode: :random,
-          palette_auto: true,
-          palette_phase: 0.1,
-          color_interval: 5.0,
-          speed: 1.0
-        })
+    test "freezing cancels color timer" do
+      ref = Process.send_after(self(), :noop, 60_000)
+      state = base_state(%{time_frozen: false, color_timer_ref: ref})
 
-      {:noreply, running} = pixel_fun_handle_info(:tick, state)
-      assert running.palette_phase > 0.1
+      {:noreply, updated} = pixel_fun_handle_config(%{time_frozen: true}, state)
 
-      {:noreply, frozen} = pixel_fun_handle_config(%{time_frozen: true}, running)
-      phase = frozen.palette_phase
-      {:noreply, still} = pixel_fun_handle_info(:tick, frozen)
-      assert_in_delta still.palette_phase, phase, 1.0e-12
+      assert updated.time_frozen == true
+      assert updated.color_timer_ref == nil
+    end
+
+    test "unfreezing restarts color timer" do
+      state = base_state(%{time_frozen: true, color_timer_ref: nil, color_mode: :random})
+
+      {:noreply, updated} = pixel_fun_handle_config(%{time_frozen: false}, state)
+
+      assert updated.time_frozen == false
+      assert is_reference(updated.color_timer_ref)
     end
 
     test "tick does not advance time when frozen" do
-      state = base_state(%{time_frozen: true, seconds: 42.0, palette_phase: 0.3})
+      state = base_state(%{time_frozen: true, seconds: 42.0, lerp_time: 3.0})
 
       {:noreply, updated} = pixel_fun_handle_info(:tick, state)
 
       assert updated.seconds == 42.0
-      assert_in_delta updated.palette_phase, 0.3, 1.0e-12
+      assert updated.lerp_time == 3.0
     end
 
     test "tick advances time when not frozen" do
@@ -216,130 +174,12 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
       assert updated.seconds > 10.0
     end
 
-    test "palette auto advances phase and updates complementary hues" do
-      state =
-        base_state(%{
-          color_mode: :random,
-          palette_auto: true,
-          palette_phase: 0.0,
-          color_interval: 1.0,
-          saturation_percent: 70,
-          speed: 1.0
-        })
+    test "update_colors is ignored while frozen" do
+      state = base_state(%{time_frozen: true, color_mode: :random, colors: {color(), color()}})
 
-      {:noreply, updated} = pixel_fun_handle_info(:tick, state)
-      assert updated.palette_phase > 0.0
-      {a, b} = updated.colors
-      assert rem(a.h + 180, 360) == b.h
-    end
+      {:noreply, updated} = pixel_fun_handle_info(:update_colors, state)
 
-    test "palette auto off keeps phase fixed" do
-      state =
-        base_state(%{
-          color_mode: :random,
-          palette_auto: false,
-          palette_phase: 0.4,
-          color_interval: 1.0,
-          speed: 1.0
-        })
-
-      {:noreply, updated} = pixel_fun_handle_info(:tick, state)
-      assert_in_delta updated.palette_phase, 0.4, 1.0e-12
-    end
-
-    test "auto toggle on seeds wanderer at manual base; off clears wanderer" do
-      state = base_state(%{orbit_rate: 1.5, elev_base: 0.5, trans_auto: false, seconds: 5.0})
-
-      {:noreply, on} =
-        pixel_fun_handle_config(
-          %{trans_auto: true, orbit_rate: 1.5, elev_base: 0.5, pixel_fun_units: 2},
-          state
-        )
-
-      assert on.trans_auto == true
-      assert %Octopus.Wander{value: {vx, vy}} = on.auto_wanderers[:trans]
-      assert_in_delta vx, 1.5, 1.0e-12
-      assert_in_delta vy, 0.5, 1.0e-12
-
-      {:noreply, stepped} = pixel_fun_handle_info(:tick, on)
-      assert_in_delta elem(stepped.auto_wanderers[:trans].value, 0), 1.5, 0.05
-
-      {:noreply, off} =
-        pixel_fun_handle_config(%{trans_auto: false, orbit_rate: 1.5, elev_base: 0.5}, stepped)
-
-      assert off.trans_auto == false
-      refute Map.has_key?(off.auto_wanderers, :trans)
-      assert_in_delta off.orbit_rate, 1.5, 1.0e-12
-    end
-
-    test "frozen time does not advance wanderers" do
-      state =
-        base_state(%{
-          time_frozen: false,
-          trans_auto: true,
-          orbit_rate: 0.0,
-          elev_base: 0.0,
-          trans_auto_range_x: 2.0,
-          trans_auto_range_y: 2.0,
-          trans_auto_interval: 4.0,
-          seconds: 1.0,
-          auto_wanderers: %{trans: Octopus.Wander.new({0.0, 0.0})}
-        })
-
-      {:noreply, running} = pixel_fun_handle_info(:tick, state)
-      w1 = running.auto_wanderers[:trans]
-
-      frozen = %{running | time_frozen: true}
-      {:noreply, still} = pixel_fun_handle_info(:tick, frozen)
-      assert still.auto_wanderers[:trans] == w1
-      assert still.seconds == running.seconds
-    end
-    test "toggle-off hands live wanderer values to sliders" do
-      state =
-        base_state(%{
-          orbit_rate: 0.0,
-          elev_base: 0.0,
-          trans_auto: true,
-          seconds: 5.0,
-          auto_wanderers: %{
-            trans: %Octopus.Wander{
-              value: {2.5, -1.0},
-              seg_from: {0.0, 0.0},
-              target: {2.5, -1.0},
-              seg_start: 0.0,
-              seg_dur: 1.0,
-              easing: :smoothstep
-            }
-          }
-        })
-
-      {:noreply, off} =
-        pixel_fun_handle_config(%{trans_auto: false, pixel_fun_units: 2}, state)
-
-      assert off.trans_auto == false
-      assert_in_delta off.orbit_rate, 2.5, 1.0e-12
-      assert_in_delta off.elev_base, -1.0, 1.0e-12
-      refute Map.has_key?(off.auto_wanderers, :trans)
-    end
-
-    test "formula_seconds reverses continuously without jump" do
-      state = base_state(%{time_direction: :forward, seconds: 10.0, formula_seconds: 10.0, speed: 1.0})
-
-      state =
-        Enum.reduce(1..100, state, fn _, s ->
-          {:noreply, next} = pixel_fun_handle_info(:tick, s)
-          next
-        end)
-
-      before = state.formula_seconds
-      dt = 1 / 60
-
-      {:noreply, flipped} =
-        pixel_fun_handle_config(%{time_direction: :backward, pixel_fun_units: 2}, state)
-
-      {:noreply, after_tick} = pixel_fun_handle_info(:tick, flipped)
-
-      assert_in_delta after_tick.formula_seconds - before, -dt, 1.0e-6
+      assert updated.colors == state.colors
     end
   end
 

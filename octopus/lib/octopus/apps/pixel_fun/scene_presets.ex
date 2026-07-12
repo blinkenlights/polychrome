@@ -6,39 +6,12 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
   used by the full editor and existing tests.
   """
 
-  alias Octopus.Apps.PixelFun
   alias Octopus.Apps.PixelFun.Program
 
   @app_mode_presets "Elixir.Octopus.AppModePresets"
   @pixel_fun "Elixir.Octopus.Apps.PixelFun"
 
-  @sphere_defaults %{
-    orbit_rate: 0.0,
-    roll_rate: 0.0,
-    roll_pivot: 0,
-    tilt_scale: 0.0,
-    tilt_speed: 0.5,
-    tilt_mode: :wobble,
-    elev_base: 0.0,
-    zoom_base: 1.0,
-    zoom_pivot: 0,
-    pattern_speed: 1.0,
-    trans_auto: false,
-    trans_auto_range_x: 6.0,
-    trans_auto_range_y: 2.0,
-    trans_auto_interval: 30.0,
-    rot_auto: false,
-    rot_auto_range: 30.0,
-    rot_auto_interval: 30.0,
-    zoom_auto: false,
-    zoom_auto_range: 1.5,
-    zoom_auto_interval: 30.0,
-    sway_auto: false,
-    sway_auto_range: 2.0,
-    sway_auto_interval: 30.0
-  }
-
-  @sphere_keys Map.keys(@sphere_defaults)
+  @sway_defaults %{sway_scale: 0.0, sway_speed: 0.5, sway_mode: :wobble}
 
   @type preset :: map()
 
@@ -74,16 +47,17 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
   def create(attrs) do
     name = Map.fetch!(attrs, :name)
 
-    config =
-      %{
-        program: Map.get(attrs, :formula) || Map.get(attrs, :program),
-        palette_phase: Map.get(attrs, :palette_phase, 0.0),
-        color_interval: Map.get(attrs, :color_interval, 5.0),
-        palette_auto: Map.get(attrs, :palette_auto, true),
-        time_direction: Map.get(attrs, :time_direction, :forward)
-      }
-      |> Map.merge(sphere_attrs_from(attrs))
-      |> PixelFun.migrate_legacy_config()
+    config = %{
+      program: Map.get(attrs, :formula) || Map.get(attrs, :program),
+      color_interval: Map.get(attrs, :color_interval, 5.0),
+      translate_scale: Map.get(attrs, :translate_scale, 0.0),
+      rotate_scale: Map.get(attrs, :rotate_scale, 0.0),
+      zoom_scale: Map.get(attrs, :zoom_scale, 1.0),
+      sway_scale: Map.get(attrs, :sway_scale, @sway_defaults.sway_scale),
+      sway_speed: Map.get(attrs, :sway_speed, @sway_defaults.sway_speed),
+      sway_mode: Map.get(attrs, :sway_mode, @sway_defaults.sway_mode),
+      time_direction: Map.get(attrs, :time_direction, :forward)
+    }
 
     opts = [accent_color: Map.get(attrs, :accent_color, presets().random_accent_color())]
 
@@ -102,7 +76,6 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
     config =
       base_config
       |> Map.merge(flat_attrs_to_config(attrs))
-      |> PixelFun.migrate_legacy_config()
 
     update_attrs =
       %{config: config}
@@ -135,29 +108,30 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
   def to_config(%{} = preset) do
     %{
       program: preset.formula,
-      palette_phase: Map.get(preset, :palette_phase, 0.0),
       color_interval: preset.color_interval,
-      palette_auto: Map.get(preset, :palette_auto, true),
-      time_direction: normalize_time_direction(Map.get(preset, :time_direction, :forward))
+      translate_scale: preset.translate_scale,
+      rotate_scale: preset.rotate_scale,
+      zoom_scale: preset.zoom_scale,
+      sway_scale: Map.get(preset, :sway_scale, @sway_defaults.sway_scale),
+      sway_speed: Map.get(preset, :sway_speed, @sway_defaults.sway_speed),
+      sway_mode: Map.get(preset, :sway_mode, @sway_defaults.sway_mode),
+      time_direction: Map.get(preset, :time_direction, :forward)
     }
-    |> Map.merge(Map.take(preset, @sphere_keys))
-    |> PixelFun.migrate_legacy_config()
-    |> Map.update!(:time_direction, &normalize_time_direction/1)
-    |> Map.update!(:tilt_mode, &Octopus.Sway.normalize_mode/1)
   end
 
   @spec attrs_from_config(map()) :: map()
   def attrs_from_config(config) do
-    config = PixelFun.migrate_legacy_config(config)
-
     %{
       formula: Map.get(config, :program, ""),
-      palette_phase: Map.get(config, :palette_phase, 0.0),
       color_interval: Map.get(config, :color_interval, 5.0),
-      palette_auto: Map.get(config, :palette_auto, true),
+      translate_scale: Map.get(config, :translate_scale, 0.0),
+      rotate_scale: Map.get(config, :rotate_scale, 0.0),
+      zoom_scale: Map.get(config, :zoom_scale, 1.0),
+      sway_scale: Map.get(config, :sway_scale, @sway_defaults.sway_scale),
+      sway_speed: Map.get(config, :sway_speed, @sway_defaults.sway_speed),
+      sway_mode: Map.get(config, :sway_mode, @sway_defaults.sway_mode),
       time_direction: Map.get(config, :time_direction, :forward)
     }
-    |> Map.merge(Map.take(config, @sphere_keys))
   end
 
   @spec config_matches?(map(), map()) :: boolean()
@@ -166,17 +140,23 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
     right = effective_scene_config(normalize_snapshot(preset_or_snapshot))
 
     Enum.all?(
-      [:program, :color_interval, :palette_auto, :time_direction | @sphere_keys],
+      [
+        :program,
+        :color_interval,
+        :translate_scale,
+        :rotate_scale,
+        :zoom_scale,
+        :sway_scale,
+        :sway_speed,
+        :sway_mode,
+        :time_direction
+      ],
       fn key ->
         case key do
           :program -> left.program == right.program
-          :tilt_mode -> left.tilt_mode == right.tilt_mode
+          :sway_mode -> left.sway_mode == right.sway_mode
           :time_direction -> left.time_direction == right.time_direction
-          k when k in [:trans_auto, :rot_auto, :zoom_auto, :sway_auto, :palette_auto] ->
-            Map.get(left, k) == Map.get(right, k)
-
-          _ ->
-            float_eq?(Map.get(left, key), Map.get(right, key))
+          _ -> float_eq?(Map.get(left, key), Map.get(right, key))
         end
       end
     )
@@ -207,20 +187,23 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
   defp pixel_fun, do: String.to_existing_atom(@pixel_fun)
 
   defp to_legacy(%{} = preset) do
-    config = PixelFun.migrate_legacy_config(preset.config)
+    config = preset.config
 
     %{
       id: legacy_id(preset),
       name: preset.name,
       formula: config[:program],
-      palette_phase: Map.get(config, :palette_phase, 0.0),
       color_interval: config[:color_interval],
+      translate_scale: config[:translate_scale],
+      rotate_scale: config[:rotate_scale],
+      zoom_scale: config[:zoom_scale],
+      sway_scale: Map.get(config, :sway_scale, @sway_defaults.sway_scale),
+      sway_speed: Map.get(config, :sway_speed, @sway_defaults.sway_speed),
+      sway_mode: Map.get(config, :sway_mode, @sway_defaults.sway_mode),
       time_direction: Map.get(config, :time_direction, :forward),
       accent_color: preset.accent_color,
-      builtin: preset.builtin,
-      palette_auto: Map.get(config, :palette_auto, true)
+      builtin: preset.builtin
     }
-    |> Map.merge(Map.take(config, @sphere_keys))
   end
 
   defp legacy_id(%{origin: :builtin, slug: slug}), do: "builtin:#{slug}"
@@ -237,17 +220,14 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
   defp flat_attrs_to_config(attrs) do
     %{}
     |> maybe_config_put(:program, Map.get(attrs, :formula) || Map.get(attrs, :program))
-    |> maybe_config_put(:palette_phase, Map.get(attrs, :palette_phase))
     |> maybe_config_put(:color_interval, Map.get(attrs, :color_interval))
-    |> maybe_config_put(:palette_auto, Map.get(attrs, :palette_auto))
+    |> maybe_config_put(:translate_scale, Map.get(attrs, :translate_scale))
+    |> maybe_config_put(:rotate_scale, Map.get(attrs, :rotate_scale))
+    |> maybe_config_put(:zoom_scale, Map.get(attrs, :zoom_scale))
+    |> maybe_config_put(:sway_scale, Map.get(attrs, :sway_scale))
+    |> maybe_config_put(:sway_speed, Map.get(attrs, :sway_speed))
+    |> maybe_config_put(:sway_mode, Map.get(attrs, :sway_mode))
     |> maybe_config_put(:time_direction, Map.get(attrs, :time_direction))
-    |> then(fn config -> Map.merge(config, sphere_attrs_from(attrs)) end)
-  end
-
-  defp sphere_attrs_from(attrs) do
-    attrs
-    |> Map.take(@sphere_keys ++ [:translate_scale, :rotate_scale, :zoom_scale, :sway_scale, :sway_speed, :sway_mode])
-    |> Map.reject(fn {_k, v} -> is_nil(v) end)
   end
 
   defp maybe_config_put(config, _key, nil), do: config
@@ -270,7 +250,17 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
   end
 
   defp normalize_snapshot(%{formula: formula} = preset) do
-    to_config(Map.put(preset, :formula, formula))
+    %{
+      program: formula,
+      color_interval: preset.color_interval,
+      translate_scale: preset.translate_scale,
+      rotate_scale: preset.rotate_scale,
+      zoom_scale: preset.zoom_scale,
+      sway_scale: Map.get(preset, :sway_scale, @sway_defaults.sway_scale),
+      sway_speed: Map.get(preset, :sway_speed, @sway_defaults.sway_speed),
+      sway_mode: normalize_sway_mode(Map.get(preset, :sway_mode, @sway_defaults.sway_mode)),
+      time_direction: normalize_time_direction(Map.get(preset, :time_direction, :forward))
+    }
   end
 
   defp normalize_snapshot(%{program: _} = snapshot) do
@@ -278,17 +268,24 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
   end
 
   defp effective_scene_config(config) do
-    config = PixelFun.migrate_legacy_config(config)
-
     %{
       program: Map.get(config, :program),
       color_interval: Map.get(config, :color_interval, 5.0),
-      palette_auto: Map.get(config, :palette_auto, true),
-      time_direction: normalize_time_direction(Map.get(config, :time_direction, :forward)),
-      tilt_mode: Octopus.Sway.normalize_mode(Map.get(config, :tilt_mode, :wobble))
+      translate_scale: Map.get(config, :translate_scale, 0.0),
+      rotate_scale: Map.get(config, :rotate_scale, 0.0),
+      zoom_scale: Map.get(config, :zoom_scale, 1.0),
+      sway_scale: Map.get(config, :sway_scale, @sway_defaults.sway_scale),
+      sway_speed: Map.get(config, :sway_speed, @sway_defaults.sway_speed),
+      sway_mode: normalize_sway_mode(Map.get(config, :sway_mode, @sway_defaults.sway_mode)),
+      time_direction: normalize_time_direction(Map.get(config, :time_direction, :forward))
     }
-    |> Map.merge(Map.take(config, @sphere_keys))
   end
+
+  defp normalize_sway_mode(:wobble), do: :wobble
+  defp normalize_sway_mode(:pendulum), do: :pendulum
+  defp normalize_sway_mode("wobble"), do: :wobble
+  defp normalize_sway_mode("pendulum"), do: :pendulum
+  defp normalize_sway_mode(_), do: :wobble
 
   defp normalize_time_direction(:forward), do: :forward
   defp normalize_time_direction(:backward), do: :backward
