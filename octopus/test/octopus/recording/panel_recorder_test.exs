@@ -3,6 +3,7 @@ defmodule Octopus.Recording.PanelRecorderTest do
 
   alias Octopus.{Installation, Recording}
   alias Octopus.Recording.Format
+  alias Octopus.Recording.Sink
   alias Octopus.Protobuf.{RGBFrame, WFrame}
 
   @mixer_topic "mixer"
@@ -94,7 +95,56 @@ defmodule Octopus.Recording.PanelRecorderTest do
     assert {:error, :already_recording} = Recording.start(dir: dir)
   end
 
+  test "streams the recording to a remote TCP server" do
+    {:ok, listen} =
+      :gen_tcp.listen(0, [:binary, packet: :raw, active: false, reuseaddr: true])
+
+    {:ok, port} = :inet.port(listen)
+    test_pid = self()
+
+    _acceptor =
+      spawn_link(fn ->
+        {:ok, sock} = :gen_tcp.accept(listen, 2000)
+        send(test_pid, {:received, recv_all(sock, <<>>)})
+      end)
+
+    num_panels = Installation.num_panels()
+    pw = Installation.panel_width()
+    ph = Installation.panel_height()
+    rgb_size = num_panels * pw * ph * 3
+
+    frame_a = %RGBFrame{data: :binary.copy(<<77>>, rgb_size)}
+    frame_b = %RGBFrame{data: :binary.copy(<<123>>, rgb_size)}
+
+    assert {:ok, "tcp://127.0.0.1:" <> _} =
+             Recording.start(sink_mod: Sink.Remote, sink_opts: [host: {127, 0, 0, 1}, port: port])
+
+    broadcast(frame_a)
+    broadcast(frame_b)
+
+    # Closing the socket on stop lets the server's recv loop finish.
+    assert :ok = Recording.stop()
+
+    assert_receive {:received, data}, 2000
+    assert {:ok, header, records} = Format.parse(data)
+    assert header.num_panels == num_panels
+
+    distinctive =
+      records
+      |> Enum.map(fn {_offset, d} -> d end)
+      |> Enum.filter(&(&1 in [frame_a.data, frame_b.data]))
+
+    assert distinctive == [frame_a.data, frame_b.data]
+  end
+
   defp broadcast(frame) do
     Phoenix.PubSub.broadcast(Octopus.PubSub, @mixer_topic, {:mixer, {:frame, frame}})
+  end
+
+  defp recv_all(sock, acc) do
+    case :gen_tcp.recv(sock, 0, 2000) do
+      {:ok, data} -> recv_all(sock, acc <> data)
+      {:error, _} -> acc
+    end
   end
 end

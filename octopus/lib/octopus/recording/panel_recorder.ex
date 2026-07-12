@@ -173,8 +173,7 @@ defmodule Octopus.Recording.PanelRecorder do
     panel_height = Installation.panel_height()
 
     started_at_ms = System.system_time(:millisecond)
-    sink_mod = Keyword.get(opts, :sink_mod, Sink.File)
-    sink_opts = sink_opts(opts, started_at_ms)
+    {sink_mod, sink_opts} = resolve_sink(opts, started_at_ms)
 
     with {:ok, sink} <- sink_mod.open(sink_opts),
          header = Format.header(num_panels, panel_width, panel_height, started_at_ms),
@@ -220,15 +219,46 @@ defmodule Octopus.Recording.PanelRecorder do
     %State{max_queue: state.max_queue}
   end
 
-  defp sink_opts(opts, started_at_ms) do
-    case Keyword.fetch(opts, :sink_opts) do
-      {:ok, sink_opts} ->
-        sink_opts
+  # Resolve which sink to use and the options to open it with. An explicit
+  # `:sink_mod` in the start options wins; otherwise the configured `:sink`
+  # spec is used (defaulting to a file sink).
+  defp resolve_sink(opts, started_at_ms) do
+    case Keyword.fetch(opts, :sink_mod) do
+      {:ok, Sink.File} ->
+        {Sink.File, file_open_opts(opts, [], started_at_ms)}
+
+      {:ok, mod} ->
+        {mod, Keyword.get(opts, :sink_opts, [])}
 
       :error ->
-        dir = Keyword.get(opts, :dir, Recording.output_dir())
-        [path: Path.join(dir, generated_filename(started_at_ms))]
+        case Recording.sink_spec() do
+          {:remote, remote_opts} ->
+            {Sink.Remote, remote_opts}
+
+          {:file, file_opts} ->
+            {Sink.File, file_open_opts(opts, file_opts, started_at_ms)}
+
+          _ ->
+            {Sink.File, file_open_opts(opts, [], started_at_ms)}
+        end
     end
+  end
+
+  defp file_open_opts(opts, file_opts, started_at_ms) do
+    sink_opts = Keyword.get(opts, :sink_opts, [])
+
+    path =
+      cond do
+        p = Keyword.get(sink_opts, :path) -> p
+        p = Keyword.get(file_opts, :path) -> p
+        true -> Path.join(file_dir(opts, file_opts), generated_filename(started_at_ms))
+      end
+
+    [path: path]
+  end
+
+  defp file_dir(opts, file_opts) do
+    Keyword.get(opts, :dir) || Keyword.get(file_opts, :dir) || Recording.output_dir()
   end
 
   defp generated_filename(started_at_ms) do

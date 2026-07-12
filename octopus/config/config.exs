@@ -42,7 +42,11 @@ config :octopus, :osc_server_port, 8000
 config :octopus, Octopus.Recording,
   enabled: false,
   output_dir: "recordings",
-  max_queue: 600
+  max_queue: 600,
+  # Where an auto-started/default recording is written:
+  #   {:file, []}                              -> local file (default)
+  #   {:remote, host: "10.0.0.5", port: 7000}  -> stream to a TCP server
+  sink: {:file, []}
 
 # Network addresses are now configured in Installation modules
 # See lib/octopus/installation/*.ex files
