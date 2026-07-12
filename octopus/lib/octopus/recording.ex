@@ -12,12 +12,23 @@ defmodule Octopus.Recording do
       config :octopus, Octopus.Recording,
         enabled: false,          # auto-start a recording on boot
         output_dir: "recordings",# where generated recording files are written
-        max_queue: 600           # mailbox backlog before frames are dropped
+        max_queue: 600,          # mailbox backlog before frames are dropped
+        sink: {:file, []}        # default sink; see below
+
+    The `:sink` spec selects where an auto-started (or default) recording is
+  written:
+
+    * `{:file, opts}` - append to a local file (`opts` may set `:dir` or a
+      fixed `:path`). This is the default.
+    * `{:remote, opts}` - stream to a TCP server; `opts` requires `:host` and
+      `:port` (see `Octopus.Recording.Sink.Remote`).
 
   ## Runtime control
 
-      Octopus.Recording.start()          # start recording to a generated file
+      Octopus.Recording.start()          # start recording using the default sink
       Octopus.Recording.start(dir: "/tmp/rec")
+      Octopus.Recording.start(sink_mod: Octopus.Recording.Sink.Remote,
+        sink_opts: [host: "10.0.0.5", port: 7000])
       Octopus.Recording.status()
       Octopus.Recording.stop()
   """
@@ -42,6 +53,13 @@ defmodule Octopus.Recording do
   @doc "Mailbox backlog at which the recorder starts dropping frames."
   @spec max_queue() :: pos_integer()
   def max_queue, do: config()[:max_queue] || @default_max_queue
+
+  @doc """
+  The configured default sink spec, used for auto-start and when `start/1` is
+  called without an explicit `:sink_mod`. Defaults to `{:file, []}`.
+  """
+  @spec sink_spec() :: {:file, keyword()} | {:remote, keyword()}
+  def sink_spec, do: config()[:sink] || {:file, []}
 
   @doc """
   Start recording. See `Octopus.Recording.PanelRecorder.start_recording/1` for
