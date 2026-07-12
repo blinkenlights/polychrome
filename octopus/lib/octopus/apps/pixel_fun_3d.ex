@@ -167,7 +167,8 @@ defmodule Octopus.Apps.PixelFun3D do
       slug: "organic_swirl",
       name: "Organic swirl",
       formula: "sin(x*y*0.06+sin(t*0.06)*x*0.2-t*0.12)*cos(hypot(x,y)*2+t*0.06)",
-      accent_color: "#2ECC71"
+      accent_color: "#2ECC71",
+      saturation_percent: 50
     },
     %{
       slug: "swaytest",
@@ -216,7 +217,7 @@ defmodule Octopus.Apps.PixelFun3D do
       slug: "quallenpuls",
       name: "Quallen-Puls",
       formula:
-        "exp(-hypot(sin((x-78)*PI/312)*14,y)*0.25)*sin(hypot(sin((x-78)*PI/312)*14,y)*1.5-t*0.4)",
+        "exp(-hypot(sin((x+9)*PI/312)*14,y)*0.1)*sin(hypot(sin((x+9)*PI/312)*14,y)*1.5-t*0.4)",
       accent_color: "#2ECC71"
     },
     %{
@@ -250,9 +251,9 @@ defmodule Octopus.Apps.PixelFun3D do
     %{
       slug: "nebeldrift",
       name: "Nebeldrift",
-      formula: "noise(nx*2,ny*2,nz*2+t*0.13)",
+      formula: "noise(nx*2,ny*2,nz*2+t*0.08)",
       accent_color: "#1ABC9C",
-      color_mode: :rainbow,
+      color_mode: :random,
       trans_auto: true,
       trans_auto_range_x: 4.0,
       trans_auto_range_y: 1.5,
@@ -279,6 +280,47 @@ defmodule Octopus.Apps.PixelFun3D do
       sway_auto: true,
       sway_auto_range: 1.5,
       sway_auto_interval: 35
+    },
+    %{
+      slug: "strudel",
+      name: "Strudel",
+      formula: "sin(3*atan2(nz,ny)+acos(nx)*6-t*0.4)",
+      accent_color: "#2ECC71"
+    },
+    %{
+      slug: "spiralband",
+      name: "Spiralband",
+      formula: "sin(4*atan2(ny,nx)+nz*30-t*0.4)",
+      accent_color: "#FF7043"
+    },
+    %{
+      slug: "globus",
+      name: "Globus",
+      formula:
+        "exp(-pow(nz*5,2))*sin(4*atan2(ny,nx)+nz*20-t*0.4)+exp(-pow((nz-1)*4,2))*sin(3*atan2(ny,nx)+acos(nz)*10+t*0.3)+exp(-pow((nz+1)*4,2))*sin(3*atan2(ny,nx)-acos(-nz)*10-t*0.3)",
+      accent_color: "#E74C3C",
+      # With roll_pivot 0 the panels near the pivot axis see less parade —
+      # the full equator→pole cycle is most dramatic a quarter-ring away.
+      roll_rate: 6.0,
+      roll_pivot: 0
+    },
+    %{
+      slug: "polarlicht_parade",
+      name: "Polar-Parade",
+      formula:
+        "exp(-pow((nz-1)*3,2))*sin(2*atan2(ny,nx)+acos(nz)*8+t*0.4)+exp(-pow((nz+1)*3,2))*sin(2*atan2(ny,nx)+acos(-nz)*8-t*0.4)",
+      accent_color: "#3498DB",
+      roll_rate: 4.0,
+      roll_pivot: 6
+    },
+    %{
+      slug: "kippende_baender",
+      name: "Kippende Bänder",
+      formula: "sin(nx*10-t*0.13)",
+      accent_color: "#9B59B6",
+      rot_auto: true,
+      rot_auto_range: 20,
+      rot_auto_interval: 40
     }
   ]
 

@@ -119,7 +119,9 @@ defmodule Octopus.Apps.PixelFun.Program do
   def do_eval({:call, [~c"tan", expr]}, env), do: expr |> do_eval(env) |> :math.tan()
 
   def do_eval({:call, [~c"asin", expr]}, env), do: expr |> do_eval(env) |> :math.asin()
-  def do_eval({:call, [~c"acos", expr]}, env), do: expr |> do_eval(env) |> :math.acos()
+  # Clamp: unit-vector inputs (nx/ny/nz) can drift past ±1 by float error.
+  def do_eval({:call, [~c"acos", expr]}, env),
+    do: expr |> do_eval(env) |> min(1.0) |> max(-1.0) |> :math.acos()
   def do_eval({:call, [~c"atan", expr]}, env), do: expr |> do_eval(env) |> :math.atan()
   def do_eval({:call, [~c"atan2", a, b]}, env), do: :math.atan2(do_eval(a, env), do_eval(b, env))
 

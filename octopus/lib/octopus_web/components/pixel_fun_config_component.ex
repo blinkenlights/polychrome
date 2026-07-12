@@ -263,7 +263,6 @@ defmodule OctopusWeb.PixelFunConfigComponent do
       step={@opts |> Map.get(:step, if(@type == :int, do: 1, else: 0.01))}
       min={@opts[:min]}
       max={@opts[:max]}
-      phx-debounce="50"
       value={@value}
       class="range range-primary range-sm w-full"
     />
