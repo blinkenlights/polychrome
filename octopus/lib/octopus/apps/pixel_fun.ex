@@ -20,14 +20,14 @@ defmodule Octopus.Apps.PixelFun do
 
   @auto_defaults %{
     trans_auto: false,
-    trans_auto_range_x: 1.0,
+    trans_auto_range_x: 6.0,
     trans_auto_range_y: 2.0,
     trans_auto_interval: 30.0,
     rot_auto: false,
-    rot_auto_range: 1.0,
+    rot_auto_range: 30.0,
     rot_auto_interval: 30.0,
     zoom_auto: false,
-    zoom_auto_range: 0.8,
+    zoom_auto_range: 1.5,
     zoom_auto_interval: 30.0,
     sway_auto: false,
     sway_auto_range: 2.0,
@@ -35,12 +35,14 @@ defmodule Octopus.Apps.PixelFun do
   }
 
   @channel_bounds %{
-    trans_x: {-4.0, 4.0},
+    trans_x: {-30.0, 30.0},
     trans_y: {-4.0, 4.0},
-    rot: {-4.0, 4.0},
-    zoom: {-2.0, 2.0},
+    rot: {-180.0, 180.0},
     sway: {0.0, 4.0}
   }
+
+  @zoom_factor_min 0.25
+  @zoom_factor_max 4.0
 
   @channel_base_key %{
     rot: :roll_rate,
@@ -61,10 +63,11 @@ defmodule Octopus.Apps.PixelFun do
     tilt_speed: 0.5,
     tilt_mode: :wobble,
     elev_base: 0.0,
-    zoom_base: 0.0,
+    zoom_base: 1.0,
     zoom_pivot: 0,
     pattern_speed: 1.0,
-    time_direction: :forward
+    time_direction: :forward,
+    pixel_fun_units: 2
   }
   |> Map.merge(@auto_defaults)
 
@@ -242,23 +245,23 @@ defmodule Octopus.Apps.PixelFun do
       palette_phase: {"Palette", :float, %{default: 0.0, min: 0.0, max: 1.0, step: 0.01}},
       color_interval: {"Palette tempo (s)", :float, %{default: 5, min: 1, max: 20, step: 0.5}},
       palette_auto: {"Palette Auto", :boolean, %{default: true}},
-      orbit_rate: {"Translate X", :float, %{default: 0.0, min: -4, max: 4, step: 0.01}},
-      elev_base: {"Translate Y", :float, %{default: 0.0, min: -4, max: 4, step: 0.1}},
-      roll_rate: {"Rotation", :float, %{default: 0.0, min: -4, max: 4, step: 0.01}},
-      zoom_base: {"Zoom", :float, %{default: 0.0, min: -2, max: 2, step: 0.05}},
-      tilt_scale: {"Sway", :float, %{default: 0.0, min: 0, max: 4, step: 0.1}},
+      orbit_rate: {"Translate X (px/s)", :float, %{default: 0.0, min: -30, max: 30, step: 0.5}},
+      elev_base: {"Translate Y (px)", :float, %{default: 0.0, min: -4, max: 4, step: 0.1}},
+      roll_rate: {"Rotation (°/s)", :float, %{default: 0.0, min: -180, max: 180, step: 1}},
+      zoom_base: {"Zoom (×)", :float, %{default: 1.0, min: 0.25, max: 4, step: 0.05}},
+      tilt_scale: {"Sway (px)", :float, %{default: 0.0, min: 0, max: 4, step: 0.1}},
       trans_auto: {"Translate Auto", :boolean, %{default: false}},
-      trans_auto_range_x: {"Translate Range X", :float, %{default: 1.0, min: 0, max: 4, step: 0.05}},
-      trans_auto_range_y: {"Translate Range Y", :float, %{default: 2.0, min: 0, max: 4, step: 0.05}},
+      trans_auto_range_x: {"Translate Range X (px/s)", :float, %{default: 6.0, min: 0, max: 15, step: 0.5}},
+      trans_auto_range_y: {"Translate Range Y (px)", :float, %{default: 2.0, min: 0, max: 4, step: 0.1}},
       trans_auto_interval: {"Translate Interval", :float, %{default: 30.0, min: 4, max: 60, step: 1}},
       rot_auto: {"Rotation Auto", :boolean, %{default: false}},
-      rot_auto_range: {"Rotation Range", :float, %{default: 1.0, min: 0, max: 4, step: 0.05}},
+      rot_auto_range: {"Rotation Range (°/s)", :float, %{default: 30.0, min: 0, max: 90, step: 1}},
       rot_auto_interval: {"Rotation Interval", :float, %{default: 30.0, min: 4, max: 60, step: 1}},
       zoom_auto: {"Zoom Auto", :boolean, %{default: false}},
-      zoom_auto_range: {"Zoom Range", :float, %{default: 0.8, min: 0, max: 2, step: 0.05}},
+      zoom_auto_range: {"Zoom Range (×÷)", :float, %{default: 1.5, min: 1.0, max: 3.0, step: 0.05}},
       zoom_auto_interval: {"Zoom Interval", :float, %{default: 30.0, min: 4, max: 60, step: 1}},
       sway_auto: {"Sway Auto", :boolean, %{default: false}},
-      sway_auto_range: {"Sway Range", :float, %{default: 2.0, min: 0, max: 4, step: 0.05}},
+      sway_auto_range: {"Sway Range (px)", :float, %{default: 2.0, min: 0, max: 4, step: 0.05}},
       sway_auto_interval: {"Sway Interval", :float, %{default: 30.0, min: 4, max: 60, step: 1}},
       roll_pivot: {"Rotation pivot (panel)", :float, %{default: 0, min: 0, max: 12, step: 1}},
       tilt_speed: {"Sway speed", :float, %{default: 0.5, min: 0, max: 3, step: 0.05}},
@@ -290,15 +293,17 @@ defmodule Octopus.Apps.PixelFun do
 
     Saturation — colour vividness for Random dual and Rainbow (0 = grey, 100 = full; default 70). White dual ignores saturation.
 
-    Translate X — yaw orbit of the pattern around the ring (seamless). Looks like horizontal drift from inside the ring. Auto wanders the rate.
+    Translate X — ring yaw drift in px/s (8 px/s ≈ one panel per second). Auto wanders the rate (± Range X).
 
-    Translate Y — static vertical band shift (seamless in azimuth). Auto wanders the offset.
+    Translate Y — vertical band shift in px. Shared Translate Auto also wanders this (± Range Y).
 
-    Rotation — roll about a panel pivot; the pattern spins around that panel. Auto wanders the rate. Rotation pivot (Advanced) selects which panel.
+    Rotation — roll rate in °/s (30°/s ≈ one full spin per 12 s). Auto wanders the rate. Rotation pivot (Advanced) selects which panel.
 
-    Zoom — conformal Möbius dilation toward the zoom pivot panel (static log-zoom). Auto wanders the zoom value.
+    Zoom — conformal Möbius scale factor × (1.0 = neutral). Auto wanders symmetrically in log space (± Range multiplier).
 
-    Sway — small-angle tilt about a horizontal axis (Wobble precesses; Pendulum oscillates amplitude). Strength is in pixel units. Auto wanders strength; Sway speed/mode live in Advanced.
+    Sway — small-angle tilt strength in px (Wobble precesses; Pendulum oscillates). Auto wanders strength; Sway speed/mode live in Advanced.
+
+    Auto Interval — seconds between wander targets (shared easing; Translate moves diagonally).
 
     Time direction — forward (default) or backward. Backward reverses formula animation and manual sphere motion. Auto wanderers and palette Auto ignore time direction (they keep advancing on wall-clock app time).
 
@@ -333,7 +338,8 @@ defmodule Octopus.Apps.PixelFun do
       live_scene_id: live_scene_id(state, scene),
       active_preset_id: running_preset_id(state, scene),
       time_frozen: state.time_frozen || false,
-      show_advanced: state.show_advanced || false
+      show_advanced: state.show_advanced || false,
+      pixel_fun_units: 2
     })
   end
 
@@ -366,17 +372,23 @@ defmodule Octopus.Apps.PixelFun do
   def summary_for_preset(%{config: config}) do
     config = migrate_legacy_config(config)
 
-    channel_bit = fn ch, label, key ->
+    channel_bit = fn ch, label, key, unit ->
       if Map.get(config, :"#{ch}_auto", false) do
         case ch do
           :trans ->
-            "trans auto±#{format_num(Map.get(config, :trans_auto_range_x, 0))}/#{format_num(Map.get(config, :trans_auto_range_y, 0))}"
+            "trans auto±#{format_num(Map.get(config, :trans_auto_range_x, 0))}px/s/#{format_num(Map.get(config, :trans_auto_range_y, 0))}px"
+
+          :zoom ->
+            "zoom auto×÷#{format_num(Map.get(config, :zoom_auto_range, 1.5))}"
 
           _ ->
-            "#{label} auto±#{format_num(Map.get(config, :"#{ch}_auto_range", 0))}"
+            "#{label} auto±#{format_num(Map.get(config, :"#{ch}_auto_range", 0))}#{unit}"
         end
       else
-        "#{label} #{format_num(Map.get(config, key, 0))}"
+        case ch do
+          :zoom -> "zoom ×#{format_num(Map.get(config, key, 1.0))}"
+          _ -> "#{label} #{format_num(Map.get(config, key, 0))}#{unit}"
+        end
       end
     end
 
@@ -406,17 +418,17 @@ defmodule Octopus.Apps.PixelFun do
       Enum.join(
         [
           if Map.get(config, :trans_auto, false) do
-            channel_bit.(:trans, "trans", :orbit_rate)
+            channel_bit.(:trans, "trans", :orbit_rate, "")
           else
             [
-              channel_bit.(:trans, "tx", :orbit_rate),
-              "ty #{format_num(Map.get(config, :elev_base, 0))}"
+              channel_bit.(:trans, "tx", :orbit_rate, "px/s"),
+              "ty #{format_num(Map.get(config, :elev_base, 0))}px"
             ]
             |> Enum.join(" · ")
           end,
-          channel_bit.(:rot, "rot", :roll_rate),
-          channel_bit.(:zoom, "zoom", :zoom_base),
-          channel_bit.(:sway, "sway", :tilt_scale),
+          channel_bit.(:rot, "rot", :roll_rate, "°/s"),
+          channel_bit.(:zoom, "zoom", :zoom_base, ""),
+          channel_bit.(:sway, "sway", :tilt_scale, "px"),
           palette
         ],
         " · "
@@ -497,10 +509,11 @@ defmodule Octopus.Apps.PixelFun do
         key: :orbit_rate,
         label: "Translate X",
         type: :slider,
-        min: -4.0,
-        max: 4.0,
-        step: 0.01,
+        min: -30.0,
+        max: 30.0,
+        step: 0.5,
         default: 0.0,
+        unit: "px/s",
         auto_key: :trans_auto
       },
       %{key: :trans_auto, label: "Auto", type: :toggle, default: false, companion_of: :orbit_rate},
@@ -509,9 +522,10 @@ defmodule Octopus.Apps.PixelFun do
         label: "Range X",
         type: :slider,
         min: 0.0,
-        max: 4.0,
-        step: 0.05,
-        default: 1.0,
+        max: 15.0,
+        step: 0.5,
+        default: 6.0,
+        unit: "px/s",
         visible_when: {:trans_auto, [true]}
       },
       %{
@@ -520,8 +534,9 @@ defmodule Octopus.Apps.PixelFun do
         type: :slider,
         min: 0.0,
         max: 4.0,
-        step: 0.05,
+        step: 0.1,
         default: 2.0,
+        unit: "px",
         visible_when: {:trans_auto, [true]}
       },
       %{
@@ -542,16 +557,18 @@ defmodule Octopus.Apps.PixelFun do
         min: -4.0,
         max: 4.0,
         step: 0.1,
-        default: 0.0
+        default: 0.0,
+        unit: "px"
       },
       %{
         key: :roll_rate,
         label: "Rotation",
         type: :slider,
-        min: -4.0,
-        max: 4.0,
-        step: 0.01,
+        min: -180.0,
+        max: 180.0,
+        step: 1.0,
         default: 0.0,
+        unit: "°/s",
         auto_key: :rot_auto
       },
       %{key: :rot_auto, label: "Auto", type: :toggle, default: false, companion_of: :roll_rate},
@@ -560,9 +577,10 @@ defmodule Octopus.Apps.PixelFun do
         label: "Range",
         type: :slider,
         min: 0.0,
-        max: 4.0,
-        step: 0.05,
-        default: 1.0,
+        max: 90.0,
+        step: 1.0,
+        default: 30.0,
+        unit: "°/s",
         visible_when: {:rot_auto, [true]}
       },
       %{
@@ -580,10 +598,11 @@ defmodule Octopus.Apps.PixelFun do
         key: :zoom_base,
         label: "Zoom",
         type: :slider,
-        min: -2.0,
-        max: 2.0,
+        min: 0.25,
+        max: 4.0,
         step: 0.05,
-        default: 0.0,
+        default: 1.0,
+        unit: "×",
         auto_key: :zoom_auto
       },
       %{key: :zoom_auto, label: "Auto", type: :toggle, default: false, companion_of: :zoom_base},
@@ -591,10 +610,11 @@ defmodule Octopus.Apps.PixelFun do
         key: :zoom_auto_range,
         label: "Range",
         type: :slider,
-        min: 0.0,
-        max: 2.0,
+        min: 1.0,
+        max: 3.0,
         step: 0.05,
-        default: 0.8,
+        default: 1.5,
+        unit: "×÷",
         visible_when: {:zoom_auto, [true]}
       },
       %{
@@ -616,6 +636,7 @@ defmodule Octopus.Apps.PixelFun do
         max: 4.0,
         step: 0.1,
         default: 0.0,
+        unit: "px",
         auto_key: :sway_auto
       },
       %{key: :sway_auto, label: "Auto", type: :toggle, default: false, companion_of: :tilt_scale},
@@ -627,6 +648,7 @@ defmodule Octopus.Apps.PixelFun do
         max: 4.0,
         step: 0.05,
         default: 2.0,
+        unit: "px",
         visible_when: {:sway_auto, [true]}
       },
       %{
@@ -930,6 +952,8 @@ defmodule Octopus.Apps.PixelFun do
   @doc false
   def migrate_legacy_config(config) when is_map(config) do
     config = normalize_config_keys(config)
+    original_keys = MapSet.new(Map.keys(config))
+    needs_units? = needs_display_unit_conversion?(config)
 
     migrated =
       config
@@ -940,11 +964,60 @@ defmodule Octopus.Apps.PixelFun do
       |> maybe_migrate_elev_drift()
       |> maybe_migrate_trans_auto()
       |> maybe_migrate_auto_tempos()
+      |> maybe_migrate_display_units(needs_units?, original_keys)
       |> strip_removed_zoom_keys()
       |> Map.drop(@removed_elev_keys ++ @removed_tx_ty_keys ++ @removed_tempo_keys)
 
     Map.merge(Map.take(@default_scene, @sphere_scene_keys), migrated)
+    |> Map.put(:pixel_fun_units, 2)
     |> Map.drop(@removed_elev_keys ++ @removed_zoom_keys ++ @removed_tx_ty_keys ++ @removed_tempo_keys)
+  end
+
+  defp needs_display_unit_conversion?(config) do
+    cond do
+      Map.get(config, :pixel_fun_units) == 2 ->
+        false
+
+      Map.get(config, :legacy_internal_units) == true ->
+        true
+
+      true ->
+        Enum.any?(
+          [
+            :tx_auto,
+            :ty_auto,
+            :tx_auto_range,
+            :ty_auto_range,
+            :tx_auto_tempo,
+            :ty_auto_tempo,
+            :rot_auto_tempo,
+            :zoom_auto_tempo,
+            :sway_auto_tempo,
+            :elev_amp,
+            :translate_scale,
+            :rotate_scale,
+            :zoom_scale,
+            :zoom_pulse
+          ],
+          &Map.has_key?(config, &1)
+        )
+    end
+  end
+
+  # Legacy configs stored orbit/roll in rad/s and zoom as log-sigma.
+  defp maybe_migrate_display_units(config, false, _keys), do: config
+
+  defp maybe_migrate_display_units(config, true, keys) do
+    w = installation_width_for_migration(config)
+
+    config
+    |> convert_orbit_to_px_s(w, keys)
+    |> convert_roll_to_deg_s(keys)
+    |> convert_zoom_to_factor(keys)
+    |> convert_trans_range_x(w, keys)
+    |> convert_rot_range_to_deg_s(keys)
+    |> convert_zoom_range_to_multiplier(keys)
+    |> Map.drop([:legacy_internal_units])
   end
 
   defp normalize_config_keys(config) do
@@ -1078,6 +1151,122 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   defp tempo_to_interval(_), do: 30.0
+
+  defp installation_width_for_migration(_config) do
+    # Prefer live installation; fall back to Nation2026 ring width (12*(8+18)=312).
+    try do
+      Installation.width()
+    rescue
+      _ -> 312
+    end
+  end
+
+  defp convert_orbit_to_px_s(config, w, keys) do
+    if MapSet.member?(keys, :orbit_rate) do
+      case Map.get(config, :orbit_rate) do
+        v when is_number(v) ->
+          px = v * w / (:math.pi() * 2)
+          {clamped, _} = clamp_log(px, -30.0, 30.0, :orbit_rate)
+          Map.put(config, :orbit_rate, clamped)
+
+        _ ->
+          config
+      end
+    else
+      config
+    end
+  end
+
+  defp convert_roll_to_deg_s(config, keys) do
+    if MapSet.member?(keys, :roll_rate) or MapSet.member?(keys, :rotate_scale) do
+      case Map.get(config, :roll_rate) do
+        v when is_number(v) ->
+          deg = v * 180.0 / :math.pi()
+          {clamped, _} = clamp_log(deg, -180.0, 180.0, :roll_rate)
+          Map.put(config, :roll_rate, clamped)
+
+        _ ->
+          config
+      end
+    else
+      config
+    end
+  end
+
+  defp convert_zoom_to_factor(config, keys) do
+    if MapSet.member?(keys, :zoom_base) do
+      case Map.get(config, :zoom_base) do
+        v when is_number(v) ->
+          factor = :math.exp(v)
+          {clamped, _} = clamp_log(factor, @zoom_factor_min, @zoom_factor_max, :zoom_base)
+          Map.put(config, :zoom_base, clamped)
+
+        _ ->
+          config
+      end
+    else
+      config
+    end
+  end
+
+  defp convert_trans_range_x(config, w, keys) do
+    if MapSet.member?(keys, :tx_auto_range) or MapSet.member?(keys, :trans_auto_range_x) do
+      case Map.get(config, :trans_auto_range_x) do
+        v when is_number(v) ->
+          px = v * w / (:math.pi() * 2)
+          {clamped, _} = clamp_log(px, 0.0, 15.0, :trans_auto_range_x)
+          Map.put(config, :trans_auto_range_x, clamped)
+
+        _ ->
+          config
+      end
+    else
+      config
+    end
+  end
+
+  defp convert_rot_range_to_deg_s(config, keys) do
+    if MapSet.member?(keys, :rot_auto_range) do
+      case Map.get(config, :rot_auto_range) do
+        v when is_number(v) ->
+          deg = v * 180.0 / :math.pi()
+          {clamped, _} = clamp_log(deg, 0.0, 90.0, :rot_auto_range)
+          Map.put(config, :rot_auto_range, clamped)
+
+        _ ->
+          config
+      end
+    else
+      config
+    end
+  end
+
+  defp convert_zoom_range_to_multiplier(config, keys) do
+    if MapSet.member?(keys, :zoom_auto_range) do
+      case Map.get(config, :zoom_auto_range) do
+        v when is_number(v) ->
+          mult = :math.exp(abs(v))
+          {clamped, _} = clamp_log(mult, 1.0, 3.0, :zoom_auto_range)
+          Map.put(config, :zoom_auto_range, clamped)
+
+        _ ->
+          config
+      end
+    else
+      config
+    end
+  end
+
+  defp clamp_log(v, lo, hi, key) do
+    clamped = v |> max(lo) |> min(hi)
+
+    if clamped != v do
+      Logger.info("PixelFun: clamped #{key} #{inspect(v)} → #{inspect(clamped)}")
+      {clamped, true}
+    else
+      {clamped, false}
+    end
+  end
 
   defp strip_removed_zoom_keys(config) do
     dropped =
@@ -1235,6 +1424,9 @@ defmodule Octopus.Apps.PixelFun do
 
   defp accumulate_orientation(%State{} = state, dt_signed) do
     eff = effective_transform_values(state)
+    alpha = Sphere.alpha(Installation.width())
+    orbit_rad_s = eff.orbit_rate * alpha
+    roll_rad_s = eff.roll_rate * :math.pi() / 180.0
     dt_yaw = if state.trans_auto, do: abs(dt_signed), else: dt_signed
     dt_roll = if state.rot_auto, do: abs(dt_signed), else: dt_signed
 
@@ -1242,8 +1434,8 @@ defmodule Octopus.Apps.PixelFun do
       accumulate_orientation_angles(
         state.yaw_angle || 0.0,
         state.roll_angle || 0.0,
-        eff.orbit_rate,
-        eff.roll_rate,
+        orbit_rad_s,
+        roll_rad_s,
         dt_yaw,
         dt_roll
       )
@@ -1273,6 +1465,11 @@ defmodule Octopus.Apps.PixelFun do
     Wander.new({state.orbit_rate || 0.0, state.elev_base || 0.0})
   end
 
+  defp new_channel_wanderer(%State{} = state, :zoom) do
+    factor = max(state.zoom_base || 1.0, @zoom_factor_min)
+    Wander.new(:math.log(factor))
+  end
+
   defp new_channel_wanderer(%State{} = state, ch) do
     Wander.new(Map.get(state, @channel_base_key[ch]) || 0.0)
   end
@@ -1290,6 +1487,14 @@ defmodule Octopus.Apps.PixelFun do
       maxs: {min(ox + rx, hix), min(ey + ry, hiy)},
       interval: interval
     })
+  end
+
+  defp step_channel_wanderer(w, now, state, :zoom, interval) do
+    b = max(state.zoom_base || 1.0, @zoom_factor_min)
+    r = max(Map.get(state, :zoom_auto_range) || @auto_defaults.zoom_auto_range, 1.0)
+    lo = max(:math.log(b / r), :math.log(@zoom_factor_min))
+    hi = min(:math.log(b * r), :math.log(@zoom_factor_max))
+    Wander.step(w, now, %{min: lo, max: hi, interval: interval})
   end
 
   defp step_channel_wanderer(w, now, state, ch, interval) do
@@ -1474,15 +1679,16 @@ defmodule Octopus.Apps.PixelFun do
     roll_rate = eff.roll_rate
     tilt_scale = eff.tilt_scale
     elev_base = eff.elev_base
-    zoom_base = eff.zoom_base
-    sigma = zoom_base
+    zoom_factor = max(eff.zoom_base || 1.0, @zoom_factor_min)
+    sigma = :math.log(zoom_factor)
 
-    yaw_angle = state.yaw_angle || orbit_rate * seconds
-    roll_angle = state.roll_angle || roll_rate * seconds
+    # Orientation angles are already integrated in rad; fallback uses display→rad.
+    yaw_angle = state.yaw_angle || orbit_rate * alpha * seconds
+    roll_angle = state.roll_angle || roll_rate * :math.pi() / 180.0 * seconds
 
     neutral? =
       orbit_rate == 0.0 and roll_rate == 0.0 and tilt_scale == 0.0 and elev_base == 0.0 and
-        sigma == 0.0 and not any_auto?(state) and yaw_angle == 0.0 and roll_angle == 0.0
+        zoom_factor == 1.0 and not any_auto?(state) and yaw_angle == 0.0 and roll_angle == 0.0
 
     if neutral? do
       %{neutral?: true, center_x: cx, center_y: cy, alpha: alpha}
@@ -1718,8 +1924,11 @@ defmodule Octopus.Apps.PixelFun do
     wander_val = fn ch, base ->
       if Map.get(state, :"#{ch}_auto") do
         case state.auto_wanderers do
-          %{^ch => %Wander{value: {v}}} -> v
-          _ -> base
+          %{^ch => %Wander{value: {v}}} ->
+            if ch == :zoom, do: :math.exp(v), else: v
+
+          _ ->
+            base
         end
       else
         base

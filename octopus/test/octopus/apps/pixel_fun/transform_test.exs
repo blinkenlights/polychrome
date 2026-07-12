@@ -31,7 +31,7 @@ defmodule Octopus.Apps.PixelFun.TransformTest do
         tilt_speed: 0.5,
         tilt_mode: :wobble,
         elev_base: 0.0,
-        zoom_base: 0.0,
+        zoom_base: 1.0,
         zoom_pivot: 0,
         yaw_angle: nil,
         roll_angle: nil
@@ -139,11 +139,12 @@ defmodule Octopus.Apps.PixelFun.TransformTest do
 
         params =
           base_params(%{
-            orbit_rate: 0.4,
-            roll_rate: 0.3,
+            # Display units: legacy 0.4 rad/s → ~19.9 px/s; 0.3 rad/s → ~17.2 °/s; σ0.2 → ×1.22
+            orbit_rate: 0.4 * 312 / (:math.pi() * 2),
+            roll_rate: 0.3 * 180 / :math.pi(),
             tilt_scale: 1.0,
             elev_base: 0.5,
-            zoom_base: 0.2,
+            zoom_base: :math.exp(0.2),
             seconds: t
           })
 
@@ -198,7 +199,7 @@ defmodule Octopus.Apps.PixelFun.TransformTest do
       assert migrated.tilt_scale == 1.5
       assert migrated.tilt_speed == 0.8
       assert migrated.tilt_mode == :pendulum
-      assert migrated.roll_rate == 2.0
+      assert_in_delta migrated.roll_rate, 2.0 * 180 / :math.pi(), 0.1
       assert migrated.trans_auto == true
       assert_in_delta migrated.trans_auto_range_y, 3.0, 0.0001
       assert_in_delta migrated.trans_auto_interval, 60.0, 0.0001
@@ -217,6 +218,37 @@ defmodule Octopus.Apps.PixelFun.TransformTest do
       assert_in_delta migrated.trans_auto_range_y, 1.5, 0.0001
       assert_in_delta migrated.trans_auto_interval, 40.0, 0.0001
       refute Map.has_key?(migrated, :elev_amp)
+    end
+
+    test "unit migrations: rad/s and log zoom to display units" do
+      migrated =
+        PixelFun.migrate_legacy_config(%{
+          program: "sin(x)",
+          orbit_rate: 0.5,
+          roll_rate: 1.0,
+          zoom_base: 0.5,
+          legacy_internal_units: true
+        })
+
+      assert_in_delta migrated.orbit_rate, 0.5 * 312 / (:math.pi() * 2), 0.1
+      assert_in_delta migrated.roll_rate, 1.0 * 180 / :math.pi(), 0.1
+      assert_in_delta migrated.zoom_base, :math.exp(0.5), 0.1
+      assert migrated.pixel_fun_units == 2
+    end
+
+    test "config_matches? succeeds for legacy-unit stored preset vs migrated live" do
+      legacy = %{
+        program: "sin(0.4*t-hypot(x,y))",
+        orbit_rate: 0.5,
+        roll_rate: 1.0,
+        zoom_base: 0.5,
+        color_interval: 5.0,
+        palette_auto: true,
+        legacy_internal_units: true
+      }
+
+      live = PixelFun.migrate_legacy_config(legacy)
+      assert Octopus.Apps.PixelFun.ScenePresets.config_matches?(live, legacy)
     end
   end
 

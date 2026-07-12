@@ -681,6 +681,7 @@ defmodule OctopusWeb.ConsoleComponents do
                           now_playing_value_dirty?(@now_playing, spec.key) && "border-[#fcb700]"
                         ]}
                       />
+                      <span :if={spec[:unit]} class="text-[11px] opacity-60 shrink-0 w-8">{spec[:unit]}</span>
                       <label
                         :if={auto_spec}
                         class="flex items-center gap-1.5 shrink-0 cursor-pointer select-none"
@@ -750,6 +751,7 @@ defmodule OctopusWeb.ConsoleComponents do
                             now_playing_value_dirty?(@now_playing, sub.key) && "border-[#fcb700]"
                           ]}
                         />
+                        <span :if={sub[:unit]} class="text-[10px] opacity-60 shrink-0">{sub[:unit]}</span>
                       </div>
                     </div>
                   </div>

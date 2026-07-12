@@ -146,7 +146,7 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
 
       assert updated.trans_auto == true
       assert_in_delta updated.trans_auto_range_y, 4.0, 0.0001
-      assert updated.roll_rate == 2.0
+      assert_in_delta updated.roll_rate, 2.0 * 180 / :math.pi(), 0.1
     end
 
     test "applies color_interval and palette_phase via handle_config" do
@@ -250,7 +250,10 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
       state = base_state(%{orbit_rate: 1.5, elev_base: 0.5, trans_auto: false, seconds: 5.0})
 
       {:noreply, on} =
-        pixel_fun_handle_config(%{trans_auto: true, orbit_rate: 1.5, elev_base: 0.5}, state)
+        pixel_fun_handle_config(
+          %{trans_auto: true, orbit_rate: 1.5, elev_base: 0.5, pixel_fun_units: 2},
+          state
+        )
 
       assert on.trans_auto == true
       assert %Octopus.Wander{value: {vx, vy}} = on.auto_wanderers[:trans]

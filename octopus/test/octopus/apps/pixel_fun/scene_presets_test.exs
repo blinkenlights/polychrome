@@ -163,12 +163,13 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
           trans_auto_interval: 30.0,
           rot_auto: false,
           zoom_auto: true,
-          zoom_auto_range: 0.6,
+          zoom_auto_range: 1.5,
           zoom_auto_interval: 17.0,
           sway_auto: true,
           sway_auto_range: 1.1,
           sway_auto_interval: 22.0,
-          pattern_speed: 1.25
+          pattern_speed: 1.25,
+          pixel_fun_units: 2
         })
 
       assert {:ok, preset} = ScenePresets.create(attrs)
