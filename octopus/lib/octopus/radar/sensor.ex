@@ -37,7 +37,7 @@ defmodule Octopus.Radar.Sensor do
   require Logger
 
   alias Octopus.Radar
-  alias Octopus.Radar.{Ack, Command, DebugLog, Frame, LogFormat, Protocol, Transform}
+  alias Octopus.Radar.{Ack, Command, Frame, LogFormat, Protocol, Transform}
 
   @reopen_interval :timer.seconds(5)
   @ack_timeout :timer.seconds(2)
@@ -135,29 +135,8 @@ defmodule Octopus.Radar.Sensor do
     try do
       GenServer.call(via(device_id), message)
     catch
-      :exit, {:noproc, _} = exit ->
-        # #region agent log
-        DebugLog.write(
-          "H4",
-          "sensor.ex:call_sensor",
-          "get_phase exit noproc",
-          DebugLog.sensor_data(device_id, nil, exit: inspect(exit), message: inspect(message))
-        )
-
-        # #endregion
-        {:error, :no_sensor}
-
-      :exit, reason ->
-        # #region agent log
-        DebugLog.write(
-          "H4",
-          "sensor.ex:call_sensor",
-          "get_phase exit other",
-          DebugLog.sensor_data(device_id, nil, exit: inspect(reason), message: inspect(message))
-        )
-
-        # #endregion
-        {:error, :unavailable}
+      :exit, {:noproc, _} -> {:error, :no_sensor}
+      :exit, _ -> {:error, :unavailable}
     end
   end
 
@@ -252,19 +231,6 @@ defmodule Octopus.Radar.Sensor do
         case state.recovery_stage do
           :post_reset ->
             log(state, :info, "No stream after AT+RESET — running initialization sequence")
-
-            # #region agent log
-            DebugLog.write(
-              "H9",
-              "sensor.ex:probe_window_expired",
-              "post-reset probe failed entering init",
-              DebugLog.sensor_data(state.device_id, state.port_name,
-                buffer_bytes: byte_size(state.buffer)
-              )
-            )
-
-            # #endregion
-
             {:noreply, enter_configuring(%State{state | recovery_stage: :normal})}
 
           :normal ->
@@ -273,16 +239,6 @@ defmodule Octopus.Radar.Sensor do
               :info,
               "No streaming frames in verification window — sending AT+RESET then observing"
             )
-
-            # #region agent log
-            DebugLog.write(
-              "H8",
-              "sensor.ex:probe_window_expired",
-              "reset then observe",
-              DebugLog.sensor_data(state.device_id, state.port_name, phase: :probing)
-            )
-
-            # #endregion
 
             {:noreply, reset_then_init(state)}
         end
@@ -447,21 +403,6 @@ defmodule Octopus.Radar.Sensor do
       :ok ->
         log(state, :info, "Opened serial port at #{baud} baud")
         Radar.broadcast_status(state.device_id, :probing)
-
-        # #region agent log
-        DebugLog.write(
-          "H3",
-          "sensor.ex:try_open",
-          "port open ok",
-          DebugLog.sensor_data(state.device_id, port,
-            phase: :opening,
-            ui_status: :probing,
-            settle_ms: @post_open_settle_ms
-          )
-        )
-
-        # #endregion
-
         Process.send_after(self(), :start_init, @post_open_settle_ms)
 
         %State{
@@ -477,16 +418,6 @@ defmodule Octopus.Radar.Sensor do
         }
 
       {:error, reason} ->
-        # #region agent log
-        DebugLog.write(
-          "H2",
-          "sensor.ex:try_open",
-          "port open failed",
-          DebugLog.sensor_data(state.device_id, port, reason: inspect(reason))
-        )
-
-        # #endregion
-
         schedule_reopen(state, unavailable_reason: reason)
     end
   end
@@ -717,7 +648,6 @@ defmodule Octopus.Radar.Sensor do
   end
 
   defp handle_ack_bytes(data, %State{phase: phase} = state) when phase in [:stale, :configuring] do
-    log_uart_bytes(state, phase, data)
     handle_ack_bytes_impl(data, state)
   end
 
@@ -843,7 +773,7 @@ defmodule Octopus.Radar.Sensor do
     end
   end
 
-  defp reset_then_init(state), do: enter_configuring(%State{state | recovery_stage: :normal})
+  defp reset_then_init(%State{} = state), do: enter_configuring(%State{state | recovery_stage: :normal})
 
   defp maybe_attach_from_probe_buffer(%State{buffer: buffer} = state) do
     try_attach_from_binary(buffer, state)
@@ -857,20 +787,6 @@ defmodule Octopus.Radar.Sensor do
     case Protocol.feed(<<>>, binary) do
       {[_ | _], _, leftover} ->
         log(state, :info, "Binary stream detected — attaching without re-init")
-
-        # #region agent log
-        DebugLog.write(
-          "H10",
-          "sensor.ex:try_attach_from_binary",
-          "attach to stream",
-          DebugLog.sensor_data(state.device_id, state.port_name,
-            phase: state.phase,
-            input_bytes: byte_size(binary)
-          )
-        )
-
-        # #endregion
-
         {:attach, state |> cancel_ack_timer() |> cancel_watchdog() |> enter_running_from_stream(leftover)}
 
       _ ->
@@ -879,26 +795,6 @@ defmodule Octopus.Radar.Sensor do
   end
 
   defp try_attach_from_binary(_binary, _state), do: :no
-
-  defp log_uart_bytes(%State{} = state, phase, data) when byte_size(data) > 0 do
-    # #region agent log
-    DebugLog.write(
-      "H6",
-      "sensor.ex:handle_ack_bytes",
-      "uart bytes received",
-      DebugLog.sensor_data(state.device_id, state.port_name,
-        phase: phase,
-        byte_count: byte_size(data),
-        sample: inspect(binary_part(data, 0, min(byte_size(data), 32)))
-      )
-    )
-
-    # #endregion
-
-    :ok
-  end
-
-  defp log_uart_bytes(_state, _phase, _data), do: :ok
 
   defp ui_status(%State{phase: :opening, port_unavailable: true}), do: :unavailable
   defp ui_status(%State{phase: :opening}), do: :probing

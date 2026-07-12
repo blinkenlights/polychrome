@@ -42,7 +42,6 @@ defmodule OctopusWeb.RadarDebugLive do
   require Logger
 
   alias Octopus.Radar
-  alias Octopus.Radar.DebugLog
 
   @display_window_ms 120_000
   @unit_ms 100
@@ -69,28 +68,6 @@ defmodule OctopusWeb.RadarDebugLive do
     statuses = build_sensor_statuses(devices)
     histories = if Radar.enabled?(), do: trim_histories(Radar.get_history(), @display_window_ms), else: %{}
     stats = if Radar.enabled?(), do: Radar.get_stats(), else: %{}
-
-    # #region agent log
-    if Radar.enabled?() do
-      snapshot =
-        Map.new(devices, fn d ->
-          {Radar.device_letter(d.device_id),
-           %{
-             device_id: d.device_id,
-             status: Map.get(statuses, d.device_id),
-             short_port: Radar.short_port(d.port)
-           }}
-        end)
-
-      DebugLog.write(
-        "H1",
-        "radar_debug_live.ex:mount",
-        "debug ui sensor snapshot",
-        %{sensors: snapshot}
-      )
-    end
-
-    # #endregion
 
     if connected?(socket) do
       if Radar.enabled?() do

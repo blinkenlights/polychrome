@@ -113,7 +113,7 @@ defmodule Octopus.Radar do
   use Supervisor
   require Logger
 
-  alias Octopus.Radar.{DebugLog, LogFormat, Mock, Runtime, Sensor}
+  alias Octopus.Radar.{LogFormat, Mock, Runtime, Sensor}
 
   @topic "radar:hlk6001"
   @supported_types [:ld6001a]
@@ -471,55 +471,13 @@ defmodule Octopus.Radar do
           :inactive | :unavailable | :probing | :initializing | :working | :stale
   def sensor_status(device_id) do
     cond do
-      not enabled?() ->
-        # #region agent log
-        DebugLog.write(
-          "H5",
-          "radar.ex:sensor_status",
-          "radar disabled",
-          DebugLog.sensor_data(device_id, nil, ui_status: :inactive)
-        )
-
-        # #endregion
-        :inactive
-
-      not Runtime.enabled?(device_id) ->
-        # #region agent log
-        DebugLog.write(
-          "H5",
-          "radar.ex:sensor_status",
-          "runtime disabled",
-          DebugLog.sensor_data(device_id, nil, ui_status: :inactive)
-        )
-
-        # #endregion
-        :inactive
-
+      not enabled?() -> :inactive
+      not Runtime.enabled?(device_id) -> :inactive
       true ->
-        ui_result = Sensor.get_ui_status(device_id)
-
-        ui_status =
-          case ui_result do
-            {:ok, status} -> status
-            {:error, _} -> :unavailable
-          end
-
-        if ui_status == :unavailable do
-          # #region agent log
-          DebugLog.write(
-            "H2",
-            "radar.ex:sensor_status",
-            "mapped to unavailable",
-            DebugLog.sensor_data(device_id, nil,
-              ui_result: inspect(ui_result),
-              ui_status: ui_status
-            )
-          )
-
-          # #endregion
+        case Sensor.get_ui_status(device_id) do
+          {:ok, status} -> status
+          {:error, _} -> :unavailable
         end
-
-        ui_status
     end
   end
 
@@ -536,16 +494,6 @@ defmodule Octopus.Radar do
   @doc "Broadcast a sensor status change. Called internally by `Octopus.Radar.Sensor`."
   @spec broadcast_status(pos_integer(), atom()) :: :ok | {:error, term()}
   def broadcast_status(device_id, status) do
-    # #region agent log
-    DebugLog.write(
-      "H1",
-      "radar.ex:broadcast_status",
-      "status broadcast",
-      DebugLog.sensor_data(device_id, nil, status: status)
-    )
-
-    # #endregion
-
     Phoenix.PubSub.broadcast(
       Octopus.PubSub,
       status_topic(device_id),
