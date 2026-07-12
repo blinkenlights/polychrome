@@ -88,6 +88,55 @@ defmodule Octopus.MixerTest do
     _ = :sys.get_state(Mixer)
   end
 
+  test "uses cached bleeding config when rendering frames" do
+    app_id = "bleedapp"
+
+    config = %{
+      supports_rgb: true,
+      supports_grayscale: false,
+      bleeding: 42.0,
+      merge_rgbw: false
+    }
+
+    Mixer.create_display_buffers(app_id, config)
+
+    :sys.replace_state(Mixer, fn state ->
+      %{state | rendered_app: app_id}
+    end)
+
+    canvas = Canvas.new(10, 8) |> Canvas.put_pixel({0, 0}, {255, 0, 0})
+
+    assert :ok = Mixer.update_app_display(app_id, canvas, :rgb)
+    _ = :sys.get_state(Mixer)
+  end
+
+  test "config_updated merges bleeding without replacing display metadata" do
+    app_id = "metadatapp"
+
+    display_config = %{
+      layout: :gapped_panels,
+      supports_rgb: true,
+      supports_grayscale: true,
+      merge_rgbw: true,
+      easing_interval: 200,
+      bleeding: 0.0
+    }
+
+    Mixer.create_display_buffers(app_id, display_config)
+
+    runtime_config = %{program: "sin(x)", bleeding: 55.0}
+    send(Mixer, {:apps, {:config_updated, app_id, runtime_config}})
+    _ = :sys.get_state(Mixer)
+
+    app_display = :sys.get_state(Mixer).app_displays |> Map.fetch!(app_id)
+
+    assert app_display.config.layout == :gapped_panels
+    assert app_display.config.supports_grayscale == true
+    assert app_display.config.merge_rgbw == true
+    assert app_display.config.easing_interval == 200
+    assert app_display.config.bleeding == 55.0
+  end
+
   test "retargets in-flight fade-out when a new app is selected during stop-then-start" do
     old_app = "oldapp1"
     new_app = "newapp1"

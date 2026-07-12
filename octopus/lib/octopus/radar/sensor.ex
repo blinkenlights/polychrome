@@ -450,7 +450,12 @@ defmodule Octopus.Radar.Sensor do
     # Re-enter :probing to wait for real frames before declaring :working.
     # If no frames arrive within the window we fall back to :stale and
     # re-init, avoiding the false :working → :stale flicker.
-    log(state, :info, "Init sequence acked — verifying sensor is streaming (#{@probe_window_ms} ms)")
+    log(
+      state,
+      :info,
+      "Init sequence acked — verifying sensor is streaming (#{@probe_window_ms} ms)"
+    )
+
     Radar.broadcast_status(state.device_id, :probing)
     timer = Process.send_after(self(), :probe_window_expired, @probe_window_ms)
 
@@ -494,8 +499,18 @@ defmodule Octopus.Radar.Sensor do
     state = cancel_watchdog(state)
 
     log(state, :info, "Re-probing sensor before initialization")
-    state = %State{state | phase: :stale, pending_commands: [], current_command: nil,
-                           buffer: <<>>, ack_buffer: <<>>, ack_retries: 0, last_track_count: nil}
+
+    state = %State{
+      state
+      | phase: :stale,
+        pending_commands: [],
+        current_command: nil,
+        buffer: <<>>,
+        ack_buffer: <<>>,
+        ack_retries: 0,
+        last_track_count: nil
+    }
+
     Radar.broadcast_status(state.device_id, :stale)
     send_probe(state)
   end
@@ -535,7 +550,11 @@ defmodule Octopus.Radar.Sensor do
   end
 
   defp write_command(cmd, %State{transport: transport, uart: uart, phase: phase} = state) do
-    log(state, if(phase == :configuring, do: :debug, else: :info), "→ #{String.trim_trailing(cmd)}")
+    log(
+      state,
+      if(phase == :configuring, do: :debug, else: :info),
+      "→ #{String.trim_trailing(cmd)}"
+    )
 
     case transport.write(uart, cmd) do
       :ok ->
@@ -547,8 +566,14 @@ defmodule Octopus.Radar.Sensor do
     end
   end
 
-  defp resend_command(%State{transport: transport, uart: uart, current_command: cmd, phase: phase} = state) do
-    log(state, if(phase == :configuring, do: :debug, else: :info), "→ #{String.trim_trailing(cmd)}")
+  defp resend_command(
+         %State{transport: transport, uart: uart, current_command: cmd, phase: phase} = state
+       ) do
+    log(
+      state,
+      if(phase == :configuring, do: :debug, else: :info),
+      "→ #{String.trim_trailing(cmd)}"
+    )
 
     case transport.write(uart, cmd) do
       :ok ->
@@ -567,7 +592,12 @@ defmodule Octopus.Radar.Sensor do
         # fragment in residual adapter-buffer data should not count as live streaming.
         case Protocol.feed(<<>>, buf) do
           {[_ | _], _, _} ->
-            log(state, :info, "Device already streaming — attaching to live stream without re-init")
+            log(
+              state,
+              :info,
+              "Device already streaming — attaching to live stream without re-init"
+            )
+
             state |> cancel_ack_timer() |> reset_ack_retries() |> enter_running_from_stream(buf)
 
           _ ->
@@ -583,7 +613,11 @@ defmodule Octopus.Radar.Sensor do
         |> enter_configuring()
 
       {:retry, buf} ->
-        log(state, :info, "← Save Para Fail during probe — treating as responsive, starting initialization")
+        log(
+          state,
+          :info,
+          "← Save Para Fail during probe — treating as responsive, starting initialization"
+        )
 
         state
         |> cancel_ack_timer()
@@ -601,7 +635,8 @@ defmodule Octopus.Radar.Sensor do
       {:ok, buf} ->
         log(state, :debug, "← AT+OK")
 
-        %State{} = state =
+        %State{} =
+          state =
           state
           |> cancel_ack_timer()
           |> reset_ack_retries()
@@ -612,7 +647,8 @@ defmodule Octopus.Radar.Sensor do
       {:retry, buf} ->
         log(state, :warning, "← Save Para Fail — resending: #{inspect(state.current_command)}")
 
-        %State{} = state =
+        %State{} =
+          state =
           state
           |> cancel_ack_timer()
           |> reset_ack_retries()
@@ -669,7 +705,12 @@ defmodule Octopus.Radar.Sensor do
 
     state = cancel_watchdog(state)
     timer = Process.send_after(self(), :frame_watchdog, @frame_timeout_ms)
-    state = %State{state | last_frame_at: System.monotonic_time(:millisecond), watchdog_timer: timer}
+
+    state = %State{
+      state
+      | last_frame_at: System.monotonic_time(:millisecond),
+        watchdog_timer: timer
+    }
 
     track_count = length(frame.tracks)
 

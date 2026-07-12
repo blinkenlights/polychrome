@@ -2,7 +2,7 @@ defmodule Octopus.InstallationTransportTest do
   use ExUnit.Case, async: false
 
   alias Octopus.{AppManager, AppSupervisor, InstallationTransport}
-  alias Octopus.Apps.{Collective, Matrix, Ocean, PerlinNoise, PixelFun, PixieDebug, Sand, SparkleMist, Wood}
+  alias Octopus.Apps.{Collective, Matrix, Ocean, PerlinNoise, PixelFun, PixelFun3D, PixieDebug, Sand, SparkleMist, Wood}
   alias Octopus.Apps.PixelFun.Program
 
   @presets Module.concat(["Octopus", "AppModePresets"])
@@ -15,6 +15,8 @@ defmodule Octopus.InstallationTransportTest do
   @sand "sand:sand"
   @sparkle_mist "sparklemist:mist"
   @orbital "collective:orbital"
+  @classic_3d "pixelfun3d:classic_ripple"
+  @marmor "pixelfun3d:marmor"
 
   setup do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Octopus.Repo, shared: true)
@@ -204,6 +206,19 @@ defmodule Octopus.InstallationTransportTest do
       InstallationTransport.play_now(PixelFun, @cross)
       assert state().cycle_index == 1
       assert state().live.mode_id == @cross
+    end
+
+    test "play_now while PixelFun3D is ticking switches mode" do
+      assert :ok = InstallationTransport.play_now(PixelFun3D, @classic_3d)
+      assert state().live.mode_id == @classic_3d
+
+      Process.sleep(100)
+
+      assert :ok = InstallationTransport.play_now(PixelFun3D, @marmor)
+
+      s = state()
+      assert s.live.app == PixelFun3D
+      assert s.live.mode_id == @marmor
     end
 
     test "off-queue play pauses rotation so it stays on the wall" do

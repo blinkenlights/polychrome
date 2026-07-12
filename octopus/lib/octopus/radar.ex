@@ -211,19 +211,29 @@ defmodule Octopus.Radar do
 
           case File.write("#{sysfs_base}/authorized", "0") do
             :ok ->
-              Logger.info("[radar] USB adapter #{adapter_name} (#{adapter.usb_path}) deauthorized — power cycling")
+              Logger.info(
+                "[radar] USB adapter #{adapter_name} (#{adapter.usb_path}) deauthorized — power cycling"
+              )
+
               Process.sleep(1_000)
 
               case File.write("#{sysfs_base}/authorized", "1") do
                 :ok ->
-                  Logger.info("[radar] USB adapter #{adapter_name} (#{adapter.usb_path}) reauthorized")
+                  Logger.info(
+                    "[radar] USB adapter #{adapter_name} (#{adapter.usb_path}) reauthorized"
+                  )
 
                 {:error, reason} ->
-                  Logger.error("[radar] Failed to reauthorize USB adapter #{adapter_name}: #{inspect(reason)}")
+                  Logger.error(
+                    "[radar] Failed to reauthorize USB adapter #{adapter_name}: #{inspect(reason)}"
+                  )
               end
 
             {:error, reason} ->
-              Logger.error("[radar] Failed to deauthorize USB adapter #{adapter_name} at #{sysfs_base}: #{inspect(reason)}")
+              Logger.error(
+                "[radar] Failed to deauthorize USB adapter #{adapter_name} at #{sysfs_base}: #{inspect(reason)}"
+              )
+
               Enum.each(adapter.device_ids, &broadcast_status(&1, :unavailable))
           end
         end)
@@ -787,8 +797,9 @@ defmodule Octopus.Radar do
           Enum.flat_map(adapters, fn a -> Keyword.fetch!(a, :ports) end)
       end
 
-    layout_type = Keyword.get(layout, :type) ||
-      raise ArgumentError, "radar layout: :type is required (e.g. type: :radial)"
+    layout_type =
+      Keyword.get(layout, :type) ||
+        raise ArgumentError, "radar layout: :type is required (e.g. type: :radial)"
 
     sensor_pose_list = expand_layout(layout_type, layout)
 
@@ -819,8 +830,9 @@ defmodule Octopus.Radar do
   end
 
   defp expand_layout(:radial, layout) do
-    count = Keyword.get(layout, :count) ||
-      raise ArgumentError, "radar layout type :radial requires :count"
+    count =
+      Keyword.get(layout, :count) ||
+        raise ArgumentError, "radar layout type :radial requires :count"
 
     unless is_integer(count) and count > 0 do
       raise ArgumentError,
