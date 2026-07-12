@@ -510,7 +510,15 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
     if spec && spec.type == :choice do
       {value, _} = Enum.at(spec.options, String.to_integer(index))
-      InstallationTransport.set_tweakable(key, value)
+
+      changes =
+        if key == :overflow_mode do
+          %{key => value, overflow_auto: false}
+        else
+          %{key => value}
+        end
+
+      InstallationTransport.set_tweakables(changes)
     end
 
     {:noreply, refresh_transport(socket, refresh_library: false)}

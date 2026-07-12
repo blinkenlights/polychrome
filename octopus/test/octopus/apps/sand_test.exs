@@ -1,12 +1,11 @@
 defmodule Octopus.Apps.SandTest do
   use Octopus.DataCase, async: true
 
+  alias Octopus.Apps.Sand
   alias Octopus.Apps.Sand.State
-  alias Octopus.Apps.Sand.Sim
 
-  @sand Module.concat(["Octopus", "Apps", "Sand"])
+  @sand Sand
   @presets Module.concat(["Octopus", "AppModePresets"])
-  @default_supersample 4
 
   setup do
     preset_sync_all!()
@@ -14,50 +13,78 @@ defmodule Octopus.Apps.SandTest do
   end
 
   defp base_state(overrides) do
-    s = @default_supersample
-
-    defaults = %{
-      panels: %{},
-      spawn_rate: 0.25,
-      button_force: 40,
-      auto_drain: true,
-      color_mode: :rainbow,
-      supersample: s,
-      gravity: Sim.default_gravity(s)
-    }
+    defaults = Sand.legacy_mode_config("sand")
 
     struct!(State, Map.merge(defaults, Map.new(overrides)))
   end
 
-  test "list_modes/0 includes sand mode" do
-    [mode] = sand_list_modes()
-    assert mode.id == "sand:sand"
-    assert mode.builtin == true
+  test "list_modes/0 includes all builtin sand presets" do
+    modes = sand_list_modes()
+    ids = Enum.map(modes, & &1.id)
+
+    assert "sand:sand" in ids
+    assert "sand:dunes" in ids
+    assert "sand:hourglass" in ids
+    assert "sand:cascade" in ids
+    assert "sand:aurora" in ids
+    assert "sand:storm" in ids
+    assert Enum.all?(modes, & &1.builtin)
   end
 
-  test "mode_config/1 returns defaults" do
-    s = @default_supersample
-
-    defaults = %{
-      spawn_rate: 0.25,
-      button_force: 40,
-      auto_drain: true,
-      color_mode: :rainbow,
-      supersample: s,
-      gravity: Sim.default_gravity(s)
-    }
+  test "mode_config/1 returns defaults for classic sand" do
+    defaults = Sand.legacy_mode_config("sand")
 
     assert sand_mode_config("sand:sand") == defaults
     assert sand_mode_config("sand") == defaults
     assert sand_mode_config("unknown") == %{}
   end
 
-  test "mode_tweakables/1 exposes all tweakable keys" do
+  test "mode_config/1 returns preset-specific values" do
+    hourglass = sand_mode_config("sand:hourglass")
+    assert hourglass.spawn_shape == :fountain
+    assert hourglass.spawn_rate == 0.08
+    assert hourglass.plug_drain == true
+
+    storm = sand_mode_config("sand:storm")
+    assert storm.wind_auto == true
+    assert storm.overflow_auto == true
+  end
+
+  test "mode_tweakables/1 exposes expected keys without button_force" do
     keys =
       sand_mode_tweakables("sand")
       |> Enum.map(& &1.key)
 
-    assert keys == [:spawn_rate, :button_force, :auto_drain, :color_mode, :supersample, :gravity]
+    assert :spawn_rate in keys
+    assert :spawn_shape in keys
+    assert :wind_strength in keys
+    assert :wind_auto in keys
+    assert :bleeding in keys
+    assert :overflow_mode in keys
+    assert :overflow_auto in keys
+    assert :plug_drain in keys
+    assert :color_mix in keys
+    refute :button_force in keys
+  end
+
+  test "summary_for_preset/1 formats preset summary" do
+    summary =
+      Sand.summary_for_preset(%{
+        config: %{
+          spawn_rate: 0.08,
+          wind_auto: true,
+          overflow_mode: :waterfall,
+          color_mix: 0.7,
+          plug_drain: true,
+          plug_drain_interval: 12.0
+        }
+      })
+
+    assert summary =~ "spawn 8%"
+    assert summary =~ "wind auto"
+    assert summary =~ "overflow waterfall"
+    assert summary =~ "mix 70%"
+    assert summary =~ "plug 12.0s"
   end
 
   test "handle_config/2 applies partial updates without clearing panels" do
@@ -66,50 +93,61 @@ defmodule Octopus.Apps.SandTest do
     {:noreply, updated} = sand_handle_config(%{spawn_rate: 0.5}, state)
 
     assert updated.spawn_rate == 0.5
-    assert updated.button_force == 40
+    assert updated.spawn_shape == :rain
     assert updated.panels == %{0 => :panel}
   end
 
-  test "get_config/1 returns tweakable values" do
+  test "handle_config/2 disables overflow_auto when overflow_mode is set" do
+    state = base_state(overflow_auto: true)
+
+    {:noreply, updated} =
+      sand_handle_config(%{overflow_mode: :waterfall}, state)
+
+    assert updated.overflow_mode == :waterfall
+    assert updated.overflow_auto == false
+  end
+
+  test "get_config/1 returns tweakable values with display scaling" do
     state =
       base_state(
         spawn_rate: 0.4,
-        button_force: 55,
-        auto_drain: false,
         color_mode: :warm,
+        color_mix: 0.5,
+        collapse_sensitivity: 0.25,
         supersample: 2,
-        gravity: 0.1
+        gravity: 0.1,
+        overflow_auto: true,
+        runtime_overflow_mode: :abyss
       )
 
     assert %{
              spawn_rate: 0.4,
-             button_force: 55,
-             auto_drain: false,
              color_mode: :warm,
+             color_mix: 50.0,
+             collapse_sensitivity: 25.0,
              supersample: 2,
-             gravity: 0.1
+             gravity: 0.1,
+             overflow_mode: :abyss,
+             overflow_auto: true
            } = sand_get_config(state)
   end
 
-  test "now_playing_meta/1 summarizes settings and interaction hint" do
-    s = @default_supersample
-    gravity = Sim.default_gravity(s)
+  test "now_playing_meta/1 summarizes settings" do
+    meta =
+      sand_now_playing_meta(%{
+        spawn_rate: 0.25,
+        spawn_shape: :rain,
+        wind_auto: false,
+        wind_strength: 0.8,
+        overflow_mode: :block,
+        overflow_auto: false,
+        color_mix: 0.0,
+        gravity: 0.35
+      })
 
-    assert sand_now_playing_meta(%{
-             spawn_rate: 0.25,
-             button_force: 40,
-             auto_drain: true,
-             color_mode: :rainbow,
-             supersample: s,
-             gravity: gravity
-           }) == [
-             "spawn 25%",
-             "blast 40",
-             "auto-drain on",
-             "rainbow",
-             "S=4 grav=#{Float.round(gravity, 2)}",
-             "Press buttons to explode"
-           ]
+    assert Enum.any?(meta, &String.contains?(&1, "spawn 25%"))
+    assert Enum.any?(meta, &String.contains?(&1, "wind 0.8"))
+    assert Enum.any?(meta, &String.contains?(&1, "overflow block"))
   end
 
   test "compatible?/0 allows panels without buttons or one button per panel" do

@@ -810,12 +810,14 @@ defmodule OctopusWeb.ConsoleComponents do
                           type="button"
                           class={[
                             "btn btn-sm join-item min-h-11",
-                            Map.get(@now_playing.effective, spec.key) == elem(option, 0) && "btn-primary"
+                            Map.get(@now_playing.effective, spec.key) == elem(option, 0) && "btn-primary",
+                            now_playing_disabled?(@now_playing, spec) && "opacity-40 pointer-events-none"
                           ]}
                           phx-click="now_playing_choice"
                           phx-value-key={spec.key}
                           phx-value-index={idx}
                           phx-target={@target}
+                          disabled={now_playing_disabled?(@now_playing, spec)}
                         >
                           {elem(option, 1)}
                         </button>

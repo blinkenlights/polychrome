@@ -15,7 +15,7 @@ defmodule Octopus.AppModePresetsTest do
       assert length(preset_list(PixelFun)) == 8
       assert length(preset_list(Collective)) == 6
       assert length(preset_list(Matrix)) == 2
-      assert length(preset_list(Sand)) == 1
+      assert length(preset_list(Sand)) == 6
       assert length(preset_list(SparkleMist)) == 1
       assert length(preset_list(Wood)) == 2
 
@@ -100,12 +100,15 @@ defmodule Octopus.AppModePresetsTest do
     end
 
     test "returns sand tiles with summaries" do
-      [mode] = preset_list_modes(Sand)
+      modes = preset_list_modes(Sand)
+      classic = Enum.find(modes, &(&1.id == "sand:sand"))
+      storm = Enum.find(modes, &(&1.id == "sand:storm"))
 
-      assert mode.id == "sand:sand"
-      assert mode.summary != ""
-      assert mode.deletable
-      assert mode.renamable
+      assert length(modes) == 6
+      assert classic.summary != ""
+      assert classic.deletable
+      assert classic.renamable
+      assert storm.summary =~ "wind auto"
     end
 
     test "returns sparkle mist tiles with summaries" do
