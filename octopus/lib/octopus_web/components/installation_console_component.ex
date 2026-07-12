@@ -5,8 +5,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   import OctopusWeb.ConsoleComponents
 
   alias Octopus.{AppManager, AppSupervisor, InstallationTransport}
-  alias Octopus.Apps.{PixelFun, PixieDebug}
-  alias Octopus.Apps.{PixelFun, PixieDebug}
+  alias Octopus.Apps.{PixelFun3D, PixieDebug}
 
   @app Module.concat(["Octopus", "App"])
   @app_mode_presets Module.concat(["Octopus", "AppModePresets"])
@@ -31,7 +30,8 @@ defmodule OctopusWeb.InstallationConsoleComponent do
        browse_apps: [],
        browse_app_count: 0,
        console_theme: "light",
-       library_sections: nil
+       library_sections: nil,
+       transform_live: nil
      )}
   end
 
@@ -40,14 +40,24 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
     socket =
       socket
-      |> assign(Map.drop(assigns, [:refresh_running, :transport, :refresh_library]))
+      |> assign(Map.drop(assigns, [:refresh_running, :transport, :refresh_library, :transform_live]))
       |> maybe_assign_transport(assigns)
+      |> maybe_assign_transform_live(assigns)
       |> assign_transport_view()
       |> maybe_refresh_library(assigns, initial_load?)
       |> maybe_assign_running(assigns, initial_load?)
 
     {:ok, socket}
   end
+
+  defp maybe_assign_transform_live(socket, %{transform_live: %{app_id: app_id} = live}) do
+    case socket.assigns.transport.now_playing do
+      %{app_id: ^app_id} -> assign(socket, transform_live: live)
+      _ -> socket
+    end
+  end
+
+  defp maybe_assign_transform_live(socket, _), do: socket
 
   def render(assigns) do
     ~H"""
@@ -817,18 +827,18 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
   defp assign_library(socket) do
     transport = socket.assigns.transport
-    pixel_fun_app_id = AppSupervisor.find_running_app(PixelFun) |> elem_or_nil()
+    pixel_fun_3d_app_id = AppSupervisor.find_running_app(PixelFun3D) |> elem_or_nil()
 
     pixel_section = %{
-      title: "Pixel Fun",
-      app: PixelFun,
-      new_scene_path: if(pixel_fun_app_id, do: ~p"/app/#{pixel_fun_app_id}", else: nil),
+      title: "Pixel Fun 3D",
+      app: PixelFun3D,
+      new_scene_path: if(pixel_fun_3d_app_id, do: ~p"/app/#{pixel_fun_3d_app_id}", else: nil),
       soon: [],
-      tiles: tile_list(PixelFun, app_list_modes(PixelFun), transport)
+      tiles: tile_list(PixelFun3D, app_list_modes(PixelFun3D), transport)
     }
 
     more_sections =
-      for app <- persistable_apps(), app != PixelFun do
+      for app <- persistable_apps(), app != PixelFun3D do
         %{
           title: app_name(app),
           app: app,
@@ -942,8 +952,17 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   end
 
   defp now_playing_assigns(assigns) do
+    np = assigns.transport.now_playing
+
+    np =
+      if np && assigns[:transform_live] do
+        Map.put(np, :transform_live, assigns.transform_live)
+      else
+        np
+      end
+
     %{
-      now_playing: assigns.transport.now_playing,
+      now_playing: np,
       live: assigns.transport.live,
       rotating?: assigns.rotating?,
       playing: assigns.playing,

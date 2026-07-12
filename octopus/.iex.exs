@@ -12,6 +12,7 @@ alias Octopus.{
   GameScheduler,
   Installation,
   Apps.PixelFun,
+  Apps.PixelFun3D,
   Canvas
 }
 

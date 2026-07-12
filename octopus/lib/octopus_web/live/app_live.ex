@@ -3,7 +3,7 @@ defmodule OctopusWeb.AppLive do
 
   alias Octopus.AppSupervisor
   alias Octopus.InstallationTransport
-  alias Octopus.Apps.{PixelFun, Wood}
+  alias Octopus.Apps.{PixelFun, PixelFun3D, Wood}
 
   def mount(%{"id" => app_id}, _session, socket) do
     case AppSupervisor.lookup_app(app_id) do
@@ -38,8 +38,8 @@ defmodule OctopusWeb.AppLive do
     <div class="container mx-auto p-4">
       <div class={[
         "card bg-base-100 shadow-lg mx-auto",
-        @module == PixelFun && "max-w-6xl",
-        @module != PixelFun && "max-w-2xl"
+        wide_config?(@module) && "max-w-6xl",
+        not wide_config?(@module) && "max-w-2xl"
       ]}>
         <div class="card-body">
           <h1 class="card-title text-3xl justify-center">{@name}</h1>
@@ -48,6 +48,14 @@ defmodule OctopusWeb.AppLive do
               <.live_component
                 id={"app-config-#{@app_id}"}
                 module={OctopusWeb.PixelFunConfigComponent}
+                app_id={@app_id}
+                app_module={@module}
+                config={@app_config}
+              />
+            <% @module == PixelFun3D -> %>
+              <.live_component
+                id={"app-config-#{@app_id}"}
+                module={OctopusWeb.PixelFun3DConfigComponent}
                 app_id={@app_id}
                 app_module={@module}
                 config={@app_config}
@@ -124,8 +132,13 @@ defmodule OctopusWeb.AppLive do
   end
 
   defp config_component_module(PixelFun), do: OctopusWeb.PixelFunConfigComponent
+  defp config_component_module(PixelFun3D), do: OctopusWeb.PixelFun3DConfigComponent
   defp config_component_module(Wood), do: OctopusWeb.WoodConfigComponent
   defp config_component_module(_), do: OctopusWeb.AppConfigComponent
+
+  defp wide_config?(PixelFun), do: true
+  defp wide_config?(PixelFun3D), do: true
+  defp wide_config?(_), do: false
 
   defp assign_playlist_config(socket) do
     config = %{
