@@ -32,6 +32,18 @@ config :octopus, :firmware_broadcaster_remote_port, 1337
 # Used by Octopus.Osc.Server - Open Sound Control for audio/visual applications
 config :octopus, :osc_server_port, 8000
 
+# =============================================================================
+# RECORDING
+# =============================================================================
+
+# Records the frames the mixer sends to the LED panels into an append-only file
+# that can be converted to video. Disabled by default so it has zero overhead
+# and can never influence the running installation unless explicitly enabled.
+config :octopus, Octopus.Recording,
+  enabled: false,
+  output_dir: "recordings",
+  max_queue: 600
+
 # Network addresses are now configured in Installation modules
 # See lib/octopus/installation/*.ex files
 

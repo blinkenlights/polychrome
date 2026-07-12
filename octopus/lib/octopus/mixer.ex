@@ -118,8 +118,14 @@ defmodule Octopus.Mixer do
   `duration_ms` is the total fade time (half out, half in). When `duration_ms` is 0
   or transitions are disabled, `on_black` runs immediately.
   """
-  def run_transition(duration_ms, on_black) when is_integer(duration_ms) and duration_ms >= 0 and is_function(on_black, 0) do
+  def run_transition(duration_ms, on_black)
+      when is_integer(duration_ms) and duration_ms >= 0 and is_function(on_black, 0) do
     GenServer.cast(__MODULE__, {:run_transition, duration_ms, on_black})
+  end
+
+  @doc "Unsubscribes the calling process from the mixer topic."
+  def unsubscribe do
+    Phoenix.PubSub.unsubscribe(Octopus.PubSub, @pubsub_topic)
   end
 
   def init(:ok) do
@@ -313,7 +319,8 @@ defmodule Octopus.Mixer do
           {state, :noop}
 
         state.transition == nil ->
-          {%State{state | transition: {:out, @transition_duration, selected_app}}, :start_transition}
+          {%State{state | transition: {:out, @transition_duration, selected_app}},
+           :start_transition}
 
         match?({:out, _, _}, state.transition) ->
           # Retarget an in-flight fade-out (e.g. stop old app then immediately select new one).
@@ -402,7 +409,10 @@ defmodule Octopus.Mixer do
     {:noreply, state}
   end
 
-  def handle_info(:transition, %State{transition: {:out, time, {:callback, on_black, half}}} = state)
+  def handle_info(
+        :transition,
+        %State{transition: {:out, time, {:callback, on_black, half}}} = state
+      )
       when time <= 0 do
     on_black.()
 
@@ -413,7 +423,10 @@ defmodule Octopus.Mixer do
     {:noreply, state}
   end
 
-  def handle_info(:transition, %State{transition: {:out, time, {:callback, on_black, half}}} = state) do
+  def handle_info(
+        :transition,
+        %State{transition: {:out, time, {:callback, on_black, half}}} = state
+      ) do
     state = %State{
       state
       | transition: {:out, time - @transition_frame_time, {:callback, on_black, half}}

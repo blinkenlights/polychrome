@@ -48,6 +48,7 @@ defmodule Octopus.Application do
         Octopus.Mixer,
         Octopus.ButtonServer,
         Octopus.Sunlight,
+        Octopus.Recording.Supervisor,
 
         # WebApp
         {Finch, name: Octopus.Finch},
