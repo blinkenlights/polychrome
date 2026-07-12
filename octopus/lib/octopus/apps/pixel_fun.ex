@@ -520,6 +520,19 @@ defmodule Octopus.Apps.PixelFun do
       },
       %{key: :trans_auto, label: "Auto", type: :toggle, default: false, companion_of: :orbit_rate},
       %{
+        key: :elev_base,
+        label: "Translate Y",
+        type: :slider,
+        min: -4.0,
+        max: 4.0,
+        step: 0.1,
+        default: 0.0,
+        unit: "px",
+        # Reserve Auto-column width so X/Y tracks align; nest Range/Interval under Y.
+        auto_spacer: true,
+        disabled_when: {:trans_auto, [true]}
+      },
+      %{
         key: :trans_auto_range_x,
         label: "Range X",
         type: :slider,
@@ -551,17 +564,6 @@ defmodule Octopus.Apps.PixelFun do
         default: 30.0,
         unit: "s",
         visible_when: {:trans_auto, [true]}
-      },
-      %{
-        key: :elev_base,
-        label: "Translate Y",
-        type: :slider,
-        min: -4.0,
-        max: 4.0,
-        step: 0.1,
-        default: 0.0,
-        unit: "px",
-        disabled_when: {:trans_auto, [true]}
       },
       %{
         key: :roll_rate,

@@ -709,6 +709,14 @@ defmodule OctopusWeb.ConsoleComponents do
                           class="toggle toggle-sm toggle-primary shrink-0 focus:outline-none focus:ring-0 focus:ring-offset-0"
                         />
                       </label>
+                      <div
+                        :if={is_nil(auto_spec) and spec[:auto_spacer]}
+                        class="flex items-center gap-1.5 shrink-0 invisible pointer-events-none select-none"
+                        aria-hidden="true"
+                      >
+                        <span class="text-[11px]">Auto</span>
+                        <span class="toggle toggle-sm shrink-0"></span>
+                      </div>
                     </div>
                   </div>
 
@@ -1100,27 +1108,54 @@ defmodule OctopusWeb.ConsoleComponents do
       |> List.flatten()
       |> MapSet.new(& &1.key)
 
-    control_tweakables
-    |> Enum.reject(&(&1.key in companion_keys or &1.key in nested_keys))
-    |> Enum.map(fn
-      %{type: :slider} = spec ->
-        auto_spec =
-          case spec[:auto_key] do
-            nil -> nil
-            key -> Map.get(by_key, key)
-          end
+    rows =
+      control_tweakables
+      |> Enum.reject(&(&1.key in companion_keys or &1.key in nested_keys))
+      |> Enum.map(fn
+        %{type: :slider} = spec ->
+          auto_spec =
+            case spec[:auto_key] do
+              nil -> nil
+              key -> Map.get(by_key, key)
+            end
 
-        nested =
-          case spec[:auto_key] do
-            nil -> []
-            key -> Map.get(nested_by_auto, key, [])
-          end
+          {:slider, spec, auto_spec, []}
 
-        {:slider, spec, auto_spec, nested}
+        spec ->
+          {:control, spec}
+      end)
 
-      spec ->
-        {:control, spec}
+    # Nest Range/Interval under the last slider disabled by that Auto
+    # (Translate: under Y, not between X and Y).
+    Enum.reduce(nested_by_auto, rows, fn {auto_key, nested}, acc ->
+      case find_auto_nested_anchor_index(acc, auto_key) do
+        nil ->
+          acc
+
+        idx ->
+          List.update_at(acc, idx, fn {:slider, spec, auto_spec, _} ->
+            {:slider, spec, auto_spec, nested}
+          end)
+      end
     end)
+  end
+
+  defp find_auto_nested_anchor_index(rows, auto_key) do
+    rows
+    |> Enum.with_index()
+    |> Enum.filter(fn
+      {{:slider, spec, _auto, _}, _} ->
+        spec[:auto_key] == auto_key or
+          match?({^auto_key, _}, spec[:disabled_when])
+
+      _ ->
+        false
+    end)
+    |> List.last()
+    |> case do
+      {_, idx} -> idx
+      nil -> nil
+    end
   end
 
   defp nested_auto_subcontrol?(%{type: :slider, visible_when: {dep, _}}) when is_atom(dep) do
