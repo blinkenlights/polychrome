@@ -88,6 +88,28 @@ defmodule Octopus.MixerTest do
     _ = :sys.get_state(Mixer)
   end
 
+  test "uses cached bleeding config when rendering frames" do
+    app_id = "bleedapp"
+
+    config = %{
+      supports_rgb: true,
+      supports_grayscale: false,
+      bleeding: 42.0,
+      merge_rgbw: false
+    }
+
+    Mixer.create_display_buffers(app_id, config)
+
+    :sys.replace_state(Mixer, fn state ->
+      %{state | rendered_app: app_id}
+    end)
+
+    canvas = Canvas.new(10, 8) |> Canvas.put_pixel({0, 0}, {255, 0, 0})
+
+    assert :ok = Mixer.update_app_display(app_id, canvas, :rgb)
+    _ = :sys.get_state(Mixer)
+  end
+
   test "retargets in-flight fade-out when a new app is selected during stop-then-start" do
     old_app = "oldapp1"
     new_app = "newapp1"

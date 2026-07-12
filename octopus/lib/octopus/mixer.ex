@@ -322,7 +322,16 @@ defmodule Octopus.Mixer do
   end
 
   # Ignore other app supervisor events
-  def handle_info({:apps, {:config_updated, app_id, _config}}, %State{} = state) do
+  def handle_info({:apps, {:config_updated, app_id, config}}, %State{} = state) do
+    state =
+      case Map.get(state.app_displays, app_id) do
+        nil ->
+          state
+
+        app_display ->
+          update_app_displays(state, app_id, %{app_display | config: config})
+      end
+
     if rendered_app_id(state) == app_id do
       rerender_selected_app(state)
     end
@@ -817,7 +826,7 @@ defmodule Octopus.Mixer do
          easing_interval,
          main_app_mode
        ) do
-    bleeding = app_bleeding(state.rendered_app)
+    bleeding = app_bleeding(main_app_display.config)
 
     main_canvas =
       Canvas.bleed(main_canvas, bleeding, display_info: main_display_info)
@@ -955,9 +964,9 @@ defmodule Octopus.Mixer do
   defp rendered_app_id(%State{rendered_app: app_id}) when is_binary(app_id), do: app_id
   defp rendered_app_id(_), do: nil
 
-  defp app_bleeding(app_id) when is_binary(app_id) do
-    case AppSupervisor.config(app_id) do
-      %{bleeding: value} when is_number(value) -> App.clamp_bleeding(value)
+  defp app_bleeding(config) when is_map(config) do
+    case Map.get(config, :bleeding) do
+      value when is_number(value) -> App.clamp_bleeding(value)
       _ -> 0.0
     end
   end
