@@ -462,8 +462,8 @@ defmodule Octopus.Apps.PixelFunTest do
 
     assert migrated.tilt_scale == 2.0
     assert migrated.roll_rate == 1.0
-    assert migrated.ty_auto == true
-    assert_in_delta migrated.ty_auto_range, 3.0, 0.0001
+    assert migrated.trans_auto == true
+    assert_in_delta migrated.trans_auto_range_y, 3.0, 0.0001
     refute Map.has_key?(migrated, :elev_amp)
     refute Map.has_key?(migrated, :zoom_pulse)
   end

@@ -527,21 +527,19 @@ defmodule OctopusWeb.PixelFunConfigComponent do
       zoom_pivot: config[:zoom_pivot],
       pattern_speed: config[:pattern_speed],
       time_direction: config[:time_direction],
-      tx_auto: config[:tx_auto],
-      tx_auto_range: config[:tx_auto_range],
-      tx_auto_tempo: config[:tx_auto_tempo],
-      ty_auto: config[:ty_auto],
-      ty_auto_range: config[:ty_auto_range],
-      ty_auto_tempo: config[:ty_auto_tempo],
+      trans_auto: config[:trans_auto],
+      trans_auto_range_x: config[:trans_auto_range_x],
+      trans_auto_range_y: config[:trans_auto_range_y],
+      trans_auto_interval: config[:trans_auto_interval],
       rot_auto: config[:rot_auto],
       rot_auto_range: config[:rot_auto_range],
-      rot_auto_tempo: config[:rot_auto_tempo],
+      rot_auto_interval: config[:rot_auto_interval],
       zoom_auto: config[:zoom_auto],
       zoom_auto_range: config[:zoom_auto_range],
-      zoom_auto_tempo: config[:zoom_auto_tempo],
+      zoom_auto_interval: config[:zoom_auto_interval],
       sway_auto: config[:sway_auto],
       sway_auto_range: config[:sway_auto_range],
-      sway_auto_tempo: config[:sway_auto_tempo]
+      sway_auto_interval: config[:sway_auto_interval]
     }
   end
 

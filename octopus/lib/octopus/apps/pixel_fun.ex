@@ -16,37 +16,33 @@ defmodule Octopus.Apps.PixelFun do
 
   @app_mode_presets "Elixir.Octopus.AppModePresets"
 
-  @auto_channels [:tx, :ty, :rot, :zoom, :sway]
+  @auto_channels [:trans, :rot, :zoom, :sway]
 
   @auto_defaults %{
-    tx_auto: false,
-    tx_auto_range: 1.0,
-    tx_auto_tempo: 0.25,
-    ty_auto: false,
-    ty_auto_range: 2.0,
-    ty_auto_tempo: 0.25,
+    trans_auto: false,
+    trans_auto_range_x: 1.0,
+    trans_auto_range_y: 2.0,
+    trans_auto_interval: 30.0,
     rot_auto: false,
     rot_auto_range: 1.0,
-    rot_auto_tempo: 0.25,
+    rot_auto_interval: 30.0,
     zoom_auto: false,
     zoom_auto_range: 0.8,
-    zoom_auto_tempo: 0.25,
+    zoom_auto_interval: 30.0,
     sway_auto: false,
     sway_auto_range: 2.0,
-    sway_auto_tempo: 0.25
+    sway_auto_interval: 30.0
   }
 
   @channel_bounds %{
-    tx: {-4.0, 4.0},
-    ty: {-4.0, 4.0},
+    trans_x: {-4.0, 4.0},
+    trans_y: {-4.0, 4.0},
     rot: {-4.0, 4.0},
     zoom: {-2.0, 2.0},
     sway: {0.0, 4.0}
   }
 
   @channel_base_key %{
-    tx: :orbit_rate,
-    ty: :elev_base,
     rot: :roll_rate,
     zoom: :zoom_base,
     sway: :tilt_scale
@@ -76,6 +72,15 @@ defmodule Octopus.Apps.PixelFun do
 
   @removed_zoom_keys [:zoom_rate, :zoom_pulse, :zoom_pulse_speed]
   @removed_elev_keys [:elev_amp, :elev_speed]
+  @removed_tx_ty_keys [
+    :tx_auto,
+    :tx_auto_range,
+    :tx_auto_tempo,
+    :ty_auto,
+    :ty_auto_range,
+    :ty_auto_tempo
+  ]
+  @removed_tempo_keys [:rot_auto_tempo, :zoom_auto_tempo, :sway_auto_tempo, :trans_auto_tempo]
 
   @builtin_scene_keys ([
                         :color_mode,
@@ -186,21 +191,19 @@ defmodule Octopus.Apps.PixelFun do
       :zoom_base,
       :zoom_pivot,
       :pattern_speed,
-      :tx_auto,
-      :tx_auto_range,
-      :tx_auto_tempo,
-      :ty_auto,
-      :ty_auto_range,
-      :ty_auto_tempo,
+      :trans_auto,
+      :trans_auto_range_x,
+      :trans_auto_range_y,
+      :trans_auto_interval,
       :rot_auto,
       :rot_auto_range,
-      :rot_auto_tempo,
+      :rot_auto_interval,
       :zoom_auto,
       :zoom_auto_range,
-      :zoom_auto_tempo,
+      :zoom_auto_interval,
       :sway_auto,
       :sway_auto_range,
-      :sway_auto_tempo,
+      :sway_auto_interval,
       :auto_wanderers,
       :yaw_angle,
       :roll_angle,
@@ -244,21 +247,19 @@ defmodule Octopus.Apps.PixelFun do
       roll_rate: {"Rotation", :float, %{default: 0.0, min: -4, max: 4, step: 0.01}},
       zoom_base: {"Zoom", :float, %{default: 0.0, min: -2, max: 2, step: 0.05}},
       tilt_scale: {"Sway", :float, %{default: 0.0, min: 0, max: 4, step: 0.1}},
-      tx_auto: {"Translate X Auto", :boolean, %{default: false}},
-      tx_auto_range: {"Translate X Range", :float, %{default: 1.0, min: 0, max: 4, step: 0.05}},
-      tx_auto_tempo: {"Translate X Tempo", :float, %{default: 0.25, min: 0, max: 3, step: 0.05}},
-      ty_auto: {"Translate Y Auto", :boolean, %{default: false}},
-      ty_auto_range: {"Translate Y Range", :float, %{default: 2.0, min: 0, max: 4, step: 0.05}},
-      ty_auto_tempo: {"Translate Y Tempo", :float, %{default: 0.25, min: 0, max: 3, step: 0.05}},
+      trans_auto: {"Translate Auto", :boolean, %{default: false}},
+      trans_auto_range_x: {"Translate Range X", :float, %{default: 1.0, min: 0, max: 4, step: 0.05}},
+      trans_auto_range_y: {"Translate Range Y", :float, %{default: 2.0, min: 0, max: 4, step: 0.05}},
+      trans_auto_interval: {"Translate Interval", :float, %{default: 30.0, min: 4, max: 60, step: 1}},
       rot_auto: {"Rotation Auto", :boolean, %{default: false}},
       rot_auto_range: {"Rotation Range", :float, %{default: 1.0, min: 0, max: 4, step: 0.05}},
-      rot_auto_tempo: {"Rotation Tempo", :float, %{default: 0.25, min: 0, max: 3, step: 0.05}},
+      rot_auto_interval: {"Rotation Interval", :float, %{default: 30.0, min: 4, max: 60, step: 1}},
       zoom_auto: {"Zoom Auto", :boolean, %{default: false}},
       zoom_auto_range: {"Zoom Range", :float, %{default: 0.8, min: 0, max: 2, step: 0.05}},
-      zoom_auto_tempo: {"Zoom Tempo", :float, %{default: 0.25, min: 0, max: 3, step: 0.05}},
+      zoom_auto_interval: {"Zoom Interval", :float, %{default: 30.0, min: 4, max: 60, step: 1}},
       sway_auto: {"Sway Auto", :boolean, %{default: false}},
       sway_auto_range: {"Sway Range", :float, %{default: 2.0, min: 0, max: 4, step: 0.05}},
-      sway_auto_tempo: {"Sway Tempo", :float, %{default: 0.25, min: 0, max: 3, step: 0.05}},
+      sway_auto_interval: {"Sway Interval", :float, %{default: 30.0, min: 4, max: 60, step: 1}},
       roll_pivot: {"Rotation pivot (panel)", :float, %{default: 0, min: 0, max: 12, step: 1}},
       tilt_speed: {"Sway speed", :float, %{default: 0.5, min: 0, max: 3, step: 0.05}},
       tilt_mode:
@@ -367,22 +368,17 @@ defmodule Octopus.Apps.PixelFun do
 
     channel_bit = fn ch, label, key ->
       if Map.get(config, :"#{ch}_auto", false) do
-        "#{label} auto±#{format_num(Map.get(config, :"#{ch}_auto_range", 0))}"
+        case ch do
+          :trans ->
+            "trans auto±#{format_num(Map.get(config, :trans_auto_range_x, 0))}/#{format_num(Map.get(config, :trans_auto_range_y, 0))}"
+
+          _ ->
+            "#{label} auto±#{format_num(Map.get(config, :"#{ch}_auto_range", 0))}"
+        end
       else
         "#{label} #{format_num(Map.get(config, key, 0))}"
       end
     end
-
-    sway =
-      if Map.get(config, :sway_auto, false) do
-        " · #{channel_bit.(:sway, "sway", :tilt_scale)}"
-      else
-        if (config[:tilt_scale] || 0) > 0 do
-          " · sway #{format_num(config[:tilt_scale])}"
-        else
-          ""
-        end
-      end
 
     color_mode = Map.get(config, :color_mode, :random)
 
@@ -409,10 +405,18 @@ defmodule Octopus.Apps.PixelFun do
     sliders =
       Enum.join(
         [
-          channel_bit.(:tx, "tx", :orbit_rate),
-          channel_bit.(:ty, "ty", :elev_base),
+          if Map.get(config, :trans_auto, false) do
+            channel_bit.(:trans, "trans", :orbit_rate)
+          else
+            [
+              channel_bit.(:trans, "tx", :orbit_rate),
+              "ty #{format_num(Map.get(config, :elev_base, 0))}"
+            ]
+            |> Enum.join(" · ")
+          end,
           channel_bit.(:rot, "rot", :roll_rate),
           channel_bit.(:zoom, "zoom", :zoom_base),
+          channel_bit.(:sway, "sway", :tilt_scale),
           palette
         ],
         " · "
@@ -423,7 +427,7 @@ defmodule Octopus.Apps.PixelFun do
       |> String.trim()
       |> then(fn f -> if String.length(f) > 28, do: String.slice(f, 0, 25) <> "...", else: f end)
 
-    "#{sliders}#{sway} · #{formula}"
+    "#{sliders} · #{formula}"
   end
 
   defp format_num(n) when is_float(n), do: :erlang.float_to_binary(n, decimals: 1)
@@ -497,28 +501,39 @@ defmodule Octopus.Apps.PixelFun do
         max: 4.0,
         step: 0.01,
         default: 0.0,
-        auto_key: :tx_auto
+        auto_key: :trans_auto
       },
-      %{key: :tx_auto, label: "Auto", type: :toggle, default: false, companion_of: :orbit_rate},
+      %{key: :trans_auto, label: "Auto", type: :toggle, default: false, companion_of: :orbit_rate},
       %{
-        key: :tx_auto_range,
-        label: "Range",
+        key: :trans_auto_range_x,
+        label: "Range X",
         type: :slider,
         min: 0.0,
         max: 4.0,
         step: 0.05,
         default: 1.0,
-        visible_when: {:tx_auto, [true]}
+        visible_when: {:trans_auto, [true]}
       },
       %{
-        key: :tx_auto_tempo,
-        label: "Tempo",
+        key: :trans_auto_range_y,
+        label: "Range Y",
         type: :slider,
         min: 0.0,
-        max: 3.0,
+        max: 4.0,
         step: 0.05,
-        default: 0.25,
-        visible_when: {:tx_auto, [true]}
+        default: 2.0,
+        visible_when: {:trans_auto, [true]}
+      },
+      %{
+        key: :trans_auto_interval,
+        label: "Interval",
+        type: :slider,
+        min: 4.0,
+        max: 60.0,
+        step: 1.0,
+        default: 30.0,
+        unit: "s",
+        visible_when: {:trans_auto, [true]}
       },
       %{
         key: :elev_base,
@@ -527,29 +542,7 @@ defmodule Octopus.Apps.PixelFun do
         min: -4.0,
         max: 4.0,
         step: 0.1,
-        default: 0.0,
-        auto_key: :ty_auto
-      },
-      %{key: :ty_auto, label: "Auto", type: :toggle, default: false, companion_of: :elev_base},
-      %{
-        key: :ty_auto_range,
-        label: "Range",
-        type: :slider,
-        min: 0.0,
-        max: 4.0,
-        step: 0.05,
-        default: 2.0,
-        visible_when: {:ty_auto, [true]}
-      },
-      %{
-        key: :ty_auto_tempo,
-        label: "Tempo",
-        type: :slider,
-        min: 0.0,
-        max: 3.0,
-        step: 0.05,
-        default: 0.25,
-        visible_when: {:ty_auto, [true]}
+        default: 0.0
       },
       %{
         key: :roll_rate,
@@ -573,13 +566,14 @@ defmodule Octopus.Apps.PixelFun do
         visible_when: {:rot_auto, [true]}
       },
       %{
-        key: :rot_auto_tempo,
-        label: "Tempo",
+        key: :rot_auto_interval,
+        label: "Interval",
         type: :slider,
-        min: 0.0,
-        max: 3.0,
-        step: 0.05,
-        default: 0.25,
+        min: 4.0,
+        max: 60.0,
+        step: 1.0,
+        default: 30.0,
+        unit: "s",
         visible_when: {:rot_auto, [true]}
       },
       %{
@@ -604,13 +598,14 @@ defmodule Octopus.Apps.PixelFun do
         visible_when: {:zoom_auto, [true]}
       },
       %{
-        key: :zoom_auto_tempo,
-        label: "Tempo",
+        key: :zoom_auto_interval,
+        label: "Interval",
         type: :slider,
-        min: 0.0,
-        max: 3.0,
-        step: 0.05,
-        default: 0.25,
+        min: 4.0,
+        max: 60.0,
+        step: 1.0,
+        default: 30.0,
+        unit: "s",
         visible_when: {:zoom_auto, [true]}
       },
       %{
@@ -635,13 +630,14 @@ defmodule Octopus.Apps.PixelFun do
         visible_when: {:sway_auto, [true]}
       },
       %{
-        key: :sway_auto_tempo,
-        label: "Tempo",
+        key: :sway_auto_interval,
+        label: "Interval",
         type: :slider,
-        min: 0.0,
-        max: 3.0,
-        step: 0.05,
-        default: 0.25,
+        min: 4.0,
+        max: 60.0,
+        step: 1.0,
+        default: 30.0,
+        unit: "s",
         visible_when: {:sway_auto, [true]}
       },
       %{
@@ -942,11 +938,13 @@ defmodule Octopus.Apps.PixelFun do
       |> maybe_migrate_translate()
       |> maybe_migrate_zoom()
       |> maybe_migrate_elev_drift()
+      |> maybe_migrate_trans_auto()
+      |> maybe_migrate_auto_tempos()
       |> strip_removed_zoom_keys()
-      |> Map.drop(@removed_elev_keys)
+      |> Map.drop(@removed_elev_keys ++ @removed_tx_ty_keys ++ @removed_tempo_keys)
 
     Map.merge(Map.take(@default_scene, @sphere_scene_keys), migrated)
-    |> Map.drop(@removed_elev_keys ++ @removed_zoom_keys)
+    |> Map.drop(@removed_elev_keys ++ @removed_zoom_keys ++ @removed_tx_ty_keys ++ @removed_tempo_keys)
   end
 
   defp normalize_config_keys(config) do
@@ -984,7 +982,7 @@ defmodule Octopus.Apps.PixelFun do
   defp maybe_migrate_translate(config) do
     # Legacy translate_scale was vertical drift amplitude → elev_amp.
     if Map.has_key?(config, :translate_scale) and not Map.has_key?(config, :elev_amp) and
-         not Map.has_key?(config, :ty_auto) do
+         not Map.has_key?(config, :ty_auto) and not Map.has_key?(config, :trans_auto) do
       config
       |> Map.put(:elev_amp, Map.get(config, :translate_scale, 0.0))
       |> Map.put_new(:elev_speed, 0.05)
@@ -1007,7 +1005,8 @@ defmodule Octopus.Apps.PixelFun do
   defp maybe_migrate_elev_drift(config) do
     amp = Map.get(config, :elev_amp, 0.0) || 0.0
 
-    if is_number(amp) and amp > 0 and not Map.get(config, :ty_auto, false) do
+    if is_number(amp) and amp > 0 and not Map.get(config, :ty_auto, false) and
+         not Map.get(config, :trans_auto, false) do
       config
       |> Map.put(:ty_auto, true)
       |> Map.put(:ty_auto_range, amp * 1.0)
@@ -1016,6 +1015,69 @@ defmodule Octopus.Apps.PixelFun do
       config
     end
   end
+
+  defp maybe_migrate_trans_auto(config) do
+    has_legacy? =
+      Map.has_key?(config, :tx_auto) or Map.has_key?(config, :ty_auto) or
+        Map.has_key?(config, :tx_auto_range) or Map.has_key?(config, :ty_auto_range)
+
+    if has_legacy? and not Map.has_key?(config, :trans_auto) do
+      tx = Map.get(config, :tx_auto, false) in [true, "true", 1]
+      ty = Map.get(config, :ty_auto, false) in [true, "true", 1]
+
+      config
+      |> Map.put(:trans_auto, tx or ty)
+      |> Map.put(
+        :trans_auto_range_x,
+        Map.get(config, :tx_auto_range, @auto_defaults.trans_auto_range_x) * 1.0
+      )
+      |> Map.put(
+        :trans_auto_range_y,
+        Map.get(config, :ty_auto_range, @auto_defaults.trans_auto_range_y) * 1.0
+      )
+      |> maybe_put_tempo_as_interval(:trans_auto_interval, [
+        Map.get(config, :tx_auto_tempo),
+        Map.get(config, :ty_auto_tempo)
+      ])
+    else
+      config
+    end
+  end
+
+  defp maybe_migrate_auto_tempos(config) do
+    Enum.reduce([:rot, :zoom, :sway], config, fn ch, acc ->
+      tempo_key = :"#{ch}_auto_tempo"
+      interval_key = :"#{ch}_auto_interval"
+
+      if Map.has_key?(acc, tempo_key) and not Map.has_key?(acc, interval_key) do
+        Map.put(acc, interval_key, tempo_to_interval(Map.get(acc, tempo_key)))
+      else
+        acc
+      end
+    end)
+  end
+
+  defp maybe_put_tempo_as_interval(config, interval_key, tempos) do
+    if Map.has_key?(config, interval_key) do
+      config
+    else
+      tempo =
+        tempos
+        |> Enum.filter(&is_number/1)
+        |> case do
+          [] -> 0.25
+          list -> Enum.max(list)
+        end
+
+      Map.put(config, interval_key, tempo_to_interval(tempo))
+    end
+  end
+
+  defp tempo_to_interval(tempo) when is_number(tempo) do
+    (12.0 / max(tempo * 1.0, 0.2)) |> max(4.0) |> min(60.0)
+  end
+
+  defp tempo_to_interval(_), do: 30.0
 
   defp strip_removed_zoom_keys(config) do
     dropped =
@@ -1173,7 +1235,7 @@ defmodule Octopus.Apps.PixelFun do
 
   defp accumulate_orientation(%State{} = state, dt_signed) do
     eff = effective_transform_values(state)
-    dt_yaw = if state.tx_auto, do: abs(dt_signed), else: dt_signed
+    dt_yaw = if state.trans_auto, do: abs(dt_signed), else: dt_signed
     dt_roll = if state.rot_auto, do: abs(dt_signed), else: dt_signed
 
     {yaw, roll} =
@@ -1195,14 +1257,9 @@ defmodule Octopus.Apps.PixelFun do
     wanderers =
       Enum.reduce(@auto_channels, state.auto_wanderers || %{}, fn ch, acc ->
         if Map.get(state, :"#{ch}_auto") do
-          base = Map.get(state, @channel_base_key[ch]) || 0.0
-          range = Map.get(state, :"#{ch}_auto_range") || 0.0
-          tempo = Map.get(state, :"#{ch}_auto_tempo") || 0.0
-          {lo, hi} = @channel_bounds[ch]
-          min_v = max(base - range, lo)
-          max_v = min(base + range, hi)
-          w = Map.get(acc, ch) || Wander.new(base)
-          {_v, next} = Wander.step(w, now, %{min: min_v, max: max_v, tempo: tempo})
+          interval = Map.get(state, :"#{ch}_auto_interval") || @auto_defaults[:"#{ch}_auto_interval"]
+          w = Map.get(acc, ch) || new_channel_wanderer(state, ch)
+          {_v, next} = step_channel_wanderer(w, now, state, ch, interval)
           Map.put(acc, ch, next)
         else
           Map.delete(acc, ch)
@@ -1210,6 +1267,38 @@ defmodule Octopus.Apps.PixelFun do
       end)
 
     %State{state | auto_wanderers: wanderers}
+  end
+
+  defp new_channel_wanderer(%State{} = state, :trans) do
+    Wander.new({state.orbit_rate || 0.0, state.elev_base || 0.0})
+  end
+
+  defp new_channel_wanderer(%State{} = state, ch) do
+    Wander.new(Map.get(state, @channel_base_key[ch]) || 0.0)
+  end
+
+  defp step_channel_wanderer(w, now, state, :trans, interval) do
+    ox = state.orbit_rate || 0.0
+    ey = state.elev_base || 0.0
+    rx = Map.get(state, :trans_auto_range_x) || @auto_defaults.trans_auto_range_x
+    ry = Map.get(state, :trans_auto_range_y) || @auto_defaults.trans_auto_range_y
+    {lox, hix} = @channel_bounds.trans_x
+    {loy, hiy} = @channel_bounds.trans_y
+
+    Wander.step(w, now, %{
+      mins: {max(ox - rx, lox), max(ey - ry, loy)},
+      maxs: {min(ox + rx, hix), min(ey + ry, hiy)},
+      interval: interval
+    })
+  end
+
+  defp step_channel_wanderer(w, now, state, ch, interval) do
+    base = Map.get(state, @channel_base_key[ch]) || 0.0
+    range = Map.get(state, :"#{ch}_auto_range") || @auto_defaults[:"#{ch}_auto_range"]
+    {lo, hi} = @channel_bounds[ch]
+    min_v = max(base - range, lo)
+    max_v = min(base + range, hi)
+    Wander.step(w, now, %{min: min_v, max: max_v, interval: interval})
   end
 
   defp push_frame(%State{} = state) do
@@ -1477,8 +1566,7 @@ defmodule Octopus.Apps.PixelFun do
       zoom_base: 0.0,
       zoom_pivot: 0,
       pattern_speed: 1.0,
-      tx_auto: false,
-      ty_auto: false,
+      trans_auto: false,
       rot_auto: false,
       zoom_auto: false,
       sway_auto: false,
@@ -1490,38 +1578,81 @@ defmodule Octopus.Apps.PixelFun do
 
   defp auto_config_from_state(%State{} = state) do
     Enum.reduce(@auto_channels, %{}, fn ch, acc ->
-      acc
-      |> Map.put(:"#{ch}_auto", Map.get(state, :"#{ch}_auto") || false)
-      |> Map.put(
-        :"#{ch}_auto_range",
-        Map.get(state, :"#{ch}_auto_range") || @auto_defaults[:"#{ch}_auto_range"]
-      )
-      |> Map.put(
-        :"#{ch}_auto_tempo",
-        Map.get(state, :"#{ch}_auto_tempo") || @auto_defaults[:"#{ch}_auto_tempo"]
-      )
+      acc =
+        acc
+        |> Map.put(:"#{ch}_auto", Map.get(state, :"#{ch}_auto") || false)
+        |> Map.put(
+          :"#{ch}_auto_interval",
+          Map.get(state, :"#{ch}_auto_interval") || @auto_defaults[:"#{ch}_auto_interval"]
+        )
+
+      case ch do
+        :trans ->
+          acc
+          |> Map.put(
+            :trans_auto_range_x,
+            Map.get(state, :trans_auto_range_x) || @auto_defaults.trans_auto_range_x
+          )
+          |> Map.put(
+            :trans_auto_range_y,
+            Map.get(state, :trans_auto_range_y) || @auto_defaults.trans_auto_range_y
+          )
+
+        _ ->
+          Map.put(
+            acc,
+            :"#{ch}_auto_range",
+            Map.get(state, :"#{ch}_auto_range") || @auto_defaults[:"#{ch}_auto_range"]
+          )
+      end
     end)
   end
 
   defp put_auto_fields(%State{} = state, config) do
     Enum.reduce(@auto_channels, state, fn ch, acc ->
       auto_key = :"#{ch}_auto"
-      range_key = :"#{ch}_auto_range"
-      tempo_key = :"#{ch}_auto_tempo"
+      interval_key = :"#{ch}_auto_interval"
 
-      acc
-      |> Map.put(
-        auto_key,
-        coerce_time_frozen(Map.get(config, auto_key, Map.get(acc, auto_key) || false))
-      )
-      |> Map.put(
-        range_key,
-        Map.get(config, range_key, Map.get(acc, range_key) || @auto_defaults[range_key])
-      )
-      |> Map.put(
-        tempo_key,
-        Map.get(config, tempo_key, Map.get(acc, tempo_key) || @auto_defaults[tempo_key])
-      )
+      acc =
+        acc
+        |> Map.put(
+          auto_key,
+          coerce_time_frozen(Map.get(config, auto_key, Map.get(acc, auto_key) || false))
+        )
+        |> Map.put(
+          interval_key,
+          Map.get(config, interval_key, Map.get(acc, interval_key) || @auto_defaults[interval_key])
+        )
+
+      case ch do
+        :trans ->
+          acc
+          |> Map.put(
+            :trans_auto_range_x,
+            Map.get(
+              config,
+              :trans_auto_range_x,
+              Map.get(acc, :trans_auto_range_x) || @auto_defaults.trans_auto_range_x
+            )
+          )
+          |> Map.put(
+            :trans_auto_range_y,
+            Map.get(
+              config,
+              :trans_auto_range_y,
+              Map.get(acc, :trans_auto_range_y) || @auto_defaults.trans_auto_range_y
+            )
+          )
+
+        _ ->
+          range_key = :"#{ch}_auto_range"
+
+          Map.put(
+            acc,
+            range_key,
+            Map.get(config, range_key, Map.get(acc, range_key) || @auto_defaults[range_key])
+          )
+      end
     end)
   end
 
@@ -1533,8 +1664,7 @@ defmodule Octopus.Apps.PixelFun do
     wanderers =
       Enum.reduce(@auto_channels, %{}, fn ch, acc ->
         if Map.get(state, :"#{ch}_auto") do
-          base = Map.get(state, @channel_base_key[ch]) || 0.0
-          Map.put(acc, ch, Wander.new(base))
+          Map.put(acc, ch, new_channel_wanderer(state, ch))
         else
           acc
         end
@@ -1548,11 +1678,10 @@ defmodule Octopus.Apps.PixelFun do
       Enum.reduce(@auto_channels, state.auto_wanderers || %{}, fn ch, acc ->
         was = Map.get(old_flags, ch, false)
         now? = Map.get(state, :"#{ch}_auto") || false
-        base = Map.get(state, @channel_base_key[ch]) || 0.0
 
         cond do
           now? and not was ->
-            Map.put(acc, ch, Wander.new(base))
+            Map.put(acc, ch, new_channel_wanderer(state, ch))
 
           not now? and was ->
             Map.delete(acc, ch)
@@ -1570,10 +1699,26 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   defp effective_transform_values(%State{} = state) do
+    orbit = state.orbit_rate || 0.0
+    elev = state.elev_base || 0.0
+    roll = state.roll_rate || 0.0
+    zoom = state.zoom_base || 0.0
+    sway = state.tilt_scale || 0.0
+
+    {orbit, elev} =
+      if state.trans_auto do
+        case state.auto_wanderers do
+          %{trans: %Wander{value: {ox, ey}}} -> {ox, ey}
+          _ -> {orbit, elev}
+        end
+      else
+        {orbit, elev}
+      end
+
     wander_val = fn ch, base ->
       if Map.get(state, :"#{ch}_auto") do
         case state.auto_wanderers do
-          %{^ch => %Wander{value: v}} -> v
+          %{^ch => %Wander{value: {v}}} -> v
           _ -> base
         end
       else
@@ -1581,15 +1726,9 @@ defmodule Octopus.Apps.PixelFun do
       end
     end
 
-    orbit = state.orbit_rate || 0.0
-    elev = state.elev_base || 0.0
-    roll = state.roll_rate || 0.0
-    zoom = state.zoom_base || 0.0
-    sway = state.tilt_scale || 0.0
-
     %{
-      orbit_rate: wander_val.(:tx, orbit),
-      elev_base: wander_val.(:ty, elev),
+      orbit_rate: orbit,
+      elev_base: elev,
       roll_rate: wander_val.(:rot, roll),
       zoom_base: wander_val.(:zoom, zoom),
       tilt_scale: wander_val.(:sway, sway)

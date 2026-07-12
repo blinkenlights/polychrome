@@ -559,21 +559,19 @@ defmodule Octopus.AppModePresets do
           :zoom_pivot,
           :pattern_speed,
           :time_direction,
-          :tx_auto,
-          :tx_auto_range,
-          :tx_auto_tempo,
-          :ty_auto,
-          :ty_auto_range,
-          :ty_auto_tempo,
+          :trans_auto,
+          :trans_auto_range_x,
+          :trans_auto_range_y,
+          :trans_auto_interval,
           :rot_auto,
           :rot_auto_range,
-          :rot_auto_tempo,
+          :rot_auto_interval,
           :zoom_auto,
           :zoom_auto_range,
-          :zoom_auto_tempo,
+          :zoom_auto_interval,
           :sway_auto,
           :sway_auto_range,
-          :sway_auto_tempo
+          :sway_auto_interval
         ]
 
       Enum.all?(keys, fn key ->
@@ -581,7 +579,7 @@ defmodule Octopus.AppModePresets do
           :program -> left.program == right.program
           :tilt_mode -> left.tilt_mode == right.tilt_mode
           :time_direction -> left.time_direction == right.time_direction
-          k when k in [:tx_auto, :ty_auto, :rot_auto, :zoom_auto, :sway_auto, :palette_auto] ->
+          k when k in [:trans_auto, :rot_auto, :zoom_auto, :sway_auto, :palette_auto] ->
             Map.get(left, k) == Map.get(right, k)
 
           _ ->
@@ -611,21 +609,19 @@ defmodule Octopus.AppModePresets do
       zoom_pivot: Map.get(config, :zoom_pivot, 0),
       pattern_speed: Map.get(config, :pattern_speed, 1.0),
       time_direction: pixelfun_time_direction(Map.get(config, :time_direction, :forward)),
-      tx_auto: Map.get(config, :tx_auto, false),
-      tx_auto_range: Map.get(config, :tx_auto_range, 1.0),
-      tx_auto_tempo: Map.get(config, :tx_auto_tempo, 0.25),
-      ty_auto: Map.get(config, :ty_auto, false),
-      ty_auto_range: Map.get(config, :ty_auto_range, 2.0),
-      ty_auto_tempo: Map.get(config, :ty_auto_tempo, 0.25),
+      trans_auto: Map.get(config, :trans_auto, false),
+      trans_auto_range_x: Map.get(config, :trans_auto_range_x, 1.0),
+      trans_auto_range_y: Map.get(config, :trans_auto_range_y, 2.0),
+      trans_auto_interval: Map.get(config, :trans_auto_interval, 30.0),
       rot_auto: Map.get(config, :rot_auto, false),
       rot_auto_range: Map.get(config, :rot_auto_range, 1.0),
-      rot_auto_tempo: Map.get(config, :rot_auto_tempo, 0.25),
+      rot_auto_interval: Map.get(config, :rot_auto_interval, 30.0),
       zoom_auto: Map.get(config, :zoom_auto, false),
       zoom_auto_range: Map.get(config, :zoom_auto_range, 0.8),
-      zoom_auto_tempo: Map.get(config, :zoom_auto_tempo, 0.25),
+      zoom_auto_interval: Map.get(config, :zoom_auto_interval, 30.0),
       sway_auto: Map.get(config, :sway_auto, false),
       sway_auto_range: Map.get(config, :sway_auto_range, 2.0),
-      sway_auto_tempo: Map.get(config, :sway_auto_tempo, 0.25)
+      sway_auto_interval: Map.get(config, :sway_auto_interval, 30.0)
     }
   end
 

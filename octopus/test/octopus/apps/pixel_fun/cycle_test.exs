@@ -40,21 +40,19 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
           zoom_base: 0.0,
           zoom_pivot: 0,
           pattern_speed: 1.0,
-          tx_auto: false,
-          tx_auto_range: 1.0,
-          tx_auto_tempo: 0.25,
-          ty_auto: false,
-          ty_auto_range: 2.0,
-          ty_auto_tempo: 0.25,
+          trans_auto: false,
+          trans_auto_range_x: 1.0,
+          trans_auto_range_y: 2.0,
+          trans_auto_interval: 30.0,
           rot_auto: false,
           rot_auto_range: 1.0,
-          rot_auto_tempo: 0.25,
+          rot_auto_interval: 30.0,
           zoom_auto: false,
           zoom_auto_range: 0.8,
-          zoom_auto_tempo: 0.25,
+          zoom_auto_interval: 30.0,
           sway_auto: false,
           sway_auto_range: 2.0,
-          sway_auto_tempo: 0.25,
+          sway_auto_interval: 30.0,
           auto_wanderers: %{},
           yaw_angle: 0.0,
           roll_angle: 0.0,
@@ -146,8 +144,8 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
       {:noreply, updated} =
         pixel_fun_handle_config(%{translate_scale: 4.0, rotate_scale: 2.0, zoom_scale: 5.0}, state)
 
-      assert updated.ty_auto == true
-      assert_in_delta updated.ty_auto_range, 4.0, 0.0001
+      assert updated.trans_auto == true
+      assert_in_delta updated.trans_auto_range_y, 4.0, 0.0001
       assert updated.roll_rate == 2.0
     end
 
@@ -249,19 +247,24 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
     end
 
     test "auto toggle on seeds wanderer at manual base; off clears wanderer" do
-      state = base_state(%{orbit_rate: 1.5, tx_auto: false, seconds: 5.0})
+      state = base_state(%{orbit_rate: 1.5, elev_base: 0.5, trans_auto: false, seconds: 5.0})
 
-      {:noreply, on} = pixel_fun_handle_config(%{tx_auto: true, orbit_rate: 1.5}, state)
-      assert on.tx_auto == true
-      assert %Octopus.Wander{value: v} = on.auto_wanderers[:tx]
-      assert_in_delta v, 1.5, 1.0e-12
+      {:noreply, on} =
+        pixel_fun_handle_config(%{trans_auto: true, orbit_rate: 1.5, elev_base: 0.5}, state)
+
+      assert on.trans_auto == true
+      assert %Octopus.Wander{value: {vx, vy}} = on.auto_wanderers[:trans]
+      assert_in_delta vx, 1.5, 1.0e-12
+      assert_in_delta vy, 0.5, 1.0e-12
 
       {:noreply, stepped} = pixel_fun_handle_info(:tick, on)
-      assert_in_delta stepped.auto_wanderers[:tx].value, 1.5, 0.05
+      assert_in_delta elem(stepped.auto_wanderers[:trans].value, 0), 1.5, 0.05
 
-      {:noreply, off} = pixel_fun_handle_config(%{tx_auto: false, orbit_rate: 1.5}, stepped)
-      assert off.tx_auto == false
-      refute Map.has_key?(off.auto_wanderers, :tx)
+      {:noreply, off} =
+        pixel_fun_handle_config(%{trans_auto: false, orbit_rate: 1.5, elev_base: 0.5}, stepped)
+
+      assert off.trans_auto == false
+      refute Map.has_key?(off.auto_wanderers, :trans)
       assert_in_delta off.orbit_rate, 1.5, 1.0e-12
     end
 
@@ -269,20 +272,22 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
       state =
         base_state(%{
           time_frozen: false,
-          tx_auto: true,
+          trans_auto: true,
           orbit_rate: 0.0,
-          tx_auto_range: 2.0,
-          tx_auto_tempo: 3.0,
+          elev_base: 0.0,
+          trans_auto_range_x: 2.0,
+          trans_auto_range_y: 2.0,
+          trans_auto_interval: 4.0,
           seconds: 1.0,
-          auto_wanderers: %{tx: Octopus.Wander.new(0.0)}
+          auto_wanderers: %{trans: Octopus.Wander.new({0.0, 0.0})}
         })
 
       {:noreply, running} = pixel_fun_handle_info(:tick, state)
-      w1 = running.auto_wanderers[:tx]
+      w1 = running.auto_wanderers[:trans]
 
       frozen = %{running | time_frozen: true}
       {:noreply, still} = pixel_fun_handle_info(:tick, frozen)
-      assert still.auto_wanderers[:tx] == w1
+      assert still.auto_wanderers[:trans] == w1
       assert still.seconds == running.seconds
     end
   end

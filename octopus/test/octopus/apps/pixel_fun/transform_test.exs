@@ -184,7 +184,7 @@ defmodule Octopus.Apps.PixelFun.TransformTest do
   end
 
   describe "migrate_legacy_config/1" do
-    test "maps sway/rotate/translate to sphere channels and ty_auto" do
+    test "maps sway/rotate/translate to sphere channels and trans_auto" do
       migrated =
         PixelFun.migrate_legacy_config(%{
           sway_scale: 1.5,
@@ -199,23 +199,23 @@ defmodule Octopus.Apps.PixelFun.TransformTest do
       assert migrated.tilt_speed == 0.8
       assert migrated.tilt_mode == :pendulum
       assert migrated.roll_rate == 2.0
-      assert migrated.ty_auto == true
-      assert_in_delta migrated.ty_auto_range, 3.0, 0.0001
-      assert_in_delta migrated.ty_auto_tempo, 0.05, 0.0001
+      assert migrated.trans_auto == true
+      assert_in_delta migrated.trans_auto_range_y, 3.0, 0.0001
+      assert_in_delta migrated.trans_auto_interval, 60.0, 0.0001
       refute Map.has_key?(migrated, :elev_amp)
       refute Map.has_key?(migrated, :zoom_pulse)
     end
 
-    test "maps elev_amp drift to ty_auto" do
+    test "maps elev_amp drift to trans_auto" do
       migrated =
         PixelFun.migrate_legacy_config(%{
           elev_amp: 1.5,
           elev_speed: 0.3
         })
 
-      assert migrated.ty_auto == true
-      assert_in_delta migrated.ty_auto_range, 1.5, 0.0001
-      assert_in_delta migrated.ty_auto_tempo, 0.3, 0.0001
+      assert migrated.trans_auto == true
+      assert_in_delta migrated.trans_auto_range_y, 1.5, 0.0001
+      assert_in_delta migrated.trans_auto_interval, 40.0, 0.0001
       refute Map.has_key?(migrated, :elev_amp)
     end
   end

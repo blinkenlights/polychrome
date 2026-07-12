@@ -157,28 +157,26 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
       attrs =
         Map.merge(@scene_attrs, %{
           name: "Auto roundtrip",
-          tx_auto: true,
-          tx_auto_range: 1.2,
-          tx_auto_tempo: 0.4,
-          ty_auto: true,
-          ty_auto_range: 1.5,
-          ty_auto_tempo: 0.3,
+          trans_auto: true,
+          trans_auto_range_x: 1.2,
+          trans_auto_range_y: 1.5,
+          trans_auto_interval: 30.0,
           rot_auto: false,
           zoom_auto: true,
           zoom_auto_range: 0.6,
-          zoom_auto_tempo: 0.7,
+          zoom_auto_interval: 17.0,
           sway_auto: true,
           sway_auto_range: 1.1,
-          sway_auto_tempo: 0.55,
+          sway_auto_interval: 22.0,
           pattern_speed: 1.25
         })
 
       assert {:ok, preset} = ScenePresets.create(attrs)
       config = ScenePresets.to_config(preset)
 
-      assert config.tx_auto == true
-      assert_in_delta config.tx_auto_range, 1.2, 0.0001
-      assert_in_delta config.ty_auto_tempo, 0.3, 0.0001
+      assert config.trans_auto == true
+      assert_in_delta config.trans_auto_range_x, 1.2, 0.0001
+      assert_in_delta config.trans_auto_interval, 30.0, 0.0001
       assert config.zoom_auto == true
       assert config.sway_auto == true
       assert_in_delta config.pattern_speed, 1.25, 0.0001

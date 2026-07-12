@@ -23,21 +23,19 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
     zoom_base: 0.0,
     zoom_pivot: 0,
     pattern_speed: 1.0,
-    tx_auto: false,
-    tx_auto_range: 1.0,
-    tx_auto_tempo: 0.25,
-    ty_auto: false,
-    ty_auto_range: 2.0,
-    ty_auto_tempo: 0.25,
+    trans_auto: false,
+    trans_auto_range_x: 1.0,
+    trans_auto_range_y: 2.0,
+    trans_auto_interval: 30.0,
     rot_auto: false,
     rot_auto_range: 1.0,
-    rot_auto_tempo: 0.25,
+    rot_auto_interval: 30.0,
     zoom_auto: false,
     zoom_auto_range: 0.8,
-    zoom_auto_tempo: 0.25,
+    zoom_auto_interval: 30.0,
     sway_auto: false,
     sway_auto_range: 2.0,
-    sway_auto_tempo: 0.25
+    sway_auto_interval: 30.0
   }
 
   @sphere_keys Map.keys(@sphere_defaults)
@@ -174,7 +172,7 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
           :program -> left.program == right.program
           :tilt_mode -> left.tilt_mode == right.tilt_mode
           :time_direction -> left.time_direction == right.time_direction
-          k when k in [:tx_auto, :ty_auto, :rot_auto, :zoom_auto, :sway_auto, :palette_auto] ->
+          k when k in [:trans_auto, :rot_auto, :zoom_auto, :sway_auto, :palette_auto] ->
             Map.get(left, k) == Map.get(right, k)
 
           _ ->
