@@ -112,6 +112,11 @@ defmodule Octopus.Mixer do
     Phoenix.PubSub.subscribe(Octopus.PubSub, @pubsub_topic)
   end
 
+  @doc "Unsubscribes the calling process from the mixer topic."
+  def unsubscribe do
+    Phoenix.PubSub.unsubscribe(Octopus.PubSub, @pubsub_topic)
+  end
+
   def init(:ok) do
     # Subscribe to app events
     AppManager.subscribe()
@@ -275,7 +280,8 @@ defmodule Octopus.Mixer do
           {state, :noop}
 
         state.transition == nil ->
-          {%State{state | transition: {:out, @transition_duration, selected_app}}, :start_transition}
+          {%State{state | transition: {:out, @transition_duration, selected_app}},
+           :start_transition}
 
         match?({:out, _, _}, state.transition) ->
           # Retarget an in-flight fade-out (e.g. stop old app then immediately select new one).
