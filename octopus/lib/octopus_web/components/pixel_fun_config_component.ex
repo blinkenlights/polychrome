@@ -7,7 +7,7 @@ defmodule OctopusWeb.PixelFunConfigComponent do
   alias Octopus.InstallationTransport
 
   @known_idents ~w(
-    x y t i l m h pi PI tau Tau
+    x y nx ny nz t i l m h pi PI tau Tau
     rand random abs sqrt exp log hypot sin cos tan asin acos atan atan2
     asinh acosh atanh sinh cosh tanh floor ceil round fract noise
   )
@@ -115,7 +115,7 @@ defmodule OctopusWeb.PixelFunConfigComponent do
             <label class="label" for={"#{@app_id}-program"}>
               <span class="label-text font-semibold">Formula</span>
             </label>
-            <div class="pf-mono text-[11px] opacity-60 mb-1">x y t i · l m h (audio) · pi tau</div>
+            <div class="pf-mono text-[11px] opacity-60 mb-1">x y nx ny nz · t i · l m h (audio) · pi tau</div>
             <input
               type="text"
               name="program"
@@ -508,16 +508,26 @@ defmodule OctopusWeb.PixelFunConfigComponent do
   end
 
   defp preset_attrs(config, name) do
+    config = PixelFun.migrate_legacy_config(config)
+
     %{
       name: name,
       formula: config[:program],
       color_interval: config[:color_interval],
-      translate_scale: config[:translate_scale],
-      rotate_scale: config[:rotate_scale],
-      zoom_scale: config[:zoom_scale],
-      sway_scale: config[:sway_scale],
-      sway_speed: config[:sway_speed],
-      sway_mode: config[:sway_mode],
+      orbit_rate: config[:orbit_rate],
+      roll_rate: config[:roll_rate],
+      roll_pivot: config[:roll_pivot],
+      tilt_scale: config[:tilt_scale],
+      tilt_speed: config[:tilt_speed],
+      tilt_mode: config[:tilt_mode],
+      elev_base: config[:elev_base],
+      elev_amp: config[:elev_amp],
+      elev_speed: config[:elev_speed],
+      zoom_base: config[:zoom_base],
+      zoom_rate: config[:zoom_rate],
+      zoom_pulse: config[:zoom_pulse],
+      zoom_pulse_speed: config[:zoom_pulse_speed],
+      zoom_pivot: config[:zoom_pivot],
       time_direction: config[:time_direction]
     }
   end

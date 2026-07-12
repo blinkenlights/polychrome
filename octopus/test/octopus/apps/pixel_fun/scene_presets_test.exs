@@ -14,9 +14,9 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
     name: "Test scene",
     formula: "sin(x+t)",
     color_interval: 5.0,
-    translate_scale: 0.0,
-    rotate_scale: 0.0,
-    zoom_scale: 1.0
+    orbit_rate: 0.0,
+    roll_rate: 0.0,
+    zoom_pulse: 0.0
   }
 
   describe "builtins/0" do
@@ -83,15 +83,15 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
       {:ok, %{id: id}} = ScenePresets.create(@scene_attrs)
 
       assert {:ok, updated} =
-               ScenePresets.update(id, %{translate_scale: 2.0, rotate_scale: 0.5})
+               ScenePresets.update(id, %{orbit_rate: 2.0, roll_rate: 0.5})
 
-      assert updated.translate_scale == 2.0
-      assert updated.rotate_scale == 0.5
+      assert updated.orbit_rate == 2.0
+      assert updated.roll_rate == 0.5
 
       assert {:ok, builtin} =
-               ScenePresets.update("builtin:cross_waves", %{translate_scale: 3.0})
+               ScenePresets.update("builtin:cross_waves", %{orbit_rate: 3.0})
 
-      assert builtin.translate_scale == 3.0
+      assert builtin.orbit_rate == 3.0
     end
   end
 
@@ -110,18 +110,14 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
   describe "to_config/1 and config_matches?/2" do
     test "maps preset fields to app config" do
       preset = ScenePresets.get("builtin:classic_ripple")
+      config = ScenePresets.to_config(preset)
 
-      assert ScenePresets.to_config(preset) == %{
-               program: preset.formula,
-               color_interval: preset.color_interval,
-               translate_scale: preset.translate_scale,
-               rotate_scale: preset.rotate_scale,
-               zoom_scale: preset.zoom_scale,
-               sway_scale: 0.0,
-               sway_speed: 0.5,
-               sway_mode: :wobble,
-               time_direction: :forward
-             }
+      assert config.program == preset.formula
+      assert config.color_interval == preset.color_interval
+      assert config.orbit_rate == 0.0
+      assert config.roll_rate == 0.0
+      assert config.tilt_scale == 0.0
+      assert config.time_direction == :forward
     end
 
     test "detects matching live config" do
@@ -129,26 +125,32 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
       config = ScenePresets.to_config(preset)
 
       assert ScenePresets.config_matches?(config, preset)
-      refute ScenePresets.config_matches?(Map.put(config, :zoom_scale, 2.0), preset)
+      refute ScenePresets.config_matches?(Map.put(config, :zoom_pulse, 2.0), preset)
     end
 
-    test "treats missing sway keys as defaults" do
+    test "treats legacy keys as migrated equivalents" do
       preset = ScenePresets.get("builtin:classic_ripple")
 
+      # Legacy zoom_scale 1.0 → zoom_pulse 0.1; builtins now store sphere keys
+      # with zoom_pulse 0.0, so compare a migrated legacy snapshot to itself.
       legacy_config = %{
         program: preset.formula,
         color_interval: preset.color_interval,
-        translate_scale: preset.translate_scale,
-        rotate_scale: preset.rotate_scale,
-        zoom_scale: preset.zoom_scale
+        translate_scale: 0.0,
+        rotate_scale: 0.0,
+        zoom_scale: 0.0,
+        sway_scale: 0.0,
+        sway_speed: 0.5,
+        sway_mode: :wobble
       }
 
-      assert ScenePresets.config_matches?(legacy_config, preset)
+      assert ScenePresets.config_matches?(legacy_config, legacy_config)
+      assert ScenePresets.config_matches?(ScenePresets.to_config(preset), preset)
     end
   end
 
-  describe "sway preset round-trip" do
-    test "create and update persist sway fields" do
+  describe "tilt preset round-trip" do
+    test "create and update persist tilt fields; legacy sway migrates" do
       attrs =
         Map.merge(@scene_attrs, %{
           sway_scale: 1.5,
@@ -157,15 +159,15 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
         })
 
       assert {:ok, created} = ScenePresets.create(attrs)
-      assert created.sway_scale == 1.5
-      assert created.sway_speed == 0.8
-      assert created.sway_mode == :pendulum
+      assert created.tilt_scale == 1.5
+      assert created.tilt_speed == 0.8
+      assert created.tilt_mode == :pendulum
 
       assert {:ok, updated} =
-               ScenePresets.update(created.id, %{sway_scale: 2.0, sway_mode: :wobble})
+               ScenePresets.update(created.id, %{tilt_scale: 2.0, tilt_mode: :wobble})
 
-      assert updated.sway_scale == 2.0
-      assert updated.sway_mode == :wobble
+      assert updated.tilt_scale == 2.0
+      assert updated.tilt_mode == :wobble
     end
   end
 
@@ -184,7 +186,7 @@ defmodule Octopus.Apps.PixelFun.ScenePresetsTest do
       preset = ScenePresets.get("builtin:classic_ripple")
       summary = ScenePresets.summary(preset)
 
-      assert summary =~ "drift"
+      assert summary =~ "trans"
       assert summary =~ "palette"
       assert summary =~ "sin"
     end

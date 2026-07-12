@@ -84,10 +84,9 @@ defmodule Octopus.Apps.PixelFunTest do
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        translate_scale: 0.0,
-        rotate_scale: 0.0,
-        zoom_scale: 0.0,
-        offset: {0, 0},
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_pulse: 0.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -112,10 +111,9 @@ defmodule Octopus.Apps.PixelFunTest do
         panel_proximities: %{0 => 0.0, 1 => 0.0},
         panel_interaction_factors: %{0 => 0.0, 1 => 0.0},
         seconds: 0.0,
-        translate_scale: 0.0,
-        rotate_scale: 0.0,
-        zoom_scale: 0.0,
-        offset: {0, 0},
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_pulse: 0.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -141,10 +139,9 @@ defmodule Octopus.Apps.PixelFunTest do
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        translate_scale: 0.0,
-        rotate_scale: 0.0,
-        zoom_scale: 0.0,
-        offset: {0, 0},
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_pulse: 0.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -169,10 +166,9 @@ defmodule Octopus.Apps.PixelFunTest do
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        translate_scale: 0.0,
-        rotate_scale: 0.0,
-        zoom_scale: 0.0,
-        offset: {0, 0},
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_pulse: 0.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -195,10 +191,9 @@ defmodule Octopus.Apps.PixelFunTest do
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        translate_scale: 0.0,
-        rotate_scale: 0.0,
-        zoom_scale: 0.0,
-        offset: {0, 0},
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_pulse: 0.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -222,10 +217,9 @@ defmodule Octopus.Apps.PixelFunTest do
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        translate_scale: 0.0,
-        rotate_scale: 0.0,
-        zoom_scale: 0.0,
-        offset: {0, 0},
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_pulse: 0.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -252,10 +246,9 @@ defmodule Octopus.Apps.PixelFunTest do
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        translate_scale: 0.0,
-        rotate_scale: 0.0,
-        zoom_scale: 0.0,
-        offset: {0, 0},
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_pulse: 0.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -279,10 +272,9 @@ defmodule Octopus.Apps.PixelFunTest do
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 5.0,
-        translate_scale: 0.0,
-        rotate_scale: 0.0,
-        zoom_scale: 0.0,
-        offset: {0, 0},
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_pulse: 0.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -312,10 +304,9 @@ defmodule Octopus.Apps.PixelFunTest do
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        translate_scale: 0.0,
-        rotate_scale: 0.0,
-        zoom_scale: 0.0,
-        offset: {0, 0},
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_pulse: 0.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -380,10 +371,9 @@ defmodule Octopus.Apps.PixelFunTest do
         panel_proximities: %{0 => 0.0},
         panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        translate_scale: 0.0,
-        rotate_scale: 0.0,
-        zoom_scale: 0.0,
-        offset: {0, 0},
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_pulse: 0.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -408,4 +398,52 @@ defmodule Octopus.Apps.PixelFunTest do
 
   defp pixel_fun_generate_random_white_levels,
     do: apply(@pixel_fun, :generate_random_white_levels, [])
+
+  test "nx ny nz are available and unit length in formulas", _context do
+    with_installation(Octopus.Installation.Nation2026, fn ->
+      {:ok, program} = Program.parse("nx*nx+ny*ny+nz*nz")
+
+      state = %State{
+        program: program,
+        display_info: %{width: Installation.width(), height: Installation.height()},
+        colors: {Chameleon.HSV.new(0, 70, 100), Chameleon.HSV.new(180, 70, 100)},
+        color_mode: :random,
+        panel_proximities: Map.new(0..(Installation.num_panels() - 1), &{&1, 0.0}),
+        panel_interaction_factors: Map.new(0..(Installation.num_panels() - 1), &{&1, 0.0}),
+        seconds: 0.0,
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        tilt_scale: 0.0,
+        elev_base: 0.0,
+        elev_amp: 0.0,
+        zoom_base: 0.0,
+        zoom_rate: 0.0,
+        zoom_pulse: 0.0,
+        audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
+      }
+
+      # Formula returns ~1.0 everywhere → positive lobe → non-black pixels
+      canvas = pixel_fun_build_canvas(state)
+      {x, y} = hd(List.flatten(Installation.virtual_pixel_positions_per_panel()))
+      refute Canvas.get_pixel(canvas, {x, y}) == {0, 0, 0}
+    end)
+  end
+
+  test "migrate_legacy_config maps old preset keys", _context do
+    migrated =
+      apply(@pixel_fun, :migrate_legacy_config, [
+        %{
+          program: "sin(x)",
+          sway_scale: 2.0,
+          rotate_scale: 1.0,
+          translate_scale: 3.0,
+          zoom_scale: 1.0
+        }
+      ])
+
+    assert migrated.tilt_scale == 2.0
+    assert migrated.roll_rate == 1.0
+    assert migrated.elev_amp == 3.0
+    assert_in_delta migrated.zoom_pulse, 0.1, 0.0001
+  end
 end

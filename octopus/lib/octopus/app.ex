@@ -269,8 +269,16 @@ defmodule Octopus.App do
   the app defines its own.
   """
   def config_schema(module) when is_atom(module) do
-    apply(module, :config_schema, [])
-    |> Map.put_new(:bleeding, @bleeding_config_option)
+    case apply(module, :config_schema, []) do
+      %{} = schema ->
+        Map.put_new(schema, :bleeding, @bleeding_config_option)
+
+      schema when is_list(schema) ->
+        Keyword.put_new(schema, :bleeding, @bleeding_config_option)
+
+      other ->
+        other
+    end
   end
 
   @doc false

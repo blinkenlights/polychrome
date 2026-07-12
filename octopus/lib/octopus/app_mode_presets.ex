@@ -255,21 +255,30 @@ defmodule Octopus.AppModePresets do
     |> Enum.each(fn builtin ->
       slug = builtin.slug
 
+      attrs = %{
+        app: module_name(app),
+        slug: slug,
+        name: builtin.name,
+        config: normalize_config(builtin.config),
+        accent_color: builtin.accent_color,
+        origin: "builtin"
+      }
+
       case fetch_record_by_slug(app, slug) do
         nil ->
           struct(@preset_schema)
-          |> preset_changeset(%{
-            app: module_name(app),
-            slug: slug,
-            name: builtin.name,
-            config: normalize_config(builtin.config),
-            accent_color: builtin.accent_color,
-            origin: "builtin"
-          })
+          |> preset_changeset(attrs)
           |> Repo.insert()
 
-        _ ->
-          :ok
+        record ->
+          # Refresh PixelFun builtins so sphere-channel defaults replace legacy keys.
+          if app_key(app) == "pixelfun" do
+            record
+            |> preset_changeset(Map.take(attrs, [:name, :config, :accent_color]))
+            |> Repo.update()
+          else
+            :ok
+          end
       end
     end)
 
@@ -534,53 +543,69 @@ defmodule Octopus.AppModePresets do
       left = pixelfun_effective_config(config)
       right = pixelfun_effective_config(preset_config)
 
-      Enum.all?(
+      keys =
         [
           :program,
           :color_interval,
-          :translate_scale,
-          :rotate_scale,
-          :zoom_scale,
-          :sway_scale,
-          :sway_speed,
-          :sway_mode,
+          :orbit_rate,
+          :roll_rate,
+          :roll_pivot,
+          :tilt_scale,
+          :tilt_speed,
+          :tilt_mode,
+          :elev_base,
+          :elev_amp,
+          :elev_speed,
+          :zoom_base,
+          :zoom_rate,
+          :zoom_pulse,
+          :zoom_pulse_speed,
+          :zoom_pivot,
           :time_direction
-        ],
-        fn key ->
-          case key do
-            :program -> left.program == right.program
-            :sway_mode -> left.sway_mode == right.sway_mode
-            :time_direction -> left.time_direction == right.time_direction
-            _ -> float_eq?(Map.get(left, key), Map.get(right, key))
-          end
+        ]
+
+      Enum.all?(keys, fn key ->
+        case key do
+          :program -> left.program == right.program
+          :tilt_mode -> left.tilt_mode == right.tilt_mode
+          :time_direction -> left.time_direction == right.time_direction
+          _ -> float_eq?(Map.get(left, key), Map.get(right, key))
         end
-      )
+      end)
     else
       float_eq_maps?(config, preset_config)
     end
   end
 
-  @sway_defaults %{sway_scale: 0.0, sway_speed: 0.5, sway_mode: :wobble}
-
   defp pixelfun_effective_config(config) do
+    config = Octopus.Apps.PixelFun.migrate_legacy_config(config)
+
     %{
       program: Map.get(config, :program),
       color_interval: Map.get(config, :color_interval, 5.0),
-      translate_scale: Map.get(config, :translate_scale, 0.0),
-      rotate_scale: Map.get(config, :rotate_scale, 0.0),
-      zoom_scale: Map.get(config, :zoom_scale, 1.0),
-      sway_scale: Map.get(config, :sway_scale, @sway_defaults.sway_scale),
-      sway_speed: Map.get(config, :sway_speed, @sway_defaults.sway_speed),
-      sway_mode: pixelfun_sway_mode(Map.get(config, :sway_mode, @sway_defaults.sway_mode)),
+      orbit_rate: Map.get(config, :orbit_rate, 0.0),
+      roll_rate: Map.get(config, :roll_rate, 0.0),
+      roll_pivot: Map.get(config, :roll_pivot, 0),
+      tilt_scale: Map.get(config, :tilt_scale, 0.0),
+      tilt_speed: Map.get(config, :tilt_speed, 0.5),
+      tilt_mode: pixelfun_tilt_mode(Map.get(config, :tilt_mode, :wobble)),
+      elev_base: Map.get(config, :elev_base, 0.0),
+      elev_amp: Map.get(config, :elev_amp, 0.0),
+      elev_speed: Map.get(config, :elev_speed, 0.2),
+      zoom_base: Map.get(config, :zoom_base, 0.0),
+      zoom_rate: Map.get(config, :zoom_rate, 0.0),
+      zoom_pulse: Map.get(config, :zoom_pulse, 0.0),
+      zoom_pulse_speed: Map.get(config, :zoom_pulse_speed, 0.1),
+      zoom_pivot: Map.get(config, :zoom_pivot, 0),
       time_direction: pixelfun_time_direction(Map.get(config, :time_direction, :forward))
     }
   end
 
-  defp pixelfun_sway_mode(:wobble), do: :wobble
-  defp pixelfun_sway_mode(:pendulum), do: :pendulum
-  defp pixelfun_sway_mode("wobble"), do: :wobble
-  defp pixelfun_sway_mode("pendulum"), do: :pendulum
-  defp pixelfun_sway_mode(_), do: :wobble
+  defp pixelfun_tilt_mode(:wobble), do: :wobble
+  defp pixelfun_tilt_mode(:pendulum), do: :pendulum
+  defp pixelfun_tilt_mode("wobble"), do: :wobble
+  defp pixelfun_tilt_mode("pendulum"), do: :pendulum
+  defp pixelfun_tilt_mode(_), do: :wobble
 
   defp pixelfun_time_direction(:forward), do: :forward
   defp pixelfun_time_direction(:backward), do: :backward

@@ -47,18 +47,14 @@ defmodule Octopus.SwayTest do
     assert_in_delta o_quarter - o0, amplitude, 0.05
   end
 
-  test "matches PixelFun transform sway component on Nation2026" do
+  test "matches PixelFun transform tilt component on Nation2026 within small-angle tolerance" do
     w = Installation.width()
 
     params = %{
-      offset_x: 0.0,
-      offset_y: 0.0,
-      zoom: 1.0,
       seconds: 1.7,
-      rotate_scale: 0.0,
-      sway_scale: 2.0,
-      sway_speed: 0.5,
-      sway_mode: :wobble
+      tilt_scale: 1.0,
+      tilt_speed: 0.5,
+      tilt_mode: :wobble
     }
 
     x = 42
@@ -66,11 +62,11 @@ defmodule Octopus.SwayTest do
 
     {_x_out, y_pixel_fun} = PixelFun.transform_pixel_coords(x, y, params)
 
-    {amplitude, phase} = Sway.params(2.0, 0.5, :wobble, 1.7)
+    {amplitude, phase} = Sway.params(1.0, 0.5, :wobble, 1.7)
     center_y = Installation.height() / 2 - 0.5
-    y_scaled = (y - 0.0 - center_y) * 1.0
+    y_scaled = y - center_y
     y_expected = y_scaled + Sway.offset(x, w, amplitude, phase)
 
-    assert_in_delta y_pixel_fun, y_expected, 0.0001
+    assert_in_delta y_pixel_fun, y_expected, 0.02
   end
 end

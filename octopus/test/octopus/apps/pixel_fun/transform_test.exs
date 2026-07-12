@@ -3,6 +3,7 @@ defmodule Octopus.Apps.PixelFun.TransformTest do
 
   alias Octopus.Apps.PixelFun
   alias Octopus.Installation
+  alias Octopus.Sphere
 
   setup do
     original_installation = Application.get_env(:octopus, :installation)
@@ -22,21 +23,28 @@ defmodule Octopus.Apps.PixelFun.TransformTest do
   defp base_params(overrides \\ %{}) do
     Map.merge(
       %{
-        offset_x: 0.0,
-        offset_y: 0.0,
-        zoom: 1.0,
         seconds: 0.0,
-        rotate_scale: 0.0,
-        sway_scale: 0.0,
-        sway_speed: 0.5,
-        sway_mode: :wobble
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        roll_pivot: 0,
+        tilt_scale: 0.0,
+        tilt_speed: 0.5,
+        tilt_mode: :wobble,
+        elev_base: 0.0,
+        elev_amp: 0.0,
+        elev_speed: 0.2,
+        zoom_base: 0.0,
+        zoom_rate: 0.0,
+        zoom_pulse: 0.0,
+        zoom_pulse_speed: 0.1,
+        zoom_pivot: 0
       },
       overrides
     )
   end
 
   describe "transform_pixel_coords/3 on Nation2026" do
-    test "sway_scale 0 matches pre-sway transform (no y offset)" do
+    test "neutral path matches centered canvas coords" do
       with_installation(Octopus.Installation.Nation2026, fn ->
         params = base_params()
         center_x = Installation.width() / 2 - 0.5
@@ -49,16 +57,16 @@ defmodule Octopus.Apps.PixelFun.TransformTest do
       end)
     end
 
-    test "sway is W-periodic in x for fixed y" do
+    test "tilt is W-periodic in chart x for fixed y" do
       with_installation(Octopus.Installation.Nation2026, fn ->
         w = Installation.width()
 
         params =
           base_params(%{
-            sway_scale: 2.0,
-            sway_speed: 0.5,
+            tilt_scale: 2.0,
+            tilt_speed: 0.5,
             seconds: 1.7,
-            sway_mode: :wobble
+            tilt_mode: :wobble
           })
 
         {_x0, y0} = PixelFun.transform_pixel_coords(10, 3, params)
@@ -68,102 +76,147 @@ defmodule Octopus.Apps.PixelFun.TransformTest do
       end)
     end
 
-    test "negative rotate_scale reverses 2D rotation" do
+    test "negative roll_rate reverses roll" do
       with_installation(Octopus.Installation.Nation2026, fn ->
-        forward = base_params(%{rotate_scale: 1.0, seconds: 3.0})
-        reverse = base_params(%{rotate_scale: -1.0, seconds: 3.0})
-        mirrored = base_params(%{rotate_scale: 1.0, seconds: -3.0})
+        forward = base_params(%{roll_rate: 1.0, seconds: 3.0})
+        reverse = base_params(%{roll_rate: -1.0, seconds: 3.0})
+        mirrored = base_params(%{roll_rate: 1.0, seconds: -3.0})
 
         {x_forward, y_forward} = PixelFun.transform_pixel_coords(50, 3, forward)
         {x_reverse, y_reverse} = PixelFun.transform_pixel_coords(50, 3, reverse)
         {x_mirrored, y_mirrored} = PixelFun.transform_pixel_coords(50, 3, mirrored)
 
-        refute_in_delta x_forward, x_reverse, 0.0001
-        refute_in_delta y_forward, y_reverse, 0.0001
         assert_in_delta x_reverse, x_mirrored, 0.0001
         assert_in_delta y_reverse, y_mirrored, 0.0001
+        refute abs(x_forward - x_reverse) < 0.0001 and abs(y_forward - y_reverse) < 0.0001
       end)
     end
 
-    test "circular rotation uses 2D spin on x and y" do
+    test "orbit_rate changes sample coords" do
       with_installation(Octopus.Installation.Nation2026, fn ->
-        no_rot = base_params(%{rotate_scale: 0.0, seconds: 3.0, zoom: 1.0})
-        with_rot = base_params(%{rotate_scale: 1.0, seconds: 3.0, zoom: 1.0})
+        no_orbit = base_params(%{seconds: 3.0})
+        with_orbit = base_params(%{orbit_rate: 1.0, seconds: 3.0})
 
-        {x0, y0} = PixelFun.transform_pixel_coords(50, 6, no_rot)
-        {x1, y1} = PixelFun.transform_pixel_coords(50, 6, with_rot)
+        {x0, y0} = PixelFun.transform_pixel_coords(50, 3, no_orbit)
+        {x1, y1} = PixelFun.transform_pixel_coords(50, 3, with_orbit)
 
-        refute_in_delta x0, x1, 0.0001
-        refute_in_delta y0, y1, 0.0001
+        refute abs(x0 - x1) < 0.0001 and abs(y0 - y1) < 0.0001
       end)
     end
 
-    test "zoom scales y only after rotation" do
+    test "small-angle tilt matches legacy sway offset within 0.02 px" do
       with_installation(Octopus.Installation.Nation2026, fn ->
-        base = base_params(%{zoom: 1.0})
-        zoomed = base_params(%{zoom: 2.5})
+        w = Installation.width()
+        seconds = 1.3
+        tilt_scale = 1.0
+        tilt_speed = 0.5
 
-        {x_base, _y_base} = PixelFun.transform_pixel_coords(42, 4, base)
-        {x_zoomed, _y_zoomed} = PixelFun.transform_pixel_coords(42, 4, zoomed)
-
-        assert_in_delta x_base, x_zoomed, 0.0001
-      end)
-    end
-
-    test "pendulum mode oscillates sway amplitude" do
-      with_installation(Octopus.Installation.Nation2026, fn ->
-        at_zero =
+        params =
           base_params(%{
-            sway_scale: 2.0,
-            sway_speed: 1.0,
-            sway_mode: :pendulum,
+            tilt_scale: tilt_scale,
+            tilt_speed: tilt_speed,
+            tilt_mode: :wobble,
+            seconds: seconds
+          })
+
+        {amp, phase} = Octopus.Sway.params(tilt_scale, tilt_speed, :wobble, seconds)
+
+        max_dy =
+          for x <- 0..(w - 1), rem(x, 26) < 8, reduce: 0.0 do
+            acc ->
+              {_xs, ys} = PixelFun.transform_pixel_coords(x, 3, params)
+              cy = Installation.height() / 2 - 0.5
+              y_centered = 3 - cy
+              legacy_y = y_centered + Octopus.Sway.offset(x, w, amp, phase)
+              max(acc, abs(ys - legacy_y))
+          end
+
+        assert max_dy < 0.02
+      end)
+    end
+
+    test "seam: chart x and x+W yield identical formula samples under motion" do
+      with_installation(Octopus.Installation.Nation2026, fn ->
+        w = Installation.width()
+        t = 2.5
+
+        params =
+          base_params(%{
+            orbit_rate: 0.4,
+            roll_rate: 0.3,
+            tilt_scale: 1.0,
+            elev_amp: 0.5,
+            zoom_base: 0.2,
+            seconds: t
+          })
+
+        formula = fn xs -> :math.sin(xs * :math.pi() * 6 / 156 - t) end
+
+        for x <- [0, 10, 50, 100, 200] do
+          {xs0, _y0} = PixelFun.transform_pixel_coords(x, 3, params)
+          {xs1, _y1} = PixelFun.transform_pixel_coords(x + w, 3, params)
+          assert_in_delta formula.(xs0), formula.(xs1), 1.0e-9
+        end
+      end)
+    end
+
+    test "pendulum tilt oscillates with time" do
+      with_installation(Octopus.Installation.Nation2026, fn ->
+        a =
+          base_params(%{
+            tilt_scale: 2.0,
+            tilt_speed: 1.0,
+            tilt_mode: :pendulum,
             seconds: 0.0
           })
 
-        at_peak =
+        b =
           base_params(%{
-            sway_scale: 2.0,
-            sway_speed: 1.0,
-            sway_mode: :pendulum,
+            tilt_scale: 2.0,
+            tilt_speed: 1.0,
+            tilt_mode: :pendulum,
             seconds: :math.pi() / 2
           })
 
-        {_x, y0} = PixelFun.transform_pixel_coords(20, 2, at_zero)
-        {_x, y_peak} = PixelFun.transform_pixel_coords(20, 2, at_peak)
+        {_x0, y0} = PixelFun.transform_pixel_coords(50, 3, a)
+        {_x1, y1} = PixelFun.transform_pixel_coords(50, 3, b)
 
-        # Pendulum amplitude is zero at t=0; peak time adds a non-zero y offset.
-        center_y = Installation.height() / 2 - 0.5
-        y_scaled = 2 - center_y
-
-        assert_in_delta y0, y_scaled, 0.0001
-        refute_in_delta y_peak, y_scaled, 0.0001
+        refute abs(y0 - y1) < 0.0001
       end)
     end
   end
 
-  describe "transform_pixel_coords/3 on linear installation" do
-    test "keeps 2D rotation semantics" do
-      with_installation(Octopus.Installation.RunningLights, fn ->
-        no_rot = base_params(%{rotate_scale: 0.0, seconds: 1.0, zoom: 1.0})
-        with_rot = base_params(%{rotate_scale: 1.0, seconds: 1.0, zoom: 1.0})
+  describe "migrate_legacy_config/1" do
+    test "maps sway/rotate/translate/zoom_scale to sphere channels" do
+      migrated =
+        PixelFun.migrate_legacy_config(%{
+          sway_scale: 1.5,
+          sway_speed: 0.8,
+          sway_mode: :pendulum,
+          rotate_scale: 2.0,
+          translate_scale: 3.0,
+          zoom_scale: 1.0
+        })
 
-        {x0, y0} = PixelFun.transform_pixel_coords(0, 5, no_rot)
-        {x1, y1} = PixelFun.transform_pixel_coords(0, 5, with_rot)
-
-        refute {x0, y0} == {x1, y1}
-      end)
+      assert migrated.tilt_scale == 1.5
+      assert migrated.tilt_speed == 0.8
+      assert migrated.tilt_mode == :pendulum
+      assert migrated.roll_rate == 2.0
+      assert migrated.elev_amp == 3.0
+      assert_in_delta migrated.elev_speed, 0.05, 0.0001
+      assert_in_delta migrated.zoom_pulse, 0.1, 0.0001
     end
+  end
 
-    test "zoom scales y only on linear installation" do
-      with_installation(Octopus.Installation.RunningLights, fn ->
-        base = base_params(%{zoom: 1.0})
-        zoomed = base_params(%{zoom: 2.0})
+  describe "Sphere direction precompute" do
+    test "direction is unit length for visible pixels" do
+      with_installation(Octopus.Installation.Nation2026, fn ->
+        w = Installation.width()
+        h = Installation.height()
 
-        {x_base, y_base} = PixelFun.transform_pixel_coords(0, 3, base)
-        {x_zoomed, y_zoomed} = PixelFun.transform_pixel_coords(0, 3, zoomed)
-
-        assert_in_delta x_base, x_zoomed, 0.0001
-        assert abs(y_zoomed) > abs(y_base)
+        for {x, y} <- List.flatten(Installation.virtual_pixel_positions_per_panel()) do
+          assert_in_delta Sphere.norm(Sphere.direction(x, y, w, h)), 1.0, 1.0e-12
+        end
       end)
     end
   end

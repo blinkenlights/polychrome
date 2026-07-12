@@ -30,15 +30,24 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
           last_colors: {color(), color()},
           target_colors: {color(), color()},
           lerp_time: 5.0,
-          translate_scale: 0.0,
-          rotate_scale: 0.0,
-          zoom_scale: 1.0,
+          orbit_rate: 0.0,
+          roll_rate: 0.0,
+          roll_pivot: 0,
+          tilt_scale: 0.0,
+          tilt_speed: 0.5,
+          tilt_mode: :wobble,
+          elev_base: 0.0,
+          elev_amp: 0.0,
+          elev_speed: 0.2,
+          zoom_base: 0.0,
+          zoom_rate: 0.0,
+          zoom_pulse: 0.0,
+          zoom_pulse_speed: 0.1,
+          zoom_pivot: 0,
           color_mode: :random,
           saturation_percent: 70,
           color_interval: 5.0,
           live_scene_id: nil,
-          offset: {0, 0},
-          move: {0, 0},
           audio_input: %{low: 0.0, mid: 0.0, high: 0.0},
           seconds: 0.0,
           buttons: %{},
@@ -46,6 +55,7 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
           panel_proximities: %{},
           speed: 1.0,
           display_info: %{width: 8, height: 8},
+          pixel_dirs: nil,
           time_frozen: false
         },
         overrides
@@ -101,15 +111,26 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
   end
 
   describe "handle_config/2" do
-    test "applies drift, rotation, and zoom immediately" do
+    test "applies orbit, roll, and zoom immediately" do
+      state = base_state(%{live_scene_id: @classic})
+
+      {:noreply, updated} =
+        pixel_fun_handle_config(%{orbit_rate: 1.5, roll_rate: 2.0, zoom_base: 0.5}, state)
+
+      assert updated.orbit_rate == 1.5
+      assert updated.roll_rate == 2.0
+      assert updated.zoom_base == 0.5
+    end
+
+    test "migrates legacy transform keys on handle_config" do
       state = base_state(%{live_scene_id: @classic})
 
       {:noreply, updated} =
         pixel_fun_handle_config(%{translate_scale: 4.0, rotate_scale: 2.0, zoom_scale: 5.0}, state)
 
-      assert updated.translate_scale == 4.0
-      assert updated.rotate_scale == 2.0
-      assert updated.zoom_scale == 5.0
+      assert updated.elev_amp == 4.0
+      assert updated.roll_rate == 2.0
+      assert_in_delta updated.zoom_pulse, 0.5, 0.0001
     end
 
     test "reschedules color timer and resets lerp_time when color_interval changes" do

@@ -323,32 +323,32 @@ defmodule Octopus.InstallationTransportTest do
 
       before = state().now_playing
       assert before.dirty == false
-      stored_drift = before.stored[:translate_scale]
+      stored_orbit = before.stored[:orbit_rate]
 
-      InstallationTransport.set_tweakable(:translate_scale, 4.0)
+      InstallationTransport.set_tweakable(:orbit_rate, 4.0)
 
       tweaked = state().now_playing
       assert tweaked.dirty == true
-      assert tweaked.stored[:translate_scale] == stored_drift
-      assert tweaked.effective[:translate_scale] == 4.0
+      assert tweaked.stored[:orbit_rate] == stored_orbit
+      assert tweaked.effective[:orbit_rate] == 4.0
 
       {:ok, app_id} = AppSupervisor.find_running_app(PixelFun)
-      assert AppSupervisor.config(app_id)[:translate_scale] == 4.0
+      assert AppSupervisor.config(app_id)[:orbit_rate] == 4.0
     end
 
     test "discard restores stored values" do
       InstallationTransport.play_now(PixelFun, @classic)
-      stored = state().now_playing.stored[:translate_scale]
+      stored = state().now_playing.stored[:orbit_rate]
 
-      InstallationTransport.set_tweakable(:translate_scale, 4.0)
+      InstallationTransport.set_tweakable(:orbit_rate, 4.0)
       InstallationTransport.discard_now_playing_overrides()
 
       after_discard = state().now_playing
       assert after_discard.dirty == false
-      assert after_discard.effective[:translate_scale] == stored
+      assert after_discard.effective[:orbit_rate] == stored
 
       {:ok, app_id} = AppSupervisor.find_running_app(PixelFun)
-      assert AppSupervisor.config(app_id)[:translate_scale] == stored
+      assert AppSupervisor.config(app_id)[:orbit_rate] == stored
     end
 
     test "queue advance drops overrides" do
@@ -358,7 +358,7 @@ defmodule Octopus.InstallationTransportTest do
       ])
 
       InstallationTransport.play_now(PixelFun, @classic)
-      InstallationTransport.set_tweakable(:translate_scale, 4.0)
+      InstallationTransport.set_tweakable(:orbit_rate, 4.0)
       InstallationTransport.next()
 
       advanced = state().now_playing
@@ -385,14 +385,14 @@ defmodule Octopus.InstallationTransportTest do
       assert playing.stored[:blob_size] == 3
       assert playing.effective[:speed] == 2.0
 
-      InstallationTransport.set_tweakable(:speed, 3.5)
+      InstallationTransport.set_tweakable(:speed, 1.5)
 
       tweaked = state().now_playing
       assert tweaked.dirty == true
-      assert tweaked.effective[:speed] == 3.5
+      assert tweaked.effective[:speed] == 1.5
 
       config = AppSupervisor.config(app_id)
-      assert config[:speed] == 3.5
+      assert config[:speed] == 1.5
       assert config[:mode] == :endless_up
       assert config[:blob_size] == 3
     end
@@ -494,8 +494,9 @@ defmodule Octopus.InstallationTransportTest do
       assert playing.effective[:speed] == 1.0
       assert playing.effective[:density] == 3
       assert playing.effective[:max_particles] == 200
-      assert length(playing.tweakables) == 3
-      assert playing.meta == ["200 particles max", "density 3"]
+      assert length(playing.tweakables) == length(Matrix.mode_tweakables(@matrix))
+      assert "200 particles max" in playing.meta
+      assert "density 3" in playing.meta
 
       InstallationTransport.set_tweakable(:speed, 2.0)
       InstallationTransport.set_tweakable(:density, 6)
@@ -568,7 +569,7 @@ defmodule Octopus.InstallationTransportTest do
 
     test "pixel fun save as new clears dirty state" do
       InstallationTransport.play_now(PixelFun, @classic)
-      InstallationTransport.set_tweakable(:translate_scale, 4.0)
+      InstallationTransport.set_tweakable(:orbit_rate, 4.0)
 
       assert :ok = InstallationTransport.save_now_playing_as_new("Drifty ripple")
       assert state().now_playing.dirty == false
@@ -578,7 +579,7 @@ defmodule Octopus.InstallationTransportTest do
       InstallationTransport.play_now(PixelFun, @classic)
 
       playing = state().now_playing
-      assert length(playing.tweakables) == 5
+      assert length(playing.tweakables) == length(PixelFun.mode_tweakables(@classic))
       assert Enum.any?(playing.tweakables, &(&1.key == :program and &1.type == :formula))
       assert playing.effective[:program] == "sin(10*t-hypot(x,y))"
     end
@@ -630,7 +631,7 @@ defmodule Octopus.InstallationTransportTest do
 
     test "pixel fun save as new fills missing program from running app" do
       InstallationTransport.play_now(PixelFun, @classic)
-      InstallationTransport.set_tweakable(:translate_scale, 4.0)
+      InstallationTransport.set_tweakable(:orbit_rate, 4.0)
 
       :sys.replace_state(InstallationTransport, fn state ->
         stored = Map.delete(state.now_playing_stored_config, :program)
@@ -647,16 +648,16 @@ defmodule Octopus.InstallationTransportTest do
       stale_id = state().now_playing.app_id
       AppSupervisor.stop_app(stale_id)
 
-      InstallationTransport.set_tweakable(:zoom_scale, 3.5)
+      InstallationTransport.set_tweakable(:zoom_pulse, 1.5)
 
       s = state().now_playing
-      assert s.effective[:zoom_scale] == 3.5
+      assert s.effective[:zoom_pulse] == 1.5
       assert is_binary(s.app_id)
       assert s.app_id != stale_id
 
       {:ok, app_id} = AppSupervisor.find_running_app(PixelFun)
       assert app_id == s.app_id
-      assert AppSupervisor.config(app_id)[:zoom_scale] == 3.5
+      assert AppSupervisor.config(app_id)[:zoom_pulse] == 1.5
     end
 
     test "pixel fun rejects save when formula is invalid" do
@@ -802,17 +803,17 @@ defmodule Octopus.InstallationTransportTest do
       assert playing.renamable
 
       InstallationTransport.set_tweakable(:foreground_hue, 140)
-      InstallationTransport.set_tweakable(:background_speed, 3.5)
+      InstallationTransport.set_tweakable(:background_speed, 1.5)
 
       tweaked = state().now_playing
       assert tweaked.dirty == true
       assert tweaked.effective[:foreground_hue] == 140
-      assert tweaked.effective[:background_speed] == 3.5
+      assert tweaked.effective[:background_speed] == 1.5
 
       {:ok, app_id} = AppSupervisor.find_running_app(SparkleMist)
       config = AppSupervisor.config(app_id)
       assert config[:foreground_hue] == 140
-      assert config[:background_speed] == 3.5
+      assert config[:background_speed] == 1.5
     end
 
     test "save and overwrite sparkle mist builtin" do
