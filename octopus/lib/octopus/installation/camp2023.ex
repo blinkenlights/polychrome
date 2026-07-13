@@ -1,6 +1,7 @@
 defmodule Octopus.Installation.Camp2023 do
   use Octopus.Installation,
     arrangement: :linear,
+    panel_type: :polychrome,
     panels: [
       [controller: :polychrome_panel_1, wiring: :serpentine_horizontal_bottom_left],
       [controller: :polychrome_panel_2, wiring: :serpentine_horizontal_bottom_left],

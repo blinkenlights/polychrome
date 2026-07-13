@@ -84,8 +84,5 @@ config :swoosh, :api_client, false
 # Set environment for broadcaster
 config :octopus, :env, :dev
 
-# Radar: local dev uses the "dev" setup in config/radar.exs by default
-# (RADAR_SETUP unset). That setup defaults to boot_mock_mode: :exact, so the
-# mock radar (Octopus.Radar.Mock.World/Server) streams a simulated crowd from
-# boot — the 3D sim and the Collective app both consume it via the real radar
-# PubSub feed. Override with RADAR_MOCK_MODE=off|exact|fuzzy or RADAR_SETUP=<name>.
+# RADAR_SOURCE_MODE=off|live|exact|fuzzy (default :off). Set RADAR_DEPLOYMENT on hosts
+# with hardware for live mode.

@@ -6,7 +6,7 @@ defmodule Octopus.Hardware.InstallationValidator do
   require Logger
 
   alias Octopus.Hardware
-  alias Octopus.Hardware.{Controller, PanelSlot, Wiring}
+  alias Octopus.Hardware.{Controller, PanelSlot, PanelTypes, Wiring}
 
   defmodule Error do
     defexception [:message]
@@ -22,6 +22,7 @@ defmodule Octopus.Hardware.InstallationValidator do
   """
   @spec validate!(keyword(), %{atom() => Controller.t()}, %{atom() => Wiring.t()}) :: :ok
   def validate!(installation_opts, controller_registry \\ Hardware.registry(), wiring_registry \\ Hardware.wiring_registry()) do
+    validate_panel_type!(installation_opts)
     panel_slots = Keyword.get(installation_opts, :panel_slots)
 
     if panel_slots do
@@ -135,4 +136,28 @@ defmodule Octopus.Hardware.InstallationValidator do
   end
 
   defp maybe_warn_broadcast_frame_size(_panel_slots, _controller_registry, _mode), do: :ok
+
+  defp validate_panel_type!(opts) do
+    case Keyword.get(opts, :panel_type) do
+      nil ->
+        :ok
+
+      type ->
+        unless type in PanelTypes.ids() do
+          raise Error,
+                message: "unknown panel_type #{inspect(type)}; known: #{inspect(PanelTypes.ids())}"
+        end
+
+        panel_layout = Keyword.get(opts, :panel_layout, {8, 8})
+        reference = PanelTypes.fetch!(type).reference_matrix
+
+        unless panel_layout == reference do
+          raise Error,
+                message:
+                  "panel_layout #{inspect(panel_layout)} does not match panel_type #{inspect(type)} reference_matrix #{inspect(reference)}"
+        end
+
+        :ok
+    end
+  end
 end

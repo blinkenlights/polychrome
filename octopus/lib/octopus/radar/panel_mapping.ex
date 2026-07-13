@@ -14,12 +14,21 @@ defmodule Octopus.Radar.PanelMapping do
   """
 
   @default_panel_width 8
-  # aframe panelDiameter 20 m → 10 m ring radius
-  @ring_radius_m 10.0
 
   @type track :: %{required(:x) => float(), required(:y) => float(), optional(atom()) => any()}
 
-  def ring_radius, do: @ring_radius_m
+  @doc """
+  Returns the installation ring radius in meters for circular layouts.
+
+  Falls back to `10.0` when the active installation is not circular.
+  """
+  def ring_radius do
+    if Octopus.Installation.arrangement() == :circular do
+      Octopus.Installation.ring_radius_m()
+    else
+      10.0
+    end
+  end
 
   def track_radius(%{x: x, y: y}), do: :math.sqrt(x * x + y * y)
 

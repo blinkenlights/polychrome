@@ -60,6 +60,12 @@ defmodule Octopus.Radar.Mock.Server do
   @spec detach(GenServer.server()) :: :ok
   def detach(server), do: GenServer.call(server, :detach)
 
+  @doc "Replace the mock device's pose config used for coordinate transforms."
+  @spec update_config(GenServer.server(), keyword()) :: :ok
+  def update_config(server, config) when is_list(config) do
+    GenServer.call(server, {:update_config, config})
+  end
+
   ## GenServer callbacks
 
   @impl true
@@ -91,6 +97,10 @@ defmodule Octopus.Radar.Mock.Server do
 
   def handle_call(:detach, _from, state) do
     {:reply, :ok, %{state | owner: nil, emitting?: false}}
+  end
+
+  def handle_call({:update_config, config}, _from, state) do
+    {:reply, :ok, %{state | config: config}}
   end
 
   @impl true

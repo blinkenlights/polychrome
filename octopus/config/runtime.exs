@@ -1,13 +1,10 @@
 import Config
 
-# Radar (HLK-LD6001A): config/radar.exs holds the named setups; the active one
-# is selected via RADAR_SETUP. runtime.exs cannot use import_config/1, so we
-# evaluate the file instead.
-if config_env() == :test do
-  config :octopus, Octopus.Radar, enabled: false, sensors: []
-else
-  Code.eval_file(Path.join(__DIR__, "radar.exs"))
-end
+# Radar: config/radar.exs holds the physical deployment bindings and boot
+# source mode. Logical layout comes from the installation module; the active
+# deployment is selected by the machine's hostname. runtime.exs cannot use
+# import_config/1, so we evaluate the file instead.
+Code.eval_file(Path.join(__DIR__, "radar.exs"))
 
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the

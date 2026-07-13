@@ -1,6 +1,7 @@
 defmodule Octopus.Installation.Prototype do
   use Octopus.Installation,
     arrangement: :linear,
+    panel_type: :pixie,
     panels: [
       [controller: :polychrome_panel_prototype, wiring: :serpentine_horizontal_bottom_left]
     ],

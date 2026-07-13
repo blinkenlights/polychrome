@@ -87,9 +87,40 @@ defmodule Octopus.Installation do
   @callback auto_brightness() :: boolean()
 
   @doc """
-  Returns whether the radar layer should start for this installation.
+  Returns the installation's logical radar configuration, or `nil` when radar
+  is not part of this installation.
   """
-  @callback radar_enabled() :: boolean()
+  @callback radar_config() :: keyword() | nil
+
+  @doc """
+  Returns the optional physical panel type id (`:polychrome`, `:pixie`, `:woodstock`), or `nil`.
+  """
+  @callback panel_type() :: atom() | nil
+
+  @doc """
+  Returns outer panel dimensions `{width_cm, height_cm, depth_cm}` when `panel_type/0` is set.
+  """
+  @callback panel_outer_dimensions_cm() :: {float(), float(), float()} | nil
+
+  @doc """
+  Returns the panel type specification struct when `panel_type/0` is set.
+  """
+  @callback panel_type_spec() :: Octopus.Hardware.PanelType.t() | nil
+
+  @doc """
+  Returns the ring radius in meters for circular installations.
+  """
+  @callback ring_radius_m() :: float()
+
+  @doc """
+  Returns which panel (1-based index) faces north (+Y) in circular layouts, or `1`.
+  """
+  @callback north_panel() :: pos_integer()
+
+  @doc """
+  Returns the central platform radius in meters when set, otherwise `nil`.
+  """
+  @callback platform_radius_m() :: float() | nil
 
   @options_schema NimbleOptions.new!(
                     arrangement: [type: {:in, [:linear, :circular]}, required: true],
@@ -103,6 +134,40 @@ defmodule Octopus.Installation do
                       type: {:tuple, [:pos_integer, :pos_integer]},
                       default: {8, 8},
                       doc: "Panel layout shape `{width, height}` when using `panels:`."
+                    ],
+                    panel_matrix: [
+                      type: {:tuple, [:pos_integer, :pos_integer]},
+                      required: false,
+                      doc: "Optional alias for `panel_layout`."
+                    ],
+                    panel_type: [
+                      type: {:in, [:polychrome, :pixie, :woodstock]},
+                      required: false,
+                      doc: "Physical panel product type for derived dimensions."
+                    ],
+                    circular: [
+                      type: :keyword_list,
+                      required: false,
+                      keys: [
+                        ring_radius_m: [
+                          type: :float,
+                          required: true,
+                          doc: "Outer panel ring radius in meters."
+                        ],
+                        north_panel: [
+                          type: :pos_integer,
+                          default: 1,
+                          doc: "Panel number (1-based) at north (+Y) in radar / ring views."
+                        ],
+                        platform_radius_m: [
+                          type: :float,
+                          required: false,
+                          doc:
+                            "Central platform radius in meters for radar and mock views; omit to use Sim3D param."
+                        ]
+                      ],
+                      doc:
+                        "Circular arrangement geometry. Required when `arrangement` is `:circular`."
                     ],
                     num_panels: [type: :pos_integer, required: true],
                     num_buttons: [type: :non_neg_integer, required: true],
@@ -125,10 +190,11 @@ defmodule Octopus.Installation do
                       default: :auto
                     ],
                     auto_brightness: [type: :boolean, default: false],
-                    radar_enabled: [
-                      type: :boolean,
-                      default: false,
-                      doc: "When false, the radar layer does not start for this installation."
+                    radar: [
+                      type: :keyword_list,
+                      required: false,
+                      doc:
+                        "Logical radar sensor layout for this installation (identifiers, geometry, tuning)."
                     ],
                     network_config: [
                       type: :keyword_list,
@@ -298,8 +364,12 @@ defmodule Octopus.Installation do
   defmacro __using__(opts) do
     opts =
       opts
+      |> normalize_panel_layout_alias!()
+      |> reject_legacy_arrangement_keys!()
+      |> validate_arrangement_geometry!()
       |> Keyword.put_new(:panel_layout, {8, 8})
       |> pre_derive_panel_dimensions!()
+      |> validate_radar!()
       |> NimbleOptions.validate!(@options_schema)
       |> parse_panel_slots!()
       |> derive_panel_network_targets!()
@@ -310,6 +380,23 @@ defmodule Octopus.Installation do
 
     arrangement = Keyword.fetch!(opts, :arrangement)
     panel_layout = Keyword.fetch!(opts, :panel_layout)
+    panel_type = Keyword.get(opts, :panel_type)
+
+    {ring_radius_m, north_panel, platform_radius_m} =
+      case arrangement do
+        :circular ->
+          circular = Keyword.fetch!(opts, :circular)
+
+          {
+            Keyword.fetch!(circular, :ring_radius_m),
+            Keyword.get(circular, :north_panel, 1),
+            Keyword.get(circular, :platform_radius_m)
+          }
+
+        :linear ->
+          {nil, 1, nil}
+      end
+
     num_panels = Keyword.fetch!(opts, :num_panels)
     num_buttons = Keyword.fetch!(opts, :num_buttons)
     num_joysticks = Keyword.fetch!(opts, :num_joysticks)
@@ -319,7 +406,10 @@ defmodule Octopus.Installation do
     global_speed = Keyword.fetch!(opts, :global_speed)
     location = Keyword.fetch!(opts, :location)
     auto_brightness = Keyword.fetch!(opts, :auto_brightness)
-    radar_enabled = Keyword.fetch!(opts, :radar_enabled)
+    radar_config =
+      opts
+      |> Keyword.get(:radar)
+      |> normalize_literals()
     network_config = Keyword.fetch!(opts, :network_config)
 
     width =
@@ -364,6 +454,48 @@ defmodule Octopus.Installation do
       end)
       |> Macro.escape()
 
+    ring_radius_fn =
+      if arrangement == :circular do
+        quote do
+          @impl Octopus.Installation
+          def ring_radius_m, do: unquote(ring_radius_m)
+        end
+      else
+        quote do
+          @impl Octopus.Installation
+          def ring_radius_m do
+            raise ArgumentError, "ring_radius_m is only defined for circular installations"
+          end
+        end
+      end
+
+    panel_type_fns =
+      if panel_type do
+        quote do
+          @impl Octopus.Installation
+          def panel_type, do: unquote(panel_type)
+
+          @impl Octopus.Installation
+          def panel_type_spec, do: Octopus.Hardware.PanelTypes.fetch!(unquote(panel_type))
+
+          @impl Octopus.Installation
+          def panel_outer_dimensions_cm do
+            Octopus.Hardware.PanelType.outer_dimensions_cm(panel_type_spec())
+          end
+        end
+      else
+        quote do
+          @impl Octopus.Installation
+          def panel_type, do: nil
+
+          @impl Octopus.Installation
+          def panel_type_spec, do: nil
+
+          @impl Octopus.Installation
+          def panel_outer_dimensions_cm, do: nil
+        end
+      end
+
     quote do
       @behaviour Octopus.Installation
 
@@ -373,6 +505,7 @@ defmodule Octopus.Installation do
       def panel_slots, do: unquote(Macro.escape(panel_slots))
       @impl Octopus.Installation
       def panel_layout, do: unquote(panel_layout)
+      def panel_matrix, do: panel_layout()
       @impl Octopus.Installation
       def arrangement, do: unquote(arrangement)
       @impl Octopus.Installation
@@ -401,8 +534,77 @@ defmodule Octopus.Installation do
       def location, do: unquote(location)
       @impl Octopus.Installation
       def auto_brightness, do: unquote(auto_brightness)
+
       @impl Octopus.Installation
-      def radar_enabled, do: unquote(radar_enabled)
+      def north_panel, do: unquote(north_panel)
+
+      @impl Octopus.Installation
+      def platform_radius_m, do: unquote(Macro.escape(platform_radius_m))
+
+      @impl Octopus.Installation
+      def radar_config, do: unquote(Macro.escape(radar_config))
+
+      unquote(panel_type_fns)
+      unquote(ring_radius_fn)
+    end
+  end
+
+  defp normalize_panel_layout_alias!(opts) do
+    matrix = Keyword.get(opts, :panel_matrix)
+    layout = Keyword.get(opts, :panel_layout)
+
+    cond do
+      matrix != nil and layout != nil and matrix != layout ->
+        raise ArgumentError,
+              "panel_matrix #{inspect(matrix)} conflicts with panel_layout #{inspect(layout)}"
+
+      matrix != nil ->
+        opts |> Keyword.delete(:panel_matrix) |> Keyword.put(:panel_layout, matrix)
+
+      true ->
+        Keyword.delete(opts, :panel_matrix)
+    end
+  end
+
+  defp reject_legacy_arrangement_keys!(opts) do
+    legacy = [:ring_radius_m, :north_panel, :platform_radius_m]
+
+    case Enum.filter(legacy, &Keyword.has_key?(opts, &1)) do
+      [] ->
+        opts
+
+      keys ->
+        raise ArgumentError,
+              "circular-only options #{inspect(keys)} must be set under :circular, not at the top level"
+    end
+  end
+
+  defp validate_arrangement_geometry!(opts) do
+    arrangement = Keyword.fetch!(opts, :arrangement)
+    circular? = Keyword.has_key?(opts, :circular)
+    num_panels = length(Keyword.fetch!(opts, :panels))
+
+    case arrangement do
+      :circular ->
+        unless circular? do
+          raise ArgumentError, ":circular is required when arrangement is :circular"
+        end
+
+        north_panel = opts |> Keyword.fetch!(:circular) |> Keyword.get(:north_panel, 1)
+
+        if north_panel < 1 or north_panel > num_panels do
+          raise ArgumentError,
+                "circular :north_panel must be between 1 and #{num_panels}, got #{north_panel}"
+        end
+
+        opts
+
+      :linear ->
+        if circular? do
+          raise ArgumentError, ":circular is only allowed when arrangement is :circular"
+        end
+
+        opts
     end
   end
 
@@ -463,6 +665,49 @@ defmodule Octopus.Installation do
     opts
   end
 
+  defp normalize_literals(nil), do: nil
+
+  defp normalize_literals(list) when is_list(list) do
+    Enum.map(list, fn
+      {key, value} when is_atom(key) ->
+        {key, normalize_literals(value)}
+
+      other ->
+        normalize_literals(other)
+    end)
+  end
+
+  defp normalize_literals({:-, _, [n]}) when is_number(n), do: -n
+  defp normalize_literals({:+, _, [n]}) when is_number(n), do: n
+
+  defp normalize_literals(value) when is_atom(value) or is_number(value) or is_boolean(value),
+    do: value
+
+  defp normalize_literals(value), do: value
+
+  defp validate_radar!(opts) do
+    case Keyword.get(opts, :radar) do
+      nil ->
+        opts
+
+      radar ->
+        layout = Keyword.fetch!(radar, :layout)
+        type = Keyword.fetch!(layout, :type)
+        sensors = Keyword.fetch!(layout, :sensors)
+
+        unless type == :radial do
+          raise ArgumentError, "radar layout :type must be :radial, got #{inspect(type)}"
+        end
+
+        unless is_list(sensors) and sensors != [] and Enum.all?(sensors, &is_atom/1) do
+          raise ArgumentError,
+                "radar layout :sensors must be a non-empty list of atoms, got #{inspect(sensors)}"
+        end
+
+        opts
+    end
+  end
+
   @behaviour __MODULE__
 
   defp installation do
@@ -503,8 +748,47 @@ defmodule Octopus.Installation do
   def location, do: installation().location()
   @impl __MODULE__
   def auto_brightness, do: installation().auto_brightness()
+
   @impl __MODULE__
-  def radar_enabled, do: installation().radar_enabled()
+  def north_panel, do: installation().north_panel()
+
+  @doc """
+  Central platform radius in meters for radar and mock views.
+
+  Uses the installation's `platform_radius_m` when set, otherwise the Sim3D param.
+  """
+  @impl __MODULE__
+  def platform_radius_m do
+    case installation().platform_radius_m() do
+      nil -> Octopus.Params.Sim3d.platform_radius_m()
+      radius -> radius
+    end
+  end
+
+  @impl __MODULE__
+  def radar_config, do: installation().radar_config()
+
+  @impl __MODULE__
+  def panel_type, do: installation().panel_type()
+  @impl __MODULE__
+  def panel_type_spec, do: installation().panel_type_spec()
+  @impl __MODULE__
+  def panel_outer_dimensions_cm, do: installation().panel_outer_dimensions_cm()
+  def panel_matrix, do: panel_layout()
+
+  @doc """
+  Returns the ring radius in meters for circular installations.
+
+  Raises when the active installation is not circular.
+  """
+  @impl __MODULE__
+  def ring_radius_m do
+    if arrangement() == :circular do
+      installation().ring_radius_m()
+    else
+      raise ArgumentError, "ring_radius_m is only defined for circular installations"
+    end
+  end
 
   @doc """
   Returns the concrete pixel positions of all panels in the installation

@@ -1,6 +1,12 @@
 defmodule Octopus.Installation.Nation2026 do
   use Octopus.Installation,
     arrangement: :circular,
+    circular: [
+      ring_radius_m: 10.0,
+      north_panel: 10,
+      platform_radius_m: 2.0
+    ],
+    panel_type: :polychrome,
     panels: [
       [controller: :polychrome_panel_1, wiring: :serpentine_horizontal_bottom_left],
       [controller: :polychrome_panel_2, wiring: :serpentine_horizontal_bottom_left],
@@ -22,7 +28,25 @@ defmodule Octopus.Installation.Nation2026 do
     global_speed: 1.0,
     location: {52.684273, 12.959300},
     auto_brightness: false,
-    radar_enabled: true,
+    radar: [
+      defaults: [
+        moving_decisecs: 110,
+        static_decisecs: 100,
+        exit_decisecs: 5,
+        height_cm: 500,
+        range_cm: 500,
+        x_pos_cm: 500,
+        x_neg_cm: -500,
+        y_pos_cm: 500,
+        y_neg_cm: -500
+      ],
+      layout: [
+        type: :radial,
+        sensors: [:a, :b, :c, :d, :e, :f],
+        start_angle_deg: 150,
+        distance_cm: 300
+      ]
+    ],
     network_config: [
       mode: :broadcast,
       broadcast_ip: :auto,

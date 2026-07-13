@@ -74,20 +74,12 @@ defmodule Octopus.Application do
   end
 
   defp radar_children do
-    if Octopus.Radar.enabled?() do
+    if Octopus.Radar.configured?() do
       [Octopus.Radar]
     else
-      Logger.info(
-        "[radar] Feature disabled (config enabled: #{config_enabled?()}, installation radar_enabled: #{Octopus.Installation.radar_enabled()})"
-      )
-
+      Logger.info("[radar] No :radar block in active installation — supervisor not started")
       []
     end
-  end
-
-  defp config_enabled? do
-    Application.get_env(:octopus, Octopus.Radar, [])
-    |> Keyword.get(:enabled, true)
   end
 
   # Tell Phoenix to update the endpoint configuration

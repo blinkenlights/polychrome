@@ -9,7 +9,6 @@ defmodule Octopus.Installation.RunningLights do
     num_joysticks: 0,
     panel_gap: 0,
     global_speed: 1.0,
-    radar_enabled: false,
     location: :auto,
     auto_brightness: false,
     network_config: [

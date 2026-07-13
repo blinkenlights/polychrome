@@ -34,6 +34,14 @@ defmodule Octopus.Radar.Mock.World do
   The live population is kept within `1..max_people`; people appear and
   disappear over time. `max_people` is operator-adjustable at runtime.
 
+  ## Manual (cursor-driven) tracking
+
+  When manual mode is enabled (`set_manual/1`) the crowd simulation is
+  suspended and the world holds a single object whose position is driven
+  directly by the operator's cursor over the layout (`set_manual_point/2`).
+  This lets the operator probe how the sensors track one deliberately-placed
+  target. `clear_manual_point/0` removes it (e.g. the pointer left the map).
+
   ## Ground-truth feed
 
   On every tick the current snapshot is broadcast as `{:mock_world, objects}`
@@ -49,6 +57,10 @@ defmodule Octopus.Radar.Mock.World do
   @default_max_people 5
   @default_entropy 50
   @edge_margin_m 0.5
+
+  # Cap on the velocity inferred from consecutive manual-cursor points, so a
+  # fast pointer jump doesn't produce an absurd reported speed.
+  @manual_max_speed_mps 4.0
 
   # Behavior parameter ranges. The standing/slow/fast mix and dwell times are
   # modulated at runtime by the activity "entropy" (see `pick_behavior/2`).
@@ -164,6 +176,31 @@ defmodule Octopus.Radar.Mock.World do
   def set_objects(objects) when is_list(objects),
     do: GenServer.call(__MODULE__, {:set_objects, objects})
 
+  @doc "Whether manual (cursor-driven) tracking is currently enabled."
+  @spec manual?() :: boolean()
+  def manual?, do: GenServer.call(__MODULE__, :manual?)
+
+  @doc """
+  Enable or disable manual (cursor-driven) tracking. Enabling suspends the
+  crowd simulation and starts from an empty world; disabling clears the manual
+  object and resumes the simulation.
+  """
+  @spec set_manual(boolean()) :: :ok
+  def set_manual(enabled) when is_boolean(enabled),
+    do: GenServer.call(__MODULE__, {:set_manual, enabled})
+
+  @doc """
+  Place the single manually-tracked object at `{x, y}` (global meters),
+  clamped to the world disk. A no-op unless manual mode is enabled.
+  """
+  @spec set_manual_point(number(), number()) :: :ok
+  def set_manual_point(x, y) when is_number(x) and is_number(y),
+    do: GenServer.call(__MODULE__, {:set_manual_point, x, y})
+
+  @doc "Remove the manually-tracked object (e.g. the pointer left the map)."
+  @spec clear_manual_point() :: :ok
+  def clear_manual_point, do: GenServer.call(__MODULE__, :clear_manual_point)
+
   ## GenServer callbacks
 
   @impl true
@@ -185,7 +222,9 @@ defmodule Octopus.Radar.Mock.World do
       entropy: Keyword.get(opts, :entropy, @default_entropy) |> clamp_entropy(),
       people: [],
       next_id: 1,
-      frozen: false
+      frozen: false,
+      manual: false,
+      manual_point: nil
     }
 
     Process.send_after(self(), :tick, @tick_ms)
@@ -204,7 +243,7 @@ defmodule Octopus.Radar.Mock.World do
   def handle_call({:set_mode, mode}, _from, state) do
     state =
       case mode do
-        :off -> %{state | mode: :off, people: []}
+        :off -> %{state | mode: :off, people: [], manual: false, manual_point: nil}
         _ -> %{state | mode: mode, frozen: false}
       end
 
@@ -250,6 +289,50 @@ defmodule Octopus.Radar.Mock.World do
     {:reply, :ok, %{state | people: people, frozen: true, next_id: next_id}}
   end
 
+  def handle_call(:manual?, _from, state), do: {:reply, state.manual, state}
+
+  def handle_call({:set_manual, true}, _from, state) do
+    {:reply, :ok, %{state | manual: true, people: [], manual_point: nil}}
+  end
+
+  def handle_call({:set_manual, false}, _from, state) do
+    {:reply, :ok, %{state | manual: false, people: [], manual_point: nil}}
+  end
+
+  def handle_call({:set_manual_point, _x, _y}, _from, %{manual: false} = state) do
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:set_manual_point, x, y}, _from, state) do
+    now = System.monotonic_time(:millisecond)
+    {x, y} = clamp_point({x, y}, state.radius_m - @edge_margin_m)
+    {vx, vy} = manual_velocity(state.manual_point, x, y, now)
+
+    person = %{
+      id: 1,
+      x: x,
+      y: y,
+      z: 1.7,
+      vx: vx,
+      vy: vy,
+      behavior: :standing,
+      target_x: x,
+      target_y: y,
+      speed: 0.0,
+      until_ms: now + 1_000_000
+    }
+
+    state = %{state | people: [person], manual_point: %{x: x, y: y, t: now}}
+    broadcast(state)
+    {:reply, :ok, state}
+  end
+
+  def handle_call(:clear_manual_point, _from, state) do
+    state = %{state | people: [], manual_point: nil}
+    broadcast(state)
+    {:reply, :ok, state}
+  end
+
   @impl true
   def handle_info(:tick, state) do
     Process.send_after(self(), :tick, @tick_ms)
@@ -279,6 +362,7 @@ defmodule Octopus.Radar.Mock.World do
   ## Simulation
 
   defp step(%{mode: :off} = state), do: state
+  defp step(%{manual: true} = state), do: state
   defp step(%{frozen: true} = state), do: state
 
   defp step(state) do
@@ -739,6 +823,32 @@ defmodule Octopus.Radar.Mock.World do
     end
   end
 
+  # Estimate velocity from the previous manual point and the elapsed time, so
+  # dragging the cursor produces plausible vx/vy (and thus velocity arrows and
+  # trails). Ignores stale samples (long gaps) and clamps the magnitude.
+  defp manual_velocity(nil, _x, _y, _now), do: {0.0, 0.0}
+
+  defp manual_velocity(%{x: px, y: py, t: pt}, x, y, now) do
+    dt = (now - pt) / 1000.0
+
+    if dt > 0.0 and dt <= 0.5 do
+      clamp_speed((x - px) / dt, (y - py) / dt)
+    else
+      {0.0, 0.0}
+    end
+  end
+
+  defp clamp_speed(vx, vy) do
+    speed = :math.sqrt(vx * vx + vy * vy)
+
+    if speed > @manual_max_speed_mps do
+      scale = @manual_max_speed_mps / speed
+      {vx * scale, vy * scale}
+    else
+      {vx, vy}
+    end
+  end
+
   defp sq(v), do: v * v
 
   defp rand_in({lo, hi}) when is_integer(lo) and is_integer(hi),
@@ -773,13 +883,24 @@ defmodule Octopus.Radar.Mock.World do
   defp clampf(v, lo, hi), do: v |> max(lo) |> min(hi)
 
   defp configured_radius_m do
-    Application.get_env(:octopus, Octopus.Radar, [])
-    |> Keyword.get(:mock, [])
-    |> Keyword.get(:radius_m, @default_radius_m)
+    case Application.get_env(:octopus, Octopus.Radar, [])
+         |> Keyword.get(:mock, [])
+         |> Keyword.get(:radius_m) do
+      nil -> default_radius_from_installation()
+      radius_m -> radius_m
+    end
+  end
+
+  defp default_radius_from_installation do
+    if Octopus.Installation.arrangement() == :circular do
+      Octopus.Installation.ring_radius_m()
+    else
+      @default_radius_m
+    end
   end
 
   defp configured_platform_radius_m do
-    Octopus.Params.Sim3d.platform_radius_m()
+    Octopus.Installation.platform_radius_m()
   rescue
     _ -> @default_platform_radius_m
   end
