@@ -4,7 +4,9 @@ config :octopus, Octopus.Repo,
   database: "octopus_dev.db",
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
-  pool_size: 10
+  pool_size: 10,
+  # Keep Logger at :debug for app noise; skip per-query SQL spam from Ecto.
+  log: false
 
 # For development, we disable any cache and enable
 # debugging and code reloading.
