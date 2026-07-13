@@ -88,7 +88,7 @@ defmodule Octopus.Apps.PixelFun3D.Zoom do
   """
   @spec advance_octave_state(map(), float(), float()) :: {map(), integer(), nil | map()}
   def advance_octave_state(state, z, now) do
-    current_n = Map.get(state, :zoom_octave_n, 0)
+    current_n = Map.get(state, :zoom_octave_n, 0) || 0
     fade = Map.get(state, :octave_fade)
     {target_n, _r} = decompose(z, current_n)
 
@@ -133,7 +133,7 @@ defmodule Octopus.Apps.PixelFun3D.Zoom do
 
     d =
       d
-      |> Sphere.transform(matrix)
+      |> then(&Sphere.transform(matrix, &1))
       |> Sphere.dilate(sigma, basis)
       |> Sphere.apply_elevation(elev_rad, alpha)
 

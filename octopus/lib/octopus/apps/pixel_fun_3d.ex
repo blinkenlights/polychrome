@@ -10,6 +10,7 @@ defmodule Octopus.Apps.PixelFun3D do
   alias Octopus.Events.Event.Proximity, as: ProximityEvent
   alias Octopus.AppSupervisor
   alias Octopus.Apps.PixelFun.Program
+  alias Octopus.Apps.PixelFun3D.Zoom
   alias Octopus.Installation
   alias Octopus.Sphere
   alias Octopus.Wander
@@ -391,7 +392,9 @@ defmodule Octopus.Apps.PixelFun3D do
       :frozen_roll_ref,
       :show_advanced,
       :formula_seconds,
-      :transform_live_last_ms
+      :transform_live_last_ms,
+      :zoom_octave_n,
+      :octave_fade
     ]
   end
 
@@ -1050,7 +1053,9 @@ defmodule Octopus.Apps.PixelFun3D do
       time_frozen: time_frozen,
       show_advanced: Map.get(config, :show_advanced, false) |> coerce_boolean(),
       yaw_angle: 0.0,
-      roll_angle: 0.0
+      roll_angle: 0.0,
+      zoom_octave_n: 0,
+      octave_fade: nil
     }
 
     state =
@@ -1809,7 +1814,14 @@ defmodule Octopus.Apps.PixelFun3D do
 
     state
     |> step_auto_wanderers()
+    |> advance_octave_state_step()
     |> accumulate_orientation(dt_signed)
+  end
+
+  defp advance_octave_state_step(%State{} = state) do
+    z = max(effective_transform_values(state).zoom_base || 1.0, @zoom_factor_min)
+    {updates, _committed_n, _fade} = Zoom.advance_octave_state(state, z, state.seconds)
+    struct(State, Map.merge(Map.from_struct(state), updates))
   end
 
   @doc false
@@ -1976,7 +1988,10 @@ defmodule Octopus.Apps.PixelFun3D do
   defp render_canvas(%State{display_info: display_info} = state) do
     # Deterministic motion (tilt) uses signed formula clock; auto wanderers use state.seconds.
     seconds = state.formula_seconds || state.seconds
-    transform_params = build_transform_params(state, seconds)
+    eff = effective_transform_values(state)
+    z = max(eff.zoom_base || 1.0, @zoom_factor_min)
+    motion_params = build_motion_params(state, seconds)
+    zoom_branches = resolve_zoom_branches(state, z, seconds)
 
     canvas_mode = if state.color_mode == :white, do: :grayscale, else: :rgb
     canvas = Canvas.new(display_info.width, display_info.height, canvas_mode)
@@ -2002,70 +2017,22 @@ defmodule Octopus.Apps.PixelFun3D do
       audio = state.audio_input
 
       Enum.reduce(Enum.with_index(panel), canvas, fn {{x, y, d}, i}, canvas ->
-        {x_scaled, y_scaled, {nx, ny, nz}} = sample_pixel(d, x, y, transform_params)
-
         pixel =
-          case state.color_mode do
-            :white ->
-              {color_a, color_b} = state.colors
-
-              state.program
-              |> eval_pixel_value(
-                x_scaled,
-                y_scaled,
-                nx,
-                ny,
-                nz,
-                i,
-                pixel_time,
-                audio.low,
-                audio.mid,
-                audio.high
-              )
-              |> white_pixel_value(color_a, color_b)
-
-            :rainbow ->
-              value =
-                eval_pixel_value(
-                  state.program,
-                  x_scaled,
-                  y_scaled,
-                  nx,
-                  ny,
-                  nz,
-                  i,
-                  pixel_time,
-                  audio.low,
-                  audio.mid,
-                  audio.high
-                )
-
-              rainbow_pixel_color(x_scaled, y_scaled, value, hue_shift, saturation_percent)
-
-            _ ->
-              {color_a, color_b} = state.colors
-
-              colors = {
-                %Chameleon.HSV{(%Chameleon.HSV{} = color_a) | h: rem(trunc(color_a.h + hue_shift), 360)},
-                %Chameleon.HSV{(%Chameleon.HSV{} = color_b) | h: rem(trunc(color_b.h + hue_shift), 360)}
-              }
-
-              pixels(
-                state.program,
-                x_scaled,
-                y_scaled,
-                nx,
-                ny,
-                nz,
-                i,
-                pixel_time,
-                audio.low,
-                audio.mid,
-                audio.high,
-                colors,
-                lerp_fn
-              )
-          end
+          render_pixel(
+            state,
+            motion_params,
+            z,
+            zoom_branches,
+            d,
+            x,
+            y,
+            i,
+            pixel_time,
+            hue_shift,
+            saturation_percent,
+            audio,
+            lerp_fn
+          )
 
         Canvas.put_pixel(canvas, {x, y}, pixel)
       end)
@@ -2082,7 +2049,10 @@ defmodule Octopus.Apps.PixelFun3D do
     end)
   end
 
-  defp build_transform_params(%State{} = state, seconds) do
+  @doc false
+  def build_transform_params(state, seconds), do: build_motion_params(state, seconds)
+
+  defp build_motion_params(%State{} = state, seconds) do
     w = Installation.width()
     h = Installation.height()
     alpha = Sphere.alpha(w)
@@ -2094,8 +2064,7 @@ defmodule Octopus.Apps.PixelFun3D do
     roll_rate = eff.roll_rate
     tilt_scale = eff.tilt_scale
     elev_base = eff.elev_base
-    zoom_factor = max(eff.zoom_base || 1.0, @zoom_factor_min)
-    sigma = :math.log(zoom_factor)
+    z = max(eff.zoom_base || 1.0, @zoom_factor_min)
 
     # Orientation angles are already integrated in rad; fallback uses display→rad.
     yaw_angle = state.yaw_angle || orbit_rate * alpha * seconds
@@ -2106,7 +2075,8 @@ defmodule Octopus.Apps.PixelFun3D do
 
     neutral? =
       orbit_rate == 0.0 and roll_rate == 0.0 and tilt_scale == 0.0 and elev_base == 0.0 and
-        zoom_factor == 1.0 and not any_auto?(state) and yaw_angle == 0.0 and roll_angle == 0.0
+        z == 1.0 and (state.zoom_octave_n || 0) == 0 and state.octave_fade == nil and
+        not any_auto?(state) and yaw_angle == 0.0 and roll_angle == 0.0
 
     if neutral? do
       %{neutral?: true, center_x: cx, center_y: cy, alpha: alpha}
@@ -2114,6 +2084,7 @@ defmodule Octopus.Apps.PixelFun3D do
       tilt_amp_rad = tilt_scale * alpha
       roll_pivot_phi = panel_to_phi(state.roll_pivot || 0, w, alpha)
       zoom_pivot_phi = panel_to_phi(state.zoom_pivot || 0, w, alpha)
+      x_p = zoom_pivot_phi / alpha
 
       matrix =
         Sphere.orientation(
@@ -2129,14 +2100,163 @@ defmodule Octopus.Apps.PixelFun3D do
       %{
         neutral?: false,
         matrix: matrix,
-        sigma: sigma,
         mobius_basis: Sphere.mobius_basis(zoom_pivot_phi),
         elev_rad: Sphere.elev_offset(elev_base, alpha),
         alpha: alpha,
         center_x: cx,
-        center_y: cy
+        center_y: cy,
+        x_p: x_p
       }
     end
+  end
+
+  defp resolve_zoom_branches(%State{} = state, z, seconds) do
+    current_n = state.zoom_octave_n || 0
+
+    cond do
+      state.time_frozen ->
+        {n, _r} = Zoom.decompose(z, current_n)
+        {:steady, n}
+
+      state.octave_fade == nil ->
+        {:steady, current_n}
+
+      true ->
+        fade = state.octave_fade
+        u = Zoom.fade_u(fade, seconds)
+
+        if u >= 1.0 do
+          {:steady, fade.to_n}
+        else
+          {:fade, fade.from_n, fade.to_n, u}
+        end
+    end
+  end
+
+  defp render_pixel(
+         state,
+         motion_params,
+         z,
+         zoom_branches,
+         d,
+         x,
+         y,
+         i,
+         pixel_time,
+         hue_shift,
+         saturation_percent,
+         audio,
+         lerp_fn
+       ) do
+    sample_ctx = {motion_params, z, x, y, d}
+
+    case zoom_branches do
+      {:steady, n} ->
+        sample_ctx
+        |> sample_zoom_branch(n)
+        |> colorize_sample(state, i, pixel_time, hue_shift, saturation_percent, audio, lerp_fn)
+
+      {:fade, from_n, to_n, u} ->
+        c_from =
+          sample_ctx
+          |> sample_zoom_branch(from_n)
+          |> colorize_sample(state, i, pixel_time, hue_shift, saturation_percent, audio, lerp_fn)
+
+        c_to =
+          sample_ctx
+          |> sample_zoom_branch(to_n)
+          |> colorize_sample(state, i, pixel_time, hue_shift, saturation_percent, audio, lerp_fn)
+
+        blend_pixels(c_from, c_to, u)
+    end
+  end
+
+  defp sample_zoom_branch({motion_params, z, x, y, d}, n) do
+    m = Zoom.octave_factor(n)
+    r = z / m
+
+    if motion_params.neutral? do
+      {xs, ys, dir} = Sphere.sample(d, Map.merge(motion_params, %{x: x, y: y}))
+      {xs, ys, dir}
+    else
+      Zoom.sample_pixel(d, motion_params, m, r, motion_params.x_p)
+    end
+  end
+
+  defp colorize_sample({x_scaled, y_scaled, {nx, ny, nz}}, state, i, pixel_time, hue_shift, sat, audio, lerp_fn) do
+    case state.color_mode do
+      :white ->
+        {color_a, color_b} = state.colors
+
+        state.program
+        |> eval_pixel_value(
+          x_scaled,
+          y_scaled,
+          nx,
+          ny,
+          nz,
+          i,
+          pixel_time,
+          audio.low,
+          audio.mid,
+          audio.high
+        )
+        |> white_pixel_value(color_a, color_b)
+
+      :rainbow ->
+        value =
+          eval_pixel_value(
+            state.program,
+            x_scaled,
+            y_scaled,
+            nx,
+            ny,
+            nz,
+            i,
+            pixel_time,
+            audio.low,
+            audio.mid,
+            audio.high
+          )
+
+        rainbow_pixel_color(x_scaled, y_scaled, value, hue_shift, sat)
+
+      _ ->
+        {color_a, color_b} = state.colors
+
+        colors = {
+          %Chameleon.HSV{(%Chameleon.HSV{} = color_a) | h: rem(trunc(color_a.h + hue_shift), 360)},
+          %Chameleon.HSV{(%Chameleon.HSV{} = color_b) | h: rem(trunc(color_b.h + hue_shift), 360)}
+        }
+
+        pixels(
+          state.program,
+          x_scaled,
+          y_scaled,
+          nx,
+          ny,
+          nz,
+          i,
+          pixel_time,
+          audio.low,
+          audio.mid,
+          audio.high,
+          colors,
+          lerp_fn
+        )
+    end
+  end
+
+  defp blend_pixels(c_from, c_to, u) when is_integer(c_from) and is_integer(c_to) do
+    round((1 - u) * c_from + u * c_to)
+  end
+
+  defp blend_pixels({r1, g1, b1}, {r2, g2, b2}, u) do
+    {
+      round((1 - u) * r1 + u * r2),
+      round((1 - u) * g1 + u * g2),
+      round((1 - u) * b1 + u * b2)
+    }
   end
 
   defp panel_to_phi(panel, w, alpha) do
@@ -2148,11 +2268,13 @@ defmodule Octopus.Apps.PixelFun3D do
     (center_x - cx) * alpha
   end
 
-  defp sample_pixel(d, x, y, %{neutral?: true} = params) do
-    Sphere.sample(d, Map.put(params, :x, x) |> Map.put(:y, y))
-  end
+  defp sample_pixel(d, x, y, motion_params, z, n) do
+    {xs, ys, _dir} =
+      {motion_params, z, x, y, d}
+      |> sample_zoom_branch(n)
 
-  defp sample_pixel(d, _x, _y, params), do: Sphere.sample(d, params)
+    {xs, ys}
+  end
 
   @doc false
   def transform_pixel_coords(x, y, params) do
@@ -2160,7 +2282,7 @@ defmodule Octopus.Apps.PixelFun3D do
     h = Installation.height()
     d = Map.get(params, :direction) || Sphere.direction(x, y, w, h)
 
-    transform_params =
+    motion_params =
       case params do
         %{neutral?: _} = p ->
           p
@@ -2170,12 +2292,15 @@ defmodule Octopus.Apps.PixelFun3D do
             default_motion_state()
             |> Map.merge(Map.take(params, Map.keys(default_motion_state())))
 
-          state_like = struct(State, motion)
-          build_transform_params(state_like, Map.get(params, :seconds, 0.0))
+          state_like = struct(State, Map.put(motion, :zoom_octave_n, Map.get(params, :zoom_octave_n, 0)))
+          build_motion_params(state_like, Map.get(params, :seconds, 0.0))
       end
 
-    {xs, ys, _d} = sample_pixel(d, x, y, Map.merge(transform_params, %{x: x, y: y}))
-    {xs, ys}
+    z = max(Map.get(params, :zoom_base, 1.0), @zoom_factor_min)
+    current_n = Map.get(params, :zoom_octave_n, 0)
+    {n, _r} = Zoom.decompose(z, current_n)
+
+    sample_pixel(d, x, y, motion_params, z, n)
   end
 
   defp default_motion_state do
@@ -2189,6 +2314,8 @@ defmodule Octopus.Apps.PixelFun3D do
       elev_base: 0.0,
       zoom_base: 1.0,
       zoom_pivot: 0,
+      zoom_octave_n: 0,
+      octave_fade: nil,
       pattern_speed: 1.0,
       trans_auto: false,
       rot_auto: false,
