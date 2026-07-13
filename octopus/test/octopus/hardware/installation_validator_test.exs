@@ -183,4 +183,33 @@ defmodule Octopus.Hardware.InstallationValidatorTest do
                Hardware.registry()
              )
   end
+
+  test "raises when panel_layout does not match panel_type reference matrix" do
+    assert_raise Error, ~r/does not match panel_type/, fn ->
+      InstallationValidator.validate!(
+        [
+          panel_type: :woodstock,
+          panel_layout: {8, 8},
+          panel_slots: [],
+          panels: [],
+          network_config: [mode: :broadcast]
+        ],
+        Hardware.registry()
+      )
+    end
+  end
+
+  test "accepts matching panel_type and panel_layout" do
+    assert :ok =
+             InstallationValidator.validate!(
+               [
+                 panel_type: :polychrome,
+                 panel_layout: {8, 8},
+                 panel_slots: [],
+                 panels: [],
+                 network_config: [mode: :broadcast]
+               ],
+               Hardware.registry()
+             )
+  end
 end

@@ -65,10 +65,10 @@ defmodule Octopus.Radar.Sensor do
       :current_command,
       :buffer,
       :ack_buffer,
-      :last_track_count,
       :ack_timer,
       :last_frame_at,
       :watchdog_timer,
+      :last_ui_status,
       ack_retries: 0,
       port_unavailable: false,
       recovery_stage: :normal
@@ -109,6 +109,17 @@ defmodule Octopus.Radar.Sensor do
   @spec reinitialize(pos_integer()) :: :ok | {:error, :no_sensor}
   def reinitialize(device_id) do
     call_sensor(device_id, :reinitialize)
+  end
+
+  @doc """
+  Replace the sensor's merged runtime config (used for pose transforms).
+
+  Only geometry keys are expected to change; device parameters such as
+  sensitivity are left untouched by the caller.
+  """
+  @spec update_config(pos_integer(), keyword()) :: :ok | {:error, :no_sensor}
+  def update_config(device_id, config) when is_list(config) do
+    call_sensor(device_id, {:update_config, config})
   end
 
   @doc "Return the sensor's current phase (`:opening`, `:probing`, `:configuring`, `:running`, or `:stale`)."
@@ -157,8 +168,7 @@ defmodule Octopus.Radar.Sensor do
       phase: :opening,
       pending_commands: [],
       buffer: <<>>,
-      ack_buffer: <<>>,
-      last_track_count: nil
+      ack_buffer: <<>>
     }
 
     {:ok, uart} = transport.start_link(transport_opts)
@@ -185,17 +195,21 @@ defmodule Octopus.Radar.Sensor do
     state = %State{state | config: new_config}
 
     if port_open?(state) do
-      log(state, :info, "Updating sensitivity to DPKTH=#{level} and re-initializing")
+      log(state, :debug, "Sensitivity updated to DPKTH=#{level}, re-initializing")
       {:reply, :ok, restart_init(state)}
     else
-      log(state, :info, "Updating sensitivity to DPKTH=#{level} — will apply when port opens")
+      log(state, :debug, "Sensitivity updated to DPKTH=#{level} — will apply when port opens")
       {:reply, :ok, state}
     end
   end
 
   def handle_call(:reinitialize, _from, %State{} = state) do
-    log(state, :info, "Re-initializing on operator request")
+    log(state, :debug, "Re-initializing on operator request")
     {:reply, :ok, restart_init(state)}
+  end
+
+  def handle_call({:update_config, config}, _from, %State{} = state) do
+    {:reply, :ok, %{state | config: config}}
   end
 
   def handle_call(:get_phase, _from, %State{phase: phase} = state) do
@@ -212,12 +226,17 @@ defmodule Octopus.Radar.Sensor do
   end
 
   def handle_info(:start_init, %State{} = state) do
-    log(state, :info, "Port settled — observing for existing stream (#{@probe_window_ms} ms)")
-    Radar.broadcast_status(state.device_id, :probing)
     timer = Process.send_after(self(), :probe_window_expired, @probe_window_ms)
+    state = set_status(state, :probing)
 
     {:noreply,
-     %State{state | phase: :probing, buffer: <<>>, ack_buffer: <<>>, watchdog_timer: timer}}
+     %State{
+       state
+       | phase: :probing,
+         buffer: <<>>,
+         ack_buffer: <<>>,
+         watchdog_timer: timer
+     }}
   end
 
   def handle_info(:probe_window_expired, %State{phase: :probing} = state) do
@@ -230,25 +249,17 @@ defmodule Octopus.Radar.Sensor do
       :no ->
         case state.recovery_stage do
           :post_reset ->
-            log(state, :info, "No stream after AT+RESET — running initialization sequence")
             {:noreply, enter_configuring(%State{state | recovery_stage: :normal})}
 
           :normal ->
-            log(
-              state,
-              :info,
-              "No streaming frames in verification window — sending AT+RESET then observing"
-            )
-
             {:noreply, reset_then_init(state)}
         end
     end
   end
 
   def handle_info(:post_reset_init, %State{} = state) do
-    log(state, :info, "Post-reset settle — observing for stream (#{@probe_window_ms} ms)")
-    Radar.broadcast_status(state.device_id, :probing)
     timer = Process.send_after(self(), :probe_window_expired, @probe_window_ms)
+    state = set_status(state, :probing)
 
     {:noreply,
      %State{
@@ -285,16 +296,13 @@ defmodule Octopus.Radar.Sensor do
     if ack_retries >= @max_ack_retries do
       log(
         state,
-        :warning,
-        "AT command stuck after #{ack_retries} retries (#{inspect(state.current_command)}) — falling back to stale, probing"
+        :debug,
+        "Init command stuck after #{ack_retries} retries — falling back to stale"
       )
 
       state = %State{state | phase: :stale}
-      Radar.broadcast_status(state.device_id, :stale)
-      {:noreply, send_probe(state)}
+      {:noreply, state |> set_status(:stale) |> send_probe()}
     else
-      log(state, :warning, "AT command timed out, resending: #{inspect(state.current_command)}")
-
       case try_attach_from_ack_buffer(state) do
         {:attach, state} -> {:noreply, state}
         :no -> {:noreply, resend_command(state)}
@@ -307,11 +315,9 @@ defmodule Octopus.Radar.Sensor do
     state = %State{state | ack_timer: nil, ack_retries: ack_retries}
 
     if ack_retries >= @max_ack_retries do
-      log(state, :warning, "Probe timed out after #{ack_retries} retries — escalating reopen")
+      log(state, :debug, "Probe stuck after #{ack_retries} retries — reopening port")
       {:noreply, escalate_init_failure(state)}
     else
-      log(state, :warning, "Probe timed out, resending")
-
       case try_attach_from_ack_buffer(state) do
         {:attach, state} -> {:noreply, state}
         :no -> {:noreply, resend_command(state)}
@@ -324,10 +330,8 @@ defmodule Octopus.Radar.Sensor do
   end
 
   def handle_info(:frame_watchdog, %State{phase: :running} = state) do
-    log(state, :warning, "No frames received for #{@frame_timeout_ms} ms — sensor stale, probing")
     state = %State{state | phase: :stale, watchdog_timer: nil}
-    Radar.broadcast_status(state.device_id, :stale)
-    {:noreply, send_probe(state)}
+    {:noreply, state |> set_status(:stale) |> send_probe()}
   end
 
   def handle_info(:frame_watchdog, %State{} = state) do
@@ -335,7 +339,7 @@ defmodule Octopus.Radar.Sensor do
   end
 
   def handle_info({:circuits_uart, _port, {:error, reason}}, %State{} = state) do
-    log(state, :warning, "UART error: #{inspect(reason)} — reopening")
+    log(state, :debug, "UART error: #{inspect(reason)} — reopening port")
     {:noreply, schedule_reopen(close_port(state))}
   end
 
@@ -401,9 +405,8 @@ defmodule Octopus.Radar.Sensor do
            framing: Circuits.UART.Framing.None
          ) do
       :ok ->
-        log(state, :info, "Opened serial port at #{baud} baud")
-        Radar.broadcast_status(state.device_id, :probing)
         Process.send_after(self(), :start_init, @post_open_settle_ms)
+        state = set_status(state, :probing)
 
         %State{
           state
@@ -412,7 +415,6 @@ defmodule Octopus.Radar.Sensor do
             buffer: <<>>,
             ack_buffer: <<>>,
             ack_retries: 0,
-            last_track_count: nil,
             current_command: nil,
             port_unavailable: false
         }
@@ -436,13 +438,9 @@ defmodule Octopus.Radar.Sensor do
     }
   end
 
-  defp schedule_reopen(%State{} = state, opts) do
+  defp schedule_reopen(%State{} = state, _opts) do
     Process.send_after(self(), :reopen_port, @reopen_interval)
-    Radar.broadcast_status(state.device_id, :unavailable)
-
-    if reason = Keyword.get(opts, :unavailable_reason) do
-      log(state, :info, "Serial port unavailable (#{inspect(reason)}) — retrying every 5s")
-    end
+    state = set_status(state, :unavailable)
 
     %State{
       state
@@ -501,19 +499,8 @@ defmodule Octopus.Radar.Sensor do
   ## Phase: configuring
 
   defp send_next_command(%State{pending_commands: []} = state) do
-    # Init sequence is fully acked — but acks only prove the sensor received
-    # the commands. It may not actually start streaming (hardware quirk).
-    # Re-enter :probing to wait for real frames before declaring :working.
-    # If no frames arrive within the window we fall back to :stale and
-    # re-init, avoiding the false :working → :stale flicker.
-    log(
-      state,
-      :info,
-      "Init sequence acked — verifying sensor is streaming (#{@probe_window_ms} ms)"
-    )
-
-    Radar.broadcast_status(state.device_id, :probing)
     timer = Process.send_after(self(), :probe_window_expired, @probe_window_ms)
+    state = set_status(state, :probing)
 
     %State{
       state
@@ -536,8 +523,6 @@ defmodule Octopus.Radar.Sensor do
   defp port_open?(%State{phase: phase}), do: phase in [:probing, :configuring, :running, :stale]
 
   defp restart_init(%State{phase: :opening} = state) do
-    log(state, :info, "Re-init deferred until serial port is available")
-
     cancel_ack_timer(%State{
       state
       | pending_commands: [],
@@ -545,7 +530,6 @@ defmodule Octopus.Radar.Sensor do
         buffer: <<>>,
         ack_buffer: <<>>,
         ack_retries: 0,
-        last_track_count: nil,
         watchdog_timer: nil
     })
   end
@@ -554,8 +538,6 @@ defmodule Octopus.Radar.Sensor do
     state = cancel_ack_timer(state)
     state = cancel_watchdog(state)
 
-    log(state, :info, "Re-probing sensor before initialization")
-
     state = %State{
       state
       | phase: :stale,
@@ -563,34 +545,29 @@ defmodule Octopus.Radar.Sensor do
         current_command: nil,
         buffer: <<>>,
         ack_buffer: <<>>,
-        ack_retries: 0,
-        last_track_count: nil
+        ack_retries: 0
     }
 
-    Radar.broadcast_status(state.device_id, :stale)
-    send_probe(state)
+    state |> set_status(:stale) |> send_probe()
   end
 
   defp enter_configuring(%State{} = state) do
-    log(state, :info, "Sensor responsive — starting initialization sequence")
-    Radar.broadcast_status(state.device_id, :initializing)
+    state =
+      %State{
+        state
+        | phase: :configuring,
+          pending_commands: Command.init_sequence(state.config),
+          current_command: nil,
+          buffer: <<>>,
+          ack_buffer: <<>>,
+          ack_retries: 0
+      }
+      |> set_status(:initializing)
 
-    %State{
-      state
-      | phase: :configuring,
-        pending_commands: Command.init_sequence(state.config),
-        current_command: nil,
-        buffer: <<>>,
-        ack_buffer: <<>>,
-        ack_retries: 0,
-        last_track_count: nil
-    }
-    |> send_next_command()
+    send_next_command(state)
   end
 
   defp enter_running_from_stream(%State{} = state, buffer) do
-    log(state, :info, "Streaming confirmed — entering :running phase")
-    Radar.broadcast_status(state.device_id, :working)
     timer = Process.send_after(self(), :frame_watchdog, @frame_timeout_ms)
 
     %State{
@@ -603,46 +580,33 @@ defmodule Octopus.Radar.Sensor do
         current_command: nil,
         pending_commands: []
     }
+    |> set_status(:working)
   end
 
-  defp write_command(cmd, %State{transport: transport, uart: uart, phase: phase} = state) do
+  defp write_command(cmd, %State{transport: transport, uart: uart} = state) do
     case try_attach_from_ack_buffer(state) do
       {:attach, state} ->
         state
 
       :no ->
-        log(
-          state,
-          if(phase == :configuring, do: :debug, else: :info),
-          "→ #{String.trim_trailing(cmd)}"
-        )
-
         case transport.write(uart, cmd) do
           :ok ->
             arm_ack_timer(%State{state | current_command: cmd, ack_buffer: <<>>})
 
           {:error, reason} ->
-            log(state, :warning, "UART write failed (#{inspect(reason)}) — reopening")
+            log(state, :debug, "UART write failed (#{inspect(reason)}) — reopening port")
             schedule_reopen(close_port(state))
         end
     end
   end
 
-  defp resend_command(
-         %State{transport: transport, uart: uart, current_command: cmd, phase: phase} = state
-       ) do
-    log(
-      state,
-      if(phase == :configuring, do: :debug, else: :info),
-      "→ #{String.trim_trailing(cmd)}"
-    )
-
-    case transport.write(uart, cmd) do
+  defp resend_command(%State{transport: transport, uart: uart} = state) do
+    case transport.write(uart, state.current_command) do
       :ok ->
         arm_ack_timer(state)
 
       {:error, reason} ->
-        log(state, :warning, "UART write failed (#{inspect(reason)}) — reopening")
+        log(state, :debug, "UART write failed (#{inspect(reason)}) — reopening port")
         schedule_reopen(close_port(state))
     end
   end
@@ -663,20 +627,12 @@ defmodule Octopus.Radar.Sensor do
         end
 
       {:ok, _buf} ->
-        log(state, :info, "← AT+OK — sensor responsive, starting initialization")
-
         state
         |> cancel_ack_timer()
         |> reset_ack_retries()
         |> enter_configuring()
 
       {:retry, buf} ->
-        log(
-          state,
-          :info,
-          "← Save Para Fail during probe — treating as responsive, starting initialization"
-        )
-
         state
         |> cancel_ack_timer()
         |> reset_ack_retries()
@@ -694,8 +650,6 @@ defmodule Octopus.Radar.Sensor do
         end
 
       {:ok, buf} ->
-        log(state, :debug, "← AT+OK")
-
         %State{} =
           state =
           state
@@ -706,8 +660,6 @@ defmodule Octopus.Radar.Sensor do
         send_next_command(state)
 
       {:retry, buf} ->
-        log(state, :warning, "← Save Para Fail — resending: #{inspect(state.current_command)}")
-
         %State{} =
           state =
           state
@@ -752,8 +704,6 @@ defmodule Octopus.Radar.Sensor do
   end
 
   defp reset_then_init(%State{transport: transport, uart: uart} = state) when not is_nil(uart) do
-    log(state, :info, "→ AT+RESET")
-
     case transport.write(uart, @reset_command) do
       :ok ->
         Process.send_after(self(), :post_reset_init, @post_reset_settle_ms)
@@ -768,7 +718,7 @@ defmodule Octopus.Radar.Sensor do
         }
 
       {:error, reason} ->
-        log(state, :warning, "AT+RESET write failed (#{inspect(reason)}) — initializing anyway")
+        log(state, :debug, "AT+RESET write failed (#{inspect(reason)}) — initializing anyway")
         enter_configuring(%State{state | recovery_stage: :normal})
     end
   end
@@ -786,7 +736,7 @@ defmodule Octopus.Radar.Sensor do
   defp try_attach_from_binary(binary, %State{} = state) when is_binary(binary) and binary != <<>> do
     case Protocol.feed(<<>>, binary) do
       {[_ | _], _, leftover} ->
-        log(state, :info, "Binary stream detected — attaching without re-init")
+        log(state, :debug, "Binary stream detected — attaching without re-init")
         {:attach, state |> cancel_ack_timer() |> cancel_watchdog() |> enter_running_from_stream(leftover)}
 
       _ ->
@@ -809,7 +759,7 @@ defmodule Octopus.Radar.Sensor do
     {frames, errors, leftover} = Protocol.feed(buffer, data)
 
     Enum.each(errors, fn {:error, reason, _frame_bin} ->
-      log(state, :warning, "Frame parse error: #{reason}")
+      log(state, :debug, "Frame parse error: #{reason}")
     end)
 
     %State{} = state = Enum.reduce(frames, state, &publish_frame/2)
@@ -825,47 +775,38 @@ defmodule Octopus.Radar.Sensor do
     state = cancel_watchdog(state)
     timer = Process.send_after(self(), :frame_watchdog, @frame_timeout_ms)
 
-    state = %State{
+    %State{
       state
       | last_frame_at: System.monotonic_time(:millisecond),
         watchdog_timer: timer
     }
+  end
 
-    track_count = length(frame.tracks)
+  ## Logging
 
-    if track_count != state.last_track_count do
-      ids = Enum.map_join(frame.tracks, ", ", &Integer.to_string(&1.id))
+  defp set_status(%State{last_ui_status: prev, device_id: device_id} = state, status) do
+    Radar.broadcast_status(device_id, status)
 
-      log(
-        state,
-        :info,
-        "Tracking #{track_count} person(s)" <>
-          if(track_count > 0, do: " (target IDs: #{ids})", else: "")
-      )
-
-      # Diagnostic: print the per-record fields at offset 0 and offset 4 so we
-      # can confirm field-order interpretation against actual hardware.
-      # Per both the HLK-LD6001A V1.1 manual §7.2.1 and the MS72SF1 V1.0
-      # datasheet §8.2, offset 0 is "reserved" and offset 4 is the track ID.
-      # If the offset-0 column is always 0 in real captures, the docs (and our
-      # parser) are correct. The nitram509/ld6001-ms72sf1-connector JS parser
-      # has these reversed.
-      if track_count > 0 do
-        rows =
-          Enum.map_join(frame.tracks, ", ", fn t ->
-            "{off0=#{t.reserved}, off4=#{t.id}}"
-          end)
-
-        log(state, :debug, "track field diagnostic: #{rows}")
-      end
-
-      %State{state | last_track_count: track_count}
+    if prev == status do
+      state
     else
+      state = %State{state | last_ui_status: status}
+      log_status_transition(state, status)
       state
     end
   end
 
-  ## Logging
+  defp log_status_transition(state, status) do
+    case status do
+      :working -> log(state, :info, "Online — streaming frames")
+      :unavailable -> log(state, :info, "Unavailable — waiting for serial port")
+      :stale -> log(state, :info, "Stale — recovering connection")
+      :initializing -> log(state, :debug, "Initializing")
+      :probing -> log(state, :debug, "Probing")
+      :resetting -> log(state, :debug, "Resetting")
+      _ -> :ok
+    end
+  end
 
   defp log(%State{device_id: id, port_name: port}, level, message) do
     Logger.log(level, "#{LogFormat.tag(id, port)} #{message}")

@@ -773,9 +773,20 @@ defmodule Octopus.Radar.Mock.World do
   defp clampf(v, lo, hi), do: v |> max(lo) |> min(hi)
 
   defp configured_radius_m do
-    Application.get_env(:octopus, Octopus.Radar, [])
-    |> Keyword.get(:mock, [])
-    |> Keyword.get(:radius_m, @default_radius_m)
+    case Application.get_env(:octopus, Octopus.Radar, [])
+         |> Keyword.get(:mock, [])
+         |> Keyword.get(:radius_m) do
+      nil -> default_radius_from_installation()
+      radius_m -> radius_m
+    end
+  end
+
+  defp default_radius_from_installation do
+    if Octopus.Installation.arrangement() == :circular do
+      Octopus.Installation.ring_radius_m()
+    else
+      @default_radius_m
+    end
   end
 
   defp configured_platform_radius_m do

@@ -82,11 +82,9 @@ defaults = [
 # All known radar setups, keyed by name. Select one per deployment with
 # RADAR_SETUP=<name>.
 setups = %{
-  # Local Mac development. Six mock sensors arranged in a radial circle.
-  # Runs mock-backed (boot_mock_mode :exact), so the placeholder ports below
-  # are never opened for real hardware. Tune the sensor-circle radius via
-  # :distance_cm, the mounting height via :height_cm, and the simulated
-  # world-disk radius (where mock people roam) via mock: [radius_m: ...].
+  # Local Mac development. Six sensors in a radial layout; placeholder ports
+  # below are fine when no hardware is attached. Switch to mock mode in the
+  # Radar UI or via RADAR_MOCK_MODE=exact|fuzzy when testing without hardware.
   "dev" => [
     defaults: defaults,
     layout: [
@@ -97,7 +95,7 @@ setups = %{
       rotation_deg: 90,
       height_cm: 500
     ],
-    # Mock mode never opens these ports for real, so placeholder paths are fine.
+    # Placeholder ports when no USB adapters are connected.
     ports: [
       "/dev/tty.mock-radar-1",
       "/dev/tty.mock-radar-2",
@@ -105,8 +103,7 @@ setups = %{
       "/dev/tty.mock-radar-4",
       "/dev/tty.mock-radar-5",
       "/dev/tty.mock-radar-6"
-    ],
-    mock: [radius_m: 9.0]
+    ]
   ],
 
   # metaebene.org production server — no radar hardware.
@@ -122,8 +119,7 @@ setups = %{
   # Adapter "FF" (sysfs 1-1.3, USB serial BDFFDFABCD) — sensors A,B,C (#1–#3)
   # Adapter "65" (sysfs 1-1.4, USB serial BD6545ABCD) — sensors D,E,F (#4–#6)
   #
-  # rotation_deg is relative to the outward beam direction; 90 matches the
-  # physical mounting direction.
+  # rotation_deg is relative to the outward beam direction.
   "redlady" => [
     defaults: defaults,
     layout: [
@@ -131,7 +127,7 @@ setups = %{
       count: 6,
       start_angle_deg: 0,
       distance_cm: 300,
-      rotation_deg: 90,
+      rotation_deg: 180,
       sensitivity: 4,
       moving_decisecs: 110,
       static_decisecs: 100,
@@ -185,12 +181,10 @@ enabled? =
     val -> val in ~w(true 1 yes)
   end
 
-# Boot-time mock mode (see Octopus.Radar.boot_mock_mode/0). The "dev" setup has
-# no real hardware, so it defaults to :exact (mock-backed sensors stream a
-# simulated crowd from boot); all other setups default to :off (real serial).
-# Override anywhere with RADAR_MOCK_MODE=off|exact|fuzzy.
+# Boot-time mock mode (see Octopus.Radar.boot_mock_mode/0). Defaults to :off
+# (live serial sensors). Override with RADAR_MOCK_MODE=exact|fuzzy.
 boot_mock_mode =
-  System.get_env("RADAR_MOCK_MODE", if(setup_name == "dev", do: "exact", else: "off"))
+  System.get_env("RADAR_MOCK_MODE", "off")
   |> String.to_existing_atom()
 
 config :octopus,

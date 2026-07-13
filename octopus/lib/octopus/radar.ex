@@ -113,7 +113,7 @@ defmodule Octopus.Radar do
   use Supervisor
   require Logger
 
-  alias Octopus.Radar.{LogFormat, Mock, Runtime, Sensor}
+  alias Octopus.Radar.{LogFormat, Mock, PoseTweak, Runtime, Sensor}
 
   @topic "radar:hlk6001"
   @supported_types [:ld6001a]
@@ -428,8 +428,16 @@ defmodule Octopus.Radar do
   @spec world_radius_m() :: float()
   def world_radius_m do
     case Process.whereis(Mock.World) do
-      nil -> 8.0
+      nil -> default_world_radius_m()
       _pid -> Mock.World.radius_m()
+    end
+  end
+
+  defp default_world_radius_m do
+    if Octopus.Installation.arrangement() == :circular do
+      Octopus.Installation.ring_radius_m()
+    else
+      8.0
     end
   end
 
@@ -518,6 +526,66 @@ defmodule Octopus.Radar do
   defdelegate reset_stats(), to: Octopus.Radar.Stats, as: :reset
 
   @doc """
+  Return `true` when the active radar setup uses a `:radial` layout block.
+
+  Runtime pose sliders in the radar UI are only shown in this configuration.
+  """
+  @spec radial_layout?() :: boolean()
+  def radial_layout? do
+    enabled?() and radial_layout_config?()
+  end
+
+  @doc """
+  Starting bearing (degrees) for the first sensor in a radial layout.
+
+  Reads the runtime tweak when present, otherwise the value from config.
+  """
+  @spec layout_start_angle_deg() :: number()
+  def layout_start_angle_deg do
+    cond do
+      Process.whereis(PoseTweak) -> PoseTweak.layout_start_angle_deg()
+      radial_layout_config?() -> config_layout_start_angle_deg()
+      true -> 0
+    end
+  end
+
+  @doc """
+  Global offset (degrees) added to every sensor's `:angle_deg` at runtime.
+
+  Used to rotate the installation coordinate frame without reassigning ports.
+  """
+  @spec angle_offset_deg() :: number()
+  def angle_offset_deg do
+    if Process.whereis(PoseTweak), do: PoseTweak.angle_offset_deg(), else: 0
+  end
+
+  @doc """
+  Set the radial layout's starting angle (which port sits at which bearing).
+
+  Not persisted across restarts. Updates live sensor pose configs immediately.
+  """
+  @spec set_layout_start_angle_deg(number()) :: :ok
+  def set_layout_start_angle_deg(deg) when is_number(deg) do
+    PoseTweak.set_layout_start_angle_deg(deg)
+    apply_pose_tweaks()
+    broadcast_pose_tweak_changed()
+    :ok
+  end
+
+  @doc """
+  Set a global offset applied to every sensor's `:angle_deg`.
+
+  Not persisted across restarts. Updates live sensor pose configs immediately.
+  """
+  @spec set_angle_offset_deg(number()) :: :ok
+  def set_angle_offset_deg(deg) when is_number(deg) do
+    PoseTweak.set_angle_offset_deg(deg)
+    apply_pose_tweaks()
+    broadcast_pose_tweak_changed()
+    :ok
+  end
+
+  @doc """
   Enable a sensor at runtime, starting its process if not already running.
 
   This overrides an `enabled: false` config entry for the current runtime
@@ -587,6 +655,7 @@ defmodule Octopus.Radar do
       [
         {Registry, keys: :unique, name: Octopus.Radar.Registry},
         {Runtime, initial_runtime},
+        {PoseTweak, []},
         Octopus.Radar.StatusHistory,
         Octopus.Radar.Stats,
         {Mock.World, [mode: boot_mock_mode()]}
@@ -601,6 +670,22 @@ defmodule Octopus.Radar do
   defp sensor_children do
     mode = boot_mock_mode()
 
+    missing_at_boot =
+      if mode == :off do
+        sensor_configs()
+        |> Enum.filter(fn {_id, cfg} ->
+          Keyword.fetch!(cfg, :enabled) and not File.exists?(Keyword.fetch!(cfg, :port))
+        end)
+      else
+        []
+      end
+
+    if missing_at_boot != [] do
+      Logger.info(
+        "[radar] #{length(missing_at_boot)} sensor(s) waiting for serial port at boot"
+      )
+    end
+
     sensor_configs()
     |> Enum.flat_map(fn {device_id, config} ->
       port = Keyword.fetch!(config, :port)
@@ -608,16 +693,10 @@ defmodule Octopus.Radar do
 
       cond do
         not enabled? ->
-          Logger.info("#{LogFormat.tag(device_id, port)} Sensor disabled in config — skipping")
+          Logger.debug("#{LogFormat.tag(device_id, port)} Sensor disabled in config — skipping")
           []
 
         true ->
-          if mode == :off and not File.exists?(port) do
-            Logger.info(
-              "#{LogFormat.tag(device_id, port)} Configured port not present at boot — starting sensor (will retry until available)"
-            )
-          end
-
           device_child_specs(device_id, config, mode)
       end
     end)
@@ -778,6 +857,7 @@ defmodule Octopus.Radar do
       config =
         defaults
         |> Keyword.merge(sensor_opts)
+        |> maybe_apply_pose_tweaks()
         |> normalize_sensor_config(index)
 
       {index, config}
@@ -828,6 +908,7 @@ defmodule Octopus.Radar do
         merged_defaults
         |> Keyword.merge(pose_opts)
         |> Keyword.merge(port_opts)
+        |> maybe_apply_pose_tweaks()
         |> normalize_sensor_config(index)
 
       {index, config}
@@ -844,11 +925,11 @@ defmodule Octopus.Radar do
             "radar layout: :count must be a positive integer, got #{inspect(count)}"
     end
 
-    start_angle = Keyword.get(layout, :start_angle_deg, 0)
+    start_angle = effective_layout_start_angle(layout)
     step = 360.0 / count
 
     Enum.map(0..(count - 1), fn i ->
-      [angle_deg: start_angle + i * step]
+      [angle_deg: PoseTweak.normalize_deg(start_angle + i * step)]
     end)
   end
 
@@ -893,5 +974,78 @@ defmodule Octopus.Radar do
     end
 
     config
+  end
+
+  defp radial_layout_config? do
+    case Application.get_env(:octopus, __MODULE__, []) |> Keyword.get(:layout) do
+      [type: :radial] -> true
+      layout when is_list(layout) -> Keyword.get(layout, :type) == :radial
+      _ -> false
+    end
+  end
+
+  defp effective_layout_start_angle(layout) do
+    if Process.whereis(PoseTweak) do
+      PoseTweak.layout_start_angle_deg()
+    else
+      config_layout_start_angle_deg(layout)
+    end
+  end
+
+  defp config_layout_start_angle_deg(layout \\ nil) do
+    layout =
+      layout ||
+        case Application.get_env(:octopus, __MODULE__, []) |> Keyword.get(:layout) do
+          nil -> []
+          kw -> kw
+        end
+
+    Keyword.get(layout, :start_angle_deg, 0) * 1.0
+  end
+
+  defp effective_angle_offset do
+    if Process.whereis(PoseTweak), do: PoseTweak.angle_offset_deg(), else: 0.0
+  end
+
+  defp maybe_apply_pose_tweaks(config) do
+    if radial_layout_config?() do
+      rotation =
+        config
+        |> Keyword.get(:rotation_deg, 0)
+        |> Kernel.+(effective_angle_offset())
+        |> PoseTweak.normalize_deg()
+
+      Keyword.put(config, :rotation_deg, rotation)
+    else
+      config
+    end
+  end
+
+  defp apply_pose_tweaks do
+    sensor_configs()
+    |> Enum.each(fn {device_id, config} ->
+      Sensor.update_config(device_id, config)
+      update_mock_config(device_id, config)
+    end)
+  end
+
+  defp update_mock_config(device_id, config) do
+    try do
+      Mock.Server.update_config(mock_via(device_id), config)
+    catch
+      :exit, {:noproc, _} -> :ok
+    end
+  end
+
+  defp broadcast_pose_tweak_changed do
+    Phoenix.PubSub.broadcast(
+      Octopus.PubSub,
+      topic(),
+      {:pose_tweak_changed,
+       %{
+         layout_start_angle_deg: layout_start_angle_deg(),
+         angle_offset_deg: angle_offset_deg()
+       }}
+    )
   end
 end
