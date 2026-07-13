@@ -24,7 +24,7 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
     test "returns presets with valid formulas and scene fields" do
       presets = ScenePresets.builtins()
 
-      assert length(presets) == 27
+      assert length(presets) == 28
 
       for preset <- presets do
         assert preset.builtin
@@ -101,8 +101,8 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
 
       assert facetten_config.rot_auto == true
       assert facetten_config.zoom_auto == true
-      assert_in_delta facetten_config.rot_auto_range, 30.0, 0.0001
-      assert_in_delta facetten_config.zoom_auto_range, 1.4, 0.0001
+      assert_in_delta facetten_config.rot_auto_range, 60.0, 0.0001
+      assert_in_delta facetten_config.zoom_auto_range, 1.05, 0.0001
 
       globus_config = ScenePresets.to_config(ScenePresets.get("builtin:globus"))
       assert_in_delta globus_config.roll_rate, 6.0, 0.0001
@@ -114,8 +114,8 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
 
       kipp_config = ScenePresets.to_config(ScenePresets.get("builtin:kippende_baender"))
       assert kipp_config.rot_auto == true
-      assert_in_delta kipp_config.rot_auto_range, 20.0, 0.0001
-      assert_in_delta kipp_config.rot_auto_interval, 40.0, 0.0001
+      assert_in_delta kipp_config.rot_auto_range, 45.0, 0.0001
+      assert_in_delta kipp_config.rot_auto_interval, 60.0, 0.0001
     end
 
     test "config_matches? identifies each new builtin against its own config" do

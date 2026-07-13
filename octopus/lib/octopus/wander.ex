@@ -43,22 +43,37 @@ defmodule Octopus.Wander do
 
   @doc """
   Step a wanderer. Scalar opts: `%{min:, max:, interval:}`. Vector opts: `%{mins:, maxs:, interval:}`.
+
+  Optional `:bias` key: `:pingpong` picks each new target in the opposite half of
+  the midpoint from the current value, guaranteeing back-and-forth motion across
+  the center. Default (`nil`) picks freely-random targets in range.
   """
-  def step(%__MODULE__{} = w, now, %{min: min, max: max, interval: interval})
+  def step(%__MODULE__{} = w, now, %{min: min, max: max, interval: interval} = opts)
       when is_number(now) and is_number(min) and is_number(max) and is_number(interval) and
              tuple_size(w.value) == 1 do
     {value, next} =
-      step_vec(w, now, %{mins: {min * 1.0}, maxs: {max * 1.0}, interval: interval * 1.0})
+      step_vec(w, now, %{
+        mins: {min * 1.0},
+        maxs: {max * 1.0},
+        interval: interval * 1.0,
+        bias: Map.get(opts, :bias)
+      })
 
     {elem(value, 0), next}
   end
 
-  def step(%__MODULE__{} = w, now, %{mins: mins, maxs: maxs, interval: interval})
+  def step(%__MODULE__{} = w, now, %{mins: mins, maxs: maxs, interval: interval} = opts)
       when is_number(now) and is_tuple(mins) and is_tuple(maxs) and is_number(interval) do
-    step_vec(w, now, %{mins: mins, maxs: maxs, interval: interval * 1.0})
+    step_vec(w, now, %{
+      mins: mins,
+      maxs: maxs,
+      interval: interval * 1.0,
+      bias: Map.get(opts, :bias)
+    })
   end
 
-  defp step_vec(%__MODULE__{} = w, now, %{mins: mins, maxs: maxs, interval: interval}) do
+  defp step_vec(%__MODULE__{} = w, now, %{mins: mins, maxs: maxs, interval: interval} = opts) do
+    bias = Map.get(opts, :bias)
     n = tuple_size(w.value)
     true = tuple_size(mins) == n and tuple_size(maxs) == n
 
@@ -72,15 +87,15 @@ defmodule Octopus.Wander do
       held = clamp_vec(w.value, bounds)
       {held, %{w | value: held, seg_start: :pending}}
     else
-      w = ensure_in_range(w, now, bounds, interval)
+      w = ensure_in_range(w, now, bounds, interval, bias)
 
       case w.seg_start do
         :pending ->
-          next = roll_segment(w, now, bounds, interval)
+          next = roll_segment(w, now, bounds, interval, bias)
           {clamp_vec(next.value, bounds), next}
 
         _ ->
-          w = maybe_retarget_for_range(w, now, bounds, interval)
+          w = maybe_retarget_for_range(w, now, bounds, interval, bias)
           p = clamp_scalar((now - w.seg_start) / max(w.seg_dur, 1.0e-9), 0.0, 1.0)
           e = ease(w.easing, p)
 
@@ -92,7 +107,7 @@ defmodule Octopus.Wander do
 
           if p >= 1.0 do
             finalized = %{w | value: clamp_vec(w.target, bounds)}
-            next = roll_segment(finalized, now, bounds, interval)
+            next = roll_segment(finalized, now, bounds, interval, bias)
             {finalized.value, next}
           else
             value = clamp_vec(value, bounds)
@@ -123,30 +138,30 @@ defmodule Octopus.Wander do
     end
   end
 
-  defp ensure_in_range(%__MODULE__{} = w, now, bounds, interval) do
+  defp ensure_in_range(%__MODULE__{} = w, now, bounds, interval, bias) do
     if out_of_bounds?(w.value, bounds) do
       clamped = clamp_vec(w.value, bounds)
-      roll_segment(%{w | value: clamped, seg_from: clamped}, now, bounds, interval)
+      roll_segment(%{w | value: clamped, seg_from: clamped}, now, bounds, interval, bias)
     else
       w
     end
   end
 
-  defp maybe_retarget_for_range(%__MODULE__{} = w, now, bounds, interval) do
+  defp maybe_retarget_for_range(%__MODULE__{} = w, now, bounds, interval, bias) do
     if out_of_bounds?(w.target, bounds) do
-      roll_segment(%{w | seg_from: w.value, value: w.value}, now, bounds, interval)
+      roll_segment(%{w | seg_from: w.value, value: w.value}, now, bounds, interval, bias)
     else
       w
     end
   end
 
-  defp roll_segment(%__MODULE__{} = w, now, bounds, interval) do
+  defp roll_segment(%__MODULE__{} = w, now, bounds, interval, bias) do
     n = tuple_size(w.value)
 
     target =
       for i <- 0..(n - 1) do
         {lo, hi} = elem(bounds, i)
-        lo + :rand.uniform() * (hi - lo)
+        pick_target(bias, elem(w.value, i), lo, hi)
       end
       |> List.to_tuple()
 
@@ -164,6 +179,23 @@ defmodule Octopus.Wander do
         value: w.value
     }
   end
+
+  # Pick a segment target within [lo, hi]. `:pingpong` biases the target to the
+  # opposite half of the midpoint from the current value so motion crosses center;
+  # a degenerate range (lo == hi) just returns lo.
+  defp pick_target(_bias, _cur, lo, hi) when hi - lo <= 1.0e-12, do: lo
+
+  defp pick_target(:pingpong, cur, lo, hi) do
+    mid = (lo + hi) / 2.0
+
+    if cur >= mid do
+      lo + :rand.uniform() * (mid - lo)
+    else
+      mid + :rand.uniform() * (hi - mid)
+    end
+  end
+
+  defp pick_target(_bias, _cur, lo, hi), do: lo + :rand.uniform() * (hi - lo)
 
   defp out_of_bounds?(vec, bounds) do
     Enum.any?(0..(tuple_size(vec) - 1), fn i ->

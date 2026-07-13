@@ -424,7 +424,7 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
       assert_in_delta updated.palette_phase, 0.4, 1.0e-12
     end
 
-    test "auto toggle on seeds wanderer at manual base; off clears wanderer" do
+    test "auto toggle on seeds X offset at 0 and Y at manual base; off clears wanderer" do
       state = base_state(%{orbit_rate: 1.5, elev_base: 0.5, trans_auto: false, seconds: 5.0})
 
       {:noreply, on} =
@@ -434,22 +434,24 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
         )
 
       assert on.trans_auto == true
+      # X wanders a horizontal position offset around 0 (not the manual rate); Y around elev_base.
       assert %Octopus.Wander{value: {vx, vy}} = on.auto_wanderers[:trans]
-      assert_in_delta vx, 1.5, 1.0e-12
+      assert_in_delta vx, 0.0, 1.0e-12
       assert_in_delta vy, 0.5, 1.0e-12
 
       {:noreply, stepped} = pixel_fun_handle_info(:tick, on)
-      assert_in_delta elem(stepped.auto_wanderers[:trans].value, 0), 1.5, 0.05
+      assert_in_delta elem(stepped.auto_wanderers[:trans].value, 0), 0.0, 0.05
 
       {:noreply, off} =
         pixel_fun_handle_config(%{trans_auto: false, orbit_rate: 1.5, elev_base: 0.5}, stepped)
 
       assert off.trans_auto == false
       refute Map.has_key?(off.auto_wanderers, :trans)
+      # Manual scroll rate is left untouched when auto resets.
       assert_in_delta off.orbit_rate, 1.5, 1.0e-12
     end
 
-    test "sat auto wanders between min/max; off hands live value to slider" do
+    test "sat auto wanders between min/max; off resets to base saturation" do
       state =
         base_state(%{
           saturation_percent: 70,
@@ -491,7 +493,8 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
 
       assert off.sat_auto == false
       refute Map.has_key?(off.auto_wanderers, :sat)
-      assert off.saturation_percent == trunc(live)
+      # Auto off resets to the base saturation, discarding the wandered value.
+      assert off.saturation_percent == 70
     end
 
     test "frozen time does not advance wanderers" do
@@ -516,11 +519,12 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
       assert still.auto_wanderers[:trans] == w1
       assert still.seconds == running.seconds
     end
-    test "toggle-off hands live wanderer values to sliders" do
+    test "toggle-off resets translate to base (no pan offset baked in)" do
       state =
         base_state(%{
           orbit_rate: 0.0,
           elev_base: 0.0,
+          yaw_angle: 0.0,
           trans_auto: true,
           seconds: 5.0,
           auto_wanderers: %{
@@ -539,9 +543,184 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
         pixel_fun_handle_config(%{trans_auto: false, pixel_fun_units: 2}, state)
 
       assert off.trans_auto == false
-      assert_in_delta off.orbit_rate, 2.5, 1.0e-12
-      assert_in_delta off.elev_base, -1.0, 1.0e-12
+      # Auto off resets: the wandered X/Y are discarded, base yaw/elev are kept.
+      assert_in_delta off.orbit_rate, 0.0, 1.0e-12
+      assert_in_delta off.yaw_angle, 0.0, 1.0e-9
+      assert_in_delta off.elev_base, 0.0, 1.0e-12
       refute Map.has_key?(off.auto_wanderers, :trans)
+    end
+
+    test "trans_auto pans via yaw offset and suppresses manual scroll" do
+      :rand.seed(:exsss, {7, 8, 9})
+
+      state =
+        base_state(%{
+          trans_auto: true,
+          orbit_rate: 5.0,
+          elev_base: 0.0,
+          trans_auto_range_x: 40.0,
+          trans_auto_range_y: 2.0,
+          trans_auto_interval: 4.0,
+          seconds: 1.0,
+          yaw_angle: 0.0,
+          auto_wanderers: %{trans: Octopus.Wander.new({0.0, 0.0})}
+        })
+
+      {:noreply, stepped} =
+        Enum.reduce(1..90, {:noreply, state}, fn _, {:noreply, s} ->
+          pixel_fun_handle_info(:tick, s)
+        end)
+
+      # Manual scroll (orbit_rate) is paused while auto pans, so yaw does not integrate.
+      assert_in_delta stepped.yaw_angle, 0.0, 1.0e-9
+      # The pan offset (X) wandered away from center, within range.
+      {vx, _vy} = stepped.auto_wanderers[:trans].value
+      assert abs(vx) > 1.0e-6
+      assert vx >= -40.0 - 1.0e-6 and vx <= 40.0 + 1.0e-6
+    end
+
+    test "manual scroll integrates yaw when trans_auto off" do
+      state = base_state(%{trans_auto: false, orbit_rate: 5.0, yaw_angle: 0.0, seconds: 1.0})
+
+      {:noreply, stepped} =
+        Enum.reduce(1..30, {:noreply, state}, fn _, {:noreply, s} ->
+          pixel_fun_handle_info(:tick, s)
+        end)
+
+      assert stepped.yaw_angle > 0.0
+    end
+
+    test "rot_auto drives roll via eased sweeps and picks a pivot; manual rate paused" do
+      :rand.seed(:exsss, {11, 22, 33})
+
+      state =
+        base_state(%{
+          rot_auto: true,
+          roll_rate: 90.0,
+          roll_angle: 0.0,
+          rot_auto_range: 60.0,
+          rot_auto_interval: 4.0,
+          seconds: 1.0,
+          auto_wanderers: %{}
+        })
+
+      {:noreply, stepped} =
+        Enum.reduce(1..60, {:noreply, state}, fn _, {:noreply, s} ->
+          pixel_fun_handle_info(:tick, s)
+        end)
+
+      # A sweep pivot was chosen within the ring.
+      assert is_number(stepped.rot_auto_pivot)
+      assert stepped.rot_auto_pivot >= 0.0
+      assert stepped.rot_auto_pivot <= Octopus.Installation.num_panels() - 1
+
+      # Roll angle tracks the eased sweep (baseline + amp*ease), NOT the manual
+      # 90°/s integration. Mid-sweep the value is off baseline and within range.
+      wa = stepped.auto_wanderers[:rot].value
+      assert_in_delta stepped.roll_angle, wa, 1.0e-9
+      assert abs(wa) > 1.0e-6
+      assert abs(wa) <= 60.0 * :math.pi() / 180.0 + 1.0e-9
+    end
+
+    test "rot_auto rerolls the pivot on each new sweep" do
+      :rand.seed(:exsss, {5, 5, 5})
+
+      state =
+        base_state(%{
+          rot_auto: true,
+          roll_angle: 0.0,
+          rot_auto_range: 60.0,
+          rot_auto_interval: 0.3,
+          seconds: 1.0,
+          auto_wanderers: %{}
+        })
+
+      {_final, pivots} =
+        Enum.reduce(1..400, {state, MapSet.new()}, fn _, {s, seen} ->
+          {:noreply, next} = pixel_fun_handle_info(:tick, s)
+          {next, MapSet.put(seen, next.rot_auto_pivot)}
+        end)
+
+      assert MapSet.size(pivots) >= 2
+
+      assert Enum.all?(pivots, fn p ->
+               p >= 0.0 and p <= Octopus.Installation.num_panels() - 1
+             end)
+    end
+
+    test "rot_auto out-and-back returns to baseline without drift and stays in range" do
+      :rand.seed(:exsss, {7, 8, 9})
+
+      range_rad = 60.0 * :math.pi() / 180.0
+
+      state =
+        base_state(%{
+          rot_auto: true,
+          roll_rate: 90.0,
+          roll_angle: 0.0,
+          rot_auto_range: 60.0,
+          rot_auto_interval: 1.0,
+          seconds: 1.0,
+          auto_wanderers: %{}
+        })
+
+      {_final, rolls} =
+        Enum.reduce(1..900, {state, []}, fn _, {s, acc} ->
+          {:noreply, next} = pixel_fun_handle_info(:tick, s)
+          {next, [next.roll_angle | acc]}
+        end)
+
+      rolls = Enum.reverse(rolls)
+
+      # Never drifts beyond the configured amplitude (both directions).
+      assert Enum.all?(rolls, fn r -> abs(r) <= range_rad + 1.0e-6 end)
+
+      # Swings both ways (two equal, opposite rotations per cycle).
+      assert Enum.min(rolls) < -1.0e-3
+      assert Enum.max(rolls) > 1.0e-3
+
+      # Returns to baseline (0) repeatedly — the pause holds it exactly upright,
+      # so 0.0 shows up many times across the run (no residual drift/jump).
+      zeros = Enum.count(rolls, fn r -> abs(r) < 1.0e-9 end)
+      assert zeros > 5
+    end
+
+    test "rot_auto toggle-off resets roll angle to zero and clears pivot" do
+      state =
+        base_state(%{
+          rot_auto: true,
+          roll_rate: 10.0,
+          roll_angle: 1.25,
+          rot_auto_pivot: 3.0,
+          seconds: 5.0,
+          auto_wanderers: %{rot: Octopus.Wander.new(1.25)}
+        })
+
+      {:noreply, off} =
+        pixel_fun_handle_config(%{rot_auto: false, roll_rate: 10.0, pixel_fun_units: 2}, state)
+
+      assert off.rot_auto == false
+      # Auto off resets: the wall snaps upright and the auto pivot is dropped.
+      assert_in_delta off.roll_angle, 0.0, 1.0e-9
+      assert off.rot_auto_pivot == nil
+      refute Map.has_key?(off.auto_wanderers, :rot)
+      # Manual rate is left untouched.
+      assert_in_delta off.roll_rate, 10.0, 1.0e-12
+    end
+
+    test "pingpong bias picks targets on alternating sides of the midpoint" do
+      :rand.seed(:exsss, {1, 2, 3})
+
+      # Start above the midpoint (5.0) → first rolled target must land below it.
+      w = Octopus.Wander.new(10.0)
+      opts = %{min: 0.0, max: 10.0, interval: 4.0, bias: :pingpong}
+
+      {_v, w1} = Octopus.Wander.step(w, 0.0, opts)
+      assert elem(w1.target, 0) <= 5.0
+
+      # Finish that segment so a new one rolls from below the midpoint → target above it.
+      {_v, w2} = Octopus.Wander.step(w1, w1.seg_start + w1.seg_dur + 0.001, opts)
+      assert elem(w2.target, 0) >= 5.0
     end
 
     test "formula_seconds reverses continuously without jump" do

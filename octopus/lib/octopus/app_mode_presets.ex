@@ -274,6 +274,12 @@ defmodule Octopus.AppModePresets do
           |> preset_changeset(attrs)
           |> Repo.insert()
 
+        # Keep builtin presets in sync with the code defaults; leave user presets alone.
+        %{origin: "builtin"} = record ->
+          record
+          |> preset_changeset(attrs)
+          |> Repo.update()
+
         _record ->
           :ok
       end
