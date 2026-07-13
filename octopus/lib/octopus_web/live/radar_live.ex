@@ -50,7 +50,7 @@ defmodule OctopusWeb.RadarLive do
   @trail_l_far 95
 
   # SVG viewBox extent. The template hardcodes the matching string. The
-  # layout uses an `aspect-square` container so circles always render
+  # canvas wrapper keeps a square aspect ratio so circles always render
   # circular regardless of the X/Y data ranges.
   @vb 1000
 
@@ -933,149 +933,126 @@ defmodule OctopusWeb.RadarLive do
       |> assign(:detection_fixed_r, @detection_fixed_r)
 
     ~H"""
-    <div class="container mx-auto p-4">
-      <div class="card bg-base-100 shadow-md">
-        <div class="card-body flex flex-col gap-3 min-h-0">
-          <div class="flex items-center justify-between gap-4 shrink-0">
-            <h1 class="card-title text-2xl">Radar</h1>
-            <%= cond do %>
-              <% not @radar_configured -> %>
-                <span class="text-sm opacity-70">
-                  Radar not defined for this installation
-                </span>
-              <% @source_mode == :off -> %>
-                <span class="text-sm opacity-70">
-                  Source off · {length(@layout_devices)} sensor{if length(@layout_devices) == 1,
-                    do: "",
-                    else: "s"} planned
-                </span>
-              <% @devices == [] -> %>
-                <span class="text-sm opacity-70">No sensors active</span>
-              <% true -> %>
-                <span class="text-sm opacity-70">
-                  {length(@devices)} sensor{if length(@devices) == 1, do: "", else: "s"}
-                </span>
-            <% end %>
+    <%= if not @radar_configured do %>
+      <div class="p-4">
+        <div class="alert alert-info">
+          <span>
+            Add a <code>:radar</code> block to the active installation module to use radar.
+          </span>
+        </div>
+      </div>
+    <% else %>
+      <div class="flex flex-row flex-nowrap w-full h-[calc(100vh-2.5rem)] min-h-0 items-stretch">
+        <div class="w-64 shrink-0 h-full overflow-y-auto flex flex-col gap-3 p-3 border-r border-base-300 bg-base-100">
+          <div class="flex flex-col gap-2">
+            <p class="text-xs font-semibold opacity-70">Detections</p>
+            <div class="join w-full" id="radar-detection-list-mode">
+              <button
+                type="button"
+                phx-click="set_detection_list_mode"
+                phx-value-mode="sensor"
+                class={[
+                  "btn btn-sm join-item flex-1",
+                  if(@detection_list_mode == :by_sensor, do: "btn-primary", else: "btn-outline")
+                ]}
+              >
+                By sensor
+              </button>
+              <button
+                type="button"
+                phx-click="set_detection_list_mode"
+                phx-value-mode="proximity"
+                class={[
+                  "btn btn-sm join-item flex-1",
+                  if(@detection_list_mode == :by_proximity, do: "btn-primary", else: "btn-outline")
+                ]}
+              >
+                By proximity
+              </button>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <label for="radar-coords-frame" class="text-xs font-semibold opacity-70">
+                Local coordinates
+              </label>
+              <input
+                id="radar-coords-frame"
+                type="checkbox"
+                class="toggle toggle-sm toggle-primary"
+                checked={@coords_frame == :local}
+                phx-click="toggle_coords_frame"
+              />
+            </div>
           </div>
 
-          <%= if not @radar_configured do %>
-            <div class="alert alert-info mt-4">
-              <span>
-                Add a <code>:radar</code> block to the active installation module to use radar.
-              </span>
-            </div>
+          <%= if @detection_list == [] do %>
+            <p class="text-sm opacity-50 italic">No detections</p>
           <% else %>
-              <div class="flex flex-row flex-nowrap gap-4 min-h-0 items-stretch">
-                <div class="w-64 shrink-0 overflow-y-auto flex flex-col gap-3 max-h-[calc(100vh-9rem)]">
-                  <div class="flex flex-col gap-2">
-                    <p class="text-xs font-semibold opacity-70">Detections</p>
-                    <div class="join w-full" id="radar-detection-list-mode">
-                      <button
-                        type="button"
-                        phx-click="set_detection_list_mode"
-                        phx-value-mode="sensor"
-                        class={[
-                          "btn btn-sm join-item flex-1",
-                          if(@detection_list_mode == :by_sensor, do: "btn-primary", else: "btn-outline")
-                        ]}
-                      >
-                        By sensor
-                      </button>
-                      <button
-                        type="button"
-                        phx-click="set_detection_list_mode"
-                        phx-value-mode="proximity"
-                        class={[
-                          "btn btn-sm join-item flex-1",
-                          if(@detection_list_mode == :by_proximity, do: "btn-primary", else: "btn-outline")
-                        ]}
-                      >
-                        By proximity
-                      </button>
-                    </div>
-                    <div class="flex items-center justify-between gap-2">
-                      <label for="radar-coords-frame" class="text-xs font-semibold opacity-70">
-                        Local coordinates
-                      </label>
-                      <input
-                        id="radar-coords-frame"
-                        type="checkbox"
-                        class="toggle toggle-sm toggle-primary"
-                        checked={@coords_frame == :local}
-                        phx-click="toggle_coords_frame"
+            <div class="flex flex-col gap-3">
+              <%= for group <- @detection_list do %>
+                <div class="flex flex-col gap-1">
+                  <%= if group.type == :sensor_group do %>
+                    <p class="text-xs font-semibold flex items-center gap-1.5">
+                      <span
+                        class="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+                        style={"background-color: #{group.color}"}
                       />
-                    </div>
-                  </div>
-
-                  <%= if @detection_list == [] do %>
-                    <p class="text-sm opacity-50 italic">No detections</p>
+                      Sensor {group.letter}
+                      <span class="font-normal opacity-60">({length(group.items)})</span>
+                    </p>
                   <% else %>
-                    <div class="flex flex-col gap-3">
-                      <%= for group <- @detection_list do %>
-                        <div class="flex flex-col gap-1">
-                          <%= if group.type == :sensor_group do %>
-                            <p class="text-xs font-semibold flex items-center gap-1.5">
-                              <span
-                                class="inline-block w-2.5 h-2.5 rounded-full shrink-0"
-                                style={"background-color: #{group.color}"}
-                              />
-                              Sensor {group.letter}
-                              <span class="font-normal opacity-60">({length(group.items)})</span>
-                            </p>
-                          <% else %>
-                            <p class="text-xs font-semibold opacity-80">
-                              Group {group.id}
-                              <span class="font-normal opacity-60">
-                                · {length(group.items)} · {fmt_m(group.span_m)} spread
-                              </span>
-                            </p>
-                          <% end %>
-                          <ul class="flex flex-col gap-1">
-                            <%= for item <- group.items do %>
-                              <li
-                                class="text-xs font-mono rounded px-2 py-1.5 bg-base-200/80 border border-base-300/60"
-                                style={"opacity: #{fmt_f(item.opacity)}"}
-                              >
-                                <div class="flex items-center justify-between gap-2">
-                                  <span class="flex items-center gap-1.5 min-w-0">
-                                    <span
-                                      class="inline-block w-2 h-2 rounded-full shrink-0"
-                                      style={"background-color: #{item.color}"}
-                                    />
-                                    <span class="font-bold">{item.label}</span>
-                                  </span>
-                                  <%= if item.speed > 0.05 do %>
-                                    <span class="opacity-60 shrink-0">{fmt_m(item.speed)}/s</span>
-                                  <% end %>
-                                </div>
-                                <div class="opacity-70 mt-0.5 tabular-nums">
-                                  <%= if @coords_frame == :local do %>
-                                    x {fmt_m(item.lx)} · y {fmt_m(item.ly)} · z {fmt_m(item.lz)}
-                                  <% else %>
-                                    x {fmt_m(item.x)} · y {fmt_m(item.y)} · z {fmt_m(item.z)}
-                                  <% end %>
-                                </div>
-                              </li>
-                            <% end %>
-                          </ul>
-                        </div>
-                      <% end %>
-                    </div>
+                    <p class="text-xs font-semibold opacity-80">
+                      Group {group.id}
+                      <span class="font-normal opacity-60">
+                        · {length(group.items)} · {fmt_m(group.span_m)} spread
+                      </span>
+                    </p>
                   <% end %>
+                  <ul class="flex flex-col gap-1">
+                    <%= for item <- group.items do %>
+                      <li
+                        class="text-xs font-mono rounded px-2 py-1.5 bg-base-200/80 border border-base-300/60"
+                        style={"opacity: #{fmt_f(item.opacity)}"}
+                      >
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="flex items-center gap-1.5 min-w-0">
+                            <span
+                              class="inline-block w-2 h-2 rounded-full shrink-0"
+                              style={"background-color: #{item.color}"}
+                            />
+                            <span class="font-bold">{item.label}</span>
+                          </span>
+                          <%= if item.speed > 0.05 do %>
+                            <span class="opacity-60 shrink-0">{fmt_m(item.speed)}/s</span>
+                          <% end %>
+                        </div>
+                        <div class="opacity-70 mt-0.5 tabular-nums">
+                          <%= if @coords_frame == :local do %>
+                            x {fmt_m(item.lx)} · y {fmt_m(item.ly)} · z {fmt_m(item.lz)}
+                          <% else %>
+                            x {fmt_m(item.x)} · y {fmt_m(item.y)} · z {fmt_m(item.z)}
+                          <% end %>
+                        </div>
+                      </li>
+                    <% end %>
+                  </ul>
                 </div>
+              <% end %>
+            </div>
+          <% end %>
+        </div>
 
-                <div class="flex-1 min-w-0 min-h-0 flex items-center justify-center">
-                  <div
-                    class="aspect-square bg-base-200 rounded w-full max-h-[calc(100vh-9rem)]"
-                    style="height: min(calc(100vh - 9rem), 100%);"
-                  >
-                    <svg
-                      id="radar-map"
-                      viewBox="0 0 1000 1000"
-                      class={["w-full h-full", @manual_tracking && "cursor-crosshair"]}
-                      phx-hook="RadarManualPointer"
-                      data-active={to_string(@manual_tracking)}
-                    >
+        <div class="flex-1 min-w-0 min-h-0 h-full flex items-center justify-center overflow-hidden bg-base-200">
+          <div
+            class="max-h-full max-w-full"
+            style="width: min(100%, calc(100vh - 2.5rem)); aspect-ratio: 1; height: auto; max-height: 100%;"
+          >
+            <svg
+              id="radar-map"
+              viewBox="0 0 1000 1000"
+              class={["w-full h-full", @manual_tracking && "cursor-crosshair"]}
+              phx-hook="RadarManualPointer"
+              data-active={to_string(@manual_tracking)}
+            >
                       <%!-- Transparent backdrop so pointer events (cursor
                            tracking) fire across the whole map, not just over
                            drawn shapes. --%>
@@ -1319,13 +1296,13 @@ defmodule OctopusWeb.RadarLive do
                           </g>
                         <% end %>
                       <% end %>
-                    </svg>
-                  </div>
-                </div>
+            </svg>
+          </div>
+        </div>
 
-                <div class="w-72 shrink-0 overflow-y-auto flex flex-col gap-4 max-h-[calc(100vh-9rem)]">
-                  <div class="flex flex-col gap-3">
-                    <p class="text-xs font-semibold opacity-70">Source</p>
+        <div class="w-72 shrink-0 h-full overflow-y-auto flex flex-col gap-4 p-3 border-l border-base-300 bg-base-100">
+          <div class="flex flex-col gap-3">
+            <p class="text-xs font-semibold opacity-70">Source</p>
                     <div class="flex flex-wrap gap-1 w-full" id="radar-source-mode">
                       <%= for {value, label, disabled?} <- source_mode_options(@live_available) do %>
                         <button
@@ -1576,12 +1553,9 @@ defmodule OctopusWeb.RadarLive do
                       </label>
                     <% end %>
                   </div>
-                </div>
-              </div>
-          <% end %>
         </div>
       </div>
-    </div>
+    <% end %>
     """
   end
 
