@@ -54,9 +54,10 @@ defmodule Octopus.Apps.MatrixTest do
     test "mode_config/1 returns defaults for both presets" do
       assert matrix_mode_config("matrix:matrix") == %{
                direction: :classic,
-               speed: 1.0,
-               density: 3,
-               max_particles: 200,
+               speed: 0.2,
+               bleeding: 30.0,
+               density: 1,
+               max_particles: 1,
                tail_length: 4,
                counterflow: 0.0,
                sway_scale: 0.0,
@@ -66,9 +67,10 @@ defmodule Octopus.Apps.MatrixTest do
 
       assert matrix_mode_config("matrix:matrix-ring") == %{
                direction: :ring,
-               speed: 1.8,
-               density: 4,
-               max_particles: 200,
+               speed: 0.15,
+               bleeding: 30.0,
+               density: 1,
+               max_particles: 1,
                tail_length: 8,
                counterflow: 0.0,
                sway_scale: 0.0,
@@ -88,6 +90,7 @@ defmodule Octopus.Apps.MatrixTest do
       assert keys == [
                :direction,
                :speed,
+               :bleeding,
                :density,
                :max_particles,
                :tail_length,

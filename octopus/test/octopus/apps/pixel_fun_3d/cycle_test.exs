@@ -241,6 +241,42 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
       assert_in_delta still.palette_phase, phase, 1.0e-12
     end
 
+    test "freeze/unfreeze with stale full config does not reset palette phase or colors" do
+      state =
+        base_state(%{
+          time_frozen: false,
+          color_mode: :random,
+          palette_auto: true,
+          palette_phase: 0.0,
+          color_interval: 1.0,
+          saturation_percent: 70,
+          speed: 1.0
+        })
+
+      {:noreply, running} = pixel_fun_handle_info(:tick, state)
+      assert running.palette_phase > 0.0
+      phase = running.palette_phase
+      colors = running.colors
+
+      stale_config =
+        pixel_fun_get_config(running)
+        |> Map.put(:palette_phase, 0.0)
+        |> Map.put(:time_frozen, true)
+
+      {:noreply, frozen} = pixel_fun_handle_config(stale_config, running)
+      assert_in_delta frozen.palette_phase, phase, 1.0e-12
+      assert frozen.colors == colors
+
+      stale_unfreeze = Map.put(stale_config, :time_frozen, false)
+
+      {:noreply, resumed} = pixel_fun_handle_config(stale_unfreeze, frozen)
+      assert_in_delta resumed.palette_phase, phase, 1.0e-12
+      assert resumed.colors == colors
+
+      {:noreply, ticking} = pixel_fun_handle_info(:tick, resumed)
+      assert ticking.palette_phase > phase
+    end
+
     test "tick does not advance time when frozen" do
       state = base_state(%{time_frozen: true, seconds: 42.0, palette_phase: 0.3})
 

@@ -97,11 +97,97 @@ const ConsoleTheme = {
   },
 };
 
+// Keeps a range slider and its companion number input in sync, and mirrors
+// number-input edits (typing + spinner arrows) back onto the range so the
+// range's phx-change reaches the server. The number input has no name, so
+// without this it never updates anything server-side.
+function npsParseNumber(raw) {
+  const cleaned = String(raw)
+    .replace(/^[×x]\s*/, "")
+    .trim();
+  return Number(cleaned);
+}
+
+function npsClamp(num, min, max) {
+  return Math.min(Math.max(num, min), max);
+}
+
+function npsFormatRaw(value, step) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "";
+  const stepNum = Number(step);
+  if (Number.isInteger(stepNum) && stepNum >= 1) return String(Math.round(num));
+  if (Math.abs(stepNum) >= 0.1) return num.toFixed(1);
+  return String(Math.round(num * 100) / 100);
+}
+
+function npsSyncNumberFromRange(hook) {
+  if (!hook.number) return;
+  hook.number.value = npsFormatRaw(hook.range.value, hook.el.dataset.step);
+}
+
+function npsSyncRangeFromNumber(hook) {
+  if (!hook.range || !hook.number) return;
+  let num = npsParseNumber(hook.number.value);
+  if (!Number.isFinite(num)) {
+    npsSyncNumberFromRange(hook);
+    return;
+  }
+  num = npsClamp(num, Number(hook.el.dataset.min), Number(hook.el.dataset.max));
+  hook.range.value = String(num);
+  const displayStep =
+    Number(hook.numberStep) >= 1 ? hook.numberStep : hook.el.dataset.step;
+  hook.number.value = npsFormatRaw(num, displayStep);
+  hook.range.dispatchEvent(new Event("input", { bubbles: true }));
+  hook.range.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+const NowPlayingSlider = {
+  mounted() {
+    this.bindElements();
+    this.onRangeInput = () => npsSyncNumberFromRange(this);
+    this.onNumberInput = () => npsSyncRangeFromNumber(this);
+    this.range.addEventListener("input", this.onRangeInput);
+    this.number.addEventListener("input", this.onNumberInput);
+    this.number.addEventListener("change", this.onNumberInput);
+    this.onRangeInput();
+  },
+  updated() {
+    this.bindElements();
+    if (!this.range) return;
+    this.numberStep =
+      this.number?.getAttribute("step") || this.el.dataset.step;
+    if (
+      document.activeElement === this.range ||
+      document.activeElement === this.number
+    )
+      return;
+    this.range.value = this.el.dataset.value;
+    npsSyncNumberFromRange(this);
+  },
+  destroyed() {
+    if (this.range && this.onRangeInput) {
+      this.range.removeEventListener("input", this.onRangeInput);
+    }
+    if (this.number && this.onNumberInput) {
+      this.number.removeEventListener("input", this.onNumberInput);
+      this.number.removeEventListener("change", this.onNumberInput);
+    }
+  },
+  bindElements() {
+    this.range = this.el.querySelector('input[type="range"]');
+    this.number = this.el.querySelector("[data-number-input]");
+    this.numberStep =
+      this.number?.getAttribute("step") || this.el.dataset.step;
+  },
+};
+
 export const Hooks = {
   Pixels: PixelsHook,
   ProximityChart: ProximityChartHook,
   CodeEditorHook: CodeEditorHook,
   CopyDump: CopyDump,
   ConsoleTheme: ConsoleTheme,
+  NowPlayingSlider: NowPlayingSlider,
   TopBar,
 };

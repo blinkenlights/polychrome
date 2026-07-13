@@ -321,11 +321,9 @@ defmodule OctopusWeb.PixelFun3DConfigComponent do
   end
 
   def handle_event("toggle_time_frozen", _params, socket) do
-    config =
-      socket.assigns.config
-      |> Map.put(:time_frozen, !(socket.assigns.config[:time_frozen] || false))
-
-    AppSupervisor.update_config(socket.assigns.app_id, config)
+    AppSupervisor.update_config(socket.assigns.app_id, %{
+      time_frozen: !(socket.assigns.config[:time_frozen] || false)
+    })
 
     {:noreply,
      socket

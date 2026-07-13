@@ -648,7 +648,7 @@ defmodule OctopusWeb.ConsoleComponents do
                 <div class="space-y-2">
                   <div
                     id={"now-playing-slider-#{spec.key}-#{@id_suffix}"}
-                    phx-hook=".NowPlayingSlider"
+                    phx-hook="NowPlayingSlider"
                     data-value={Map.get(@now_playing.effective, spec.key)}
                     data-step={spec.step}
                     data-min={spec.min}
@@ -676,9 +676,9 @@ defmodule OctopusWeb.ConsoleComponents do
                       <input
                         type="number"
                         data-number-input
-                        min={spec.min}
+                        min={now_playing_number_min(spec)}
                         max={spec.max}
-                        step={spec.step}
+                        step={now_playing_number_step(spec)}
                         value={now_playing_slider_display(@now_playing, spec)}
                         disabled={now_playing_disabled?(@now_playing, spec)}
                         phx-debounce="150"
@@ -727,7 +727,7 @@ defmodule OctopusWeb.ConsoleComponents do
                     <div
                       :for={sub <- nested}
                       id={"now-playing-slider-#{sub.key}-#{@id_suffix}"}
-                      phx-hook=".NowPlayingSlider"
+                      phx-hook="NowPlayingSlider"
                       data-value={Map.get(@now_playing.effective, sub.key)}
                       data-step={sub.step}
                       data-min={sub.min}
@@ -837,69 +837,6 @@ defmodule OctopusWeb.ConsoleComponents do
             <% end %>
           </div>
         </form>
-        <script :type={Phoenix.LiveView.ColocatedHook} name=".NowPlayingSlider">
-          function formatRaw(value, step) {
-            const num = Number(value)
-            if (!Number.isFinite(num)) return ""
-            const stepNum = Number(step)
-            if (Number.isInteger(stepNum) && stepNum >= 1) return String(Math.round(num))
-            // Match server tabular display for typical float steps
-            if (Math.abs(stepNum) >= 0.1) return num.toFixed(1)
-            return String(Math.round(num * 100) / 100)
-          }
-
-          function clamp(num, min, max) {
-            return Math.min(Math.max(num, min), max)
-          }
-
-          export default {
-            mounted() {
-              this.bindElements()
-              this.onRangeInput = () => {
-                if (this.number) {
-                  this.number.value = formatRaw(this.range.value, this.el.dataset.step)
-                }
-              }
-              this.onNumberChange = () => {
-                if (!this.range || !this.number) return
-                let num = Number(this.number.value)
-                if (!Number.isFinite(num)) {
-                  this.number.value = formatRaw(this.range.value, this.el.dataset.step)
-                  return
-                }
-                num = clamp(num, Number(this.el.dataset.min), Number(this.el.dataset.max))
-                this.range.value = String(num)
-                this.number.value = formatRaw(num, this.el.dataset.step)
-                this.range.dispatchEvent(new Event("input", { bubbles: true }))
-                this.range.dispatchEvent(new Event("change", { bubbles: true }))
-              }
-              this.range.addEventListener("input", this.onRangeInput)
-              this.number.addEventListener("change", this.onNumberChange)
-            },
-            updated() {
-              this.bindElements()
-              if (!this.range) return
-              if (document.activeElement === this.range || document.activeElement === this.number) return
-              this.range.value = this.el.dataset.value
-              if (this.number) {
-                this.number.value = formatRaw(this.range.value, this.el.dataset.step)
-              }
-            },
-            destroyed() {
-              if (this.range && this.onRangeInput) {
-                this.range.removeEventListener("input", this.onRangeInput)
-              }
-              if (this.number && this.onNumberChange) {
-                this.number.removeEventListener("change", this.onNumberChange)
-              }
-            },
-            bindElements() {
-              this.range = this.el.querySelector('input[type="range"]')
-              this.number = this.el.querySelector("[data-number-input]")
-            }
-          }
-        </script>
-
         <div
           :if={@now_playing.meta != []}
           class="rounded-lg bg-base-300/40 p-3 console-mono text-xs space-y-0.5"
@@ -1201,16 +1138,21 @@ defmodule OctopusWeb.ConsoleComponents do
     value = now_playing_slider_value(now_playing, spec)
 
     cond do
-      spec.key == :zoom_base and is_number(value) ->
-        "×" <> format_tweak_number_raw(Float.round(value * 1.0, 1))
-
-      now_playing_disabled?(now_playing, spec) and is_number(value) ->
+      is_number(value) ->
         format_tweak_number_raw(Float.round(value * 1.0, 1))
 
       true ->
         format_tweak_number_raw(value)
     end
   end
+
+  # Arrow keys on the number box step in whole units; the range keeps fine steps.
+  defp now_playing_number_step(%{key: :zoom_base}), do: 1
+  defp now_playing_number_step(%{step: step}), do: step
+
+  # HTML number stepping is min + n*step — with min=0.7 and step=1 you get 1.7, 2.7…
+  defp now_playing_number_min(%{key: :zoom_base}), do: 1
+  defp now_playing_number_min(%{min: min}), do: min
 
   defp format_tweak_number_raw(value) when is_integer(value), do: Integer.to_string(value)
 

@@ -1070,7 +1070,17 @@ defmodule Octopus.Apps.PixelFun3D do
 
   def handle_config(config, %State{} = state) do
     state = apply_scene_fields(state, config)
-    state = if state.time_frozen, do: push_frame(state), else: state
+
+    state =
+      if Map.has_key?(config, :zoom_base) do
+        z = max(state.zoom_base || 1.0, @zoom_factor_min)
+        {updates, _committed_n, _fade} = Zoom.advance_octave_state(state, z, state.seconds)
+        struct(State, Map.merge(Map.from_struct(state), updates))
+      else
+        state
+      end
+
+    state = push_frame(state)
     broadcast_config(state)
     {:noreply, state}
   end
@@ -1108,6 +1118,7 @@ defmodule Octopus.Apps.PixelFun3D do
 
   defp apply_scene_fields(%State{} = state, config) do
     config = coerce_config(config)
+    old_state = state
     program_source = Map.get(config, :program, state.source)
 
     program =
@@ -1119,9 +1130,15 @@ defmodule Octopus.Apps.PixelFun3D do
     color_interval = Map.get(config, :color_interval, state.color_interval)
     color_mode = Map.get(config, :color_mode, state.color_mode)
     saturation_percent = Map.get(config, :saturation_percent, state.saturation_percent || 70)
-    palette_phase = coerce_palette_phase(Map.get(config, :palette_phase, state.palette_phase || 0.0))
     palette_auto =
       Map.get(config, :palette_auto, state.palette_auto != false) |> coerce_boolean()
+
+    palette_phase =
+      if palette_auto do
+        state.palette_phase || 0.0
+      else
+        coerce_palette_phase(Map.get(config, :palette_phase, state.palette_phase || 0.0))
+      end
 
     old_autos = auto_flags(state)
 
@@ -1158,7 +1175,7 @@ defmodule Octopus.Apps.PixelFun3D do
     state = state |> put_auto_fields(config) |> sync_auto_wanderers(old_autos)
 
     state =
-      if color_mode in [:random, :white] do
+      if color_mode in [:random, :white] and palette_needs_refresh?(state, old_state) do
         apply_palette_colors(state)
       else
         state
@@ -1166,6 +1183,31 @@ defmodule Octopus.Apps.PixelFun3D do
 
     apply_time_frozen(state, config)
   end
+
+  defp palette_needs_refresh?(%State{} = state, %State{} = old_state) do
+    cond do
+      state.color_mode != old_state.color_mode ->
+        true
+
+      palette_auto_on?(state) != palette_auto_on?(old_state) ->
+        true
+
+      not palette_auto_on?(state) and
+          abs((state.palette_phase || 0.0) - (old_state.palette_phase || 0.0)) > 1.0e-9 ->
+        true
+
+      (state.sat_auto || false) != (old_state.sat_auto || false) ->
+        true
+
+      not (state.sat_auto || false) and state.saturation_percent != old_state.saturation_percent ->
+        true
+
+      true ->
+        false
+    end
+  end
+
+  defp palette_auto_on?(%State{} = state), do: state.palette_auto != false
 
   defp apply_time_frozen(%State{} = state, config) do
     was_frozen = state.time_frozen || false
