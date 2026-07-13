@@ -17,6 +17,8 @@ defmodule OctopusWeb.RadarLive do
 
   use OctopusWeb, :live_view
 
+  require Logger
+
   alias Octopus.Installation
   alias Octopus.Radar
   alias Octopus.Radar.{Frame, Track, Transform}
@@ -363,6 +365,13 @@ defmodule OctopusWeb.RadarLive do
   def handle_event("reinitialize", _params, socket) do
     Enum.each(socket.assigns.devices, &Radar.reinitialize(&1.device_id))
     {:noreply, reset_radar_state(socket)}
+  end
+
+  def handle_event("dump_detections", _params, socket) do
+    dump_id = dump_detections_id()
+    json = generate_detections_dump_json(socket.assigns, dump_id)
+    Logger.info("RADAR-DETECTIONS-DUMP[#{dump_id}] #{json}")
+    {:noreply, socket}
   end
 
   def handle_event("fit_bounds", _params, socket) do
@@ -982,6 +991,15 @@ defmodule OctopusWeb.RadarLive do
                 phx-click="toggle_coords_frame"
               />
             </div>
+            <button
+              id="radar-dump-detections"
+              type="button"
+              class="btn btn-outline btn-sm w-full"
+              phx-click="dump_detections"
+              title="Write current detections, sensor poses, and layout context to the server log as JSON (RADAR-DETECTIONS-DUMP)"
+            >
+              Dump detections to log
+            </button>
           </div>
 
           <%= if @detection_list == [] do %>
@@ -2023,6 +2041,100 @@ defmodule OctopusWeb.RadarLive do
   defp sensor_status_label(:stale), do: "No Data"
   defp sensor_status_label(:resetting), do: "Resetting"
   defp sensor_status_label(_), do: "Unknown"
+
+  ## Detection dump (coordinate debugging)
+
+  defp dump_detections_id do
+    Calendar.strftime(DateTime.utc_now(), "detections-%Y%m%dT%H%M%SZ")
+  end
+
+  defp generate_detections_dump_json(assigns, dump_id) do
+    payload = %{
+      "captured_at" => DateTime.to_iso8601(DateTime.utc_now()),
+      "dump_id" => dump_id,
+      "layout" => detection_dump_layout(assigns),
+      "sensors" => detection_dump_sensors(assigns.layout_devices),
+      "detections" => detection_dump_entries(assigns.tracks_now, assigns.devices)
+    }
+
+    payload =
+      if mock_source?(assigns.source_mode) and assigns.world_objects != [] do
+        Map.put(payload, "ground_truth", Enum.map(assigns.world_objects, &ground_truth_dump_entry/1))
+      else
+        payload
+      end
+
+    Jason.encode!(payload)
+  end
+
+  defp detection_dump_layout(assigns) do
+    %{
+      "source_mode" => Atom.to_string(assigns.source_mode),
+      "layout_start_angle_deg" => assigns.layout_start_angle_deg,
+      "angle_offset_deg" => assigns.angle_offset_deg,
+      "north_panel" => assigns.north_panel,
+      "radial_layout" => assigns.radial_layout
+    }
+  end
+
+  defp detection_dump_sensors(layout_devices) do
+    Enum.map(layout_devices, fn d ->
+      {tx, ty} = sensor_position(d)
+
+      %{
+        "device_id" => d.device_id,
+        "letter" => device_letter(d.device_id),
+        "active" => Radar.sensor_active?(d.device_id),
+        "type" => Atom.to_string(d.type),
+        "angle_deg" => d.angle_deg,
+        "distance_cm" => d.distance_cm,
+        "rotation_deg" => d.rotation_deg,
+        "mount_x_m" => fmt_json_float(tx),
+        "mount_y_m" => fmt_json_float(ty)
+      }
+    end)
+  end
+
+  defp detection_dump_entries(tracks_now, devices) do
+    now = System.monotonic_time(:millisecond)
+    poses = sensor_pose_lookup(devices)
+
+    tracks_now
+    |> Enum.map(fn {{device_id, id}, t} ->
+      {lx, ly, lz} = local_coords(t, Map.get(poses, device_id))
+      vz = Map.get(t, :vz, 0.0)
+      speed = :math.sqrt(t.vx * t.vx + t.vy * t.vy + vz * vz)
+
+      %{
+        "device_id" => device_id,
+        "letter" => device_letter(device_id),
+        "track_id" => id,
+        "label" => track_label(device_id, id),
+        "global" => coords_map(t.x, t.y, t.z),
+        "local" => coords_map(lx, ly, lz),
+        "velocity" => coords_map(t.vx, t.vy, vz),
+        "speed_m_s" => fmt_json_float(speed),
+        "last_seen_ms_ago" => now - t.last_seen
+      }
+    end)
+    |> Enum.sort_by(&{&1["device_id"], &1["track_id"]})
+  end
+
+  defp ground_truth_dump_entry(o) do
+    %{
+      "id" => o.id,
+      "x_m" => fmt_json_float(o.x),
+      "y_m" => fmt_json_float(o.y),
+      "z_m" => fmt_json_float(o.z)
+    }
+  end
+
+  defp coords_map(x, y, z) do
+    %{"x_m" => fmt_json_float(x), "y_m" => fmt_json_float(y), "z_m" => fmt_json_float(z)}
+  end
+
+  defp fmt_json_float(v) when is_float(v), do: Float.round(v, 4)
+  defp fmt_json_float(v) when is_integer(v), do: v * 1.0
 
   ## Formatting helpers
 
