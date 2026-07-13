@@ -159,7 +159,7 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:angle_offset_deg, round(Radar.angle_offset_deg()))
      |> assign(:north_panel, Octopus.Installation.north_panel())
      |> assign(:sensor_statuses, build_sensor_statuses(devices))
-     |> assign(:sensitivity, default_sensitivity(devices))
+     |> assign(:sensitivity_level, default_sensitivity_level(devices))
      |> assign(:source_mode, source_mode)
      |> assign(:max_people, safe_max_people())
      |> assign(:max_people_limit, Radar.max_people_limit())
@@ -180,10 +180,9 @@ defmodule OctopusWeb.RadarLive do
      |> reset_radar_state()}
   end
 
-  # First enabled sensor's sensitivity (all sensors share the slider), or the
-  # device default when none are known yet.
-  defp default_sensitivity([%{sensitivity: s} | _]), do: s
-  defp default_sensitivity(_), do: 4
+  # First enabled sensor's UI sensitivity level (all sensors share the slider).
+  defp default_sensitivity_level([%{sensitivity_level: level} | _]), do: level
+  defp default_sensitivity_level(_), do: 6
 
   # The canvas always frames the entire simulated world (in every mode) so the
   # world border, the sensors and their coverage, and the detections all share
@@ -237,16 +236,14 @@ defmodule OctopusWeb.RadarLive do
     {:noreply, socket}
   end
 
-  def handle_event("set_sensitivity", %{"sensitivity_ui" => ui_str}, socket) do
-    with {ui, ""} <- Integer.parse(ui_str),
-         true <- ui in 1..9 do
-      sensitivity = 10 - ui
-
-      Enum.each(socket.assigns.devices, &Radar.set_sensitivity(&1.device_id, sensitivity))
+  def handle_event("set_sensitivity", %{"sensitivity_level" => level_str}, socket) do
+    with {level, ""} <- Integer.parse(level_str),
+         true <- level in 1..9 do
+      Enum.each(socket.assigns.devices, &Radar.set_sensitivity_level(&1.device_id, level))
 
       {:noreply,
        socket
-       |> assign(:sensitivity, sensitivity)
+       |> assign(:sensitivity_level, level)
        |> reset_radar_state()}
     else
       _ -> {:noreply, socket}
@@ -1451,17 +1448,20 @@ defmodule OctopusWeb.RadarLive do
                         <span class="text-xs opacity-60">lower</span>
                         <input
                           id="radar-sensitivity"
-                          name="sensitivity_ui"
+                          name="sensitivity_level"
                           type="range"
                           min="1"
                           max="9"
                           step="1"
-                          value={10 - @sensitivity}
+                          value={@sensitivity_level}
                           phx-debounce="500"
                           class="range range-sm grow"
                         />
                         <span class="text-xs opacity-60">higher</span>
                       </div>
+                      <span class="text-sm font-mono text-right">
+                        {@sensitivity_level}/9 ({Octopus.Radar.SensorType.sensitivity_level_label(@sensitivity_level)})
+                      </span>
                     </form>
                   <% end %>
 
@@ -1981,7 +1981,7 @@ defmodule OctopusWeb.RadarLive do
         "Status: #{sensor_status_label(status)}",
         "Pose: #{d.angle_deg}° @ #{d.distance_cm} cm · rotation #{d.rotation_deg}°",
         "Range: #{d.range_cm} cm · Height: #{d.height_cm} cm",
-        "Sensitivity: #{10 - d.sensitivity}/9",
+        "Sensitivity: #{d.sensitivity_level}/9 (#{Octopus.Radar.SensorType.sensitivity_level_label(d.sensitivity_level)})",
         "Click to toggle active/inactive"
       ],
       "\n"

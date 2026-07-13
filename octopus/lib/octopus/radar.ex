@@ -19,7 +19,7 @@ defmodule Octopus.Radar do
   only needed as a small per-sensor correction (default `0`):
 
       radar: [
-        defaults: [sensitivity: 4, height_cm: 500, range_cm: 500, ...],
+        defaults: [sensitivity: :normal, height_cm: 500, range_cm: 500, ...],
         layout: [
           type: :radial,
           sensors: [:a, :b, :c, :d, :e, :f],
@@ -91,7 +91,7 @@ defmodule Octopus.Radar do
   use Supervisor
   require Logger
 
-  alias Octopus.Radar.{LogFormat, Mock, PoseTweak, Runtime, Sensor, SensorPlan, SourceMode}
+  alias Octopus.Radar.{LogFormat, Mock, PoseTweak, Runtime, Sensor, SensorPlan, SensorType, SourceMode}
 
   @topic "radar:hlk6001"
 
@@ -227,11 +227,10 @@ defmodule Octopus.Radar do
   Includes sensors whose port does not currently exist; consult `:port`
   with `File.exists?/1` if the caller cares about presence.
 
-  The reported `sensitivity` is the configured DPKTH value at boot
-  (range 1..9, where lower means *more* sensitive); it does not track
-  runtime changes made via `set_sensitivity/2`. The `*_cm` values are
-  the device's geometry parameters as configured (see `AT+XPosi` &c.
-  in the manual / `Octopus.Radar.Command`).
+  The reported `sensitivity_level` is on a 1..9 UI scale (1 = least
+  sensitive, 9 = most). The device-native register value is internal.
+  Installations configure presets (`:normal`, `:lower`, `:higher`) or an
+  explicit device value; see `Octopus.Radar.SensorType`.
   """
   @spec devices() :: [
           %{
@@ -240,7 +239,7 @@ defmodule Octopus.Radar do
             enabled: boolean(),
             port: String.t(),
             baud: pos_integer(),
-            sensitivity: 1..9,
+            sensitivity_level: 1..9,
             angle_deg: number(),
             distance_cm: number(),
             rotation_deg: number(),
@@ -288,13 +287,16 @@ defmodule Octopus.Radar do
   end
 
   defp device_from_config({device_id, config}) do
+    type = Keyword.fetch!(config, :type)
+    device_sensitivity = Keyword.fetch!(config, :sensitivity)
+
     %{
       device_id: device_id,
-      type: Keyword.fetch!(config, :type),
+      type: type,
       enabled: Keyword.fetch!(config, :enabled),
       port: Keyword.fetch!(config, :port),
       baud: Keyword.fetch!(config, :baud),
-      sensitivity: Keyword.fetch!(config, :sensitivity),
+      sensitivity_level: SensorType.sensitivity_level(type, device_sensitivity),
       angle_deg: Keyword.fetch!(config, :angle_deg),
       distance_cm: Keyword.fetch!(config, :distance_cm),
       rotation_deg: Keyword.fetch!(config, :rotation_deg),
@@ -308,18 +310,32 @@ defmodule Octopus.Radar do
   end
 
   @doc """
-  Set the long-range detection sensitivity (`AT+DPKTH`) on a sensor.
+  Set detection sensitivity on a sensor using the UI scale.
 
-  `level` is the device's raw scale: `1..9`, where **lower values mean
-  more sensitive** (more phantom targets / longer reach) and higher
-  values mean less sensitive. The default is `4`.
+  `level` is `1..9` where **1 = least sensitive** (fewer phantoms) and
+  **9 = most sensitive** (longer reach, more clutter). The mapping to the
+  device register is defined by `Octopus.Radar.SensorType` for each sensor
+  type.
 
   Internally this re-runs the full init sequence with the new value, so
   the device's tracker state is reset along with the parameter change.
   """
-  @spec set_sensitivity(pos_integer(), 1..9) :: :ok | {:error, term()}
-  def set_sensitivity(device_id, level) when is_integer(level) and level in 1..9 do
-    Sensor.set_sensitivity(device_id, level)
+  @spec set_sensitivity_level(pos_integer(), 1..9) :: :ok | {:error, term()}
+  def set_sensitivity_level(device_id, level) when is_integer(level) and level in 1..9 do
+    case sensor_configs() |> Enum.find(fn {id, _} -> id == device_id end) do
+      {_, config} ->
+        type = Keyword.fetch!(config, :type)
+        set_sensitivity(device_id, SensorType.level_to_device_value(type, level))
+
+      nil ->
+        {:error, :not_configured}
+    end
+  end
+
+  @doc false
+  @spec set_sensitivity(pos_integer(), pos_integer()) :: :ok | {:error, term()}
+  def set_sensitivity(device_id, device_value) when is_integer(device_value) do
+    Sensor.set_sensitivity(device_id, device_value)
   end
 
   @doc """

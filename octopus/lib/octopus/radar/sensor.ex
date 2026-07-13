@@ -96,13 +96,16 @@ defmodule Octopus.Radar.Sensor do
   end
 
   @doc """
-  Set the long-range detection sensitivity (`AT+DPKTH`, 1..9). Triggers
-  a full re-init of the device so the new value is applied cleanly and
+  Set the long-range detection sensitivity (device-native register value).
+  Triggers a full re-init of the device so the new value is applied cleanly and
   any in-flight tracker state is reset.
+
+  Prefer `Octopus.Radar.set_sensitivity_level/2` at call sites that use the
+  UI scale (1 = least sensitive, 9 = most).
   """
-  @spec set_sensitivity(pos_integer(), 1..9) :: :ok | {:error, :no_sensor}
-  def set_sensitivity(device_id, level) when is_integer(level) and level in 1..9 do
-    call_sensor(device_id, {:set_sensitivity, level})
+  @spec set_sensitivity(pos_integer(), pos_integer()) :: :ok | {:error, :no_sensor}
+  def set_sensitivity(device_id, device_value) when is_integer(device_value) do
+    call_sensor(device_id, {:set_sensitivity, device_value})
   end
 
   @doc "Re-run the configured init sequence, resetting on-device tracker state."

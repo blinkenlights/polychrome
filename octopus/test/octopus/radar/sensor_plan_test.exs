@@ -4,7 +4,7 @@ defmodule Octopus.Radar.SensorPlanTest do
   alias Octopus.Radar.SensorPlan
 
   @installation_radar [
-    defaults: [sensitivity: 4, height_cm: 500],
+    defaults: [sensitivity: :normal, height_cm: 500],
     layout: [
       type: :radial,
       sensors: [:a, :b, :c],
@@ -58,6 +58,7 @@ defmodule Octopus.Radar.SensorPlanTest do
       assert cfg1[:angle_deg] == 0.0
       assert cfg1[:distance_cm] == 300
       assert cfg1[:rotation_deg] == 180
+      assert cfg1[:sensitivity] == 4
 
       assert {2, cfg2} = Enum.at(configs, 1)
       assert cfg2[:angle_deg] == 240.0

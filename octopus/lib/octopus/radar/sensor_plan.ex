@@ -2,7 +2,7 @@ defmodule Octopus.Radar.SensorPlan do
   @moduledoc false
   # Merges installation logical sensor layout with deployment hardware bindings.
 
-  alias Octopus.Radar.PoseTweak
+  alias Octopus.Radar.{PoseTweak, SensorType}
 
   @global_defaults [
     type: :ld6001a,
@@ -11,7 +11,7 @@ defmodule Octopus.Radar.SensorPlan do
     distance_cm: 0,
     rotation_deg: 0,
     baud: 115_200,
-    sensitivity: 4,
+    sensitivity: :normal,
     height_cm: 500,
     range_cm: 500,
     x_pos_cm: 500,
@@ -169,6 +169,7 @@ defmodule Octopus.Radar.SensorPlan do
 
   defp normalize_sensor_config(config, device_id) do
     type = Keyword.fetch!(config, :type)
+    sensitivity_setting = Keyword.fetch!(config, :sensitivity)
     enabled = Keyword.fetch!(config, :enabled)
     angle_deg = Keyword.fetch!(config, :angle_deg)
     distance_cm = Keyword.fetch!(config, :distance_cm)
@@ -196,5 +197,6 @@ defmodule Octopus.Radar.SensorPlan do
     end
 
     config
+    |> Keyword.put(:sensitivity, SensorType.resolve_sensitivity(type, sensitivity_setting))
   end
 end

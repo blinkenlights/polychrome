@@ -29,11 +29,28 @@ defmodule Octopus.Radar.SensorType do
   a mirror image, so it is still right-handed. Because we mount the unit so its
   raw `+x` points outward, the raw axes already coincide with the canonical
   frame above: **the mapping is the identity**.
+
+  ### Sensitivity (`AT+DPKTH`)
+
+  Installations use presets (`:normal`, `:lower`, `:higher`) or an explicit
+  device-native integer. On this module, **higher DPKTH means lower real
+  sensitivity**. Presets default to vendor `:normal` = DPKTH 4. The UI slider
+  uses an inverted 1..9 level where 1 = least sensitive and 9 = most.
   """
 
   alias Octopus.Radar.Track
 
   @supported [:ld6001a]
+
+  @type sensitivity_preset :: :normal | :lower | :higher
+  @type sensitivity_setting :: sensitivity_preset() | pos_integer()
+
+  @ld6001a_dpkth_range 1..9
+  @ld6001a_presets %{
+    normal: 4,
+    lower: 6,
+    higher: 2
+  }
 
   @doc "Sensor types with a defined coordinate convention."
   @spec supported() :: [atom()]
@@ -52,4 +69,65 @@ defmodule Octopus.Radar.SensorType do
   """
   @spec from_canonical(atom(), Track.t()) :: Track.t()
   def from_canonical(:ld6001a, %Track{} = track), do: track
+
+  @doc """
+  Default sensitivity preset for installations (maps to the vendor default on
+  each sensor type).
+  """
+  @spec default_sensitivity_setting() :: sensitivity_preset()
+  def default_sensitivity_setting, do: :normal
+
+  @doc """
+  Resolve an installation or deployment sensitivity setting to the device-native
+  value used in AT init (e.g. `AT+DPKTH` on the LD6001A).
+
+  Accepts presets (`:normal`, `:lower`, `:higher`) or an explicit device-native
+  integer for advanced tuning.
+  """
+  @spec resolve_sensitivity(atom(), sensitivity_setting()) :: pos_integer()
+  def resolve_sensitivity(type, setting)
+
+  def resolve_sensitivity(:ld6001a, preset) when preset in [:normal, :lower, :higher] do
+    Map.fetch!(@ld6001a_presets, preset)
+  end
+
+  def resolve_sensitivity(:ld6001a, value) when is_integer(value) and value in @ld6001a_dpkth_range do
+    value
+  end
+
+  def resolve_sensitivity(type, setting) do
+    raise ArgumentError,
+          "radar sensor type #{inspect(type)}: invalid sensitivity #{inspect(setting)}"
+  end
+
+  @doc """
+  UI sensitivity level on a 1..9 scale where **1 = least sensitive** and
+  **9 = most sensitive** (independent of device register semantics).
+  """
+  @spec sensitivity_level(atom(), pos_integer()) :: 1..9
+  def sensitivity_level(type, device_value)
+
+  def sensitivity_level(:ld6001a, value) when value in @ld6001a_dpkth_range do
+    10 - value
+  end
+
+  @doc "Convert a UI sensitivity level to the device-native value."
+  @spec level_to_device_value(atom(), 1..9) :: pos_integer()
+  def level_to_device_value(type, level)
+
+  def level_to_device_value(:ld6001a, level) when level in 1..9 do
+    10 - level
+  end
+
+  @doc "Human label for a UI sensitivity level (1 = least, 9 = most)."
+  @spec sensitivity_level_label(1..9) :: String.t()
+  def sensitivity_level_label(level) when level in 1..9 do
+    cond do
+      level <= 2 -> "low"
+      level <= 4 -> "moderate-low"
+      level <= 6 -> "moderate"
+      level <= 8 -> "moderate-high"
+      true -> "high"
+    end
+  end
 end

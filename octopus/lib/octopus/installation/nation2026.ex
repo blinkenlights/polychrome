@@ -30,7 +30,6 @@ defmodule Octopus.Installation.Nation2026 do
     auto_brightness: false,
     radar: [
       defaults: [
-        sensitivity: 4,
         moving_decisecs: 110,
         static_decisecs: 100,
         exit_decisecs: 5,
