@@ -2,8 +2,6 @@ defmodule Octopus.Radar.PoseTweak do
   @moduledoc false
   use Agent
 
-  alias Octopus.Radar
-
   @type state :: %{
           layout_start_angle_deg: number(),
           angle_offset_deg: number()
@@ -47,9 +45,15 @@ defmodule Octopus.Radar.PoseTweak do
   end
 
   defp config_layout_start_angle_deg do
-    case Application.get_env(:octopus, Radar, []) |> Keyword.get(:layout) do
-      nil -> 0.0
-      layout -> Keyword.get(layout, :start_angle_deg, 0) * 1.0
+    case Octopus.Installation.radar_config() do
+      nil ->
+        0.0
+
+      radar ->
+        radar
+        |> Keyword.get(:layout, [])
+        |> Keyword.get(:start_angle_deg, 0)
+        |> Kernel.*(1.0)
     end
   end
 end

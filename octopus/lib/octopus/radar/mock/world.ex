@@ -790,7 +790,7 @@ defmodule Octopus.Radar.Mock.World do
   end
 
   defp configured_platform_radius_m do
-    Octopus.Params.Sim3d.platform_radius_m()
+    Octopus.Installation.platform_radius_m()
   rescue
     _ -> @default_platform_radius_m
   end

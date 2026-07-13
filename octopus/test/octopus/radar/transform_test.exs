@@ -47,8 +47,8 @@ defmodule Octopus.Radar.TransformTest do
     end
 
     test "sensor on +Y beam (90°) translates and rotates local frame by 90°" do
-      # rotation_deg: 0 with angle_deg: 90 → effective rotation = 90°.
-      # Mount at (0, 0.5 m). Local (0, 1) with 90° rotation:
+      # rotation_deg: 0 with angle_deg: 90 → effective rotation = 90° CCW.
+      # Mount at (0, 0.5 m). Local (0, 1) rotated by 90°:
       #   x_global = 0 + 0*cos90 - 1*sin90 = -1.0
       #   y_global = 0.5 + 0*sin90 + 1*cos90 = 0.5
       config = Keyword.merge(@base_config, distance_cm: 50, angle_deg: 90)
@@ -81,7 +81,7 @@ defmodule Octopus.Radar.TransformTest do
 
       {tx, ty, cos_r, sin_r} = Transform.pose_factors(config)
 
-      # Local coords that should map to global (0, 0): R(-θ) * (-tx, -ty)
+      # Local coords that should map to global (0, 0): Rᵀ * (-tx, -ty)
       local_x = cos_r * (-tx) + sin_r * (-ty)
       local_y = -sin_r * (-tx) + cos_r * (-ty)
 
@@ -123,6 +123,36 @@ defmodule Octopus.Radar.TransformTest do
 
       assert_in_delta result.x, :math.cos(5 * :math.pi() / 180), 1.0e-6
       assert_in_delta result.y, :math.sin(5 * :math.pi() / 180), 1.0e-6
+    end
+
+    test "rotation_deg 0 aligns local +X with the outward radial at every bearing" do
+      for angle <- [0, 60, 120, 180, 240, 300] do
+        config = Keyword.merge(@base_config, angle_deg: angle, distance_cm: 100, rotation_deg: 0)
+        result = Transform.transform_track(track(x: 1.0, y: 0.0), config)
+        {tx, ty, _, _} = Transform.pose_factors(config)
+
+        dx = result.x - tx
+        dy = result.y - ty
+        bearing = angle * :math.pi() / 180
+
+        assert_in_delta dx, :math.cos(bearing), 1.0e-6
+        assert_in_delta dy, :math.sin(bearing), 1.0e-6
+      end
+    end
+
+    test "local +Y points 90° CCW from the outward radial at every bearing" do
+      for angle <- [0, 60, 120, 180, 240, 300] do
+        config = Keyword.merge(@base_config, angle_deg: angle, distance_cm: 100, rotation_deg: 0)
+        result = Transform.transform_track(track(x: 0.0, y: 1.0), config)
+        {tx, ty, _, _} = Transform.pose_factors(config)
+
+        dx = result.x - tx
+        dy = result.y - ty
+        bearing = (angle + 90) * :math.pi() / 180
+
+        assert_in_delta dx, :math.cos(bearing), 1.0e-6
+        assert_in_delta dy, :math.sin(bearing), 1.0e-6
+      end
     end
   end
 

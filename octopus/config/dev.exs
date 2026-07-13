@@ -84,6 +84,5 @@ config :swoosh, :api_client, false
 # Set environment for broadcaster
 config :octopus, :env, :dev
 
-# Radar: local dev uses the "dev" setup in config/radar.exs by default
-# (RADAR_SETUP unset). Boot defaults to live mode (:off); enable mock via the
-# Radar UI or RADAR_MOCK_MODE=exact|fuzzy. Override setup with RADAR_SETUP=<name>.
+# RADAR_SOURCE_MODE=off|live|exact|fuzzy (default :off). Set RADAR_DEPLOYMENT on hosts
+# with hardware for live mode.

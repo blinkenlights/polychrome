@@ -801,8 +801,6 @@ defmodule Octopus.Radar.Sensor do
       :working -> log(state, :info, "Online — streaming frames")
       :unavailable -> log(state, :info, "Unavailable — waiting for serial port")
       :stale -> log(state, :info, "Stale — recovering connection")
-      :initializing -> log(state, :debug, "Initializing")
-      :probing -> log(state, :debug, "Probing")
       :resetting -> log(state, :debug, "Resetting")
       _ -> :ok
     end

@@ -64,13 +64,13 @@ defmodule OctopusWeb.RadarDebugLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    devices = if Radar.enabled?(), do: Radar.devices(), else: []
+    devices = if Radar.configured?(), do: Radar.devices(), else: []
     statuses = build_sensor_statuses(devices)
-    histories = if Radar.enabled?(), do: trim_histories(Radar.get_history(), @display_window_ms), else: %{}
-    stats = if Radar.enabled?(), do: Radar.get_stats(), else: %{}
+    histories = if Radar.configured?(), do: trim_histories(Radar.get_history(), @display_window_ms), else: %{}
+    stats = if Radar.configured?(), do: Radar.get_stats(), else: %{}
 
     if connected?(socket) do
-      if Radar.enabled?() do
+      if Radar.configured?() do
         Enum.each(devices, &Radar.subscribe_status(&1.device_id))
       end
 
@@ -79,7 +79,7 @@ defmodule OctopusWeb.RadarDebugLive do
 
     {:ok,
      assign(socket,
-       radar_enabled: Radar.enabled?(),
+       radar_configured: Radar.configured?(),
        devices: devices,
        statuses: statuses,
        histories: histories,
@@ -101,7 +101,7 @@ defmodule OctopusWeb.RadarDebugLive do
     snap_id = generate_snap_id()
 
     histories =
-      if Radar.enabled?() do
+      if Radar.configured?() do
         trim_histories(Radar.get_history(), @display_window_ms)
       else
         socket.assigns.histories
@@ -193,7 +193,7 @@ defmodule OctopusWeb.RadarDebugLive do
     {:noreply,
      assign(socket,
        histories: histories,
-       stats: if(socket.assigns.radar_enabled, do: Radar.get_stats(), else: socket.assigns.stats),
+       stats: if(socket.assigns.radar_configured, do: Radar.get_stats(), else: socket.assigns.stats),
        now_ms: now,
        dump_json: generate_dump_json(generate_dump_id())
      )}
@@ -235,8 +235,8 @@ defmodule OctopusWeb.RadarDebugLive do
         </div>
       </div>
 
-      <%= if not @radar_enabled do %>
-        <p class="text-gray-500">Radar is not enabled.</p>
+      <%= if not @radar_configured do %>
+        <p class="text-gray-500">This installation does not define radar sensors.</p>
       <% else %>
         <.stats_panel devices={@devices} stats={@stats} />
 
@@ -514,7 +514,7 @@ defmodule OctopusWeb.RadarDebugLive do
   end
 
   defp generate_dump_json(dump_id) do
-    history = if Radar.enabled?(), do: Radar.get_history(), else: %{}
+    history = if Radar.configured?(), do: Radar.get_history(), else: %{}
     generate_dump_json(dump_id, history)
   end
 

@@ -101,11 +101,6 @@ profile.
 
 ## Radar sensors
 
-This deployment loads the `gravity` radar setup defined centrally in
-`config/radar.exs`. The setup is selected by `RADAR_SETUP=gravity` in
-`deploy/gravity/.env` (see `.env.example`).
-
-To change the sensor layout, adapters, or ports, edit the `"gravity"` entry in
-`config/radar.exs` — there is no per-machine `radar.local.exs` file. The
-serial devices are made available to the container via the `/dev` and
-`/dev/serial` mounts in `docker-compose.yml`.
+The Pixie installation does not define radar sensors. If you add radar to an
+installation later, set `RADAR_DEPLOYMENT` to a matching entry in
+`config/radar_deployments.exs` and mount serial devices via `docker-compose.yml`.

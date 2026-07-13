@@ -70,7 +70,8 @@ defmodule OctopusWeb.RadarLive do
   @hues [0, 36, 72, 108, 144, 180, 216, 252, 288, 324]
   @body_saturation 70
   @body_lightness 75
-  @sensor_detecting_saturation 95
+  @sensor_detecting_saturation 100
+  @sensor_detecting_lightness 82
 
   # Padding (in meters) added around the data to avoid divide-by-zero
   # when the window is empty or all samples coincide.
@@ -123,16 +124,17 @@ defmodule OctopusWeb.RadarLive do
 
   @impl true
   def mount(_params, _session, socket) do
+    source_mode = Radar.source_mode()
+    layout_devices = Radar.planned_devices()
     devices = Radar.devices() |> Enum.filter(& &1.enabled)
-    mock_mode = Radar.mock_mode()
     world_radius = world_radius_for_view()
-    platform_radius = Octopus.Params.Sim3d.platform_radius_m()
+    platform_radius = Octopus.Installation.platform_radius_m()
     ring_layout = ring_layout_info()
 
-    if connected?(socket) and Radar.enabled?() do
+    if connected?(socket) and Radar.configured?() do
       Radar.subscribe()
       Enum.each(devices, &Radar.subscribe_status(&1.device_id))
-      if mock_mode != :off, do: subscribe_world()
+      if mock_source?(source_mode), do: subscribe_world()
       # Track the Sim3D platform radius so the drawn chill zone matches the mock.
       Phoenix.PubSub.subscribe(Octopus.PubSub, Octopus.Params.Sim3d.topic())
       Process.send_after(self(), :refresh_sensor_statuses, 2_000)
@@ -140,7 +142,7 @@ defmodule OctopusWeb.RadarLive do
 
     selected_id =
       cond do
-        mock_mode != :off -> :all
+        mock_source?(source_mode) -> :all
         length(devices) == 1 -> hd(devices).device_id
         true -> :all
       end
@@ -149,16 +151,18 @@ defmodule OctopusWeb.RadarLive do
 
     {:ok,
      socket
-     |> assign(:radar_enabled, Radar.enabled?())
+     |> assign(:radar_configured, Radar.configured?())
+     |> assign(:live_available, Radar.live_available?())
+     |> assign(:layout_devices, layout_devices)
      |> assign(:devices, devices)
      |> assign(:radial_layout, Radar.radial_layout?())
      |> assign(:layout_start_angle_deg, round(Radar.layout_start_angle_deg()))
      |> assign(:angle_offset_deg, round(Radar.angle_offset_deg()))
-     |> assign(:north_panel, 1)
+     |> assign(:north_panel, Octopus.Installation.north_panel())
      |> assign(:sensor_statuses, build_sensor_statuses(devices))
      |> assign(:selected_device_id, selected_id)
      |> assign(:sensitivity, (selected && selected.sensitivity) || 4)
-     |> assign(:mock_mode, mock_mode)
+     |> assign(:source_mode, source_mode)
      |> assign(:max_people, safe_max_people())
      |> assign(:max_people_limit, Radar.max_people_limit())
      |> assign(:max_people_applying, false)
@@ -171,7 +175,7 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:visuals, @default_visuals)
      |> assign(:detection_list_mode, :by_sensor)
      |> assign(:bounds_mode, :static)
-     |> assign(:static_bounds, bounds_for(mock_mode, selected_id, devices, world_radius))
+     |> assign(:static_bounds, bounds_for(selected_id, devices, world_radius))
      |> reset_radar_state()}
   end
 
@@ -179,7 +183,7 @@ defmodule OctopusWeb.RadarLive do
   # world border, the sensors and their coverage, and the detections all share
   # one fixed, fully-visible frame. The extent is padded slightly past the
   # world radius so the border circle isn't clipped at the canvas edge.
-  defp bounds_for(_mode, _selected_id, _devices, radius), do: world_bounds(radius)
+  defp bounds_for(_selected_id, _devices, radius), do: world_bounds(radius)
 
   defp world_bounds(radius) do
     ext = radius * 1.08
@@ -274,11 +278,14 @@ defmodule OctopusWeb.RadarLive do
     end
   end
 
-  def handle_event("set_mock_mode", %{"mode" => mode_str}, socket) do
-    # The mode change is broadcast on the radar topic; this LiveView (and any
-    # others) updates itself in handle_info({:mock_mode_changed, _}, …).
-    Radar.set_mock_mode(parse_mode(mode_str))
+  def handle_event("set_source_mode", %{"mode" => mode_str}, socket) do
+    Radar.set_source_mode(parse_source_mode(mode_str))
     {:noreply, socket}
+  end
+
+  # Legacy event name from older UI builds.
+  def handle_event("set_mock_mode", %{"mode" => mode_str}, socket) do
+    handle_event("set_source_mode", %{"mode" => mode_str}, socket)
   end
 
   def handle_event("set_max_people", %{"max_people" => v}, socket) do
@@ -440,22 +447,18 @@ defmodule OctopusWeb.RadarLive do
     {:noreply, assign(socket, :sensor_statuses, statuses)}
   end
 
-  def handle_info({:mock_mode_changed, mode}, socket) do
-    if connected?(socket) do
-      if mode == :off, do: unsubscribe_world(), else: subscribe_world()
-    end
+  def handle_info({:source_mode_changed, mode}, socket) do
+    handle_source_mode_changed(socket, mode)
+  end
 
-    {:noreply,
-     socket
-     |> assign(:mock_mode, mode)
-     |> assign(:max_people, safe_max_people())
-     |> assign(:max_people_applying, false)
-     |> assign(:entropy, safe_entropy())
-     |> assign(:selected_device_id, :all)
-     |> assign(:bounds_mode, :static)
-     |> assign(:world_objects, [])
-     |> assign(:static_bounds, bounds_for(mode, :all, socket.assigns.devices, socket.assigns.world_radius))
-     |> reset_radar_state()}
+  def handle_info({:mock_mode_changed, mode}, socket) do
+    mode =
+      case mode do
+        :off -> :live
+        other -> other
+      end
+
+    handle_source_mode_changed(socket, mode)
   end
 
   def handle_info({:pose_tweak_changed, %{layout_start_angle_deg: start, angle_offset_deg: offset}}, socket) do
@@ -463,6 +466,7 @@ defmodule OctopusWeb.RadarLive do
 
     {:noreply,
      socket
+     |> assign(:layout_devices, Radar.planned_devices())
      |> assign(:devices, devices)
      |> assign(:layout_start_angle_deg, round(start))
      |> assign(:angle_offset_deg, round(offset))
@@ -487,13 +491,7 @@ defmodule OctopusWeb.RadarLive do
 
   @impl true
   def handle_info({:radar_frame, device_id, %Frame{} = frame}, socket) do
-    selected = socket.assigns.selected_device_id
-
-    if selected == :all or selected == device_id do
-      {:noreply, ingest_frame(socket, device_id, frame)}
-    else
-      {:noreply, socket}
-    end
+    {:noreply, ingest_frame(socket, device_id, frame)}
   end
 
   def handle_info({:platform_radius_m, value}, socket) do
@@ -502,6 +500,29 @@ defmodule OctopusWeb.RadarLive do
 
   # The Sim3D topic carries other parameter broadcasts too; ignore them.
   def handle_info(_msg, socket), do: {:noreply, socket}
+
+  defp handle_source_mode_changed(socket, mode) do
+    if connected?(socket) do
+      if mock_source?(mode), do: subscribe_world(), else: unsubscribe_world()
+    end
+
+    devices = Radar.devices() |> Enum.filter(& &1.enabled)
+
+    {:noreply,
+     socket
+     |> assign(:source_mode, mode)
+     |> assign(:layout_devices, Radar.planned_devices())
+     |> assign(:devices, devices)
+     |> assign(:max_people, safe_max_people())
+     |> assign(:max_people_applying, false)
+     |> assign(:entropy, safe_entropy())
+     |> assign(:selected_device_id, :all)
+     |> assign(:bounds_mode, :static)
+     |> assign(:world_objects, [])
+     |> assign(:sensor_statuses, build_sensor_statuses(devices))
+     |> assign(:static_bounds, bounds_for(:all, devices, socket.assigns.world_radius))
+     |> reset_radar_state()}
+  end
 
   ## State updates
 
@@ -549,8 +570,8 @@ defmodule OctopusWeb.RadarLive do
 
   # Bounds to use for a (re)selection, honoring mock mode (world disk) vs
   # real hardware (configured rectangle).
-  defp active_bounds(socket, selected_id) do
-    bounds_for(socket.assigns.mock_mode, selected_id, socket.assigns.devices, socket.assigns.world_radius)
+  defp active_bounds(socket, _selected_id) do
+    bounds_for(socket.assigns.selected_device_id, socket.assigns.devices, socket.assigns.world_radius)
   end
 
   defp empty_ruler,
@@ -560,15 +581,8 @@ defmodule OctopusWeb.RadarLive do
     now = System.monotonic_time(:millisecond)
     cutoff = now - @window_ms
     fade_cutoff = now - @fade_ms
-
-    new_samples =
-      Enum.map(tracks, fn %Track{id: id, x: x, y: y, z: z} ->
-        %{ts: now, device_id: device_id, id: id, x: x, y: y, z: z}
-      end)
-
-    samples =
-      (new_samples ++ socket.assigns.samples)
-      |> Enum.filter(&(&1.ts >= cutoff))
+    selected = socket.assigns.selected_device_id
+    include_samples? = selected == :all or selected == device_id
 
     tracks_now =
       tracks
@@ -588,14 +602,35 @@ defmodule OctopusWeb.RadarLive do
       |> Enum.reject(fn {_key, t} -> t.last_seen < fade_cutoff end)
       |> Map.new()
 
+    new_samples =
+      if include_samples? do
+        Enum.map(tracks, fn %Track{id: id, x: x, y: y, z: z} ->
+          %{ts: now, device_id: device_id, id: id, x: x, y: y, z: z}
+        end)
+      else
+        []
+      end
+
+    samples =
+      if include_samples? do
+        (new_samples ++ socket.assigns.samples)
+        |> Enum.filter(&(&1.ts >= cutoff))
+      else
+        socket.assigns.samples
+      end
+
     a = socket.assigns
-    {min_x, max_x, min_y, max_y} = update_xy_bounds(a, new_samples)
-    {min_z, max_z} = grow_bounds(new_samples, a.min_z, a.max_z, :z)
+
+    {min_x, max_x, min_y, max_y} =
+      if include_samples?, do: update_xy_bounds(a, new_samples), else: {a.min_x, a.max_x, a.min_y, a.max_y}
+
+    {min_z, max_z} =
+      if include_samples?, do: grow_bounds(new_samples, a.min_z, a.max_z, :z), else: {a.min_z, a.max_z}
 
     socket
     |> assign(:samples, samples)
     |> assign(:tracks_now, tracks_now)
-    |> assign(:last_frame_number, frame_number)
+    |> assign(:last_frame_number, if(include_samples?, do: frame_number, else: a.last_frame_number))
     |> assign(:min_x, min_x)
     |> assign(:max_x, max_x)
     |> assign(:min_y, min_y)
@@ -656,10 +691,23 @@ defmodule OctopusWeb.RadarLive do
 
     ruler = build_ruler(min_x, max_x, min_y, max_y)
 
-    range_indicators =
-      build_range_indicators(a.devices, a.selected_device_id, min_x, max_x, min_y, max_y)
+    active_devices = Enum.filter(a.devices, &Radar.sensor_active?(&1.device_id))
+    active_ids = MapSet.new(active_devices, & &1.device_id)
 
-    world_sensors = build_world_sensors(a.devices, a.tracks_now, min_x, max_x, min_y, max_y)
+    range_indicators =
+      build_range_indicators(
+        a.layout_devices,
+        active_ids,
+        a.selected_device_id,
+        a.tracks_now,
+        min_x,
+        max_x,
+        min_y,
+        max_y
+      )
+
+    world_sensors =
+      build_world_sensors(a.layout_devices, active_devices, a.tracks_now, min_x, max_x, min_y, max_y)
 
     # The world border frames every mode; ground-truth people only exist in
     # mock mode.
@@ -681,7 +729,7 @@ defmodule OctopusWeb.RadarLive do
       end
 
     ground_truth =
-      if a.mock_mode == :off,
+      if mock_source?(a.source_mode),
         do: [],
         else: build_ground_truth(a.world_objects, min_x, max_x, min_y, max_y)
 
@@ -705,23 +753,37 @@ defmodule OctopusWeb.RadarLive do
     |> assign(:ring_panels, ring_panels)
   end
 
-  # One coverage ellipse per sensor in the current selection, centered on the
-  # sensor's global mount position and tinted in that sensor's color.
-  defp build_range_indicators(_devices, nil, _, _, _, _), do: []
+  # One coverage ellipse per planned sensor in the current selection, centered on
+  # the sensor's global mount position. Inactive sensors use neutral gray; active
+  # sensors use their per-sensor hue.
+  defp build_range_indicators(_layout_devices, _active_ids, nil, _tracks_now, _, _, _, _), do: []
 
-  defp build_range_indicators(devices, :all, min_x, max_x, min_y, max_y) do
-    Enum.map(devices, &range_indicator(&1, min_x, max_x, min_y, max_y))
+  defp build_range_indicators(layout_devices, active_ids, :all, tracks_now, min_x, max_x, min_y, max_y) do
+    detecting = devices_with_detections(tracks_now)
+
+    Enum.map(layout_devices, fn device ->
+      active? = MapSet.member?(active_ids, device.device_id)
+      detecting? = active? and MapSet.member?(detecting, device.device_id)
+      range_indicator(device, active?, detecting?, min_x, max_x, min_y, max_y)
+    end)
   end
 
-  defp build_range_indicators(devices, device_id, min_x, max_x, min_y, max_y)
+  defp build_range_indicators(layout_devices, active_ids, device_id, tracks_now, min_x, max_x, min_y, max_y)
        when is_integer(device_id) do
-    case Enum.find(devices, &(&1.device_id == device_id)) do
-      nil -> []
-      device -> [range_indicator(device, min_x, max_x, min_y, max_y)]
+    detecting = devices_with_detections(tracks_now)
+
+    case Enum.find(layout_devices, &(&1.device_id == device_id)) do
+      nil ->
+        []
+
+      device ->
+        active? = MapSet.member?(active_ids, device.device_id)
+        detecting? = active? and MapSet.member?(detecting, device.device_id)
+        [range_indicator(device, active?, detecting?, min_x, max_x, min_y, max_y)]
     end
   end
 
-  defp range_indicator(device, min_x, max_x, min_y, max_y) do
+  defp range_indicator(device, active?, detecting?, min_x, max_x, min_y, max_y) do
     range_m = device.range_cm / 100.0
     {tx, ty} = sensor_position(device)
 
@@ -731,40 +793,63 @@ defmodule OctopusWeb.RadarLive do
       cy: world_to_svg_y(ty, min_y, max_y),
       rx: range_m / (max_x - min_x) * @vb,
       ry: range_m / (max_y - min_y) * @vb,
-      color: sensor_color(device.device_id)
+      color: placement_marker_color(device.device_id, active?, detecting?),
+      active?: active?
     }
   end
 
   # Sensor placement markers (square + label) in the global frame.
-  defp build_world_sensors(devices, tracks_now, min_x, max_x, min_y, max_y) do
+  defp build_world_sensors(layout_devices, active_devices, tracks_now, min_x, max_x, min_y, max_y) do
+    active_ids = MapSet.new(active_devices, & &1.device_id)
     detecting = devices_with_detections(tracks_now)
 
-    Enum.map(devices, fn device ->
+    Enum.map(layout_devices, fn device ->
+      active? = MapSet.member?(active_ids, device.device_id)
+      detecting? = active? and MapSet.member?(detecting, device.device_id)
+
       {tx, ty} = sensor_position(device)
-      detecting? = MapSet.member?(detecting, device.device_id)
+      axis_len_m = @sensor_marker_half * (max_x - min_x) / @vb * 0.75
+
+      # Local axes in the global frame (matches Transform): +X along the outward
+      # radial (angle_deg + rotation_deg), +Y 90° CCW from it (right-handed).
+      phi = (device.angle_deg + device.rotation_deg) * :math.pi() / 180.0
+      {x_dx, x_dy} = {:math.cos(phi), :math.sin(phi)}
+      {y_dx, y_dy} = {-:math.sin(phi), :math.cos(phi)}
 
       %{
         cx: world_to_svg_x(tx, min_x, max_x),
         cy: world_to_svg_y(ty, min_y, max_y),
+        x_axis_x: world_to_svg_x(tx + x_dx * axis_len_m, min_x, max_x),
+        x_axis_y: world_to_svg_y(ty + x_dy * axis_len_m, min_y, max_y),
+        y_axis_x: world_to_svg_x(tx + y_dx * axis_len_m, min_x, max_x),
+        y_axis_y: world_to_svg_y(ty + y_dy * axis_len_m, min_y, max_y),
         half: @sensor_marker_half,
         label: device_letter(device.device_id),
-        color: sensor_placement_color(device.device_id, detecting?),
-        rotation: sensor_marker_rotation(device)
+        color: placement_marker_color(device.device_id, active?, detecting?),
+        fill_opacity: placement_fill_opacity(active?, detecting?),
+        stroke: if(active?, do: "#404040", else: "#9ca3af"),
+        # SVG rotate() is clockwise with Y pointing down, so a world angle φ
+        # (CCW) draws the square at −φ.
+        rotation: -(device.angle_deg + device.rotation_deg)
       }
     end)
   end
 
-  defp devices_with_detections(tracks_now) do
-    tracks_now
-    |> Map.keys()
-    |> Enum.map(fn {device_id, _} -> device_id end)
-    |> MapSet.new()
+  defp placement_marker_color(_device_id, false, _detecting?), do: "#d1d5db"
+
+  defp placement_marker_color(device_id, true, detecting?) do
+    sensor_placement_color(device_id, detecting?)
   end
 
-  # Match Transform's effective global rotation (angle_deg + rotation_deg),
-  # negated for SVG where positive rotate() is clockwise and Y is flipped.
-  defp sensor_marker_rotation(device) do
-    -(device.angle_deg + device.rotation_deg)
+  defp placement_fill_opacity(true, true), do: 0.58
+  defp placement_fill_opacity(true, false), do: 0.35
+  defp placement_fill_opacity(false, _), do: 0.22
+
+  defp devices_with_detections(tracks_now) do
+    tracks_now
+    |> Map.values()
+    |> Enum.map(& &1.device_id)
+    |> MapSet.new()
   end
 
   # LED displays on the installation ring (+Y = north). Panel fronts face inward;
@@ -885,12 +970,18 @@ defmodule OctopusWeb.RadarLive do
           <div class="flex items-center justify-between gap-4 shrink-0">
             <h1 class="card-title text-2xl">Radar</h1>
             <%= cond do %>
-              <% not @radar_enabled -> %>
+              <% not @radar_configured -> %>
                 <span class="text-sm opacity-70">
-                  Radar disabled in config (<code>enabled: false</code> or <code>RADAR_ENABLED</code>)
+                  Radar not defined for this installation
+                </span>
+              <% @source_mode == :off -> %>
+                <span class="text-sm opacity-70">
+                  Source off · {length(@layout_devices)} sensor{if length(@layout_devices) == 1,
+                    do: "",
+                    else: "s"} planned
                 </span>
               <% @devices == [] -> %>
-                <span class="text-sm opacity-70">No radar sensors configured</span>
+                <span class="text-sm opacity-70">No sensors active</span>
               <% true -> %>
                 <span class="text-sm opacity-70">
                   {length(@devices)} sensor{if length(@devices) == 1, do: "", else: "s"}
@@ -898,22 +989,13 @@ defmodule OctopusWeb.RadarLive do
             <% end %>
           </div>
 
-          <%= if not @radar_enabled do %>
+          <%= if not @radar_configured do %>
             <div class="alert alert-info mt-4">
               <span>
-                Enable radar in <code>config/radar.exs</code> (<code>enabled: true</code>) or set
-                <code>RADAR_ENABLED=true</code>, then restart the application.
+                Add a <code>:radar</code> block to the active installation module to use radar.
               </span>
             </div>
           <% else %>
-            <%= if @devices == [] do %>
-              <div class="alert alert-info mt-4">
-                <span>
-                  Add at least one sensor under <code>:sensors</code> in
-                  <code>config/radar.exs</code> or <code>config/radar.local.exs</code>.
-                </span>
-              </div>
-            <% else %>
               <div class="flex flex-row flex-nowrap gap-4 min-h-0 items-stretch">
                 <div class="w-64 shrink-0 overflow-y-auto flex flex-col gap-3 max-h-[calc(100vh-9rem)]">
                   <div class="flex flex-col gap-2">
@@ -1068,9 +1150,14 @@ defmodule OctopusWeb.RadarLive do
                         <defs>
                           <%= for r <- @range_indicators do %>
                             <radialGradient id={"rangegrad-#{r.id}"}>
-                              <stop offset="0%" stop-color={r.color} stop-opacity="0.5" />
-                              <stop offset="65%" stop-color={r.color} stop-opacity="0.18" />
-                              <stop offset="100%" stop-color={r.color} stop-opacity="0" />
+                              <%= if r.active? do %>
+                                <stop offset="0%" stop-color={r.color} stop-opacity="0.5" />
+                                <stop offset="65%" stop-color={r.color} stop-opacity="0.18" />
+                                <stop offset="100%" stop-color={r.color} stop-opacity="0" />
+                              <% else %>
+                                <stop offset="0%" stop-color={r.color} stop-opacity="0.12" />
+                                <stop offset="100%" stop-color={r.color} stop-opacity="0" />
+                              <% end %>
                             </radialGradient>
                           <% end %>
                         </defs>
@@ -1081,8 +1168,8 @@ defmodule OctopusWeb.RadarLive do
                             rx={fmt_f(r.rx)}
                             ry={fmt_f(r.ry)}
                             fill={"url(#rangegrad-#{r.id})"}
-                            stroke="#808080"
-                            stroke-opacity="0.5"
+                            stroke={if(r.active?, do: "#808080", else: "#9ca3af")}
+                            stroke-opacity={if(r.active?, do: "0.5", else: "0.7")}
                             stroke-width="2"
                           />
                         <% end %>
@@ -1127,23 +1214,12 @@ defmodule OctopusWeb.RadarLive do
                       <%!-- Sensor placements --%>
                       <%= if @visuals.placements do %>
                         <%= for s <- @world_sensors do %>
-                          <g transform={"rotate(#{fmt_f(s.rotation)}, #{fmt_f(s.cx)}, #{fmt_f(s.cy)})"}>
-                            <rect
-                              x={fmt_f(s.cx - s.half)}
-                              y={fmt_f(s.cy - s.half)}
-                              width={fmt_f(s.half * 2)}
-                              height={fmt_f(s.half * 2)}
-                              rx="3"
-                              fill={s.color}
-                              fill-opacity="0.35"
-                              stroke="#404040"
-                              stroke-width="2"
-                            />
+                          <g>
                             <line
                               x1={fmt_f(s.cx)}
                               y1={fmt_f(s.cy)}
-                              x2={fmt_f(s.cx + s.half * 0.75)}
-                              y2={fmt_f(s.cy)}
+                              x2={fmt_f(s.x_axis_x)}
+                              y2={fmt_f(s.x_axis_y)}
                               stroke="#dc2626"
                               stroke-width="3"
                               stroke-linecap="round"
@@ -1151,23 +1227,36 @@ defmodule OctopusWeb.RadarLive do
                             <line
                               x1={fmt_f(s.cx)}
                               y1={fmt_f(s.cy)}
-                              x2={fmt_f(s.cx)}
-                              y2={fmt_f(s.cy - s.half * 0.75)}
+                              x2={fmt_f(s.y_axis_x)}
+                              y2={fmt_f(s.y_axis_y)}
                               stroke="#2563eb"
                               stroke-width="3"
                               stroke-linecap="round"
                             />
-                            <text
-                              x={fmt_f(s.cx)}
-                              y={fmt_f(s.cy)}
-                              text-anchor="middle"
-                              dominant-baseline="central"
-                              font-size="22"
-                              font-weight="bold"
-                              fill="black"
-                            >
-                              {s.label}
-                            </text>
+                            <g transform={"rotate(#{fmt_f(s.rotation)}, #{fmt_f(s.cx)}, #{fmt_f(s.cy)})"}>
+                              <rect
+                                x={fmt_f(s.cx - s.half)}
+                                y={fmt_f(s.cy - s.half)}
+                                width={fmt_f(s.half * 2)}
+                                height={fmt_f(s.half * 2)}
+                                rx="3"
+                                fill={s.color}
+                                fill-opacity={fmt_f(s.fill_opacity)}
+                                stroke={s.stroke}
+                                stroke-width="2"
+                              />
+                              <text
+                                x={fmt_f(s.cx)}
+                                y={fmt_f(s.cy)}
+                                text-anchor="middle"
+                                dominant-baseline="central"
+                                font-size="22"
+                                font-weight="bold"
+                                fill="black"
+                              >
+                                {s.label}
+                              </text>
+                            </g>
                           </g>
                         <% end %>
                       <% end %>
@@ -1241,15 +1330,18 @@ defmodule OctopusWeb.RadarLive do
                 <div class="w-72 shrink-0 overflow-y-auto flex flex-col gap-4 max-h-[calc(100vh-9rem)]">
                   <div class="flex flex-col gap-3">
                     <p class="text-xs font-semibold opacity-70">Source</p>
-                    <div class="join w-full" id="radar-mock-mode">
-                      <%= for {value, label} <- [{"off", "Live"}, {"exact", "Mock · Exact"}, {"fuzzy", "Mock · Fuzzy"}] do %>
+                    <div class="flex flex-wrap gap-1 w-full" id="radar-source-mode">
+                      <%= for {value, label, disabled?} <- source_mode_options(@live_available) do %>
                         <button
                           type="button"
-                          phx-click="set_mock_mode"
+                          phx-click="set_source_mode"
                           phx-value-mode={value}
+                          disabled={disabled?}
+                          title={source_mode_button_title(value, disabled?)}
                           class={[
-                            "btn btn-sm join-item flex-1",
-                            if(Atom.to_string(@mock_mode) == value, do: "btn-primary", else: "btn-outline")
+                            "btn btn-sm flex-1 min-w-[45%]",
+                            if(Atom.to_string(@source_mode) == value, do: "btn-primary", else: "btn-outline"),
+                            disabled? && "btn-disabled"
                           ]}
                         >
                           {label}
@@ -1294,7 +1386,7 @@ defmodule OctopusWeb.RadarLive do
                     </form>
                   </div>
 
-                  <%= if @mock_mode != :off do %>
+                  <%= if mock_source?(@source_mode) do %>
                     <form phx-change="set_max_people" class="flex flex-col gap-1">
                       <label for="radar-max-people" class="text-xs font-semibold opacity-70">
                         Max people
@@ -1350,7 +1442,7 @@ defmodule OctopusWeb.RadarLive do
                     </form>
                   <% end %>
 
-                  <%= if @mock_mode == :off do %>
+                  <%= if @source_mode == :live do %>
                     <form phx-change="set_sensitivity" class="flex flex-col gap-1">
                       <label for="radar-sensitivity" class="text-xs font-semibold opacity-70">
                         Sensitivity
@@ -1457,7 +1549,6 @@ defmodule OctopusWeb.RadarLive do
                   </div>
                 </div>
               </div>
-            <% end %>
           <% end %>
         </div>
       </div>
@@ -1781,7 +1872,8 @@ defmodule OctopusWeb.RadarLive do
     do: "hsl(#{sensor_hue(device_id)}, #{@body_saturation}%, #{@body_lightness}%)"
 
   defp sensor_placement_color(device_id, true),
-    do: "hsl(#{sensor_hue(device_id)}, #{@sensor_detecting_saturation}%, #{@body_lightness}%)"
+    do:
+      "hsl(#{sensor_hue(device_id)}, #{@sensor_detecting_saturation}%, #{@sensor_detecting_lightness}%)"
 
   defp sensor_placement_color(device_id, false), do: sensor_color(device_id)
 
@@ -1793,9 +1885,25 @@ defmodule OctopusWeb.RadarLive do
 
   ## Mock mode helpers
 
-  defp parse_mode("exact"), do: :exact
-  defp parse_mode("fuzzy"), do: :fuzzy
-  defp parse_mode(_), do: :off
+  defp mock_source?(mode), do: mode in [:exact, :fuzzy]
+
+  defp source_mode_options(live_available) do
+    [
+      {"off", "Off", false},
+      {"live", "Live", not live_available},
+      {"exact", "Mock · Exact", false},
+      {"fuzzy", "Mock · Fuzzy", false}
+    ]
+  end
+
+  defp source_mode_button_title("live", true), do: "No radar hardware bound on this host"
+  defp source_mode_button_title(_value, _disabled?), do: nil
+
+  defp parse_source_mode("live"), do: :live
+  defp parse_source_mode("exact"), do: :exact
+  defp parse_source_mode("fuzzy"), do: :fuzzy
+  defp parse_source_mode("off"), do: :off
+  defp parse_source_mode(_), do: :off
 
   defp parse_degree(v) when is_binary(v) do
     case Float.parse(v) do

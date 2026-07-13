@@ -3,8 +3,8 @@ import Config
 # Copy to radar.local.exs (gitignored) for machine-specific overrides.
 # Loaded after radar.exs in config/runtime.exs.
 
-# Disable radar entirely on this host:
-# config :octopus, Octopus.Radar, enabled: false
+# Leave source off on this host (default in dev):
+# RADAR_SOURCE_MODE=off
 
 # Example: three sensors around an installation center (pose values are illustrative):
 

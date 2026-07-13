@@ -31,3 +31,7 @@ config :octopus, :env, :test
 config :octopus, :firmware_broadcaster_local_port, 0
 config :octopus, :controller_interface_port, 0
 config :octopus, :osc_server_port, 0
+
+# Nation2026 defines radar; Pixie does not. Use Pixie so tests can start radar
+# children (e.g. Mock.World) in isolation without the application supervisor.
+config :octopus, :installation, Octopus.Installation.Pixie

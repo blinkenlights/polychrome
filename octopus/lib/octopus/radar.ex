@@ -8,79 +8,56 @@ defmodule Octopus.Radar do
 
   ## Configuration
 
-  Loaded at runtime from `config/radar.exs` (via `config/runtime.exs`).
-  That file holds all named radar setups; the active one is selected per
-  deployment with the `RADAR_SETUP` env var (set in `deploy/<host>/.env`),
-  defaulting to `"dev"` for local development.
+  Radar is split between **installation** (logical layout) and **deployment**
+  (physical hardware on a specific host).
 
-  Two configuration styles are supported: **manual** and **layout**.
+  ### Installation (`:radar` in the installation module)
 
-  ### Manual style
+  The active installation defines how many sensors exist, their logical ids,
+  and how they are arranged (e.g. radial layout, distance). In a radial layout
+  each sensor's local +X points outward automatically, so `rotation_deg` is
+  only needed as a small per-sensor correction (default `0`):
 
-      config :octopus, Octopus.Radar,
-        enabled: true,
-        sensors: [
-          [port: "/dev/ttyUSB0", enabled: true, angle_deg: 0, distance_cm: 150, rotation_deg: 0],
-          [port: "/dev/ttyUSB1", angle_deg: 60, distance_cm: 150, rotation_deg: 180]
-        ],
-        defaults: [
-          type: :ld6001a,
-          enabled: true,
-          rotation_deg: 180,
-          baud: 115_200,
-          height_cm: 300, range_cm: 450,
-          x_pos_cm: 450, x_neg_cm: -450,
-          y_pos_cm: 450, y_neg_cm: -450,
-          moving_decisecs: 110, static_decisecs: 100, exit_decisecs: 5
-        ]
-
-  ### Layout style
-
-  For uniform radial installations (sensors evenly spaced around a central
-  mast) use `:layout` + `:ports` instead of `:sensors`. The layout generates
-  `angle_deg` automatically; all other sensor parameters come from the
-  non-geometry keys inside the `:layout` block or from a `:defaults` block.
-
-      config :octopus, Octopus.Radar,
+      radar: [
+        defaults: [sensitivity: 4, height_cm: 500, range_cm: 500, ...],
         layout: [
-          type: :radial,           # only supported layout type
-          count: 6,                # number of sensors
-          start_angle_deg: 0,      # bearing of first sensor
-          distance_cm: 150,        # mount distance from center (shared)
-          rotation_deg: 180,       # 0 = outward, 180 = inward (shared)
-          height_cm: 300,
-          sensitivity: 4
-        ],
-        ports: [
-          "/dev/ttyUSB0",          # paired with first auto-generated angle
-          "/dev/ttyUSB1",
-          [port: "/dev/ttyUSB2", rotation_deg: 182]  # per-port override
+          type: :radial,
+          sensors: [:a, :b, :c, :d, :e, :f],
+          start_angle_deg: 120,
+          distance_cm: 300
         ]
+      ]
 
-  A `:ports` entry may be a plain string or a keyword list with `:port` plus
-  any per-sensor overrides that take precedence over layout/defaults values.
+  See `Octopus.Installation.Nation2026` for a full example.
 
-  `:layout` and `:sensors` are mutually exclusive; an error is raised if both
-  are present.
+  ### Deployment (`config/radar_deployments.exs`)
 
-  ### Pose parameters
+  Each host that has real sensors selects a named deployment via
+  `RADAR_DEPLOYMENT` (set in `deploy/<host>/.env`). The deployment maps
+  logical sensor ids to serial ports and optional USB adapter metadata:
 
-  `rotation_deg` is **relative to the outward beam direction** (`angle_deg`).
-  The effective global rotation applied to local coordinates is
-  `angle_deg + rotation_deg`. Common values:
+      "redlady" => [
+        defaults: [type: :ld6001a, baud: 115_200],
+        sensors: [
+          [id: :a, port: "/dev/serial/by-id/..."],
+          ...
+        ],
+        adapters: [...]
+      ]
 
-    * `0` — sensor's local +X aligned with the beam pointing away from center
-    * `180` — sensor facing inward toward center
+  When `RADAR_DEPLOYMENT` is unset (e.g. local dev on a Mac), Live mode is
+  unavailable but Mock mode still works using synthetic ports.
 
-  This allows a single `rotation_deg` default to cover all sensors in a
-  uniform array, with small per-sensor corrections for physical misalignment.
+  ### Runtime (`config/radar.exs`)
 
-  * `:enabled` — master switch; when `false`, no supervisor or serial I/O.
-    Overridable via `RADAR_ENABLED` (`true`/`1`/`yes` vs anything else).
+  * `:boot_source_mode` — `:off`, `:live`, `:exact`, or `:fuzzy`; overridable via
+    `RADAR_SOURCE_MODE` (defaults to `:off` in dev, `:live` in prod).
 
-  The integer **`device_id` is the 1-based position** of an entry in the
-  `:sensors` (or `:ports`) list and is used both to register the sensor
-  process and as the tag in PubSub messages.
+  Use `live_available?/0` to check whether this host can run Live mode.
+
+  The integer **`device_id` is the 1-based position** in the installation's
+  `:sensors` list and is used both to register the sensor process and as the
+  tag in PubSub messages.
 
   ## PubSub
 
@@ -113,17 +90,9 @@ defmodule Octopus.Radar do
   use Supervisor
   require Logger
 
-  alias Octopus.Radar.{LogFormat, Mock, PoseTweak, Runtime, Sensor}
+  alias Octopus.Radar.{LogFormat, Mock, PoseTweak, Runtime, Sensor, SensorPlan, SourceMode}
 
   @topic "radar:hlk6001"
-  @supported_types [:ld6001a]
-  @default_pose [
-    type: :ld6001a,
-    enabled: true,
-    angle_deg: 0,
-    distance_cm: 0,
-    rotation_deg: 0
-  ]
 
   ## Public API
 
@@ -163,12 +132,14 @@ defmodule Octopus.Radar do
           %{name: String.t(), usb_path: String.t(), device_ids: [pos_integer()]}
         ]
   def adapters do
-    if not enabled?() do
+    if not configured?() do
       []
     else
-      radar_env = Application.get_env(:octopus, __MODULE__, [])
-
-      Keyword.get(radar_env, :adapters, [])
+      deployment_config()
+      |> case do
+        nil -> []
+        deployment -> Keyword.get(deployment, :adapters, [])
+      end
       |> Enum.reduce({[], 1}, fn adapter_opts, {acc, id_start} ->
         ports = Keyword.fetch!(adapter_opts, :ports)
         count = length(ports)
@@ -282,25 +253,57 @@ defmodule Octopus.Radar do
         ]
   def devices do
     sensor_configs()
-    |> Enum.map(fn {device_id, config} ->
-      %{
-        device_id: device_id,
-        type: Keyword.fetch!(config, :type),
-        enabled: Keyword.fetch!(config, :enabled),
-        port: Keyword.fetch!(config, :port),
-        baud: Keyword.fetch!(config, :baud),
-        sensitivity: Keyword.fetch!(config, :sensitivity),
-        angle_deg: Keyword.fetch!(config, :angle_deg),
-        distance_cm: Keyword.fetch!(config, :distance_cm),
-        rotation_deg: Keyword.fetch!(config, :rotation_deg),
-        x_pos_cm: Keyword.fetch!(config, :x_pos_cm),
-        x_neg_cm: Keyword.fetch!(config, :x_neg_cm),
-        y_pos_cm: Keyword.fetch!(config, :y_pos_cm),
-        y_neg_cm: Keyword.fetch!(config, :y_neg_cm),
-        range_cm: Keyword.fetch!(config, :range_cm),
-        height_cm: Keyword.fetch!(config, :height_cm)
-      }
-    end)
+    |> devices_from_configs()
+  end
+
+  @doc """
+  Return planned sensor geometry from the installation layout, regardless of
+  the current source mode. Used for static map overlays when sensors are off.
+  """
+  @spec planned_devices() :: [map()]
+  def planned_devices do
+    if configured?() do
+      installation_radar = Octopus.Installation.radar_config()
+      deployment = deployment_config()
+
+      SensorPlan.build(installation_radar, deployment, :exact)
+      |> devices_from_configs()
+    else
+      []
+    end
+  end
+
+  @doc """
+  Return `true` when a sensor is enabled in runtime under the current source mode.
+  """
+  @spec sensor_active?(pos_integer()) :: boolean()
+  def sensor_active?(device_id) do
+    Runtime.enabled?(device_id) and
+      Enum.any?(sensor_configs(), fn {id, _} -> id == device_id end)
+  end
+
+  defp devices_from_configs(configs) do
+    Enum.map(configs, &device_from_config/1)
+  end
+
+  defp device_from_config({device_id, config}) do
+    %{
+      device_id: device_id,
+      type: Keyword.fetch!(config, :type),
+      enabled: Keyword.fetch!(config, :enabled),
+      port: Keyword.fetch!(config, :port),
+      baud: Keyword.fetch!(config, :baud),
+      sensitivity: Keyword.fetch!(config, :sensitivity),
+      angle_deg: Keyword.fetch!(config, :angle_deg),
+      distance_cm: Keyword.fetch!(config, :distance_cm),
+      rotation_deg: Keyword.fetch!(config, :rotation_deg),
+      x_pos_cm: Keyword.fetch!(config, :x_pos_cm),
+      x_neg_cm: Keyword.fetch!(config, :x_neg_cm),
+      y_pos_cm: Keyword.fetch!(config, :y_pos_cm),
+      y_neg_cm: Keyword.fetch!(config, :y_neg_cm),
+      range_cm: Keyword.fetch!(config, :range_cm),
+      height_cm: Keyword.fetch!(config, :height_cm)
+    }
   end
 
   @doc """
@@ -327,72 +330,99 @@ defmodule Octopus.Radar do
   def reinitialize(device_id), do: Sensor.reinitialize(device_id)
 
   @doc """
-  Return `true` if the radar layer is enabled in application config and for
-  the current installation.
+  Return `true` when the active installation defines a `:radar` configuration.
 
-  See `config/radar.exs`, `RADAR_SETUP` / `RADAR_ENABLED`, and
-  `Octopus.Installation.radar_enabled/0`.
+  When `false`, the radar supervisor is not started and sensor APIs are inert.
+  Use `source_mode/0` to turn sensors on or off at runtime when configured.
   """
-  @spec enabled?() :: boolean()
-  def enabled? do
-    config_enabled =
-      Application.get_env(:octopus, __MODULE__, [])
-      |> Keyword.get(:enabled, true)
-
-    config_enabled and Octopus.Installation.radar_enabled()
+  @spec configured?() :: boolean()
+  def configured? do
+    Octopus.Installation.radar_config() != nil
   end
 
   @doc """
-  Return the mock mode to apply at boot, from `:boot_mock_mode` in config.
-
-  Defaults to `:off` (real serial sensors). When `:exact`/`:fuzzy`, the radar
-  layer starts mock-backed sensors directly at boot (see `config/radar.exs`,
-  selectable per setup / via the `RADAR_MOCK_MODE` env var). Unlike the runtime
-  `mock_mode/0`, this reads config and does not depend on the (not-yet-started)
-  `Mock.World` process, so it is safe to use while building the supervision tree.
+  Return `true` when this host has deployment bindings for every logical
+  sensor in the active installation (Live mode can talk to real hardware).
   """
-  @spec boot_mock_mode() :: :off | :exact | :fuzzy
-  def boot_mock_mode do
-    case Application.get_env(:octopus, __MODULE__, []) |> Keyword.get(:boot_mock_mode, :off) do
-      mode when mode in [:off, :exact, :fuzzy] -> mode
+  @spec live_available?() :: boolean()
+  def live_available? do
+    configured?() and
+      SensorPlan.deployment_bound?(Octopus.Installation.radar_config(), deployment_config())
+  end
+
+  @doc """
+  Return the sensor source mode to apply at boot, from `:boot_source_mode` in config.
+
+  Defaults to `:off` in dev and `:live` in prod. Unlike `source_mode/0`, this reads
+  config and is safe while building the supervision tree.
+  """
+  @spec boot_source_mode() :: SourceMode.t()
+  def boot_source_mode do
+    case Application.get_env(:octopus, __MODULE__, []) |> Keyword.get(:boot_source_mode, :off) do
+      mode when mode in [:off, :live, :exact, :fuzzy] -> mode
       _ -> :off
     end
   end
 
   @doc """
-  Return the current radar mock mode.
+  Return the current radar source mode.
 
-    * `:off`   — real sensors talk to their serial ports (default)
-    * `:exact` — each sensor is backed by a fake device deriving perfect
-      detections from the shared `Octopus.Radar.Mock.World`
-    * `:fuzzy` — like `:exact` but with per-sensor bias, distance-scaled
-      jitter and distance-based detection dropout
-
-  Returns `:off` when the radar layer (and thus the mock world) is not running.
+    * `:off`   — no sensor processes; radar UI/config only
+    * `:live`  — real sensors on serial ports (when deployment-bound)
+    * `:exact` — mock sensors with perfect synthetic detections
+    * `:fuzzy` — mock sensors with noise and dropout
   """
-  @spec mock_mode() :: :off | :exact | :fuzzy
-  def mock_mode do
-    case Process.whereis(Mock.World) do
-      nil -> :off
-      _pid -> Mock.World.mode()
+  @spec source_mode() :: SourceMode.t()
+  def source_mode do
+    case Process.whereis(SourceMode) do
+      nil -> boot_source_mode()
+      _pid -> SourceMode.get()
     end
   end
 
   @doc """
-  Switch the radar mock mode at runtime.
+  Return the active mock-world simulation mode (`:exact`, `:fuzzy`, or `:off`).
 
-  All currently-enabled sensors are torn down and restarted: in `:off` they
-  reconnect to their real serial ports; in `:exact`/`:fuzzy` each is paired
-  with a freshly-started `Octopus.Radar.Mock.Server` fake device that feeds
-  it synthetic frames. Broadcasts `{:mock_mode_changed, mode}` on `topic/0`.
+  `:off` when the source is `:off` or `:live`.
   """
+  @spec mock_mode() :: :off | :exact | :fuzzy
+  def mock_mode do
+    case source_mode() do
+      mode when mode in [:exact, :fuzzy] -> mode
+      _ -> :off
+    end
+  end
+
+  @doc """
+  Switch the radar source mode at runtime.
+
+  Tears down and restarts sensors as needed. Broadcasts
+  `{:source_mode_changed, mode}` on `topic/0`.
+  """
+  @spec set_source_mode(SourceMode.t()) :: :ok
+  def set_source_mode(:off), do: do_set_source_mode(:off)
+
+  def set_source_mode(:live) do
+    if live_available?(), do: do_set_source_mode(:live), else: :ok
+  end
+
+  def set_source_mode(mode) when mode in [:exact, :fuzzy], do: do_set_source_mode(mode)
+
+  @doc "Deprecated — use `set_source_mode/1`."
   @spec set_mock_mode(:off | :exact | :fuzzy) :: :ok
-  def set_mock_mode(mode) when mode in [:off, :exact, :fuzzy] do
-    Mock.World.set_mode(mode)
+  def set_mock_mode(:off), do: set_source_mode(:live)
+  def set_mock_mode(mode) when mode in [:exact, :fuzzy], do: set_source_mode(mode)
+
+  defp do_set_source_mode(mode) do
+    SourceMode.set(mode)
+    Mock.World.set_mode(mock_world_mode(mode))
     restart_all_sensors(mode)
-    Phoenix.PubSub.broadcast(Octopus.PubSub, topic(), {:mock_mode_changed, mode})
+    Phoenix.PubSub.broadcast(Octopus.PubSub, topic(), {:source_mode_changed, mode})
     :ok
   end
+
+  defp mock_world_mode(mode) when mode in [:exact, :fuzzy], do: mode
+  defp mock_world_mode(_), do: :off
 
   @doc "Current mock-world population cap. See `Octopus.Radar.Mock.World`."
   @spec max_people() :: pos_integer()
@@ -418,11 +448,25 @@ defmodule Octopus.Radar do
 
   @doc """
   Upper bound for the mock-world population cap: `@per_sensor_detection_cap`
-  detectable people per configured sensor (e.g. 6 sensors → 60). Derived from
-  config, so it is valid even before the `Mock.World` process is running.
+  detectable people per logical sensor in the installation (e.g. 6 sensors → 60).
+  Derived from installation config so it is safe during `Mock.World` boot.
   """
   @spec max_people_limit() :: pos_integer()
-  def max_people_limit, do: max(length(devices()), 1) * @per_sensor_detection_cap
+  def max_people_limit do
+    count =
+      case Octopus.Installation.radar_config() do
+        nil ->
+          1
+
+        radar ->
+          radar
+          |> Keyword.fetch!(:layout)
+          |> Keyword.fetch!(:sensors)
+          |> length()
+      end
+
+    max(count, 1) * @per_sensor_detection_cap
+  end
 
   @doc "Radius (meters) of the simulated mock world. See `Octopus.Radar.Mock.World`."
   @spec world_radius_m() :: float()
@@ -479,7 +523,7 @@ defmodule Octopus.Radar do
           :inactive | :unavailable | :probing | :initializing | :working | :stale
   def sensor_status(device_id) do
     cond do
-      not enabled?() -> :inactive
+      not configured?() -> :inactive
       not Runtime.enabled?(device_id) -> :inactive
       true ->
         case Sensor.get_ui_status(device_id) do
@@ -532,7 +576,7 @@ defmodule Octopus.Radar do
   """
   @spec radial_layout?() :: boolean()
   def radial_layout? do
-    enabled?() and radial_layout_config?()
+    configured?() and radial_layout_config?()
   end
 
   @doc """
@@ -603,7 +647,7 @@ defmodule Octopus.Radar do
         # Start fresh from a clean slate so the right transport (real vs mock)
         # is used for the current mock mode.
         stop_sensor_children(device_id)
-        start_sensor_children(device_id, config, mock_mode())
+        start_sensor_children(device_id, config, source_mode())
         :ok
     end
   end
@@ -642,37 +686,37 @@ defmodule Octopus.Radar do
 
   @impl true
   def init(:ok) do
-    log_boot_configuration()
-
-    # Only config-enabled sensors participate in the runtime active/inactive
-    # toggle. Config-disabled sensors never appear in the UI and are not tracked.
-    initial_runtime =
-      sensor_configs()
-      |> Enum.filter(fn {_, cfg} -> Keyword.fetch!(cfg, :enabled) end)
-      |> Map.new(fn {id, _} -> {id, true} end)
+    boot = boot_source_mode()
+    log_boot_configuration(boot)
 
     children =
       [
+        {SourceMode, boot},
         {Registry, keys: :unique, name: Octopus.Radar.Registry},
-        {Runtime, initial_runtime},
+        {Runtime, initial_runtime_for(boot)},
         {PoseTweak, []},
         Octopus.Radar.StatusHistory,
         Octopus.Radar.Stats,
-        {Mock.World, [mode: boot_mock_mode()]}
-      ] ++ sensor_children()
+        {Mock.World, [mode: mock_world_mode(boot)]}
+      ] ++ sensor_children(boot)
 
     Supervisor.init(children, strategy: :one_for_one)
   end
 
-  # Build the boot-time sensor children. The boot mock mode comes from config
-  # (:boot_mock_mode, default :off) rather than from the not-yet-started mock
-  # world process, so in :exact/:fuzzy each sensor is built mock-backed at boot.
-  defp sensor_children do
-    mode = boot_mock_mode()
+  defp initial_runtime_for(:off), do: %{}
 
+  defp initial_runtime_for(boot) when boot in [:live, :exact, :fuzzy] do
+    sensor_configs_for(boot)
+    |> Enum.filter(fn {_, cfg} -> Keyword.fetch!(cfg, :enabled) end)
+    |> Map.new(fn {id, _} -> {id, true} end)
+  end
+
+  defp sensor_children(:off), do: []
+
+  defp sensor_children(boot) do
     missing_at_boot =
-      if mode == :off do
-        sensor_configs()
+      if boot == :live do
+        sensor_configs_for(:live)
         |> Enum.filter(fn {_id, cfg} ->
           Keyword.fetch!(cfg, :enabled) and not File.exists?(Keyword.fetch!(cfg, :port))
         end)
@@ -686,7 +730,7 @@ defmodule Octopus.Radar do
       )
     end
 
-    sensor_configs()
+    sensor_configs_for(boot)
     |> Enum.flat_map(fn {device_id, config} ->
       port = Keyword.fetch!(config, :port)
       enabled? = Keyword.fetch!(config, :enabled)
@@ -697,15 +741,12 @@ defmodule Octopus.Radar do
           []
 
         true ->
-          device_child_specs(device_id, config, mode)
+          device_child_specs(device_id, config, boot)
       end
     end)
   end
 
-  # Child specs for one device under the current mock mode. In `:off` this is
-  # just the `Sensor`; in mock modes it is a `Mock.Server` fake device plus a
-  # mock-backed `Sensor` (the server must come first so it exists when the
-  # sensor attaches).
+  # Child specs for one device under the current source mode.
   defp device_child_specs(device_id, config, mode) do
     case Keyword.fetch!(config, :type) do
       :ld6001a ->
@@ -720,9 +761,11 @@ defmodule Octopus.Radar do
     end
   end
 
-  defp sensor_child_specs(device_id, config, :off) do
+  defp sensor_child_specs(device_id, config, :live) do
     [sensor_spec(device_id, config, [])]
   end
+
+  defp sensor_child_specs(_device_id, _config, :off), do: []
 
   defp sensor_child_specs(device_id, config, mode) when mode in [:exact, :fuzzy] do
     mock_spec =
@@ -754,9 +797,24 @@ defmodule Octopus.Radar do
     do: {:via, Registry, {Octopus.Radar.Registry, {:mock, device_id}}}
 
   # Tear down and restart every runtime-enabled sensor for a mode switch.
-  defp restart_all_sensors(mode) do
-    sensor_configs()
-    |> Enum.each(fn {device_id, _config} -> stop_sensor_children(device_id) end)
+  defp restart_all_sensors(:off) do
+    logical_device_ids()
+    |> Enum.each(fn device_id ->
+      Runtime.set(device_id, false)
+      stop_sensor_children(device_id)
+    end)
+  end
+
+  defp restart_all_sensors(mode) when mode in [:live, :exact, :fuzzy] do
+    if mode in [:exact, :fuzzy, :live] do
+      sensor_configs()
+      |> Enum.each(fn {device_id, config} ->
+        if Keyword.fetch!(config, :enabled), do: Runtime.set(device_id, true)
+      end)
+    end
+
+    logical_device_ids()
+    |> Enum.each(&stop_sensor_children/1)
 
     sensor_configs()
     |> Enum.each(fn {device_id, config} ->
@@ -789,12 +847,15 @@ defmodule Octopus.Radar do
     :ok
   end
 
-  defp log_boot_configuration do
-    configs = sensor_configs()
+  defp log_boot_configuration(boot) do
+    configs = sensor_configs_for(boot)
 
     case configs do
       [] ->
-        Logger.info("[radar] Enabled — no sensors configured")
+        case boot do
+          :off -> Logger.info("[radar] Enabled — source off (no sensors)")
+          _ -> Logger.info("[radar] Enabled — no sensors configured")
+        end
 
       _ ->
         summary =
@@ -820,205 +881,66 @@ defmodule Octopus.Radar do
   @doc false
   @spec sensor_configs() :: [{pos_integer(), keyword()}]
   def sensor_configs do
-    if enabled?() do
-      do_sensor_configs()
-    else
-      []
-    end
+    if configured?(), do: do_sensor_configs(), else: []
   end
 
   defp do_sensor_configs do
-    radar_env = Application.get_env(:octopus, __MODULE__, [])
+    do_sensor_configs_for(source_mode())
+  end
 
-    has_layout = Keyword.has_key?(radar_env, :layout)
-    has_sensors = Keyword.has_key?(radar_env, :sensors)
+  defp do_sensor_configs_for(:off), do: []
 
-    if has_layout and has_sensors do
-      Logger.debug(
-        "[radar] Both :layout and :sensors are set — :layout takes precedence " <>
-          "(the base radar.exs :sensors list is the dev fallback and is ignored)"
-      )
-    end
+  defp do_sensor_configs_for(mode) do
+    installation_radar = Octopus.Installation.radar_config()
+    deployment = deployment_config()
 
-    if has_layout do
-      layout_sensor_configs(radar_env)
-    else
-      manual_sensor_configs(radar_env)
+    cond do
+      is_nil(installation_radar) ->
+        []
+
+      mode == :live and not SensorPlan.deployment_bound?(installation_radar, deployment) ->
+        []
+
+      true ->
+        SensorPlan.build(installation_radar, deployment, mode)
     end
   end
 
-  defp manual_sensor_configs(radar_env) do
-    defaults = Keyword.merge(@default_pose, Keyword.get(radar_env, :defaults, []))
-    sensors = Keyword.get(radar_env, :sensors, [])
+  # Build sensor configs for a specific source mode (used at boot before the
+  # SourceMode agent reflects runtime changes).
+  defp sensor_configs_for(mode), do: if(configured?(), do: do_sensor_configs_for(mode), else: [])
 
-    sensors
-    |> Enum.with_index(1)
-    |> Enum.map(fn {sensor_opts, index} ->
-      config =
-        defaults
-        |> Keyword.merge(sensor_opts)
-        |> maybe_apply_pose_tweaks()
-        |> normalize_sensor_config(index)
+  defp logical_device_ids do
+    case Octopus.Installation.radar_config() do
+      nil ->
+        []
 
-      {index, config}
-    end)
+      radar ->
+        radar
+        |> Keyword.fetch!(:layout)
+        |> Keyword.fetch!(:sensors)
+        |> Enum.with_index(1)
+        |> Enum.map(fn {_, device_id} -> device_id end)
+    end
   end
 
-  # Keys in a :layout block that describe the geometry and are NOT passed
-  # through as per-sensor defaults.
-  @layout_geometry_keys [:type, :count, :start_angle_deg]
-
-  defp layout_sensor_configs(radar_env) do
-    layout = Keyword.fetch!(radar_env, :layout)
-
-    # :adapters is the structured alternative to a flat :ports list.
-    # Flatten adapter port entries to get the same [{port_entry}] shape.
-    ports =
-      case Keyword.get(radar_env, :adapters) do
-        nil ->
-          Keyword.get(radar_env, :ports, [])
-
-        adapters ->
-          Enum.flat_map(adapters, fn a -> Keyword.fetch!(a, :ports) end)
-      end
-
-    layout_type =
-      Keyword.get(layout, :type) ||
-        raise ArgumentError, "radar layout: :type is required (e.g. type: :radial)"
-
-    sensor_pose_list = expand_layout(layout_type, layout)
-
-    unless length(sensor_pose_list) == length(ports) do
-      raise ArgumentError,
-            "radar layout: :ports has #{length(ports)} entries but layout generates " <>
-              "#{length(sensor_pose_list)} sensors (count: #{Keyword.get(layout, :count)})"
-    end
-
-    defaults = Keyword.merge(@default_pose, Keyword.get(radar_env, :defaults, []))
-    layout_defaults = Keyword.drop(layout, @layout_geometry_keys)
-    merged_defaults = Keyword.merge(defaults, layout_defaults)
-
-    sensor_pose_list
-    |> Enum.zip(ports)
-    |> Enum.with_index(1)
-    |> Enum.map(fn {{pose_opts, port_entry}, index} ->
-      port_opts = normalize_port_entry(port_entry)
-
-      config =
-        merged_defaults
-        |> Keyword.merge(pose_opts)
-        |> Keyword.merge(port_opts)
-        |> maybe_apply_pose_tweaks()
-        |> normalize_sensor_config(index)
-
-      {index, config}
-    end)
+  defp deployment_config do
+    Application.get_env(:octopus, :radar_deployment)
   end
 
-  defp expand_layout(:radial, layout) do
-    count =
-      Keyword.get(layout, :count) ||
-        raise ArgumentError, "radar layout type :radial requires :count"
-
-    unless is_integer(count) and count > 0 do
-      raise ArgumentError,
-            "radar layout: :count must be a positive integer, got #{inspect(count)}"
+  defp installation_layout do
+    case Octopus.Installation.radar_config() do
+      nil -> []
+      radar -> Keyword.get(radar, :layout, [])
     end
-
-    start_angle = effective_layout_start_angle(layout)
-    step = 360.0 / count
-
-    Enum.map(0..(count - 1), fn i ->
-      [angle_deg: PoseTweak.normalize_deg(start_angle + i * step)]
-    end)
-  end
-
-  defp expand_layout(type, _layout) do
-    raise ArgumentError,
-          "radar layout: unsupported :type #{inspect(type)}; supported: [:radial]"
-  end
-
-  defp normalize_port_entry(port) when is_binary(port), do: [port: port]
-  defp normalize_port_entry(opts) when is_list(opts), do: opts
-
-  defp normalize_sensor_config(config, device_id) do
-    type = Keyword.fetch!(config, :type)
-    enabled = Keyword.fetch!(config, :enabled)
-    angle_deg = Keyword.fetch!(config, :angle_deg)
-    distance_cm = Keyword.fetch!(config, :distance_cm)
-    rotation_deg = Keyword.fetch!(config, :rotation_deg)
-
-    unless type in @supported_types do
-      raise ArgumentError,
-            "radar sensor ##{device_id}: unsupported type #{inspect(type)}, expected one of #{inspect(@supported_types)}"
-    end
-
-    unless is_boolean(enabled) do
-      raise ArgumentError,
-            "radar sensor ##{device_id}: :enabled must be a boolean, got #{inspect(enabled)}"
-    end
-
-    unless is_number(angle_deg) and angle_deg >= 0 and angle_deg <= 360 do
-      raise ArgumentError,
-            "radar sensor ##{device_id}: :angle_deg must be in 0..360, got #{inspect(angle_deg)}"
-    end
-
-    unless is_number(distance_cm) and distance_cm >= 0 do
-      raise ArgumentError,
-            "radar sensor ##{device_id}: :distance_cm must be >= 0, got #{inspect(distance_cm)}"
-    end
-
-    unless is_number(rotation_deg) do
-      raise ArgumentError,
-            "radar sensor ##{device_id}: :rotation_deg must be a number, got #{inspect(rotation_deg)}"
-    end
-
-    config
   end
 
   defp radial_layout_config? do
-    case Application.get_env(:octopus, __MODULE__, []) |> Keyword.get(:layout) do
-      [type: :radial] -> true
-      layout when is_list(layout) -> Keyword.get(layout, :type) == :radial
-      _ -> false
-    end
+    Keyword.get(installation_layout(), :type) == :radial
   end
 
-  defp effective_layout_start_angle(layout) do
-    if Process.whereis(PoseTweak) do
-      PoseTweak.layout_start_angle_deg()
-    else
-      config_layout_start_angle_deg(layout)
-    end
-  end
-
-  defp config_layout_start_angle_deg(layout \\ nil) do
-    layout =
-      layout ||
-        case Application.get_env(:octopus, __MODULE__, []) |> Keyword.get(:layout) do
-          nil -> []
-          kw -> kw
-        end
-
-    Keyword.get(layout, :start_angle_deg, 0) * 1.0
-  end
-
-  defp effective_angle_offset do
-    if Process.whereis(PoseTweak), do: PoseTweak.angle_offset_deg(), else: 0.0
-  end
-
-  defp maybe_apply_pose_tweaks(config) do
-    if radial_layout_config?() do
-      rotation =
-        config
-        |> Keyword.get(:rotation_deg, 0)
-        |> Kernel.+(effective_angle_offset())
-        |> PoseTweak.normalize_deg()
-
-      Keyword.put(config, :rotation_deg, rotation)
-    else
-      config
-    end
+  defp config_layout_start_angle_deg do
+    (installation_layout() |> Keyword.get(:start_angle_deg, 0)) * 1.0
   end
 
   defp apply_pose_tweaks do

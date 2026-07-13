@@ -69,7 +69,7 @@ defmodule Octopus.Radar.Stats do
 
   @impl true
   def handle_continue(:subscribe, _state) do
-    if Radar.enabled?() do
+    if Radar.configured?() do
       devices = Radar.devices()
       Enum.each(devices, &Radar.subscribe_status(&1.device_id))
 

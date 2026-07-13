@@ -37,7 +37,7 @@ defmodule OctopusWeb.Sim3dAframeLive do
     socket =
       if connected?(socket) do
         Mixer.subscribe()
-        if Radar.enabled?(), do: Radar.subscribe()
+        if Radar.configured?(), do: Radar.subscribe()
 
         frame = %RGBFrame{
           data: List.duplicate([0, 0, 0], 80 * 8) |> IO.iodata_to_binary()
@@ -45,14 +45,14 @@ defmodule OctopusWeb.Sim3dAframeLive do
 
         Phoenix.PubSub.subscribe(Octopus.PubSub, Params.topic())
 
-        mock_mode = Radar.mock_mode()
-        if mock_mode != :off, do: subscribe_world()
+        source_mode = Radar.source_mode()
+        if Radar.mock_mode() != :off, do: subscribe_world()
 
         socket
         |> push_config(@default_config)
         |> push_frame(frame)
         |> push_initial_params()
-        |> maybe_push_mock_world(mock_mode)
+        |> maybe_push_mock_world(source_mode)
       else
         socket
       end
@@ -134,14 +134,16 @@ defmodule OctopusWeb.Sim3dAframeLive do
     {:noreply, push_radar_frame(socket, payload)}
   end
 
+  def handle_info({:source_mode_changed, mode}, socket) do
+    handle_source_mode_changed(socket, mode)
+  end
+
   def handle_info({:mock_mode_changed, :off}, socket) do
-    if connected?(socket), do: unsubscribe_world()
-    {:noreply, push_mock_world(socket, [])}
+    handle_source_mode_changed(socket, :live)
   end
 
   def handle_info({:mock_mode_changed, mode}, socket) when mode in [:exact, :fuzzy] do
-    if connected?(socket), do: subscribe_world()
-    {:noreply, push_mock_world(socket, mock_world_objects())}
+    handle_source_mode_changed(socket, mode)
   end
 
   def handle_info({:mock_world, objects}, socket) do
@@ -149,6 +151,21 @@ defmodule OctopusWeb.Sim3dAframeLive do
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}
+
+  defp handle_source_mode_changed(socket, mode) do
+    if connected?(socket) do
+      if mode in [:exact, :fuzzy], do: subscribe_world(), else: unsubscribe_world()
+    end
+
+    socket =
+      if mode in [:exact, :fuzzy] do
+        push_mock_world(socket, mock_world_objects())
+      else
+        push_mock_world(socket, [])
+      end
+
+    {:noreply, socket}
+  end
 
   defp push_frame(socket, frame) do
     push_event(socket, "frame:#{@id_prefix}-#{socket.id}", %{frame: frame})
