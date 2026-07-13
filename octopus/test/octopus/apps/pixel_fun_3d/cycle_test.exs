@@ -250,6 +250,105 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
       assert updated.seconds > 10.0
     end
 
+    # Regression: integrating the manual rates while frozen kept the image
+    # translating/rotating for every scene with nonzero drift, so "Freeze
+    # time" visibly did not freeze at all.
+    test "frozen tick does not integrate manual translate X and rotation" do
+      state =
+        base_state(%{
+          time_frozen: true,
+          seconds: 42.0,
+          orbit_rate: 8.0,
+          roll_rate: 90.0,
+          yaw_angle: 0.5,
+          roll_angle: 0.25
+        })
+
+      {:noreply, updated} = pixel_fun_handle_info(:tick, state)
+
+      assert updated.yaw_angle == 0.5
+      assert updated.roll_angle == 0.25
+      assert updated.seconds == 42.0
+      assert updated.formula_seconds == state.formula_seconds
+    end
+
+    test "frozen tick does not integrate auto-wandered rates" do
+      state =
+        base_state(%{
+          time_frozen: true,
+          orbit_rate: 8.0,
+          roll_rate: 90.0,
+          trans_auto: true,
+          rot_auto: true,
+          auto_wanderers: %{
+            trans: Octopus.Wander.new({8.0, 0.0}),
+            rot: Octopus.Wander.new({90.0})
+          },
+          yaw_angle: 1.0,
+          roll_angle: 2.0
+        })
+
+      {:noreply, updated} = pixel_fun_handle_info(:tick, state)
+
+      assert_in_delta updated.yaw_angle, 1.0, 1.0e-12
+      assert_in_delta updated.roll_angle, 2.0, 1.0e-12
+    end
+
+    test "freezing captures scrub refs so the freeze moment shows no jump" do
+      state = base_state(%{orbit_rate: 2.0, roll_rate: 10.0, yaw_angle: 1.0, roll_angle: 0.5})
+
+      # The transport always sends the full config, so keep the rates in.
+      {:noreply, frozen} =
+        pixel_fun_handle_config(%{time_frozen: true, orbit_rate: 2.0, roll_rate: 10.0}, state)
+
+      assert frozen.frozen_orbit_ref == 2.0
+      assert frozen.frozen_roll_ref == 10.0
+
+      {yaw, roll} = pixel_fun_frozen_scrub_angles(frozen, 1.0, 0.5, 0.1)
+      assert_in_delta yaw, 1.0, 1.0e-12
+      assert_in_delta roll, 0.5, 1.0e-12
+    end
+
+    test "slider deltas while frozen scrub the image and scrub back" do
+      state = base_state(%{orbit_rate: 2.0, roll_rate: 10.0, yaw_angle: 1.0, roll_angle: 0.5})
+
+      {:noreply, frozen} =
+        pixel_fun_handle_config(%{time_frozen: true, orbit_rate: 2.0, roll_rate: 10.0}, state)
+
+      {:noreply, scrubbed} = pixel_fun_handle_config(%{orbit_rate: 10.0, roll_rate: 40.0}, frozen)
+
+      # Integrated angles stay untouched; only the rendered offset moves.
+      assert scrubbed.yaw_angle == 1.0
+      assert scrubbed.roll_angle == 0.5
+
+      {yaw, roll} = pixel_fun_frozen_scrub_angles(scrubbed, 1.0, 0.5, 0.1)
+      assert_in_delta yaw, 1.0 + (10.0 - 2.0) * 0.1, 1.0e-9
+      assert_in_delta roll, 0.5 + (40.0 - 10.0) * :math.pi() / 180.0, 1.0e-9
+
+      {:noreply, back} = pixel_fun_handle_config(%{orbit_rate: 2.0, roll_rate: 10.0}, scrubbed)
+      {yaw, roll} = pixel_fun_frozen_scrub_angles(back, 1.0, 0.5, 0.1)
+      assert_in_delta yaw, 1.0, 1.0e-9
+      assert_in_delta roll, 0.5, 1.0e-9
+    end
+
+    test "unfreezing bakes the scrub offset into the angles" do
+      state = base_state(%{orbit_rate: 2.0, roll_rate: 10.0, yaw_angle: 1.0, roll_angle: 0.5})
+
+      {:noreply, frozen} =
+        pixel_fun_handle_config(%{time_frozen: true, orbit_rate: 2.0, roll_rate: 10.0}, state)
+
+      {:noreply, scrubbed} = pixel_fun_handle_config(%{orbit_rate: 10.0, roll_rate: 40.0}, frozen)
+
+      {:noreply, resumed} =
+        pixel_fun_handle_config(%{time_frozen: false, orbit_rate: 10.0, roll_rate: 40.0}, scrubbed)
+
+      assert resumed.frozen_orbit_ref == nil
+      assert resumed.frozen_roll_ref == nil
+      # Yaw offset uses the installation alpha; just assert direction there.
+      assert resumed.yaw_angle > 1.0
+      assert_in_delta resumed.roll_angle, 0.5 + 30.0 * :math.pi() / 180.0, 1.0e-9
+    end
+
     test "palette auto advances phase and updates complementary hues" do
       state =
         base_state(%{
@@ -429,4 +528,7 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
   defp pixel_fun_handle_cast(message, state), do: apply(@pixel_fun, :handle_cast, [message, state])
   defp pixel_fun_handle_config(config, state), do: apply(@pixel_fun, :handle_config, [config, state])
   defp pixel_fun_handle_info(message, state), do: apply(@pixel_fun, :handle_info, [message, state])
+
+  defp pixel_fun_frozen_scrub_angles(state, yaw, roll, alpha),
+    do: apply(@pixel_fun, :frozen_scrub_angles, [state, yaw, roll, alpha])
 end

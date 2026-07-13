@@ -384,6 +384,10 @@ defmodule Octopus.Apps.PixelFun3D do
       :display_info,
       :pixel_dirs,
       :time_frozen,
+      # Rates captured when freezing; slider deltas against these scrub the
+      # frozen image (1 px/s ≙ 1 px, 1 °/s ≙ 1°). nil while unfrozen.
+      :frozen_orbit_ref,
+      :frozen_roll_ref,
       :show_advanced,
       :formula_seconds
     ]
@@ -459,7 +463,7 @@ defmodule Octopus.Apps.PixelFun3D do
 
     Translate Y — vertical band shift in px. Shared Translate Auto also wanders this (± Range Y).
 
-    Rotation — roll rate in °/s (30°/s ≈ one full spin per 12 s). Auto wanders the rate. Rotation pivot (Advanced) selects which panel.
+    Rotation — roll rate in °/s (30°/s ≈ one full spin per 12 s). Auto wanders the rate. Rotation pivot (Advanced) selects which panel; panels near the pivot axis see less parade — a constant roll is most dramatic a quarter-ring away.
 
     Zoom — conformal Möbius scale factor × (1.0 = neutral). Auto wanders symmetrically in log space (± Range multiplier).
 
@@ -1052,6 +1056,8 @@ defmodule Octopus.Apps.PixelFun3D do
       |> put_auto_fields(config)
       |> init_auto_wanderers()
 
+    state = if state.time_frozen, do: capture_frozen_refs(state), else: state
+
     {:ok, state}
   end
 
@@ -1155,9 +1161,50 @@ defmodule Octopus.Apps.PixelFun3D do
   end
 
   defp apply_time_frozen(%State{} = state, config) do
-    new_frozen = Map.get(config, :time_frozen, state.time_frozen || false) |> coerce_boolean()
-    %State{state | time_frozen: new_frozen}
+    was_frozen = state.time_frozen || false
+    new_frozen = Map.get(config, :time_frozen, was_frozen) |> coerce_boolean()
+
+    cond do
+      new_frozen and not was_frozen ->
+        %State{capture_frozen_refs(state) | time_frozen: true}
+
+      was_frozen and not new_frozen ->
+        %State{bake_frozen_scrub(state) | time_frozen: false}
+
+      true ->
+        %State{state | time_frozen: new_frozen}
+    end
   end
+
+  # Remember the rates at freeze time; slider deltas against these scrub the
+  # frozen image without any jump at the freeze moment itself.
+  defp capture_frozen_refs(%State{} = state) do
+    %State{
+      state
+      | frozen_orbit_ref: state.orbit_rate || 0.0,
+        frozen_roll_ref: state.roll_rate || 0.0
+    }
+  end
+
+  # Fold the scrub offset into the integrated angles so unfreezing resumes
+  # exactly from the on-screen orientation.
+  defp bake_frozen_scrub(%State{} = state) do
+    alpha = Sphere.alpha(Installation.width())
+
+    {yaw, roll} =
+      frozen_scrub_angles(state, state.yaw_angle || 0.0, state.roll_angle || 0.0, alpha)
+
+    %State{state | yaw_angle: yaw, roll_angle: roll, frozen_orbit_ref: nil, frozen_roll_ref: nil}
+  end
+
+  @doc false
+  def frozen_scrub_angles(%State{time_frozen: true} = state, yaw, roll, alpha) do
+    yaw_off = ((state.orbit_rate || 0.0) - (state.frozen_orbit_ref || 0.0)) * alpha
+    roll_off = ((state.roll_rate || 0.0) - (state.frozen_roll_ref || 0.0)) * :math.pi() / 180.0
+    {yaw + yaw_off, roll + roll_off}
+  end
+
+  def frozen_scrub_angles(_state, yaw, roll, _alpha), do: {yaw, roll}
 
   defp coerce_config(config) when is_map(config) do
     config
@@ -1614,7 +1661,7 @@ defmodule Octopus.Apps.PixelFun3D do
   # Scene load must win over auto-off handover and leftover integrated angles,
   # otherwise a prior sway/orbit auto leaves a tilted "horizon" on neutral presets.
   defp reset_orientation_from_scene(%State{} = state, config) do
-    %State{
+    state = %State{
       state
       | orbit_rate: Map.get(config, :orbit_rate, 0.0),
         elev_base: Map.get(config, :elev_base, 0.0),
@@ -1629,6 +1676,9 @@ defmodule Octopus.Apps.PixelFun3D do
         yaw_angle: 0.0,
         roll_angle: 0.0
     }
+
+    # New scene, new rates — rebase the frozen scrub so it starts at zero.
+    if state.time_frozen, do: capture_frozen_refs(state), else: state
   end
 
   defp broadcast_config(%State{} = state) do
@@ -1674,6 +1724,12 @@ defmodule Octopus.Apps.PixelFun3D do
   def handle_info(:tick, %State{} = state) do
     state =
       if state.time_frozen do
+        # Freeze means a static image: pattern time, palette, autos AND the
+        # rate-driven yaw/roll drift all halt. Translate X / Rotation are
+        # velocities — integrating them while frozen would keep the image
+        # moving whenever a scene has nonzero drift. Positional controls
+        # (Translate Y, Zoom, pivots, palette) still act on the frozen frame
+        # via handle_config/push_frame.
         state
       else
         state
@@ -2034,6 +2090,9 @@ defmodule Octopus.Apps.PixelFun3D do
     # Orientation angles are already integrated in rad; fallback uses display→rad.
     yaw_angle = state.yaw_angle || orbit_rate * alpha * seconds
     roll_angle = state.roll_angle || roll_rate * :math.pi() / 180.0 * seconds
+
+    # While frozen, slider deltas since the freeze scrub the still image.
+    {yaw_angle, roll_angle} = frozen_scrub_angles(state, yaw_angle, roll_angle, alpha)
 
     neutral? =
       orbit_rate == 0.0 and roll_rate == 0.0 and tilt_scale == 0.0 and elev_base == 0.0 and
