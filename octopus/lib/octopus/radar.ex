@@ -91,7 +91,18 @@ defmodule Octopus.Radar do
   use Supervisor
   require Logger
 
-  alias Octopus.Radar.{LogFormat, Mock, PoseTweak, Runtime, Sensor, SensorPlan, SensorType, SourceMode}
+  alias Octopus.Radar.{
+    LogFormat,
+    Mock,
+    PoseTweak,
+    Runtime,
+    Sensitivity,
+    Sensor,
+    SensorPlan,
+    SensorType,
+    SourceMode,
+    ViewSettings
+  }
 
   @topic "radar:hlk6001"
 
@@ -288,7 +299,6 @@ defmodule Octopus.Radar do
 
   defp device_from_config({device_id, config}) do
     type = Keyword.fetch!(config, :type)
-    device_sensitivity = Keyword.fetch!(config, :sensitivity)
 
     %{
       device_id: device_id,
@@ -296,7 +306,7 @@ defmodule Octopus.Radar do
       enabled: Keyword.fetch!(config, :enabled),
       port: Keyword.fetch!(config, :port),
       baud: Keyword.fetch!(config, :baud),
-      sensitivity_level: SensorType.sensitivity_level(type, device_sensitivity),
+      sensitivity_level: sensitivity_level(),
       angle_deg: Keyword.fetch!(config, :angle_deg),
       distance_cm: Keyword.fetch!(config, :distance_cm),
       rotation_deg: Keyword.fetch!(config, :rotation_deg),
@@ -310,7 +320,17 @@ defmodule Octopus.Radar do
   end
 
   @doc """
-  Set detection sensitivity on a sensor using the UI scale.
+  Current UI sensitivity level shared across all sensors (1 = least, 9 = most).
+
+  Reads the runtime tweak when present, otherwise the installation default.
+  """
+  @spec sensitivity_level() :: 1..9
+  def sensitivity_level do
+    if Process.whereis(Sensitivity), do: Sensitivity.level(), else: default_sensitivity_level()
+  end
+
+  @doc """
+  Set detection sensitivity on every configured sensor using the UI scale.
 
   `level` is `1..9` where **1 = least sensitive** (fewer phantoms) and
   **9 = most sensitive** (longer reach, more clutter). The mapping to the
@@ -319,23 +339,77 @@ defmodule Octopus.Radar do
 
   Internally this re-runs the full init sequence with the new value, so
   the device's tracker state is reset along with the parameter change.
+  Not persisted across restarts. Broadcasts to all radar LiveViews immediately.
   """
-  @spec set_sensitivity_level(pos_integer(), 1..9) :: :ok | {:error, term()}
-  def set_sensitivity_level(device_id, level) when is_integer(level) and level in 1..9 do
-    case sensor_configs() |> Enum.find(fn {id, _} -> id == device_id end) do
-      {_, config} ->
-        type = Keyword.fetch!(config, :type)
-        set_sensitivity(device_id, SensorType.level_to_device_value(type, level))
+  @spec set_sensitivity_level(1..9) :: :ok
+  def set_sensitivity_level(level) when is_integer(level) and level in 1..9 do
+    Sensitivity.set_level(level)
 
-      nil ->
-        {:error, :not_configured}
-    end
+    Enum.each(sensor_configs(), fn {device_id, config} ->
+      type = Keyword.fetch!(config, :type)
+      set_sensitivity(device_id, SensorType.level_to_device_value(type, level))
+    end)
+
+    broadcast_sensitivity_level_changed(level)
+    :ok
   end
 
   @doc false
   @spec set_sensitivity(pos_integer(), pos_integer()) :: :ok | {:error, term()}
   def set_sensitivity(device_id, device_value) when is_integer(device_value) do
     Sensor.set_sensitivity(device_id, device_value)
+  end
+
+  @doc "Shared radar LiveView UI settings (north panel, list mode, visuals, …)."
+  @spec view_settings() :: ViewSettings.t()
+  def view_settings do
+    if Process.whereis(ViewSettings), do: ViewSettings.get(), else: default_view_settings()
+  end
+
+  @doc "Runtime north-panel index for circular ring rendering."
+  @spec north_panel() :: pos_integer()
+  def north_panel do
+    if Process.whereis(ViewSettings), do: ViewSettings.north_panel(), else: Octopus.Installation.north_panel()
+  end
+
+  @spec set_north_panel(pos_integer()) :: :ok
+  def set_north_panel(panel) when is_integer(panel) and panel >= 1 do
+    ViewSettings.set_north_panel(panel)
+    broadcast_view_settings_changed()
+    :ok
+  end
+
+  @spec set_detection_list_mode(ViewSettings.detection_list_mode()) :: :ok
+  def set_detection_list_mode(mode) when mode in [:by_sensor, :by_proximity] do
+    ViewSettings.set_detection_list_mode(mode)
+    broadcast_view_settings_changed()
+    :ok
+  end
+
+  @spec toggle_coords_frame() :: ViewSettings.coords_frame()
+  def toggle_coords_frame do
+    frame = ViewSettings.toggle_coords_frame()
+    broadcast_view_settings_changed()
+    frame
+  end
+
+  @spec toggle_visual(atom()) :: :ok | :error
+  def toggle_visual(key) when is_atom(key) do
+    case ViewSettings.toggle_visual(key) do
+      :ok ->
+        broadcast_view_settings_changed()
+        :ok
+
+      :error ->
+        :error
+    end
+  end
+
+  @spec set_bounds_mode(ViewSettings.bounds_mode()) :: :ok
+  def set_bounds_mode(mode) when mode in [:static, :auto] do
+    ViewSettings.set_bounds_mode(mode)
+    broadcast_view_settings_changed()
+    :ok
   end
 
   @doc """
@@ -454,8 +528,12 @@ defmodule Octopus.Radar do
   @spec set_max_people(integer()) :: :ok
   def set_max_people(n) when is_integer(n) do
     case Process.whereis(Mock.World) do
-      nil -> :ok
-      _pid -> Mock.World.set_max_people(n)
+      nil ->
+        :ok
+
+      _pid ->
+        Mock.World.set_max_people(n)
+        broadcast_mock_settings_changed()
     end
   end
 
@@ -515,8 +593,12 @@ defmodule Octopus.Radar do
   @spec set_entropy(integer()) :: :ok
   def set_entropy(n) when is_integer(n) do
     case Process.whereis(Mock.World) do
-      nil -> :ok
-      _pid -> Mock.World.set_entropy(n)
+      nil ->
+        :ok
+
+      _pid ->
+        Mock.World.set_entropy(n)
+        broadcast_mock_settings_changed()
     end
   end
 
@@ -533,8 +615,12 @@ defmodule Octopus.Radar do
   @spec set_manual_tracking(boolean()) :: :ok
   def set_manual_tracking(enabled) when is_boolean(enabled) do
     case Process.whereis(Mock.World) do
-      nil -> :ok
-      _pid -> Mock.World.set_manual(enabled)
+      nil ->
+        :ok
+
+      _pid ->
+        Mock.World.set_manual(enabled)
+        broadcast_mock_settings_changed()
     end
   end
 
@@ -748,6 +834,8 @@ defmodule Octopus.Radar do
         {Registry, keys: :unique, name: Octopus.Radar.Registry},
         {Runtime, initial_runtime_for(boot)},
         {PoseTweak, []},
+        {Sensitivity, []},
+        {ViewSettings, []},
         Octopus.Radar.StatusHistory,
         Octopus.Radar.Stats,
         {Mock.World, [mode: mock_world_mode(boot)]}
@@ -1022,5 +1110,47 @@ defmodule Octopus.Radar do
          angle_offset_deg: angle_offset_deg()
        }}
     )
+  end
+
+  defp broadcast_sensitivity_level_changed(level) do
+    Phoenix.PubSub.broadcast(Octopus.PubSub, topic(), {:sensitivity_level_changed, level})
+  end
+
+  defp broadcast_view_settings_changed do
+    Phoenix.PubSub.broadcast(Octopus.PubSub, topic(), {:view_settings_changed, view_settings()})
+  end
+
+  defp broadcast_mock_settings_changed do
+    Phoenix.PubSub.broadcast(
+      Octopus.PubSub,
+      topic(),
+      {:mock_settings_changed,
+       %{
+         max_people: max(max_people(), 1),
+         entropy: entropy(),
+         manual_tracking: manual_tracking?()
+       }}
+    )
+  end
+
+  defp default_sensitivity_level do
+    with radar when not is_nil(radar) <- Octopus.Installation.radar_config(),
+         defaults <- Keyword.get(radar, :defaults, []),
+         setting <- Keyword.get(defaults, :sensitivity, SensorType.default_sensitivity_setting()),
+         device_value <- SensorType.resolve_sensitivity(:ld6001a, setting) do
+      SensorType.sensitivity_level(:ld6001a, device_value)
+    else
+      _ -> 6
+    end
+  end
+
+  defp default_view_settings do
+    %ViewSettings{
+      north_panel: Octopus.Installation.north_panel(),
+      detection_list_mode: :by_sensor,
+      coords_frame: :global,
+      visuals: ViewSettings.default_visuals(),
+      bounds_mode: :static
+    }
   end
 end

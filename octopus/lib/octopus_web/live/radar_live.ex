@@ -94,24 +94,6 @@ defmodule OctopusWeb.RadarLive do
   @minor_tick_len 8
   @major_tick_len 24
 
-  # Default per-session visibility of each visual layer. Persons, detections,
-  # coverage, placements, world border, height-as-size, trails, labels and
-  # ruler start on; velocity arrows start off to keep the overlay uncluttered.
-  @default_visuals %{
-    world_border: true,
-    platform: true,
-    ring_panels: true,
-    coverage: true,
-    placements: true,
-    persons: true,
-    detections: true,
-    trails: true,
-    arrows: false,
-    height_size: true,
-    labels: true,
-    ruler: true
-  }
-
   # Legend rows: {feature_key, label}. Rendered in this order.
   @legend_items [
     {:world_border, "World border"},
@@ -135,6 +117,7 @@ defmodule OctopusWeb.RadarLive do
     source_mode = Radar.source_mode()
     layout_devices = Radar.planned_devices()
     devices = Radar.devices() |> Enum.filter(& &1.enabled)
+    view_settings = Radar.view_settings()
     world_radius = world_radius_for_view()
     platform_radius = Octopus.Installation.platform_radius_m()
     ring_layout = ring_layout_info()
@@ -157,9 +140,9 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:radial_layout, Radar.radial_layout?())
      |> assign(:layout_start_angle_deg, round(Radar.layout_start_angle_deg()))
      |> assign(:angle_offset_deg, round(Radar.angle_offset_deg()))
-     |> assign(:north_panel, Octopus.Installation.north_panel())
+     |> assign(:north_panel, view_settings.north_panel)
      |> assign(:sensor_statuses, build_sensor_statuses(devices))
-     |> assign(:sensitivity_level, default_sensitivity_level(devices))
+     |> assign(:sensitivity_level, Radar.sensitivity_level())
      |> assign(:source_mode, source_mode)
      |> assign(:max_people, safe_max_people())
      |> assign(:max_people_limit, Radar.max_people_limit())
@@ -171,18 +154,15 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:platform_radius, platform_radius)
      |> assign(:ring_layout, ring_layout)
      |> assign(:world_objects, [])
-     |> assign(:visuals, @default_visuals)
-     |> assign(:detection_list_mode, :by_sensor)
-     |> assign(:coords_frame, :global)
+     |> assign(:visuals, view_settings.visuals)
+     |> assign(:detection_list_mode, view_settings.detection_list_mode)
+     |> assign(:coords_frame, view_settings.coords_frame)
      |> assign(:render_scheduled, false)
-     |> assign(:bounds_mode, :static)
+     |> assign(:bounds_mode, view_settings.bounds_mode)
      |> assign(:static_bounds, world_bounds(world_radius))
      |> reset_radar_state()}
   end
 
-  # First enabled sensor's UI sensitivity level (all sensors share the slider).
-  defp default_sensitivity_level([%{sensitivity_level: level} | _]), do: level
-  defp default_sensitivity_level(_), do: 6
 
   # The canvas always frames the entire simulated world (in every mode) so the
   # world border, the sensors and their coverage, and the detections all share
@@ -226,25 +206,16 @@ defmodule OctopusWeb.RadarLive do
   # rectangle) and auto (grow-only bounds derived from observed samples).
   def handle_event("toggle_bounds_mode", params, socket) do
     new_mode = if params["auto"] == "true", do: :auto, else: :static
-
-    socket =
-      socket
-      |> assign(:bounds_mode, new_mode)
-      |> apply_bounds_for_mode()
-      |> rebuild_view()
-
+    Radar.set_bounds_mode(new_mode)
     {:noreply, socket}
   end
 
   def handle_event("set_sensitivity", %{"sensitivity_level" => level_str}, socket) do
     with {level, ""} <- Integer.parse(level_str),
          true <- level in 1..9 do
-      Enum.each(socket.assigns.devices, &Radar.set_sensitivity_level(&1.device_id, level))
+      Radar.set_sensitivity_level(level)
 
-      {:noreply,
-       socket
-       |> assign(:sensitivity_level, level)
-       |> reset_radar_state()}
+      {:noreply, reset_radar_state(socket)}
     else
       _ -> {:noreply, socket}
     end
@@ -265,18 +236,7 @@ defmodule OctopusWeb.RadarLive do
       {n, _} ->
         target = n |> max(1) |> min(socket.assigns.max_people_limit)
         Radar.set_max_people(target)
-
-        # The world ramps toward the cap over a few ticks; show a loading state
-        # until the live population reaches the target AND a minimum time has
-        # elapsed, so the feedback is visible even for near-instant changes.
-        applying? = length(socket.assigns.world_objects) != target
-        until = System.monotonic_time(:millisecond) + @apply_min_ms
-
-        {:noreply,
-         socket
-         |> assign(:max_people, target)
-         |> assign(:max_people_applying, applying?)
-         |> assign(:max_people_applying_until, until)}
+        {:noreply, socket}
 
       _ ->
         {:noreply, socket}
@@ -287,7 +247,7 @@ defmodule OctopusWeb.RadarLive do
     case Integer.parse(v) do
       {n, _} ->
         Radar.set_entropy(n)
-        {:noreply, assign(socket, :entropy, n |> max(0) |> min(100))}
+        {:noreply, socket}
 
       _ ->
         {:noreply, socket}
@@ -295,9 +255,8 @@ defmodule OctopusWeb.RadarLive do
   end
 
   def handle_event("toggle_manual_tracking", _params, socket) do
-    enabled = not socket.assigns.manual_tracking
-    Radar.set_manual_tracking(enabled)
-    {:noreply, assign(socket, :manual_tracking, enabled)}
+    Radar.set_manual_tracking(not Radar.manual_tracking?())
+    {:noreply, socket}
   end
 
   # Pointer moved over the map: map the viewBox coordinates (0..@vb) reported by
@@ -341,8 +300,8 @@ defmodule OctopusWeb.RadarLive do
   def handle_event("set_north_panel", %{"north_panel" => v}, socket) do
     case Integer.parse(v) do
       {n, _} ->
-        north_panel = n |> max(1) |> min(socket.assigns.ring_layout.count)
-        {:noreply, socket |> assign(:north_panel, north_panel) |> rebuild_view()}
+        Radar.set_north_panel(n)
+        {:noreply, socket}
 
       _ ->
         {:noreply, socket}
@@ -356,28 +315,24 @@ defmodule OctopusWeb.RadarLive do
         _ -> :by_sensor
       end
 
-    {:noreply, socket |> assign(:detection_list_mode, mode_atom) |> rebuild_view()}
+    Radar.set_detection_list_mode(mode_atom)
+    {:noreply, socket}
   end
 
   # Both x/y/z and the sensor-local lx/ly/lz are always precomputed on each
   # detection, so switching frames only changes which the template shows — no
   # rebuild needed.
   def handle_event("toggle_coords_frame", _params, socket) do
-    frame = if socket.assigns.coords_frame == :local, do: :global, else: :local
-    {:noreply, assign(socket, :coords_frame, frame)}
+    Radar.toggle_coords_frame()
+    {:noreply, socket}
   end
 
-  # Visual layers just toggle visibility of already-computed data lists in the
-  # template, so no rebuild is required here.
   def handle_event("toggle_visual", %{"feature" => feature}, socket) do
     key = String.to_existing_atom(feature)
-
-    if Map.has_key?(socket.assigns.visuals, key) do
-      visuals = Map.update!(socket.assigns.visuals, key, &(!&1))
-      {:noreply, assign(socket, :visuals, visuals)}
-    else
-      {:noreply, socket}
-    end
+    Radar.toggle_visual(key)
+    {:noreply, socket}
+  rescue
+    ArgumentError -> {:noreply, socket}
   end
 
   def handle_event("toggle_sensor", %{"device_id" => id_str}, socket) do
@@ -450,6 +405,21 @@ defmodule OctopusWeb.RadarLive do
     handle_source_mode_changed(socket, mode)
   end
 
+  def handle_info({:sensitivity_level_changed, level}, socket) do
+    {:noreply,
+     socket
+     |> assign(:sensitivity_level, level)
+     |> assign(:devices, update_devices_sensitivity(socket.assigns.devices, level))}
+  end
+
+  def handle_info({:view_settings_changed, settings}, socket) do
+    {:noreply, apply_view_settings(socket, settings)}
+  end
+
+  def handle_info({:mock_settings_changed, settings}, socket) do
+    {:noreply, apply_mock_settings(socket, settings)}
+  end
+
   def handle_info({:pose_tweak_changed, %{layout_start_angle_deg: start, angle_offset_deg: offset}}, socket) do
     devices = Radar.devices() |> Enum.filter(& &1.enabled)
 
@@ -496,12 +466,40 @@ defmodule OctopusWeb.RadarLive do
   # The Sim3D topic carries other parameter broadcasts too; ignore them.
   def handle_info(_msg, socket), do: {:noreply, socket}
 
+  defp update_devices_sensitivity(devices, level) do
+    Enum.map(devices, fn device -> %{device | sensitivity_level: level} end)
+  end
+
+  defp apply_view_settings(socket, settings) do
+    socket
+    |> assign(:north_panel, settings.north_panel)
+    |> assign(:detection_list_mode, settings.detection_list_mode)
+    |> assign(:coords_frame, settings.coords_frame)
+    |> assign(:visuals, settings.visuals)
+    |> assign(:bounds_mode, settings.bounds_mode)
+    |> apply_bounds_for_mode()
+    |> rebuild_view()
+  end
+
+  defp apply_mock_settings(socket, %{max_people: target, entropy: entropy, manual_tracking: manual_tracking}) do
+    applying? = length(socket.assigns.world_objects) != target
+    until = System.monotonic_time(:millisecond) + @apply_min_ms
+
+    socket
+    |> assign(:max_people, target)
+    |> assign(:entropy, entropy |> max(0) |> min(100))
+    |> assign(:manual_tracking, manual_tracking)
+    |> assign(:max_people_applying, applying?)
+    |> assign(:max_people_applying_until, until)
+  end
+
   defp handle_source_mode_changed(socket, mode) do
     if connected?(socket) do
       if mock_source?(mode), do: subscribe_world(), else: unsubscribe_world()
     end
 
     devices = Radar.devices() |> Enum.filter(& &1.enabled)
+    view_settings = Radar.view_settings()
 
     {:noreply,
      socket
@@ -512,9 +510,14 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:max_people_applying, false)
      |> assign(:entropy, safe_entropy())
      |> assign(:manual_tracking, Radar.manual_tracking?())
-     |> assign(:bounds_mode, :static)
+     |> assign(:bounds_mode, view_settings.bounds_mode)
+     |> assign(:north_panel, view_settings.north_panel)
+     |> assign(:detection_list_mode, view_settings.detection_list_mode)
+     |> assign(:coords_frame, view_settings.coords_frame)
+     |> assign(:visuals, view_settings.visuals)
      |> assign(:world_objects, [])
      |> assign(:sensor_statuses, build_sensor_statuses(devices))
+     |> assign(:sensitivity_level, Radar.sensitivity_level())
      |> assign(:static_bounds, world_bounds(socket.assigns.world_radius))
      |> reset_radar_state()}
   end
@@ -1440,18 +1443,10 @@ defmodule OctopusWeb.RadarLive do
                   <% end %>
 
                   <%= if @source_mode == :live do %>
-                    <div
-                      id="radar-sensitivity-control"
-                      phx-hook=".RadarSensitivitySlider"
-                      data-value={@sensitivity_level}
-                      data-display={
-                        "#{@sensitivity_level}/9 (#{Octopus.Radar.SensorType.sensitivity_level_label(@sensitivity_level)})"
-                      }
-                    >
+                    <div id="radar-sensitivity-control" class="flex flex-col gap-1">
                       <form
                         id="radar-sensitivity-form"
                         phx-change="set_sensitivity"
-                        phx-update="ignore"
                         class="flex flex-col gap-1"
                       >
                         <label for="radar-sensitivity" class="text-xs font-semibold opacity-70">
@@ -1459,64 +1454,44 @@ defmodule OctopusWeb.RadarLive do
                         </label>
                         <div class="flex items-center gap-2">
                           <span class="text-xs opacity-60">lower</span>
-                          <input
-                            id="radar-sensitivity"
-                            name="sensitivity_level"
-                            type="range"
-                            min="1"
-                            max="9"
-                            step="1"
-                            value={@sensitivity_level}
-                            phx-debounce="300"
-                            class="range range-sm grow"
-                          />
+                          <div
+                            id="radar-sensitivity-input"
+                            phx-hook=".RadarSensitivitySlider"
+                            phx-update="ignore"
+                            data-value={@sensitivity_level}
+                            class="grow"
+                          >
+                            <input
+                              id="radar-sensitivity"
+                              name="sensitivity_level"
+                              type="range"
+                              min="1"
+                              max="9"
+                              step="1"
+                              value={@sensitivity_level}
+                              phx-debounce="300"
+                              class="range range-sm w-full"
+                            />
+                            <script :type={Phoenix.LiveView.ColocatedHook} name=".RadarSensitivitySlider">
+                              export default {
+                                mounted() {
+                                  this.range = this.el.querySelector('input[type="range"]')
+                                },
+                                updated() {
+                                  this.range = this.el.querySelector('input[type="range"]')
+                                  if (!this.range) return
+                                  if (document.activeElement === this.range) return
+                                  this.range.value = this.el.dataset.value
+                                }
+                              }
+                            </script>
+                          </div>
                           <span class="text-xs opacity-60">higher</span>
                         </div>
-                        <span data-sensitivity-display class="text-sm font-mono text-right">
-                          {@sensitivity_level}/9 ({Octopus.Radar.SensorType.sensitivity_level_label(@sensitivity_level)})
-                        </span>
                       </form>
-                      <script :type={Phoenix.LiveView.ColocatedHook} name=".RadarSensitivitySlider">
-                        export default {
-                          mounted() {
-                            this.bindElements()
-                            this.onInput = () => this.updateDisplayFromRange()
-                            this.range.addEventListener("input", this.onInput)
-                          },
-                          updated() {
-                            this.bindElements()
-                            if (!this.range) return
-                            if (document.activeElement === this.range) return
-                            this.range.value = this.el.dataset.value
-                            this.updateDisplayFromDataset()
-                          },
-                          destroyed() {
-                            if (this.range && this.onInput) {
-                              this.range.removeEventListener("input", this.onInput)
-                            }
-                          },
-                          bindElements() {
-                            this.range = this.el.querySelector('input[type="range"]')
-                            this.display = this.el.querySelector("[data-sensitivity-display]")
-                          },
-                          updateDisplayFromRange() {
-                            if (!this.display || !this.range) return
-                            const level = Number(this.range.value)
-                            this.display.textContent = `${level}/9 (${this.levelLabel(level)})`
-                          },
-                          updateDisplayFromDataset() {
-                            if (!this.display) return
-                            this.display.textContent = this.el.dataset.display
-                          },
-                          levelLabel(level) {
-                            if (level <= 2) return "low"
-                            if (level <= 4) return "moderate-low"
-                            if (level <= 6) return "moderate"
-                            if (level <= 8) return "moderate-high"
-                            return "high"
-                          }
-                        }
-                      </script>
+                      <span class="text-sm font-mono text-right">
+                        {@sensitivity_level}/9 ({Octopus.Radar.SensorType.sensitivity_level_label(@sensitivity_level)})
+                      </span>
                     </div>
                   <% end %>
 
