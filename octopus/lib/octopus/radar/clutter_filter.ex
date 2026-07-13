@@ -5,11 +5,11 @@ defmodule Octopus.Radar.ClutterFilter do
   alias Octopus.Radar.{Frame, Track, ViewSettings}
 
   # Movement below this threshold (meters, 3D) is treated as radar jitter, not
-  # a real position change. Tracks with no movement beyond it for
-  # `@stationary_filter_ms` are treated as static clutter.
+  # real motion. Tracks must accumulate `@qualification_ms` of time spent moving
+  # beyond this threshold before they are forwarded to consumers.
   @position_threshold_m 0.20
   @registry_stale_ms 300_000
-  @stationary_filter_ms 15_000
+  @qualification_ms 3_000
 
   def start_link(_opts) do
     Agent.start_link(fn -> %{registry: %{}} end, name: __MODULE__)
@@ -48,7 +48,7 @@ defmodule Octopus.Radar.ClutterFilter do
         entry = update_entry(Map.get(reg, key), track, now)
         reg = Map.put(reg, key, entry)
 
-        if enabled and static_clutter?(entry, now) do
+        if enabled and not entry.qualified do
           {reg, acc}
         else
           {reg, [track | acc]}
@@ -63,30 +63,38 @@ defmodule Octopus.Radar.ClutterFilter do
     if Process.whereis(ViewSettings), do: ViewSettings.clutter_filter(), else: true
   end
 
-  defp static_clutter?(entry, now) do
-    now - entry.position_last_changed >= stationary_filter_ms()
-  end
-
   defp update_entry(nil, %Track{} = track, now) do
     %{
       x: track.x,
       y: track.y,
       z: track.z,
       first_seen: now,
-      position_last_changed: now,
+      moving_ms: 0,
+      qualified: false,
       last_seen: now
     }
   end
 
   defp update_entry(prev, %Track{} = track, now) do
     moved = position_moved?(prev, track)
+    delta = now - prev.last_seen
+
+    moving_ms =
+      if moved do
+        prev.moving_ms + delta
+      else
+        prev.moving_ms
+      end
+
+    qualified = prev.qualified or moving_ms >= qualification_ms()
 
     %{
       x: track.x,
       y: track.y,
       z: track.z,
       first_seen: prev.first_seen,
-      position_last_changed: if(moved, do: now, else: prev.position_last_changed),
+      moving_ms: moving_ms,
+      qualified: qualified,
       last_seen: now
     }
   end
@@ -105,8 +113,8 @@ defmodule Octopus.Radar.ClutterFilter do
     end)
   end
 
-  defp stationary_filter_ms do
+  defp qualification_ms do
     Application.get_env(:octopus, __MODULE__, [])
-    |> Keyword.get(:stationary_filter_ms, @stationary_filter_ms)
+    |> Keyword.get(:qualification_ms, @qualification_ms)
   end
 end
