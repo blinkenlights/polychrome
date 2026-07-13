@@ -66,6 +66,9 @@ ssh "${REMOTE_USER}@${REMOTE_HOST}" "
     echo 'Loading image...'
     gunzip -c ${REMOTE_DIR}/${TARBALL} | docker load
 
+    echo 'Cleaning up old images...'
+    docker image prune -f
+
     echo 'Stopping existing container...'
     docker compose stop polychrome 2>/dev/null || true
 
