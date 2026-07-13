@@ -19,7 +19,7 @@ defmodule OctopusWeb.RadarLive do
 
   alias Octopus.Installation
   alias Octopus.Radar
-  alias Octopus.Radar.{Frame, Track}
+  alias Octopus.Radar.{Frame, Track, Transform}
   alias Octopus.Radar.Mock.World
 
   # 10 s rolling window used both for the displayed min/max and for
@@ -34,6 +34,14 @@ defmodule OctopusWeb.RadarLive do
   # Minimum time the "max people applying" spinner stays visible, so the
   # feedback is noticeable even when the population reaches the cap quickly.
   @apply_min_ms 700
+
+  # High-frequency data (radar frames from every sensor + mock-world ticks)
+  # arrives dozens of times per second. Rather than run the expensive
+  # `rebuild_view/1` (and push a full SVG diff) on each message — which
+  # saturates the LiveView process and makes UI events feel laggy — incoming
+  # data only updates raw state and requests a render. A single coalesced
+  # re-render then runs at most once per this interval (~15 fps).
+  @render_interval_ms 66
 
   # Lightness range for the trail's per-segment color. The newest
   # segment (closest to the body circle) is rendered at `@trail_l_near`
@@ -175,6 +183,8 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:world_objects, [])
      |> assign(:visuals, @default_visuals)
      |> assign(:detection_list_mode, :by_sensor)
+     |> assign(:coords_frame, :global)
+     |> assign(:render_scheduled, false)
      |> assign(:bounds_mode, :static)
      |> assign(:static_bounds, bounds_for(selected_id, devices, world_radius))
      |> reset_radar_state()}
@@ -388,12 +398,22 @@ defmodule OctopusWeb.RadarLive do
     {:noreply, socket |> assign(:detection_list_mode, mode_atom) |> rebuild_view()}
   end
 
+  # Both x/y/z and the sensor-local lx/ly/lz are always precomputed on each
+  # detection, so switching frames only changes which the template shows — no
+  # rebuild needed.
+  def handle_event("toggle_coords_frame", _params, socket) do
+    frame = if socket.assigns.coords_frame == :local, do: :global, else: :local
+    {:noreply, assign(socket, :coords_frame, frame)}
+  end
+
+  # Visual layers just toggle visibility of already-computed data lists in the
+  # template, so no rebuild is required here.
   def handle_event("toggle_visual", %{"feature" => feature}, socket) do
     key = String.to_existing_atom(feature)
 
     if Map.has_key?(socket.assigns.visuals, key) do
       visuals = Map.update!(socket.assigns.visuals, key, &(!&1))
-      {:noreply, socket |> assign(:visuals, visuals) |> rebuild_view()}
+      {:noreply, assign(socket, :visuals, visuals)}
     else
       {:noreply, socket}
     end
@@ -513,12 +533,16 @@ defmodule OctopusWeb.RadarLive do
      socket
      |> assign(:world_objects, objects)
      |> assign(:max_people_applying, applying?)
-     |> rebuild_view()}
+     |> schedule_render()}
   end
 
   @impl true
   def handle_info({:radar_frame, device_id, %Frame{} = frame}, socket) do
     {:noreply, ingest_frame(socket, device_id, frame)}
+  end
+
+  def handle_info(:render, socket) do
+    {:noreply, socket |> assign(:render_scheduled, false) |> rebuild_view()}
   end
 
   def handle_info({:platform_radius_m, value}, socket) do
@@ -665,7 +689,17 @@ defmodule OctopusWeb.RadarLive do
     |> assign(:max_y, max_y)
     |> assign(:min_z, min_z)
     |> assign(:max_z, max_z)
-    |> rebuild_view()
+    |> schedule_render()
+  end
+
+  # Coalesce high-frequency data updates into at most one re-render per
+  # `@render_interval_ms`. If a render is already pending we just leave the
+  # freshly-updated state in place; the scheduled tick will pick it up.
+  defp schedule_render(%{assigns: %{render_scheduled: true}} = socket), do: socket
+
+  defp schedule_render(socket) do
+    Process.send_after(self(), :render, @render_interval_ms)
+    assign(socket, :render_scheduled, true)
   end
 
   defp update_xy_bounds(%{bounds_mode: :static} = a, _new_samples) do
@@ -1052,6 +1086,15 @@ defmodule OctopusWeb.RadarLive do
                         By proximity
                       </button>
                     </div>
+                    <label class="flex items-center justify-between gap-2 cursor-pointer">
+                      <span class="text-xs opacity-70">Local coordinates</span>
+                      <input
+                        type="checkbox"
+                        class="toggle toggle-sm toggle-primary"
+                        checked={@coords_frame == :local}
+                        phx-click="toggle_coords_frame"
+                      />
+                    </label>
                   </div>
 
                   <%= if @detection_list == [] do %>
@@ -1096,7 +1139,11 @@ defmodule OctopusWeb.RadarLive do
                                   <% end %>
                                 </div>
                                 <div class="opacity-70 mt-0.5 tabular-nums">
-                                  x {fmt_m(item.x)} · y {fmt_m(item.y)} · z {fmt_m(item.z)}
+                                  <%= if @coords_frame == :local do %>
+                                    x {fmt_m(item.lx)} · y {fmt_m(item.ly)} · z {fmt_m(item.lz)}
+                                  <% else %>
+                                    x {fmt_m(item.x)} · y {fmt_m(item.y)} · z {fmt_m(item.z)}
+                                  <% end %>
                                 </div>
                               </li>
                             <% end %>
@@ -1672,21 +1719,23 @@ defmodule OctopusWeb.RadarLive do
 
   defp build_detection_list(tracks_now, devices, selected, mode) do
     tracks_now
-    |> tracks_to_list(selected)
+    |> tracks_to_list(selected, devices)
     |> case do
       [] -> []
       tracks -> apply_detection_list_mode(tracks, devices, mode)
     end
   end
 
-  defp tracks_to_list(tracks_now, selected) do
+  defp tracks_to_list(tracks_now, selected, devices) do
     now = System.monotonic_time(:millisecond)
+    poses = sensor_pose_lookup(devices)
 
     Enum.map(tracks_now, fn {{device_id, id}, t} ->
       vz = Map.get(t, :vz, 0.0)
       speed = :math.sqrt(t.vx * t.vx + t.vy * t.vy + vz * vz)
       age = now - t.last_seen
       opacity = max(0.0, 1.0 - age / @fade_ms)
+      {lx, ly, lz} = local_coords(t, Map.get(poses, device_id))
 
       %{
         device_id: device_id,
@@ -1695,12 +1744,43 @@ defmodule OctopusWeb.RadarLive do
         x: t.x,
         y: t.y,
         z: t.z,
+        lx: lx,
+        ly: ly,
+        lz: lz,
         speed: speed,
         opacity: opacity,
         color: sensor_color(device_id),
         letter: device_letter(device_id)
       }
     end)
+  end
+
+  # device_id → pose keyword usable by `Transform`, so a global track can be
+  # inverted back to the raw coordinates the sensor originally reported.
+  defp sensor_pose_lookup(devices) do
+    Map.new(devices, fn d ->
+      {d.device_id,
+       [
+         type: d.type,
+         angle_deg: d.angle_deg,
+         distance_cm: d.distance_cm,
+         rotation_deg: d.rotation_deg
+       ]}
+    end)
+  end
+
+  # Recover the sensor-local (raw) coordinates by inverting the forward
+  # Transform. Falls back to the global values if the pose is unknown.
+  defp local_coords(t, nil), do: {t.x, t.y, t.z}
+
+  defp local_coords(t, pose) do
+    local =
+      Transform.global_to_local_track(
+        %Track{id: 0, reserved: 0, x: t.x, y: t.y, z: t.z, vx: 0.0, vy: 0.0, vz: 0.0},
+        pose
+      )
+
+    {local.x, local.y, local.z}
   end
 
   defp apply_detection_list_mode(tracks, _devices, :by_proximity),
