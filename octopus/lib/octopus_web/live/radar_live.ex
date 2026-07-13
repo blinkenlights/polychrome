@@ -148,15 +148,6 @@ defmodule OctopusWeb.RadarLive do
       Process.send_after(self(), :refresh_sensor_statuses, 2_000)
     end
 
-    selected_id =
-      cond do
-        mock_source?(source_mode) -> :all
-        length(devices) == 1 -> hd(devices).device_id
-        true -> :all
-      end
-
-    selected = Enum.find(devices, &(&1.device_id == selected_id))
-
     {:ok,
      socket
      |> assign(:radar_configured, Radar.configured?())
@@ -168,8 +159,7 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:angle_offset_deg, round(Radar.angle_offset_deg()))
      |> assign(:north_panel, Octopus.Installation.north_panel())
      |> assign(:sensor_statuses, build_sensor_statuses(devices))
-     |> assign(:selected_device_id, selected_id)
-     |> assign(:sensitivity, (selected && selected.sensitivity) || 4)
+     |> assign(:sensitivity, default_sensitivity(devices))
      |> assign(:source_mode, source_mode)
      |> assign(:max_people, safe_max_people())
      |> assign(:max_people_limit, Radar.max_people_limit())
@@ -186,16 +176,19 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:coords_frame, :global)
      |> assign(:render_scheduled, false)
      |> assign(:bounds_mode, :static)
-     |> assign(:static_bounds, bounds_for(selected_id, devices, world_radius))
+     |> assign(:static_bounds, world_bounds(world_radius))
      |> reset_radar_state()}
   end
+
+  # First enabled sensor's sensitivity (all sensors share the slider), or the
+  # device default when none are known yet.
+  defp default_sensitivity([%{sensitivity: s} | _]), do: s
+  defp default_sensitivity(_), do: 4
 
   # The canvas always frames the entire simulated world (in every mode) so the
   # world border, the sensors and their coverage, and the detections all share
   # one fixed, fully-visible frame. The extent is padded slightly past the
   # world radius so the border circle isn't clipped at the canvas edge.
-  defp bounds_for(_selected_id, _devices, radius), do: world_bounds(radius)
-
   defp world_bounds(radius) do
     ext = radius * 1.08
     %{min_x: -ext, max_x: ext, min_y: -ext, max_y: ext, range_m: radius}
@@ -230,31 +223,6 @@ defmodule OctopusWeb.RadarLive do
   end
 
   @impl true
-  def handle_event("select_sensor", %{"device_id" => "all"}, socket) do
-    {:noreply,
-     socket
-     |> assign(:selected_device_id, :all)
-     |> assign(:static_bounds, active_bounds(socket, :all))
-     |> reset_radar_state()}
-  end
-
-  def handle_event("select_sensor", %{"device_id" => id_str}, socket) do
-    case Integer.parse(id_str) do
-      {id, ""} ->
-        device = Enum.find(socket.assigns.devices, &(&1.device_id == id))
-
-        {:noreply,
-         socket
-         |> assign(:selected_device_id, id)
-         |> assign(:sensitivity, (device && device.sensitivity) || 4)
-         |> assign(:static_bounds, active_bounds(socket, id))
-         |> reset_radar_state()}
-
-      _ ->
-        {:noreply, socket}
-    end
-  end
-
   # Toggle between static (canvas matches the sensor's configured X/Y
   # rectangle) and auto (grow-only bounds derived from observed samples).
   def handle_event("toggle_bounds_mode", params, socket) do
@@ -274,11 +242,7 @@ defmodule OctopusWeb.RadarLive do
          true <- ui in 1..9 do
       sensitivity = 10 - ui
 
-      case socket.assigns.selected_device_id do
-        :all -> Enum.each(socket.assigns.devices, &Radar.set_sensitivity(&1.device_id, sensitivity))
-        id when is_integer(id) -> Radar.set_sensitivity(id, sensitivity)
-        _ -> :ok
-      end
+      Enum.each(socket.assigns.devices, &Radar.set_sensitivity(&1.device_id, sensitivity))
 
       {:noreply,
        socket
@@ -434,18 +398,9 @@ defmodule OctopusWeb.RadarLive do
 
         statuses = build_sensor_statuses(socket.assigns.devices)
 
-        selected =
-          if status != :inactive and socket.assigns.selected_device_id == id do
-            :all
-          else
-            socket.assigns.selected_device_id
-          end
-
         {:noreply,
          socket
          |> assign(:sensor_statuses, statuses)
-         |> assign(:selected_device_id, selected)
-         |> assign(:static_bounds, active_bounds(socket, selected))
          |> reset_radar_state()}
 
       _ ->
@@ -454,18 +409,8 @@ defmodule OctopusWeb.RadarLive do
   end
 
   def handle_event("reinitialize", _params, socket) do
-    case socket.assigns.selected_device_id do
-      nil ->
-        {:noreply, socket}
-
-      :all ->
-        Enum.each(socket.assigns.devices, &Radar.reinitialize(&1.device_id))
-        {:noreply, reset_radar_state(socket)}
-
-      id ->
-        _ = Radar.reinitialize(id)
-        {:noreply, reset_radar_state(socket)}
-    end
+    Enum.each(socket.assigns.devices, &Radar.reinitialize(&1.device_id))
+    {:noreply, reset_radar_state(socket)}
   end
 
   def handle_event("fit_bounds", _params, socket) do
@@ -570,11 +515,10 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:max_people_applying, false)
      |> assign(:entropy, safe_entropy())
      |> assign(:manual_tracking, Radar.manual_tracking?())
-     |> assign(:selected_device_id, :all)
      |> assign(:bounds_mode, :static)
      |> assign(:world_objects, [])
      |> assign(:sensor_statuses, build_sensor_statuses(devices))
-     |> assign(:static_bounds, bounds_for(:all, devices, socket.assigns.world_radius))
+     |> assign(:static_bounds, world_bounds(socket.assigns.world_radius))
      |> reset_radar_state()}
   end
 
@@ -622,12 +566,6 @@ defmodule OctopusWeb.RadarLive do
     end
   end
 
-  # Bounds to use for a (re)selection, honoring mock mode (world disk) vs
-  # real hardware (configured rectangle).
-  defp active_bounds(socket, _selected_id) do
-    bounds_for(socket.assigns.selected_device_id, socket.assigns.devices, socket.assigns.world_radius)
-  end
-
   defp empty_ruler,
     do: %{x_axis_visible: false, y_axis_visible: false, origin_x: 0, origin_y: 0, ticks: []}
 
@@ -635,8 +573,6 @@ defmodule OctopusWeb.RadarLive do
     now = System.monotonic_time(:millisecond)
     cutoff = now - @window_ms
     fade_cutoff = now - @fade_ms
-    selected = socket.assigns.selected_device_id
-    include_samples? = selected == :all or selected == device_id
 
     tracks_now =
       tracks
@@ -657,34 +593,23 @@ defmodule OctopusWeb.RadarLive do
       |> Map.new()
 
     new_samples =
-      if include_samples? do
-        Enum.map(tracks, fn %Track{id: id, x: x, y: y, z: z} ->
-          %{ts: now, device_id: device_id, id: id, x: x, y: y, z: z}
-        end)
-      else
-        []
-      end
+      Enum.map(tracks, fn %Track{id: id, x: x, y: y, z: z} ->
+        %{ts: now, device_id: device_id, id: id, x: x, y: y, z: z}
+      end)
 
     samples =
-      if include_samples? do
-        (new_samples ++ socket.assigns.samples)
-        |> Enum.filter(&(&1.ts >= cutoff))
-      else
-        socket.assigns.samples
-      end
+      (new_samples ++ socket.assigns.samples)
+      |> Enum.filter(&(&1.ts >= cutoff))
 
     a = socket.assigns
 
-    {min_x, max_x, min_y, max_y} =
-      if include_samples?, do: update_xy_bounds(a, new_samples), else: {a.min_x, a.max_x, a.min_y, a.max_y}
-
-    {min_z, max_z} =
-      if include_samples?, do: grow_bounds(new_samples, a.min_z, a.max_z, :z), else: {a.min_z, a.max_z}
+    {min_x, max_x, min_y, max_y} = update_xy_bounds(a, new_samples)
+    {min_z, max_z} = grow_bounds(new_samples, a.min_z, a.max_z, :z)
 
     socket
     |> assign(:samples, samples)
     |> assign(:tracks_now, tracks_now)
-    |> assign(:last_frame_number, if(include_samples?, do: frame_number, else: a.last_frame_number))
+    |> assign(:last_frame_number, frame_number)
     |> assign(:min_x, min_x)
     |> assign(:max_x, max_x)
     |> assign(:min_y, min_y)
@@ -749,8 +674,7 @@ defmodule OctopusWeb.RadarLive do
         min_x: min_x,
         max_x: max_x,
         min_y: min_y,
-        max_y: max_y,
-        selected: a.selected_device_id
+        max_y: max_y
       })
 
     ruler = build_ruler(min_x, max_x, min_y, max_y)
@@ -762,7 +686,6 @@ defmodule OctopusWeb.RadarLive do
       build_range_indicators(
         a.layout_devices,
         active_ids,
-        a.selected_device_id,
         a.tracks_now,
         min_x,
         max_x,
@@ -801,7 +724,6 @@ defmodule OctopusWeb.RadarLive do
       build_detection_list(
         a.tracks_now,
         a.devices,
-        a.selected_device_id,
         a.detection_list_mode
       )
 
@@ -820,9 +742,7 @@ defmodule OctopusWeb.RadarLive do
   # One coverage ellipse per planned sensor in the current selection, centered on
   # the sensor's global mount position. Inactive sensors use neutral gray; active
   # sensors use their per-sensor hue.
-  defp build_range_indicators(_layout_devices, _active_ids, nil, _tracks_now, _, _, _, _), do: []
-
-  defp build_range_indicators(layout_devices, active_ids, :all, tracks_now, min_x, max_x, min_y, max_y) do
+  defp build_range_indicators(layout_devices, active_ids, tracks_now, min_x, max_x, min_y, max_y) do
     detecting = devices_with_detections(tracks_now)
 
     Enum.map(layout_devices, fn device ->
@@ -830,21 +750,6 @@ defmodule OctopusWeb.RadarLive do
       detecting? = active? and MapSet.member?(detecting, device.device_id)
       range_indicator(device, active?, detecting?, min_x, max_x, min_y, max_y)
     end)
-  end
-
-  defp build_range_indicators(layout_devices, active_ids, device_id, tracks_now, min_x, max_x, min_y, max_y)
-       when is_integer(device_id) do
-    detecting = devices_with_detections(tracks_now)
-
-    case Enum.find(layout_devices, &(&1.device_id == device_id)) do
-      nil ->
-        []
-
-      device ->
-        active? = MapSet.member?(active_ids, device.device_id)
-        detecting? = active? and MapSet.member?(detecting, device.device_id)
-        [range_indicator(device, active?, detecting?, min_x, max_x, min_y, max_y)]
-    end
   end
 
   defp range_indicator(device, active?, detecting?, min_x, max_x, min_y, max_y) do
@@ -1459,22 +1364,6 @@ defmodule OctopusWeb.RadarLive do
                         </button>
                       <% end %>
                     </div>
-                    <form phx-change="select_sensor">
-                      <select
-                        id="radar-sensor"
-                        name="device_id"
-                        class="select select-bordered w-full h-10 text-sm leading-normal"
-                      >
-                        <%= for d <- @devices do %>
-                          <option value={d.device_id} selected={d.device_id == @selected_device_id}>
-                            Sensor {device_letter(d.device_id)} — {d.port}
-                          </option>
-                        <% end %>
-                        <option value="all" selected={@selected_device_id == :all}>
-                          All sensors
-                        </option>
-                      </select>
-                    </form>
                   </div>
 
                   <%= if mock_source?(@source_mode) do %>
@@ -1639,11 +1528,7 @@ defmodule OctopusWeb.RadarLive do
                     class="btn btn-outline btn-sm w-full"
                     phx-click="reinitialize"
                   >
-                    <%= if @selected_device_id == :all do %>
-                      Reinitialize all sensors
-                    <% else %>
-                      Reinitialize sensor
-                    <% end %>
+                    Reinitialize all sensors
                   </button>
 
                   <div class="flex flex-col gap-2 border-t border-base-300 pt-3">
@@ -1681,8 +1566,7 @@ defmodule OctopusWeb.RadarLive do
       min_x: min_x,
       max_x: max_x,
       min_y: min_y,
-      max_y: max_y,
-      selected: selected
+      max_y: max_y
     } = assigns
 
     now = System.monotonic_time(:millisecond)
@@ -1707,7 +1591,7 @@ defmodule OctopusWeb.RadarLive do
         |> build_trail_segments(now, hue, min_x, max_x, min_y, max_y)
 
       %{
-        label: track_label(device_id, id, selected),
+        label: track_label(device_id, id),
         cx: cx,
         cy: cy,
         radius: radius_for_z(t.z),
@@ -1720,21 +1604,20 @@ defmodule OctopusWeb.RadarLive do
     end)
   end
 
-  # In :all mode every label is prefixed by the source sensor's letter so two
-  # sensors reporting the same numeric id are distinguishable.
-  defp track_label(device_id, id, :all), do: "#{device_letter(device_id)}#{id}"
-  defp track_label(_device_id, id, _selected), do: Integer.to_string(id)
+  # Every label is prefixed by the source sensor's letter so two sensors
+  # reporting the same numeric id are distinguishable.
+  defp track_label(device_id, id), do: "#{device_letter(device_id)}#{id}"
 
-  defp build_detection_list(tracks_now, devices, selected, mode) do
+  defp build_detection_list(tracks_now, devices, mode) do
     tracks_now
-    |> tracks_to_list(selected, devices)
+    |> tracks_to_list(devices)
     |> case do
       [] -> []
       tracks -> apply_detection_list_mode(tracks, devices, mode)
     end
   end
 
-  defp tracks_to_list(tracks_now, selected, devices) do
+  defp tracks_to_list(tracks_now, devices) do
     now = System.monotonic_time(:millisecond)
     poses = sensor_pose_lookup(devices)
 
@@ -1748,7 +1631,7 @@ defmodule OctopusWeb.RadarLive do
       %{
         device_id: device_id,
         id: id,
-        label: track_label(device_id, id, selected),
+        label: track_label(device_id, id),
         x: t.x,
         y: t.y,
         z: t.z,
