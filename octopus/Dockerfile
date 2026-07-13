@@ -93,9 +93,9 @@ RUN --mount=type=cache,target=/root/.npm \
     mix assets.deploy
 
 # Changes to config/runtime.exs / radar.exs don't require recompiling the code.
-# radar_deployments.exs is evaluated via radar.exs; RADAR_DEPLOYMENT selects
-# physical sensor bindings at runtime.
-COPY config/runtime.exs config/radar.exs config/radar_deployments.exs config/
+# radar.exs holds the physical sensor bindings and selects the active
+# deployment by hostname at runtime.
+COPY config/runtime.exs config/radar.exs config/
 
 COPY rel rel
 RUN --mount=type=cache,target=/root/.cargo/registry \

@@ -102,5 +102,6 @@ profile.
 ## Radar sensors
 
 The Pixie installation does not define radar sensors. If you add radar to an
-installation later, set `RADAR_DEPLOYMENT` to a matching entry in
-`config/radar_deployments.exs` and mount serial devices via `docker-compose.yml`.
+installation later, add an entry for this host (keyed by its hostname) to the
+`deployments` map in `config/radar.exs` and mount serial devices via
+`docker-compose.yml`.

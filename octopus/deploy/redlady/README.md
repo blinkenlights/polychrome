@@ -95,16 +95,18 @@ ssh tim@redlady.crested-frog.ts.net \
 ## Radar sensors
 
 Nation 2026 defines six logical radar sensors (`:a`–`:f`) in the installation
-module. This host maps them to USB serial ports in
-`config/radar_deployments.exs` under the `"redlady"` deployment, selected by
-`RADAR_DEPLOYMENT=redlady` in `deploy/redlady/.env` (see `.env.example`).
+module. This host maps them to USB serial ports in `config/radar.exs` under the
+`"redlady"` deployment. The deployment is selected automatically by the
+machine's hostname (`redlady`) — no `.env` entry is needed. Under
+`network_mode: host` the container inherits the host's hostname, so the match
+happens inside the container too.
 
-`RADAR_SOURCE_MODE=live` is the production default (use `off`, `exact`, or
-`fuzzy` for other modes). On dev machines the default is `off` until you pick
-a source in the radar UI.
+Live is the production default. Set `RADAR_SOURCE_MODE` in `.env` only to
+override the boot mode (`off`, `exact`, or `fuzzy`). On dev machines the
+default is `off` until you pick a source in the radar UI.
 
 To change sensor layout or orientation, edit the `:radar` block in
 `lib/octopus/installation/nation2026.ex`. To change ports or adapters on this
-Pi, edit the `"redlady"` entry in `config/radar_deployments.exs`. Serial
-devices are passed through to the container via the `/dev` and `/dev/serial`
-mounts in `docker-compose.yml`.
+Pi, edit the `"redlady"` entry in `config/radar.exs`. Serial devices are passed
+through to the container via the `/dev` and `/dev/serial` mounts in
+`docker-compose.yml`.

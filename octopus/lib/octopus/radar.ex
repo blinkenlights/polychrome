@@ -30,11 +30,12 @@ defmodule Octopus.Radar do
 
   See `Octopus.Installation.Nation2026` for a full example.
 
-  ### Deployment (`config/radar_deployments.exs`)
+  ### Deployment (`config/radar.exs`)
 
-  Each host that has real sensors selects a named deployment via
-  `RADAR_DEPLOYMENT` (set in `deploy/<host>/.env`). The deployment maps
-  logical sensor ids to serial ports and optional USB adapter metadata:
+  Each host that has real sensors has an entry in the `deployments` map in
+  `config/radar.exs`, keyed by the machine's short hostname (selected
+  automatically at boot — no environment variable). The entry maps logical
+  sensor ids to serial ports and optional USB adapter metadata:
 
       "redlady" => [
         defaults: [type: :ld6001a, baud: 115_200],
@@ -45,10 +46,10 @@ defmodule Octopus.Radar do
         adapters: [...]
       ]
 
-  When `RADAR_DEPLOYMENT` is unset (e.g. local dev on a Mac), Live mode is
+  On a host with no matching entry (e.g. local dev on a Mac), Live mode is
   unavailable but Mock mode still works using synthetic ports.
 
-  ### Runtime (`config/radar.exs`)
+  ### Boot source mode (`config/radar.exs`)
 
   * `:boot_source_mode` — `:off`, `:live`, `:exact`, or `:fuzzy`; overridable via
     `RADAR_SOURCE_MODE` (defaults to `:off` in dev, `:live` in prod).

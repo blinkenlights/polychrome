@@ -1,9 +1,9 @@
 import Config
 
-# Radar: config/radar.exs loads deployment bindings from radar_deployments.exs.
-# Logical layout comes from the installation module; RADAR_DEPLOYMENT selects
-# physical ports per host. runtime.exs cannot use import_config/1, so we
-# evaluate the file instead.
+# Radar: config/radar.exs holds the physical deployment bindings and boot
+# source mode. Logical layout comes from the installation module; the active
+# deployment is selected by the machine's hostname. runtime.exs cannot use
+# import_config/1, so we evaluate the file instead.
 Code.eval_file(Path.join(__DIR__, "radar.exs"))
 
 # config/runtime.exs is executed for all environments, including
