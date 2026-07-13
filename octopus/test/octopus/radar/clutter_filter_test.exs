@@ -29,8 +29,10 @@ defmodule Octopus.Radar.ClutterFilterTest do
     }
   end
 
-  defp frame(tracks) do
-    %Frame{frame_number: 1, tracks: tracks, received_at: System.monotonic_time(:millisecond)}
+  defp frame(tracks, opts \\ []) do
+    ts = Keyword.get(opts, :received_at, System.monotonic_time(:millisecond))
+
+    %Frame{frame_number: 1, tracks: tracks, received_at: ts}
   end
 
   test "holds back unqualified tracks" do
@@ -44,7 +46,7 @@ defmodule Octopus.Radar.ClutterFilterTest do
     Process.sleep(120)
     assert ClutterFilter.filter_frame(@device_id, frame).tracks == []
 
-    jittered = ClutterFilter.filter_frame(@device_id, frame([track(1, 0.05, 0.05)]))
+    jittered = ClutterFilter.filter_frame(@device_id, frame([track(1, 0.02, 0.02)]))
     assert jittered.tracks == []
   end
 
@@ -129,6 +131,42 @@ defmodule Octopus.Radar.ClutterFilterTest do
     assert length(debug["history"]) == 3
     assert hd(debug["history"])["moving"] == true
     assert is_float(hd(debug["history"])["speed_m_s"])
+  end
+
+  test "qualification persists when clutter filter is toggled off and on" do
+    moving = track(1, 0.0, 0.0, 1.7, velocity: {0.5, 0.0, 0.0})
+    t0 = System.monotonic_time(:millisecond)
+
+    assert ClutterFilter.filter_frame(@device_id, frame([moving], received_at: t0)).tracks == []
+    assert ClutterFilter.filter_frame(@device_id, frame([moving], received_at: t0 + 50)).tracks == []
+
+    qualified =
+      ClutterFilter.filter_frame(@device_id, frame([moving], received_at: t0 + 100))
+
+    assert length(qualified.tracks) == 1
+
+    ViewSettings.set_clutter_filter(false)
+    assert length(ClutterFilter.filter_frame(@device_id, frame([moving], received_at: t0 + 120)).tracks) == 1
+
+    ViewSettings.set_clutter_filter(true)
+
+    assert length(ClutterFilter.filter_frame(@device_id, frame([moving], received_at: t0 + 140)).tracks) == 1
+  end
+
+  test "track_qualified? reflects registry qualification state" do
+    moving = track(1, 0.0, 0.0, 1.7, velocity: {0.5, 0.0, 0.0})
+    t0 = System.monotonic_time(:millisecond)
+
+    assert ClutterFilter.track_qualified?(@device_id, 1) == false
+
+    ClutterFilter.filter_frame(@device_id, frame([moving], received_at: t0))
+    ClutterFilter.filter_frame(@device_id, frame([moving], received_at: t0 + 50))
+
+    assert ClutterFilter.track_qualified?(@device_id, 1) == false
+
+    ClutterFilter.filter_frame(@device_id, frame([moving], received_at: t0 + 100))
+
+    assert ClutterFilter.track_qualified?(@device_id, 1) == true
   end
 
   test "track_debug returns nil for unknown tracks" do

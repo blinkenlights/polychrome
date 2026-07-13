@@ -344,8 +344,7 @@ defmodule OctopusWeb.RadarLive do
 
   def handle_event("toggle_clutter_filter", _params, socket) do
     Radar.toggle_clutter_filter()
-
-    {:noreply, reset_radar_state(socket)}
+    {:noreply, socket}
   end
 
   def handle_event("toggle_sensor", %{"device_id" => id_str}, socket) do
@@ -375,6 +374,7 @@ defmodule OctopusWeb.RadarLive do
 
   def handle_event("reinitialize", _params, socket) do
     Enum.each(socket.assigns.devices, &Radar.reinitialize(&1.device_id))
+    Radar.reset_clutter_filter()
     {:noreply, reset_radar_state(socket)}
   end
 
@@ -507,9 +507,21 @@ defmodule OctopusWeb.RadarLive do
     |> assign(:visuals, settings.visuals)
     |> assign(:bounds_mode, settings.bounds_mode)
     |> assign(:clutter_filter, settings.clutter_filter)
+    |> apply_clutter_filter_to_tracks_now(settings.clutter_filter)
     |> apply_bounds_for_mode()
     |> rebuild_view()
   end
+
+  defp apply_clutter_filter_to_tracks_now(socket, true) do
+    tracks_now =
+      Map.filter(socket.assigns.tracks_now, fn {{device_id, track_id}, _} ->
+        Radar.clutter_filter_track_qualified?(device_id, track_id)
+      end)
+
+    assign(socket, :tracks_now, tracks_now)
+  end
+
+  defp apply_clutter_filter_to_tracks_now(socket, _enabled), do: socket
 
   defp apply_mock_settings(socket, %{max_people: target, entropy: entropy, manual_tracking: manual_tracking}) do
     applying? = length(socket.assigns.world_objects) != target
@@ -530,6 +542,8 @@ defmodule OctopusWeb.RadarLive do
 
     devices = Radar.devices() |> Enum.filter(& &1.enabled)
     view_settings = Radar.view_settings()
+
+    Radar.reset_clutter_filter()
 
     {:noreply,
      socket
@@ -556,8 +570,6 @@ defmodule OctopusWeb.RadarLive do
   ## State updates
 
   defp reset_radar_state(socket) do
-    Radar.reset_clutter_filter()
-
     socket
     |> assign(:samples, [])
     |> assign(:tracks_now, %{})

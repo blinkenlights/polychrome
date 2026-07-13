@@ -40,6 +40,20 @@ defmodule Octopus.Radar.ClutterFilter do
     end
   end
 
+  @spec track_qualified?(pos_integer(), non_neg_integer()) :: boolean()
+  def track_qualified?(device_id, track_id) do
+    if Process.whereis(__MODULE__) do
+      Agent.get(__MODULE__, fn %{registry: registry} ->
+        case Map.get(registry, {device_id, track_id}) do
+          nil -> false
+          entry -> entry.qualified
+        end
+      end)
+    else
+      true
+    end
+  end
+
   @spec track_debug(pos_integer(), non_neg_integer()) :: map() | nil
   def track_debug(device_id, track_id) do
     if Process.whereis(__MODULE__) do
@@ -54,8 +68,8 @@ defmodule Octopus.Radar.ClutterFilter do
     end
   end
 
-  defp do_filter(device_id, %Frame{} = frame, %{registry: registry}) do
-    now = System.monotonic_time(:millisecond)
+  defp do_filter(device_id, %Frame{received_at: frame_ts} = frame, %{registry: registry}) do
+    now = frame_ts
     enabled = clutter_filter_enabled?()
 
     {registry, tracks} =
