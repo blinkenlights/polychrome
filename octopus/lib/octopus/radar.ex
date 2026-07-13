@@ -32,19 +32,28 @@ defmodule Octopus.Radar do
 
   ### Deployment (`config/radar.exs`)
 
-  Each host that has real sensors has an entry in the `deployments` map in
-  `config/radar.exs`, keyed by the machine's short hostname (selected
-  automatically at boot — no environment variable). The entry maps logical
-  sensor ids to serial ports and optional USB adapter metadata:
+  Physical bindings live in the `deployments` map in `config/radar.exs`,
+  keyed by host OS (`:linux`, `:macos`). The matching entry is selected at
+  boot via `Octopus.Radar.Deployment.host_target/0` — no hostname or env var.
+  Each entry declares `:target`, which drives USB behaviour:
 
-      "redlady" => [
-        defaults: [type: :ld6001a, baud: 115_200],
-        sensors: [
-          [id: :a, port: "/dev/serial/by-id/..."],
-          ...
+      deployments: %{
+        linux: [
+          target: :linux,
+          adapters: [[name: "65", serial: "BD6545ABCD"], ...],
+          sensors: [[id: :a, adapter: "65", port: :if00], ...]
         ],
-        adapters: [...]
-      ]
+        macos: [
+          target: :macos,
+          adapters: [[name: "dev", ports: [if00: "/dev/tty.usbserial-..."]]],
+          ...
+        ]
+      }
+
+  `:target :linux` discovers by-id port paths and sysfs `usb_path` at runtime
+  (production rigs such as redlady). `:target :macos` uses explicit `:ports`
+  only. Adapter metadata powers USB reset on the radar debug page (Linux
+  target only); sysfs path is resolved when reset is triggered.
 
   On a host with no matching entry (e.g. local dev on a Mac), Live mode is
   unavailable but Mock mode still works using synthetic ports.
@@ -98,6 +107,7 @@ defmodule Octopus.Radar do
     Runtime,
     Sensitivity,
     Sensor,
+    Deployment,
     SensorPlan,
     SensorType,
     SourceMode,
@@ -141,31 +151,13 @@ defmodule Octopus.Radar do
   using the plain `:ports` style).
   """
   @spec adapters() :: [
-          %{name: String.t(), usb_path: String.t(), device_ids: [pos_integer()]}
+          %{name: String.t(), usb_path: String.t() | nil, device_ids: [pos_integer()]}
         ]
   def adapters do
-    if not configured?() do
-      []
+    if configured?() do
+      Deployment.adapters(deployment_config(), Octopus.Installation.radar_config())
     else
-      deployment_config()
-      |> case do
-        nil -> []
-        deployment -> Keyword.get(deployment, :adapters, [])
-      end
-      |> Enum.reduce({[], 1}, fn adapter_opts, {acc, id_start} ->
-        ports = Keyword.fetch!(adapter_opts, :ports)
-        count = length(ports)
-        device_ids = Enum.to_list(id_start..(id_start + count - 1))
-
-        entry = %{
-          name: Keyword.fetch!(adapter_opts, :name),
-          usb_path: Keyword.fetch!(adapter_opts, :usb_path),
-          device_ids: device_ids
-        }
-
-        {acc ++ [entry], id_start + count}
-      end)
-      |> elem(0)
+      []
     end
   end
 
@@ -190,6 +182,14 @@ defmodule Octopus.Radar do
     case Enum.find(adapters(), fn a -> a.name == adapter_name end) do
       nil ->
         {:error, :not_found}
+
+      %{usb_path: nil} = adapter ->
+        Logger.warning(
+          "[radar] USB adapter #{adapter_name}: no sysfs path (device unplugged?)"
+        )
+
+        Enum.each(adapter.device_ids, &broadcast_status(&1, :unavailable))
+        {:error, :unavailable}
 
       adapter ->
         Enum.each(adapter.device_ids, &broadcast_status(&1, :resetting))
