@@ -511,13 +511,15 @@ defmodule OctopusWeb.RadarLive do
   def handle_info({:pose_tweak_changed, %{layout_start_angle_deg: start, angle_offset_deg: offset}}, socket) do
     devices = Radar.devices() |> Enum.filter(& &1.enabled)
 
+    # Recompute sensor geometry in place (keep existing detections/samples so
+    # dragging the layout sliders doesn't wipe the tracks every step).
     {:noreply,
      socket
      |> assign(:layout_devices, Radar.planned_devices())
      |> assign(:devices, devices)
      |> assign(:layout_start_angle_deg, round(start))
      |> assign(:angle_offset_deg, round(offset))
-     |> reset_radar_state()}
+     |> rebuild_view()}
   end
 
   def handle_info({:mock_world, objects}, socket) do
@@ -1086,15 +1088,18 @@ defmodule OctopusWeb.RadarLive do
                         By proximity
                       </button>
                     </div>
-                    <label class="flex items-center justify-between gap-2 cursor-pointer">
-                      <span class="text-xs opacity-70">Local coordinates</span>
+                    <div class="flex items-center justify-between gap-2">
+                      <label for="radar-coords-frame" class="text-xs font-semibold opacity-70">
+                        Local coordinates
+                      </label>
                       <input
+                        id="radar-coords-frame"
                         type="checkbox"
                         class="toggle toggle-sm toggle-primary"
                         checked={@coords_frame == :local}
                         phx-click="toggle_coords_frame"
                       />
-                    </label>
+                    </div>
                   </div>
 
                   <%= if @detection_list == [] do %>
@@ -1584,6 +1589,7 @@ defmodule OctopusWeb.RadarLive do
                         max="359"
                         step="1"
                         value={@layout_start_angle_deg}
+                        phx-throttle="60"
                         class="range range-sm w-full"
                       />
                       <span class="text-sm font-mono text-right">{@layout_start_angle_deg}°</span>
@@ -1600,6 +1606,7 @@ defmodule OctopusWeb.RadarLive do
                         max="359"
                         step="1"
                         value={@angle_offset_deg}
+                        phx-throttle="60"
                         class="range range-sm w-full"
                       />
                       <span class="text-sm font-mono text-right">{@angle_offset_deg}°</span>
@@ -1619,6 +1626,7 @@ defmodule OctopusWeb.RadarLive do
                         max={@ring_layout.count}
                         step="1"
                         value={@north_panel}
+                        phx-throttle="60"
                         class="range range-sm w-full"
                       />
                       <span class="text-sm font-mono text-right">{@north_panel}</span>
