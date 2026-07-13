@@ -101,6 +101,7 @@ defmodule Octopus.Radar do
   require Logger
 
   alias Octopus.Radar.{
+    ClutterFilter,
     LogFormat,
     Mock,
     PoseTweak,
@@ -411,6 +412,28 @@ defmodule Octopus.Radar do
     broadcast_view_settings_changed()
     :ok
   end
+
+  @spec clutter_filter_enabled?() :: boolean()
+  def clutter_filter_enabled? do
+    view_settings().clutter_filter
+  end
+
+  @spec set_clutter_filter(boolean()) :: :ok
+  def set_clutter_filter(enabled) when is_boolean(enabled) do
+    ViewSettings.set_clutter_filter(enabled)
+    broadcast_view_settings_changed()
+    :ok
+  end
+
+  @spec toggle_clutter_filter() :: boolean()
+  def toggle_clutter_filter do
+    enabled = ViewSettings.toggle_clutter_filter()
+    broadcast_view_settings_changed()
+    enabled
+  end
+
+  @spec reset_clutter_filter() :: :ok
+  def reset_clutter_filter, do: ClutterFilter.reset()
 
   @doc """
   Re-run the full init sequence on a sensor, resetting all internal
@@ -836,6 +859,7 @@ defmodule Octopus.Radar do
         {PoseTweak, []},
         {Sensitivity, []},
         {ViewSettings, []},
+        {ClutterFilter, []},
         Octopus.Radar.StatusHistory,
         Octopus.Radar.Stats,
         {Mock.World, [mode: mock_world_mode(boot)]}
@@ -1150,7 +1174,8 @@ defmodule Octopus.Radar do
       detection_list_mode: :by_sensor,
       coords_frame: :global,
       visuals: ViewSettings.default_visuals(),
-      bounds_mode: :static
+      bounds_mode: :static,
+      clutter_filter: true
     }
   end
 end

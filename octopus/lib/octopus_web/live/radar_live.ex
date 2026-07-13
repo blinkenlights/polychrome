@@ -165,6 +165,7 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:coords_frame, view_settings.coords_frame)
      |> assign(:render_scheduled, false)
      |> assign(:bounds_mode, view_settings.bounds_mode)
+     |> assign(:clutter_filter, view_settings.clutter_filter)
      |> assign(:static_bounds, world_bounds(world_radius))
      |> reset_radar_state()}
   end
@@ -341,6 +342,12 @@ defmodule OctopusWeb.RadarLive do
     ArgumentError -> {:noreply, socket}
   end
 
+  def handle_event("toggle_clutter_filter", _params, socket) do
+    Radar.toggle_clutter_filter()
+
+    {:noreply, reset_radar_state(socket)}
+  end
+
   def handle_event("toggle_sensor", %{"device_id" => id_str}, socket) do
     case Integer.parse(id_str) do
       {id, ""} ->
@@ -490,6 +497,7 @@ defmodule OctopusWeb.RadarLive do
     |> assign(:coords_frame, settings.coords_frame)
     |> assign(:visuals, settings.visuals)
     |> assign(:bounds_mode, settings.bounds_mode)
+    |> assign(:clutter_filter, settings.clutter_filter)
     |> apply_bounds_for_mode()
     |> rebuild_view()
   end
@@ -528,6 +536,7 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:detection_list_mode, view_settings.detection_list_mode)
      |> assign(:coords_frame, view_settings.coords_frame)
      |> assign(:visuals, view_settings.visuals)
+     |> assign(:clutter_filter, view_settings.clutter_filter)
      |> assign(:world_objects, [])
      |> assign(:sensor_statuses, build_sensor_statuses(devices))
      |> assign(:sensitivity_level, Radar.sensitivity_level())
@@ -538,6 +547,8 @@ defmodule OctopusWeb.RadarLive do
   ## State updates
 
   defp reset_radar_state(socket) do
+    Radar.reset_clutter_filter()
+
     socket
     |> assign(:samples, [])
     |> assign(:tracks_now, %{})
@@ -1504,6 +1515,18 @@ defmodule OctopusWeb.RadarLive do
                         {@sensitivity_level}/9 ({Octopus.Radar.SensorType.sensitivity_level_label(@sensitivity_level)})
                       </span>
                     </div>
+                    <label
+                      id="radar-clutter-filter"
+                      class="flex items-center gap-2 cursor-pointer text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        class="checkbox checkbox-xs"
+                        checked={@clutter_filter}
+                        phx-click="toggle_clutter_filter"
+                      />
+                      <span>Hide static clutter</span>
+                    </label>
                   <% end %>
 
                   <%= if @radial_layout do %>
