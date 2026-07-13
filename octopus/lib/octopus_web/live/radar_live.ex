@@ -1440,29 +1440,84 @@ defmodule OctopusWeb.RadarLive do
                   <% end %>
 
                   <%= if @source_mode == :live do %>
-                    <form phx-change="set_sensitivity" class="flex flex-col gap-1">
-                      <label for="radar-sensitivity" class="text-xs font-semibold opacity-70">
-                        Sensitivity
-                      </label>
-                      <div class="flex items-center gap-2">
-                        <span class="text-xs opacity-60">lower</span>
-                        <input
-                          id="radar-sensitivity"
-                          name="sensitivity_level"
-                          type="range"
-                          min="1"
-                          max="9"
-                          step="1"
-                          value={@sensitivity_level}
-                          phx-debounce="500"
-                          class="range range-sm grow"
-                        />
-                        <span class="text-xs opacity-60">higher</span>
-                      </div>
-                      <span class="text-sm font-mono text-right">
-                        {@sensitivity_level}/9 ({Octopus.Radar.SensorType.sensitivity_level_label(@sensitivity_level)})
-                      </span>
-                    </form>
+                    <div
+                      id="radar-sensitivity-control"
+                      phx-hook=".RadarSensitivitySlider"
+                      data-value={@sensitivity_level}
+                      data-display={
+                        "#{@sensitivity_level}/9 (#{Octopus.Radar.SensorType.sensitivity_level_label(@sensitivity_level)})"
+                      }
+                    >
+                      <form
+                        id="radar-sensitivity-form"
+                        phx-change="set_sensitivity"
+                        phx-update="ignore"
+                        class="flex flex-col gap-1"
+                      >
+                        <label for="radar-sensitivity" class="text-xs font-semibold opacity-70">
+                          Sensitivity
+                        </label>
+                        <div class="flex items-center gap-2">
+                          <span class="text-xs opacity-60">lower</span>
+                          <input
+                            id="radar-sensitivity"
+                            name="sensitivity_level"
+                            type="range"
+                            min="1"
+                            max="9"
+                            step="1"
+                            value={@sensitivity_level}
+                            phx-debounce="300"
+                            class="range range-sm grow"
+                          />
+                          <span class="text-xs opacity-60">higher</span>
+                        </div>
+                        <span data-sensitivity-display class="text-sm font-mono text-right">
+                          {@sensitivity_level}/9 ({Octopus.Radar.SensorType.sensitivity_level_label(@sensitivity_level)})
+                        </span>
+                      </form>
+                      <script :type={Phoenix.LiveView.ColocatedHook} name=".RadarSensitivitySlider">
+                        export default {
+                          mounted() {
+                            this.bindElements()
+                            this.onInput = () => this.updateDisplayFromRange()
+                            this.range.addEventListener("input", this.onInput)
+                          },
+                          updated() {
+                            this.bindElements()
+                            if (!this.range) return
+                            if (document.activeElement === this.range) return
+                            this.range.value = this.el.dataset.value
+                            this.updateDisplayFromDataset()
+                          },
+                          destroyed() {
+                            if (this.range && this.onInput) {
+                              this.range.removeEventListener("input", this.onInput)
+                            }
+                          },
+                          bindElements() {
+                            this.range = this.el.querySelector('input[type="range"]')
+                            this.display = this.el.querySelector("[data-sensitivity-display]")
+                          },
+                          updateDisplayFromRange() {
+                            if (!this.display || !this.range) return
+                            const level = Number(this.range.value)
+                            this.display.textContent = `${level}/9 (${this.levelLabel(level)})`
+                          },
+                          updateDisplayFromDataset() {
+                            if (!this.display) return
+                            this.display.textContent = this.el.dataset.display
+                          },
+                          levelLabel(level) {
+                            if (level <= 2) return "low"
+                            if (level <= 4) return "moderate-low"
+                            if (level <= 6) return "moderate"
+                            if (level <= 8) return "moderate-high"
+                            return "high"
+                          }
+                        }
+                      </script>
+                    </div>
                   <% end %>
 
                   <%= if @radial_layout do %>
