@@ -604,7 +604,7 @@ defmodule OctopusWeb.RadarDebugLive do
     Map.new(devices, fn d -> {d.device_id, Radar.sensor_status(d.device_id)} end)
   end
 
-  defp device_letter(device_id), do: <<(?A + device_id - 1)::utf8>>
+  defp device_letter(device_id), do: Radar.device_letter(device_id)
 
   # Statuses in display order for the per-state breakdown. Mirrors status_legend/0.
   defp stats_statuses_order do

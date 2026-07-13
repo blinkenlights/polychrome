@@ -113,8 +113,7 @@ defmodule Octopus.Radar do
   use Supervisor
   require Logger
 
-  alias Octopus.Radar.{Runtime, Sensor}
-  alias Octopus.Radar.Mock
+  alias Octopus.Radar.{LogFormat, Mock, Runtime, Sensor}
 
   @topic "radar:hlk6001"
   @supported_types [:ld6001a]
@@ -131,6 +130,14 @@ defmodule Octopus.Radar do
   @doc "Global PubSub topic — fan-in of frames from all sensors."
   @spec topic() :: String.t()
   def topic, do: @topic
+
+  @doc "Map 1-based device_id to UI letter (1 → A, 2 → B, …)."
+  @spec device_letter(pos_integer()) :: String.t()
+  defdelegate device_letter(device_id), to: LogFormat
+
+  @doc false
+  @spec short_port(String.t()) :: String.t()
+  defdelegate short_port(path), to: LogFormat
 
   @doc "PubSub topic for a single sensor identified by `device_id`."
   @spec topic(pos_integer()) :: String.t()
@@ -211,19 +218,29 @@ defmodule Octopus.Radar do
 
           case File.write("#{sysfs_base}/authorized", "0") do
             :ok ->
-              Logger.info("[radar] USB adapter #{adapter_name} (#{adapter.usb_path}) deauthorized — power cycling")
+              Logger.info(
+                "[radar] USB adapter #{adapter_name} (#{adapter.usb_path}) deauthorized — power cycling"
+              )
+
               Process.sleep(1_000)
 
               case File.write("#{sysfs_base}/authorized", "1") do
                 :ok ->
-                  Logger.info("[radar] USB adapter #{adapter_name} (#{adapter.usb_path}) reauthorized")
+                  Logger.info(
+                    "[radar] USB adapter #{adapter_name} (#{adapter.usb_path}) reauthorized"
+                  )
 
                 {:error, reason} ->
-                  Logger.error("[radar] Failed to reauthorize USB adapter #{adapter_name}: #{inspect(reason)}")
+                  Logger.error(
+                    "[radar] Failed to reauthorize USB adapter #{adapter_name}: #{inspect(reason)}"
+                  )
               end
 
             {:error, reason} ->
-              Logger.error("[radar] Failed to deauthorize USB adapter #{adapter_name} at #{sysfs_base}: #{inspect(reason)}")
+              Logger.error(
+                "[radar] Failed to deauthorize USB adapter #{adapter_name} at #{sysfs_base}: #{inspect(reason)}"
+              )
+
               Enum.each(adapter.device_ids, &broadcast_status(&1, :unavailable))
           end
         end)
@@ -453,17 +470,14 @@ defmodule Octopus.Radar do
   @spec sensor_status(pos_integer()) ::
           :inactive | :unavailable | :probing | :initializing | :working | :stale
   def sensor_status(device_id) do
-    if enabled?() and Runtime.enabled?(device_id) do
-      case Sensor.get_phase(device_id) do
-        {:ok, :running} -> :working
-        {:ok, :stale} -> :stale
-        {:ok, :probing} -> :probing
-        {:ok, :configuring} -> :initializing
-        {:ok, :opening} -> :unavailable
-        {:error, _} -> :unavailable
-      end
-    else
-      :inactive
+    cond do
+      not enabled?() -> :inactive
+      not Runtime.enabled?(device_id) -> :inactive
+      true ->
+        case Sensor.get_ui_status(device_id) do
+          {:ok, status} -> status
+          {:error, _} -> :unavailable
+        end
     end
   end
 
@@ -594,13 +608,13 @@ defmodule Octopus.Radar do
 
       cond do
         not enabled? ->
-          Logger.info("[radar #{device_id} #{port}] Sensor disabled in config — skipping")
+          Logger.info("#{LogFormat.tag(device_id, port)} Sensor disabled in config — skipping")
           []
 
         true ->
           if mode == :off and not File.exists?(port) do
             Logger.info(
-              "[radar #{device_id} #{port}] Configured port not present at boot — starting sensor (will retry until available)"
+              "#{LogFormat.tag(device_id, port)} Configured port not present at boot — starting sensor (will retry until available)"
             )
           end
 
@@ -620,7 +634,7 @@ defmodule Octopus.Radar do
 
       type ->
         Logger.warning(
-          "[radar #{device_id} #{Keyword.fetch!(config, :port)}] Unknown sensor type #{inspect(type)} — skipping"
+          "#{LogFormat.tag(device_id, Keyword.fetch!(config, :port))} Unknown sensor type #{inspect(type)} — skipping"
         )
 
         []
@@ -680,7 +694,7 @@ defmodule Octopus.Radar do
         {:ok, _} -> :ok
         {:error, {:already_started, _}} -> :ok
         {:error, :already_present} -> :ok
-        error -> Logger.warning("[radar #{device_id}] start_child failed: #{inspect(error)}")
+        error -> Logger.warning("#{LogFormat.device_letter(device_id)} start_child failed: #{inspect(error)}")
       end
     end)
   end
@@ -713,7 +727,8 @@ defmodule Octopus.Radar do
             pose =
               "pose=#{Keyword.fetch!(cfg, :angle_deg)}°/#{Keyword.fetch!(cfg, :distance_cm)}cm/r#{Keyword.fetch!(cfg, :rotation_deg)}°"
 
-            "##{id} #{Keyword.fetch!(cfg, :port)} (#{status}, #{pose})"
+            port = Keyword.fetch!(cfg, :port)
+            "#{LogFormat.device_letter(id)} #{LogFormat.short_port(port)} (#{status}, #{pose})"
           end)
           |> Enum.join("; ")
 
@@ -787,8 +802,9 @@ defmodule Octopus.Radar do
           Enum.flat_map(adapters, fn a -> Keyword.fetch!(a, :ports) end)
       end
 
-    layout_type = Keyword.get(layout, :type) ||
-      raise ArgumentError, "radar layout: :type is required (e.g. type: :radial)"
+    layout_type =
+      Keyword.get(layout, :type) ||
+        raise ArgumentError, "radar layout: :type is required (e.g. type: :radial)"
 
     sensor_pose_list = expand_layout(layout_type, layout)
 
@@ -819,8 +835,9 @@ defmodule Octopus.Radar do
   end
 
   defp expand_layout(:radial, layout) do
-    count = Keyword.get(layout, :count) ||
-      raise ArgumentError, "radar layout type :radial requires :count"
+    count =
+      Keyword.get(layout, :count) ||
+        raise ArgumentError, "radar layout type :radial requires :count"
 
     unless is_integer(count) and count > 0 do
       raise ArgumentError,

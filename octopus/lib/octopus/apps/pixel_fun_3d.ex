@@ -324,8 +324,9 @@ defmodule Octopus.Apps.PixelFun3D do
     }
   ]
 
-  @fps 60
+  @fps 30
   @frame_time_ms trunc(1000 / @fps)
+  @transform_live_interval_ms 250
   @min_white_level_gap 30
   @min_white_level 32
 
@@ -389,7 +390,8 @@ defmodule Octopus.Apps.PixelFun3D do
       :frozen_orbit_ref,
       :frozen_roll_ref,
       :show_advanced,
-      :formula_seconds
+      :formula_seconds,
+      :transform_live_last_ms
     ]
   end
 
@@ -988,7 +990,7 @@ defmodule Octopus.Apps.PixelFun3D do
 
     {:ok, program} = config.program |> Program.parse()
 
-    :timer.send_interval(@frame_time_ms, :tick)
+    Process.send_after(self(), :tick, @frame_time_ms)
     color_mode = Map.get(config, :color_mode, :random)
     saturation_percent = Map.get(config, :saturation_percent, 70)
     palette_phase = coerce_palette_phase(Map.get(config, :palette_phase, 0.0))
@@ -1722,6 +1724,8 @@ defmodule Octopus.Apps.PixelFun3D do
   end
 
   def handle_info(:tick, %State{} = state) do
+    tick_start = System.monotonic_time(:millisecond)
+
     state =
       if state.time_frozen do
         # Freeze means a static image: pattern time, palette, autos AND the
@@ -1735,18 +1739,22 @@ defmodule Octopus.Apps.PixelFun3D do
         state
         |> advance_palette_phase()
         |> advance_tick_state()
-        |> maybe_broadcast_transform_live()
+        |> maybe_broadcast_transform_live(tick_start)
       end
 
-    {:noreply, push_frame(state)}
+    state = push_frame(state)
+    elapsed = System.monotonic_time(:millisecond) - tick_start
+    Process.send_after(self(), :tick, max(@frame_time_ms - elapsed, 1))
+    {:noreply, state}
   end
 
-  defp maybe_broadcast_transform_live(%State{} = state) do
-    # 4 Hz at 60 fps
-    if any_auto?(state) and rem(trunc(state.seconds * @fps), 15) == 0 do
+  defp maybe_broadcast_transform_live(%State{} = state, now_ms) do
+    last_ms = state.transform_live_last_ms || 0
+
+    if any_auto?(state) and now_ms - last_ms >= @transform_live_interval_ms do
       case AppSupervisor.lookup_app_id(self()) do
         nil ->
-          :ok
+          state
 
         app_id ->
           eff = effective_transform_values(state)
@@ -1772,10 +1780,12 @@ defmodule Octopus.Apps.PixelFun3D do
             "apps",
             {:apps, {:transform_live, app_id, live}}
           )
-      end
-    end
 
-    state
+          %State{state | transform_live_last_ms: now_ms}
+      end
+    else
+      state
+    end
   end
 
   defp advance_tick_state(%State{} = state) do

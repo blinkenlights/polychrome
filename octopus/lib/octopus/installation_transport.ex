@@ -209,16 +209,21 @@ defmodule Octopus.InstallationTransport do
 
     result =
       if apply(app, :compatible?, []) do
-        state =
-          state
-          |> apply_entry(entry)
-          |> maybe_jump_queue_index(entry)
-          |> maybe_takeover_off_queue_play(entry)
-          |> restart_countdown()
+        case apply_entry(state, entry) do
+          {:error, reason, state} ->
+            {:error, reason, state}
 
-        case state.live_entry do
-          %{app: ^app, mode_id: id} when id == entry.mode_id -> {:ok, state}
-          _ -> {:error, :failed, state}
+          {:ok, state} ->
+            state =
+              state
+              |> maybe_jump_queue_index(entry)
+              |> maybe_takeover_off_queue_play(entry)
+              |> restart_countdown()
+
+            case state.live_entry do
+              %{app: ^app, mode_id: id} when id == entry.mode_id -> {:ok, state}
+              _ -> {:error, :failed, state}
+            end
         end
       else
         {:error, :incompatible, state}
@@ -275,7 +280,7 @@ defmodule Octopus.InstallationTransport do
 
         state
         |> Map.put(:cycle_index, idx)
-        |> apply_entry(entry)
+        |> apply_entry_or_keep(entry)
         |> clear_manual_takeover()
       else
         state
@@ -347,7 +352,7 @@ defmodule Octopus.InstallationTransport do
       state =
         state
         |> Map.put(:cycle_index, next_index)
-        |> apply_entry(entry)
+        |> apply_entry_or_keep(entry)
         |> restart_countdown()
 
       {:noreply, broadcast(state)}
@@ -418,14 +423,14 @@ defmodule Octopus.InstallationTransport do
   defp maybe_apply_live_queue_entry(%State{live_entry: nil, queue: queue} = state)
        when queue != [] do
     entry = Enum.at(queue, state.cycle_index)
-    apply_entry(state, entry)
+    apply_entry_or_keep(state, entry)
   end
 
   defp maybe_apply_live_queue_entry(%State{} = state), do: state
 
   defp apply_queue_entry_at_cycle_index(%State{} = state) do
     entry = Enum.at(state.queue, state.cycle_index)
-    apply_entry(state, entry)
+    apply_entry_or_keep(state, entry)
   end
 
   defp resume_after_takeover(%State{queue: []} = state) do
@@ -465,8 +470,19 @@ defmodule Octopus.InstallationTransport do
 
     state
     |> Map.put(:cycle_index, next_index)
-    |> apply_entry(entry)
+    |> apply_entry_or_keep(entry)
     |> restart_countdown()
+  end
+
+  defp apply_entry_or_keep(%State{} = state, entry) do
+    case apply_entry(state, entry) do
+      {:ok, state} ->
+        state
+
+      {:error, reason, state} ->
+        Logger.warning("apply_entry failed: #{inspect(reason)}")
+        state
+    end
   end
 
   defp apply_entry(%State{} = state, %{app: app, mode_id: mode_id} = entry) do
@@ -475,8 +491,14 @@ defmodule Octopus.InstallationTransport do
     app_id =
       case AppSupervisor.find_running_app(app) do
         {:ok, id} ->
-          if map_size(mode_config) > 0, do: AppSupervisor.update_config(id, mode_config)
-          id
+          if map_size(mode_config) > 0 do
+            case safe_update_config(id, mode_config) do
+              :ok -> id
+              {:error, reason} -> {:error, reason}
+            end
+          else
+            id
+          end
 
         :not_found ->
           stored = stored_config_for(app, mode_id)
@@ -491,21 +513,37 @@ defmodule Octopus.InstallationTransport do
           end
       end
 
-    if app_id do
-      stored = stored_config_for(app, mode_id, app_id)
+    case app_id do
+      {:error, reason} ->
+        {:error, reason, state}
 
-      AppManager.select_app(app_id)
-      app_apply_mode(app_id, app, mode_id)
+      app_id when is_binary(app_id) ->
+        stored = stored_config_for(app, mode_id, app_id)
 
-      %State{
-        state
-        | live_entry: entry,
-          now_playing_stored_config: stored,
-          now_playing_overrides: %{},
-          now_playing_app_id: app_id
-      }
-    else
-      state
+        AppManager.select_app(app_id)
+        app_apply_mode(app_id, app, mode_id)
+
+        {:ok,
+         %State{
+           state
+           | live_entry: entry,
+             now_playing_stored_config: stored,
+             now_playing_overrides: %{},
+             now_playing_app_id: app_id
+         }}
+
+      _ ->
+        {:ok, state}
+    end
+  end
+
+  defp safe_update_config(app_id, config) do
+    try do
+      :ok = AppSupervisor.update_config(app_id, config)
+      :ok
+    catch
+      :exit, {:timeout, _} -> {:error, :timeout}
+      :exit, reason -> {:error, reason}
     end
   end
 

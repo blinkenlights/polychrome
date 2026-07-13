@@ -92,7 +92,7 @@ defmodule Octopus.Apps.PixelFun do
     }
   ]
 
-  @fps 60
+  @fps 30
   @frame_time_ms trunc(1000 / @fps)
   @min_white_level_gap 30
   @min_white_level 32
@@ -399,7 +399,7 @@ defmodule Octopus.Apps.PixelFun do
 
     {:ok, program} = config.program |> Program.parse()
 
-    :timer.send_interval(@frame_time_ms, :tick)
+    Process.send_after(self(), :tick, @frame_time_ms)
     color_mode = Map.get(config, :color_mode, :random)
     saturation_percent = Map.get(config, :saturation_percent, 70)
     palette = generate_random_palette(color_mode, saturation_percent)
@@ -733,6 +733,8 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   def handle_info(:tick, %State{} = state) do
+    tick_start = System.monotonic_time(:millisecond)
+
     state =
       if state.time_frozen do
         state
@@ -742,7 +744,10 @@ defmodule Octopus.Apps.PixelFun do
         |> advance_tick_state()
       end
 
-    {:noreply, push_frame(state)}
+    state = push_frame(state)
+    elapsed = System.monotonic_time(:millisecond) - tick_start
+    Process.send_after(self(), :tick, max(@frame_time_ms - elapsed, 1))
+    {:noreply, state}
   end
 
   defp advance_tick_state(%State{} = state) do
