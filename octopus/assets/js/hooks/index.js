@@ -248,6 +248,7 @@ export const Hooks = {
   CodeEditorHook: CodeEditorHook,
   CopyDump: CopyDump,
   ConsoleTheme: ConsoleTheme,
+  NowPlayingSlider: NowPlayingSlider,
   RadarManualPointer: RadarManualPointer,
   TopBar,
 };

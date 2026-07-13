@@ -64,6 +64,7 @@ defmodule Octopus.Apps.PixelFun3D do
   @default_scene %{
     color_mode: :random,
     saturation_percent: 70,
+    brightness_percent: 100,
     palette_phase: 0.0,
     color_interval: 5.0,
     palette_auto: true,
@@ -99,6 +100,7 @@ defmodule Octopus.Apps.PixelFun3D do
   @builtin_scene_keys ([
                         :color_mode,
                         :saturation_percent,
+                        :brightness_percent,
                         :palette_phase,
                         :color_interval,
                         :palette_auto,
@@ -117,6 +119,7 @@ defmodule Octopus.Apps.PixelFun3D do
                       |> Enum.uniq()
 
   @sphere_scene_keys ([
+                       :brightness_percent,
                        :orbit_rate,
                        :roll_rate,
                        :roll_pivot,
@@ -393,6 +396,7 @@ defmodule Octopus.Apps.PixelFun3D do
       :time_direction,
       :color_mode,
       :saturation_percent,
+      :brightness_percent,
       :palette_phase,
       :color_interval,
       :palette_auto,
@@ -430,6 +434,7 @@ defmodule Octopus.Apps.PixelFun3D do
       program: {"Formula", :string, %{default: "sin(0.4*t-hypot(x,y))"}},
       color_mode: {"Colors", :atom, %{default: :random}},
       saturation_percent: {"Saturation", :int, %{default: 70, min: 0, max: 100}},
+      brightness_percent: {"Brightness", :int, %{default: 100, min: 0, max: 100}},
       sat_auto: {"Saturation Auto", :boolean, %{default: false}},
       sat_auto_min: {"Saturation Min", :float, %{default: 20.0, min: 0, max: 100, step: 1}},
       sat_auto_max: {"Saturation Max", :float, %{default: 100.0, min: 0, max: 100, step: 1}},
@@ -481,6 +486,8 @@ defmodule Octopus.Apps.PixelFun3D do
 
     Formula — expression evaluated per pixel. Pick a scene preset tile or type your own; saved scenes persist across restarts. Variables: x, y (chart position on the sphere band), nx/ny/nz (unit view direction — seamless under all transforms), t (time, scaled by global Speed and Pattern speed), i (pixel index), l/m/h (audio bass/mid/high if present), pi, tau. Classic formulas in x remain ring-periodic (azimuth wraps). Builtin formulas are normalized to ~0.4 rad/s; use Pattern speed (Advanced) to deviate per scene.
 
+    Brightness — master output gain (0…100 %, default 100) applied to every colour mode. Saved per scene. The hidden OSC value_percent multiplies on top of this.
+
     Colors — Random dual maps positive/negative lobes to a complementary hue pair on the colour circle; scrub Palette to pick the hue, Auto advances it (Tempo = seconds per full circle). Rainbow spreads hue across the pattern (moves with orbit/rotation). White dual maps lobes to two brightness levels on the warm W channel of the TM1814 LEDs (no RGB tint); Palette/Auto work the same for brightness pairs.
 
     Saturation — colour vividness for Random dual and Rainbow (0 = grey, 100 = full; default 70). Auto wanders between Min and Max. White dual ignores saturation.
@@ -509,6 +516,7 @@ defmodule Octopus.Apps.PixelFun3D do
         program: state.source,
         color_mode: state.color_mode,
         saturation_percent: state.saturation_percent,
+        brightness_percent: state.brightness_percent || 100,
         palette_phase: state.palette_phase || 0.0,
         color_interval: state.color_interval,
         palette_auto: state.palette_auto != false,
@@ -678,6 +686,16 @@ defmodule Octopus.Apps.PixelFun3D do
         type: :choice,
         default: :random,
         options: [{:random, "Random dual"}, {:rainbow, "Rainbow"}, {:white, "White dual (W channel)"}]
+      },
+      %{
+        key: :brightness_percent,
+        label: "Brightness",
+        type: :slider,
+        min: 0,
+        max: 100,
+        step: 1,
+        default: 100,
+        unit: "%"
       },
       %{
         key: :saturation_percent,
@@ -1020,6 +1038,7 @@ defmodule Octopus.Apps.PixelFun3D do
     Process.send_after(self(), :tick, @frame_time_ms)
     color_mode = Map.get(config, :color_mode, :random)
     saturation_percent = Map.get(config, :saturation_percent, 70)
+    brightness_percent = coerce_saturation_percent(Map.get(config, :brightness_percent, 100))
     palette_phase = coerce_palette_phase(Map.get(config, :palette_phase, 0.0))
     palette = palette_from_phase(palette_phase, color_mode, saturation_percent)
     time_frozen = Map.get(config, :time_frozen, false) |> coerce_boolean()
@@ -1050,6 +1069,7 @@ defmodule Octopus.Apps.PixelFun3D do
       lerp_time: 0.0,
       color_mode: color_mode,
       saturation_percent: saturation_percent,
+      brightness_percent: brightness_percent,
       palette_phase: palette_phase,
       color_interval: config.color_interval,
       palette_auto: palette_auto,
@@ -1154,6 +1174,11 @@ defmodule Octopus.Apps.PixelFun3D do
     color_interval = Map.get(config, :color_interval, state.color_interval)
     color_mode = Map.get(config, :color_mode, state.color_mode)
     saturation_percent = Map.get(config, :saturation_percent, state.saturation_percent || 70)
+
+    brightness_percent =
+      coerce_saturation_percent(
+        Map.get(config, :brightness_percent, state.brightness_percent || 100)
+      )
     palette_auto =
       Map.get(config, :palette_auto, state.palette_auto != false) |> coerce_boolean()
 
@@ -1189,6 +1214,7 @@ defmodule Octopus.Apps.PixelFun3D do
           |> coerce_time_direction(),
         color_mode: color_mode,
         saturation_percent: saturation_percent,
+        brightness_percent: brightness_percent,
         palette_phase: palette_phase,
         color_interval: color_interval,
         palette_auto: palette_auto,
@@ -1285,6 +1311,7 @@ defmodule Octopus.Apps.PixelFun3D do
     |> Map.new(fn
       {:color_mode, value} -> {:color_mode, coerce_color_mode(value)}
       {:saturation_percent, value} -> {:saturation_percent, coerce_saturation_percent(value)}
+      {:brightness_percent, value} -> {:brightness_percent, coerce_saturation_percent(value)}
       {:palette_phase, value} -> {:palette_phase, coerce_palette_phase(value)}
       {:time_direction, value} -> {:time_direction, coerce_time_direction(value)}
       {:time_frozen, value} -> {:time_frozen, coerce_boolean(value)}
@@ -2042,8 +2069,8 @@ defmodule Octopus.Apps.PixelFun3D do
 
   defp step_channel_wanderer(w, now, state, :rot, interval) do
     # Out-and-back cycle: :sweep eases baseline -> baseline±amp -> baseline (equal
-    # halves, mirrored easing), then :pause holds baseline briefly, then a new sweep
-    # is rolled. Value stays at baseline across boundaries -> seamless pivot changes.
+    # halves, mirrored easing), then a new sweep is rolled immediately (no pause).
+    # Value stays at baseline across boundaries -> seamless pivot changes.
     range_deg = Map.get(state, :rot_auto_range) || @auto_defaults.rot_auto_range
 
     case w.start do
@@ -2053,28 +2080,15 @@ defmodule Octopus.Apps.PixelFun3D do
 
       _ ->
         p = (now - w.start) / max(w.dur, 1.0e-9)
+        e = if p < 0.5, do: Wander.ease(w.easing, p * 2.0), else: Wander.ease(w.easing, (1.0 - p) * 2.0)
+        value = w.baseline + w.amp * e
 
-        case w.phase do
-          :sweep ->
-            e = if p < 0.5, do: Wander.ease(w.easing, p * 2.0), else: Wander.ease(w.easing, (1.0 - p) * 2.0)
-            value = w.baseline + w.amp * e
-
-            if p >= 1.0 do
-              # Sweep finished exactly at baseline; pause upright before the next one.
-              pause = interval * (0.2 + :rand.uniform() * 0.4)
-              next = %{w | value: w.baseline, phase: :pause, start: now, dur: max(pause, 1.0e-9)}
-              {next.value, next}
-            else
-              {value, %{w | value: value}}
-            end
-
-          _ ->
-            if p >= 1.0 do
-              next = roll_rot_sweep(%{w | value: w.baseline}, now, interval, range_deg)
-              {next.value, next}
-            else
-              {w.baseline, %{w | value: w.baseline}}
-            end
+        if p >= 1.0 do
+          # Sweep finished exactly at baseline; roll the next one immediately.
+          next = roll_rot_sweep(%{w | value: w.baseline}, now, interval, range_deg)
+          {next.value, next}
+        else
+          {value, %{w | value: value}}
         end
     end
   end
@@ -2180,10 +2194,11 @@ defmodule Octopus.Apps.PixelFun3D do
     canvas_mode = if state.color_mode == :white, do: :grayscale, else: :rgb
     canvas = Canvas.new(display_info.width, display_info.height, canvas_mode)
     saturation_percent = effective_saturation_percent(state)
+    gain = value_gain(state)
     pattern_speed = state.pattern_speed || 1.0
 
     lerp_fn = fn a, b, v ->
-      interpolate_colors_with_black(a, b, v, saturation_percent)
+      interpolate_colors_with_black(a, b, v, saturation_percent, gain)
     end
 
     panels = state.pixel_dirs || precompute_pixel_dirs()
@@ -2214,6 +2229,7 @@ defmodule Octopus.Apps.PixelFun3D do
             pixel_time,
             hue_shift,
             saturation_percent,
+            gain,
             audio,
             lerp_fn
           )
@@ -2221,6 +2237,13 @@ defmodule Octopus.Apps.PixelFun3D do
         Canvas.put_pixel(canvas, {x, y}, pixel)
       end)
     end)
+  end
+
+  # Master pixel gain (0..100+): the per-scene Brightness slider multiplied onto
+  # the hidden OSC value_percent (both default 100). Replaces the bare
+  # value_percent read so Brightness scales every color mode.
+  defp value_gain(%State{} = state) do
+    param(:value_percent, 100) * (state.brightness_percent || 100) / 100.0
   end
 
   defp precompute_pixel_dirs do
@@ -2331,6 +2354,7 @@ defmodule Octopus.Apps.PixelFun3D do
          pixel_time,
          hue_shift,
          saturation_percent,
+         gain,
          audio,
          lerp_fn
        ) do
@@ -2340,18 +2364,18 @@ defmodule Octopus.Apps.PixelFun3D do
       {:steady, n} ->
         sample_ctx
         |> sample_zoom_branch(n)
-        |> colorize_sample(state, i, pixel_time, hue_shift, saturation_percent, audio, lerp_fn)
+        |> colorize_sample(state, i, pixel_time, hue_shift, saturation_percent, gain, audio, lerp_fn)
 
       {:fade, from_n, to_n, u} ->
         c_from =
           sample_ctx
           |> sample_zoom_branch(from_n)
-          |> colorize_sample(state, i, pixel_time, hue_shift, saturation_percent, audio, lerp_fn)
+          |> colorize_sample(state, i, pixel_time, hue_shift, saturation_percent, gain, audio, lerp_fn)
 
         c_to =
           sample_ctx
           |> sample_zoom_branch(to_n)
-          |> colorize_sample(state, i, pixel_time, hue_shift, saturation_percent, audio, lerp_fn)
+          |> colorize_sample(state, i, pixel_time, hue_shift, saturation_percent, gain, audio, lerp_fn)
 
         blend_pixels(c_from, c_to, u)
     end
@@ -2369,7 +2393,7 @@ defmodule Octopus.Apps.PixelFun3D do
     end
   end
 
-  defp colorize_sample({x_scaled, y_scaled, {nx, ny, nz}}, state, i, pixel_time, hue_shift, sat, audio, lerp_fn) do
+  defp colorize_sample({x_scaled, y_scaled, {nx, ny, nz}}, state, i, pixel_time, hue_shift, sat, gain, audio, lerp_fn) do
     case state.color_mode do
       :white ->
         {color_a, color_b} = state.colors
@@ -2387,7 +2411,7 @@ defmodule Octopus.Apps.PixelFun3D do
           audio.mid,
           audio.high
         )
-        |> white_pixel_value(color_a, color_b)
+        |> white_pixel_value(color_a, color_b, gain)
 
       :rainbow ->
         value =
@@ -2405,7 +2429,7 @@ defmodule Octopus.Apps.PixelFun3D do
             audio.high
           )
 
-        rainbow_pixel_color(x_scaled, y_scaled, value, hue_shift, sat)
+        rainbow_pixel_color(x_scaled, y_scaled, value, hue_shift, sat, gain)
 
       _ ->
         {color_a, color_b} = state.colors
@@ -2822,7 +2846,7 @@ defmodule Octopus.Apps.PixelFun3D do
     |> min(1.0)
   end
 
-  defp white_pixel_value(value, %Chameleon.HSV{v: level_a}, %Chameleon.HSV{v: level_b}) do
+  defp white_pixel_value(value, %Chameleon.HSV{v: level_a}, %Chameleon.HSV{v: level_b}, gain) do
     level =
       cond do
         value > 0 -> level_a * value
@@ -2831,21 +2855,21 @@ defmodule Octopus.Apps.PixelFun3D do
       end
 
     level
-    |> Kernel.*(param(:value_percent, 100) / 100.0)
+    |> Kernel.*(gain / 100.0)
     |> Kernel.*(255 / 100.0)
     |> round()
     |> max(0)
     |> min(255)
   end
 
-  defp rainbow_pixel_color(_x, _y, value, _hue_shift, _saturation_percent) when value == 0.0,
+  defp rainbow_pixel_color(_x, _y, value, _hue_shift, _saturation_percent, _gain) when value == 0.0,
     do: {0, 0, 0}
 
-  defp rainbow_pixel_color(x, y, value, hue_shift, saturation_percent) do
+  defp rainbow_pixel_color(x, y, value, hue_shift, saturation_percent, gain) do
     hue = rainbow_hue(x, y, hue_shift)
 
     saturation = saturation_percent |> max(0) |> min(100)
-    brightness = trunc(param(:value_percent, 100) * abs(value)) |> max(0) |> min(100)
+    brightness = trunc(gain * abs(value)) |> max(0) |> min(100)
 
     %Chameleon.RGB{r: r, g: g, b: b} =
       Chameleon.HSV.new(hue, saturation, brightness) |> Chameleon.convert(Chameleon.RGB)
@@ -2872,7 +2896,10 @@ defmodule Octopus.Apps.PixelFun3D do
   defp interpolate_colors_with_black(%Chameleon.HSV{} = a, %Chameleon.HSV{} = b, value),
     do: interpolate_colors_with_black(a, b, value, 70)
 
-  defp interpolate_colors_with_black(%Chameleon.HSV{} = a, %Chameleon.HSV{} = b, value, saturation_percent) do
+  defp interpolate_colors_with_black(%Chameleon.HSV{} = a, %Chameleon.HSV{} = b, value, saturation_percent),
+    do: interpolate_colors_with_black(a, b, value, saturation_percent, param(:value_percent, 100))
+
+  defp interpolate_colors_with_black(%Chameleon.HSV{} = a, %Chameleon.HSV{} = b, value, saturation_percent, gain) do
     saturation = saturation_percent |> max(0) |> min(100)
 
     hsv =
@@ -2881,14 +2908,14 @@ defmodule Octopus.Apps.PixelFun3D do
           %Chameleon.HSV{
             a
             | s: saturation,
-              v: trunc(param(:value_percent, 100) * value) |> max(0) |> min(100)
+              v: trunc(gain * value) |> max(0) |> min(100)
           }
 
         value < 0 ->
           %Chameleon.HSV{
             b
             | s: saturation,
-              v: trunc(param(:value_percent, 100) * -value) |> max(0) |> min(100)
+              v: trunc(gain * -value) |> max(0) |> min(100)
           }
 
         true ->

@@ -721,7 +721,7 @@ defmodule OctopusWeb.ConsoleComponents do
                   </div>
 
                   <div
-                    :if={nested != [] and Map.get(@now_playing.effective, :show_advanced) == true}
+                    :if={nested != []}
                     class="ml-3 space-y-1.5 border-l border-base-300 pl-3"
                   >
                     <div

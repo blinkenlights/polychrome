@@ -13,6 +13,7 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresets do
   @pixel_fun "Elixir.Octopus.Apps.PixelFun3D"
 
   @sphere_defaults %{
+    brightness_percent: 100,
     orbit_rate: 0.0,
     roll_rate: 0.0,
     roll_pivot: 0,

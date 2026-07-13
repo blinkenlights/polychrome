@@ -32,6 +32,7 @@ defmodule Octopus.Apps.MatrixTest do
       sway_scale: 0.0,
       sway_speed: 0.5,
       sway_mode: :wobble,
+      afterglow: 60,
       seconds: 0.0,
       occupied_columns: MapSet.new(),
       column_cooldowns: %{},
@@ -54,7 +55,7 @@ defmodule Octopus.Apps.MatrixTest do
     test "mode_config/1 returns defaults for both presets" do
       assert matrix_mode_config("matrix:matrix") == %{
                direction: :classic,
-               speed: 1.0,
+               speed: 6.0,
                bleeding: 10.0,
                density: 1,
                max_particles: 36,
@@ -62,7 +63,8 @@ defmodule Octopus.Apps.MatrixTest do
                counterflow: 0.0,
                sway_scale: 0.0,
                sway_speed: 0.5,
-               sway_mode: :wobble
+               sway_mode: :wobble,
+               afterglow: 60
              }
 
       assert matrix_mode_config("matrix:matrix-ring") == %{
@@ -75,7 +77,8 @@ defmodule Octopus.Apps.MatrixTest do
                counterflow: 0.0,
                sway_scale: 0.0,
                sway_speed: 0.5,
-               sway_mode: :wobble
+               sway_mode: :wobble,
+               afterglow: 0
              }
 
       assert matrix_mode_config("matrix") == matrix_mode_config("matrix:matrix")
@@ -90,6 +93,7 @@ defmodule Octopus.Apps.MatrixTest do
       assert keys == [
                :direction,
                :speed,
+               :afterglow,
                :bleeding,
                :density,
                :max_particles,

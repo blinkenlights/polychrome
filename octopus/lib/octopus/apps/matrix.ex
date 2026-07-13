@@ -61,6 +61,7 @@ defmodule Octopus.Apps.Matrix do
       :sway_scale,
       :sway_speed,
       :sway_mode,
+      :afterglow,
       :seconds,
       :occupied_columns,
       :column_cooldowns,
@@ -651,7 +652,8 @@ defmodule Octopus.Apps.Matrix do
     |> Map.update(:direction, :classic, &coerce_direction/1)
     |> Map.update(:tail_length, 4, &trunc/1)
     |> Map.update(:counterflow, 0.0, &coerce_float/1)
-    |> Map.update(:speed, 1.0, &coerce_float/1)
+    |> Map.update(:speed, 6.0, &coerce_float/1)
+    |> Map.update(:afterglow, 60, &trunc/1)
     |> Map.update(:density, 1, &trunc/1)
     |> Map.update(:max_particles, 36, &trunc/1)
     |> Map.update(:sway_scale, 0.0, &coerce_float/1)
@@ -679,7 +681,7 @@ defmodule Octopus.Apps.Matrix do
   def legacy_mode_config("matrix") do
     %{
       direction: :classic,
-      speed: 1.0,
+      speed: 6.0,
       bleeding: 10.0,
       density: 1,
       max_particles: 36,
@@ -687,7 +689,8 @@ defmodule Octopus.Apps.Matrix do
       counterflow: 0.0,
       sway_scale: 0.0,
       sway_speed: 0.5,
-      sway_mode: :wobble
+      sway_mode: :wobble,
+      afterglow: 60
     }
   end
 
@@ -702,7 +705,8 @@ defmodule Octopus.Apps.Matrix do
       counterflow: 0.0,
       sway_scale: 0.0,
       sway_speed: 0.5,
-      sway_mode: :wobble
+      sway_mode: :wobble,
+      afterglow: 0
     }
   end
 
@@ -728,9 +732,20 @@ defmodule Octopus.Apps.Matrix do
         label: "Speed",
         type: :slider,
         min: 0.1,
-        max: 3.0,
+        max: 10.0,
         step: 0.05,
-        default: 1.0
+        default: 6.0
+      },
+      %{
+        key: :afterglow,
+        label: "Afterglow",
+        type: :slider,
+        min: 0,
+        max: 300,
+        step: 10,
+        unit: "ms",
+        default: 60,
+        runtime: true
       },
       %{
         key: :bleeding,
@@ -830,7 +845,8 @@ defmodule Octopus.Apps.Matrix do
       counterflow: state.counterflow,
       sway_scale: state.sway_scale,
       sway_speed: state.sway_speed,
-      sway_mode: state.sway_mode
+      sway_mode: state.sway_mode,
+      afterglow: state.afterglow
     }
   end
 
@@ -905,7 +921,7 @@ defmodule Octopus.Apps.Matrix do
         pitch: pitch,
         panel_width: installation.panel_width,
         global_speed: global_speed,
-        speed: 1.0,
+        speed: 6.0,
         density: 1,
         direction: :classic,
         tail_length: 4,
@@ -913,6 +929,7 @@ defmodule Octopus.Apps.Matrix do
         sway_scale: 0.0,
         sway_speed: 0.5,
         sway_mode: :wobble,
+        afterglow: 60,
         seconds: 0.0,
         occupied_columns: MapSet.new(),
         column_cooldowns: %{},
@@ -957,7 +974,7 @@ defmodule Octopus.Apps.Matrix do
     state = enforce_particle_cap(state)
     dt = 1 / 60 * state.speed * state.global_speed
     state = state |> State.update(dt) |> State.render()
-    Octopus.App.update_display(state.canvas)
+    Octopus.App.update_display(state.canvas, :rgb, easing_interval: trunc(state.afterglow || 0))
     {:noreply, state}
   end
 
@@ -1004,7 +1021,8 @@ defmodule Octopus.Apps.Matrix do
     :counterflow,
     :sway_scale,
     :sway_speed,
-    :sway_mode
+    :sway_mode,
+    :afterglow
   ]
 
   defp apply_config(%State{} = state, config) do
@@ -1024,6 +1042,7 @@ defmodule Octopus.Apps.Matrix do
   defp coerce_config_value(:sway_scale, value), do: coerce_float(value)
   defp coerce_config_value(:sway_speed, value), do: coerce_float(value)
   defp coerce_config_value(:sway_mode, value), do: coerce_sway_mode(value)
+  defp coerce_config_value(:afterglow, value), do: trunc(value)
 
   defp coerce_sway_mode(mode), do: Octopus.Sway.normalize_mode(mode)
 
