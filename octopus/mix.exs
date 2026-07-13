@@ -24,10 +24,12 @@ defmodule Octopus.MixProject do
   defp copy_radar_config(release) do
     releases_dir = Path.join([release.path, "releases", release.version])
 
-    File.cp!(
-      Path.join([__DIR__, "config", "radar.exs"]),
-      Path.join([releases_dir, "radar.exs"])
-    )
+    for file <- ["radar.exs", "radar_deployments.exs"] do
+      File.cp!(
+        Path.join([__DIR__, "config", file]),
+        Path.join([releases_dir, file])
+      )
+    end
 
     release
   end
