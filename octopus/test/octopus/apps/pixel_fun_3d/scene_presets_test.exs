@@ -17,7 +17,7 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
     color_interval: 5.0,
     orbit_rate: 0.0,
     roll_rate: 0.0,
-    zoom_base: 0.0
+    zoom_base: 1.0
   }
 
   describe "builtins/0" do

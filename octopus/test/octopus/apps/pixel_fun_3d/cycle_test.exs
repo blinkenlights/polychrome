@@ -37,7 +37,7 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
           tilt_speed: 0.5,
           tilt_mode: :wobble,
           elev_base: 0.0,
-          zoom_base: 0.0,
+          zoom_base: 1.0,
           zoom_pivot: 0,
           pattern_speed: 1.0,
           trans_auto: false,
@@ -166,11 +166,19 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
       state = base_state(%{live_scene_id: @classic})
 
       {:noreply, updated} =
-        pixel_fun_handle_config(%{orbit_rate: 1.5, roll_rate: 2.0, zoom_base: 0.5}, state)
+        pixel_fun_handle_config(%{orbit_rate: 1.5, roll_rate: 2.0, zoom_base: 1.5}, state)
 
       assert updated.orbit_rate == 1.5
       assert updated.roll_rate == 2.0
-      assert updated.zoom_base == 0.5
+      assert updated.zoom_base == 1.5
+    end
+
+    test "clamps sub-minimum zoom_base on handle_config" do
+      state = base_state(%{live_scene_id: @classic})
+
+      {:noreply, updated} = pixel_fun_handle_config(%{zoom_base: 0.5}, state)
+
+      assert updated.zoom_base == 0.7
     end
 
     test "migrates legacy transform keys on handle_config" do
@@ -510,7 +518,7 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
         end)
 
       before = state.formula_seconds
-      dt = 1 / 60
+      dt = 1 / 30
 
       {:noreply, flipped} =
         pixel_fun_handle_config(%{time_direction: :backward, pixel_fun_units: 2}, state)

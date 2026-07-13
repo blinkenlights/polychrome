@@ -212,6 +212,26 @@ defmodule Octopus.Apps.PixelFun3D.ZoomRenderTest do
     end
   end
 
+  describe "legacy zoom clamp" do
+    test "stored zoom_base 0.25 loads as 0.7 with warning" do
+      import ExUnit.CaptureLog
+
+      log =
+        capture_log(fn ->
+          migrated = PixelFun3D.migrate_legacy_config(%{zoom_base: 0.25, program: "sin(x)"})
+          assert migrated.zoom_base == 0.7
+        end)
+
+      assert log =~ "legacy zoom_base 0.25 clamped to 0.7"
+    end
+
+    test "config_matches? compares via clamped zoom_base" do
+      legacy = %{program: "sin(x)", zoom_base: 0.25, pixel_fun_units: 2}
+      live = PixelFun3D.migrate_legacy_config(legacy)
+      assert Octopus.Apps.PixelFun3D.ScenePresets.config_matches?(live, legacy)
+    end
+  end
+
   describe "seam with octave multiplier" do
     test "W-periodic formula identical for m in {1,2,4,8} with non-center pivot" do
       with_installation(Octopus.Installation.Nation2026, fn ->
@@ -226,7 +246,7 @@ defmodule Octopus.Apps.PixelFun3D.ZoomRenderTest do
             elev_base: 0.5,
             zoom_base: 1.5,
             zoom_pivot: 3,
-            zoom_octave_n: 1
+            zoom_octave_n: 0
           }
 
         formula = fn xs -> :math.sin(xs * :math.pi() * 6 / 156 - 2.5) end

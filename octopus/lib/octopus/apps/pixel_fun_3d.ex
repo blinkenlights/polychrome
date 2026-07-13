@@ -47,8 +47,8 @@ defmodule Octopus.Apps.PixelFun3D do
     sat: {0.0, 100.0}
   }
 
-  @zoom_factor_min 0.25
-  @zoom_factor_max 4.0
+  @zoom_factor_min 0.7
+  @zoom_factor_max 11.0
 
   @channel_base_key %{
     rot: :roll_rate,
@@ -419,7 +419,7 @@ defmodule Octopus.Apps.PixelFun3D do
       orbit_rate: {"Translate X (px/s)", :float, %{default: 0.0, min: -30, max: 30, step: 0.5}},
       elev_base: {"Translate Y (px)", :float, %{default: 0.0, min: -4, max: 4, step: 0.1}},
       roll_rate: {"Rotation (°/s)", :float, %{default: 0.0, min: -180, max: 180, step: 1}},
-      zoom_base: {"Zoom (×)", :float, %{default: 1.0, min: 0.25, max: 4, step: 0.05}},
+      zoom_base: {"Zoom (×)", :float, %{default: 1.0, min: 0.7, max: 11, step: 0.05}},
       tilt_scale: {"Sway (px)", :float, %{default: 0.0, min: 0, max: 4, step: 0.1}},
       trans_auto: {"Translate Auto", :boolean, %{default: false}},
       trans_auto_range_x: {"Translate Range X (px/s)", :float, %{default: 6.0, min: 0, max: 15, step: 0.5}},
@@ -470,7 +470,7 @@ defmodule Octopus.Apps.PixelFun3D do
 
     Rotation — roll rate in °/s (30°/s ≈ one full spin per 12 s). Auto wanders the rate. Rotation pivot (Advanced) selects which panel; panels near the pivot axis see less parade — a constant roll is most dramatic a quarter-ring away.
 
-    Zoom — conformal Möbius scale factor × (1.0 = neutral). Auto wanders symmetrically in log space (± Range multiplier).
+    Zoom — frequency multiplier × (×1 = neutral; higher = finer/denser / farther away; below ×1 = mild magnification toward the zoom pivot). Auto wanders symmetrically in log space (± Range multiplier). The pattern anchors at the zoom pivot while zooming (phase reference moves toward the pivot as octaves increase). Changing zoom pivot while an octave is active visibly repositions the pattern — acceptable for an Advanced setting. Direction variables nx/ny/nz react only to the bounded Möbius residual (≤ ~×1.41 per octave); use explicit frequency constants in direction-space formulas.
 
     Sway — small-angle tilt strength in px (Wobble precesses; Pendulum oscillates). Auto wanders strength; Sway speed/mode live in Advanced.
 
@@ -829,8 +829,8 @@ defmodule Octopus.Apps.PixelFun3D do
         key: :zoom_base,
         label: "Zoom",
         type: :slider,
-        min: 0.25,
-        max: 4.0,
+        min: 0.7,
+        max: 11.0,
         step: 0.05,
         default: 1.0,
         unit: "×",
@@ -1247,6 +1247,7 @@ defmodule Octopus.Apps.PixelFun3D do
       |> maybe_migrate_trans_auto()
       |> maybe_migrate_auto_tempos()
       |> maybe_migrate_display_units(needs_units?, original_keys)
+      |> normalize_zoom_base()
       |> strip_removed_zoom_keys()
       |> Map.drop(@removed_elev_keys ++ @removed_tx_ty_keys ++ @removed_tempo_keys)
 
@@ -1479,9 +1480,7 @@ defmodule Octopus.Apps.PixelFun3D do
     if MapSet.member?(keys, :zoom_base) do
       case Map.get(config, :zoom_base) do
         v when is_number(v) ->
-          factor = :math.exp(v)
-          {clamped, _} = clamp_log(factor, @zoom_factor_min, @zoom_factor_max, :zoom_base)
-          Map.put(config, :zoom_base, clamped)
+          Map.put(config, :zoom_base, :math.exp(v))
 
         _ ->
           config
@@ -1547,6 +1546,20 @@ defmodule Octopus.Apps.PixelFun3D do
       {clamped, true}
     else
       {clamped, false}
+    end
+  end
+
+  defp normalize_zoom_base(config) do
+    case Map.get(config, :zoom_base) do
+      v when is_number(v) and v < @zoom_factor_min ->
+        Logger.warning("PixelFun3D: legacy zoom_base #{inspect(v)} clamped to #{@zoom_factor_min}")
+        Map.put(config, :zoom_base, @zoom_factor_min * 1.0)
+
+      v when is_number(v) ->
+        Map.put(config, :zoom_base, v |> max(@zoom_factor_min) |> min(@zoom_factor_max))
+
+      _ ->
+        config
     end
   end
 

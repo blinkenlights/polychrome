@@ -86,7 +86,7 @@ defmodule Octopus.Apps.PixelFun3DTest do
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
-        zoom_base: 0.0,
+        zoom_base: 1.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -113,7 +113,7 @@ defmodule Octopus.Apps.PixelFun3DTest do
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
-        zoom_base: 0.0,
+        zoom_base: 1.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -141,7 +141,7 @@ defmodule Octopus.Apps.PixelFun3DTest do
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
-        zoom_base: 0.0,
+        zoom_base: 1.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -168,7 +168,7 @@ defmodule Octopus.Apps.PixelFun3DTest do
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
-        zoom_base: 0.0,
+        zoom_base: 1.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -193,7 +193,7 @@ defmodule Octopus.Apps.PixelFun3DTest do
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
-        zoom_base: 0.0,
+        zoom_base: 1.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -219,7 +219,7 @@ defmodule Octopus.Apps.PixelFun3DTest do
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
-        zoom_base: 0.0,
+        zoom_base: 1.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -248,7 +248,7 @@ defmodule Octopus.Apps.PixelFun3DTest do
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
-        zoom_base: 0.0,
+        zoom_base: 1.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -307,7 +307,7 @@ defmodule Octopus.Apps.PixelFun3DTest do
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
-        zoom_base: 0.0,
+        zoom_base: 1.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -406,7 +406,7 @@ defmodule Octopus.Apps.PixelFun3DTest do
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
-        zoom_base: 0.0,
+        zoom_base: 1.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -448,7 +448,7 @@ defmodule Octopus.Apps.PixelFun3DTest do
         roll_rate: 0.0,
         tilt_scale: 0.0,
         elev_base: 0.0,
-        zoom_base: 0.0,
+        zoom_base: 1.0,
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
