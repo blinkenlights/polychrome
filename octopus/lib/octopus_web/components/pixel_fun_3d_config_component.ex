@@ -57,22 +57,21 @@ defmodule OctopusWeb.PixelFun3DConfigComponent do
 
   def render(assigns) do
     ~H"""
-    <div data-theme="dark" class="pf-root rounded-xl space-y-4">
+    <div class="pf-root rounded-xl space-y-4">
       <style>
         .pf-root{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif}
         .pf-mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,monospace}
       </style>
 
       <div class="flex flex-wrap items-center gap-3">
-        <.link navigate={~p"/"} class="btn btn-ghost btn-sm">← Console</.link>
         <h2 class="text-lg font-semibold flex-1">{@editor_name}</h2>
         <.live_badge :if={@live_preset} />
         <span :if={@queue_position} class="badge badge-outline badge-sm">Nr. {@queue_position}</span>
         <span
           :if={@dirty}
-          class="badge gap-1 border-[#fcb700] text-[#fcb700] bg-transparent"
+          class="badge gap-1 border-warning text-warning bg-transparent"
         >
-          <span class="w-2 h-2 rounded-full bg-[#fcb700]" /> Unsaved edits
+          <span class="w-2 h-2 rounded-full bg-warning" /> Unsaved edits
         </span>
       </div>
 
@@ -124,13 +123,13 @@ defmodule OctopusWeb.PixelFun3DConfigComponent do
               value={@config[:program]}
               class={[
                 "input input-bordered w-full pf-mono text-sm",
-                !@formula_valid && "border-[#ff6266] focus:border-[#ff6266]"
+                !@formula_valid && "border-error focus:border-error"
               ]}
             />
-            <p :if={@formula_valid} class="text-xs mt-1 text-[#00d390]">
+            <p :if={@formula_valid} class="text-xs mt-1 text-success">
               ✓ Valid — updating the wall as you type
             </p>
-            <p :if={!@formula_valid} class="text-xs mt-1 text-[#ff6266]">
+            <p :if={!@formula_valid} class="text-xs mt-1 text-error">
               ✕ Can't read this — '{@formula_error}' isn't a function. The wall keeps the last valid formula.
             </p>
           </div>
@@ -162,7 +161,7 @@ defmodule OctopusWeb.PixelFun3DConfigComponent do
 
         <div class="flex flex-wrap gap-2 items-center">
           <button
-            class="btn btn-primary bg-[#6d7cff] border-[#6d7cff]"
+            class="btn btn-primary"
             phx-click="open_save_preset_modal"
             phx-target={@myself}
             disabled={!@formula_valid}
@@ -183,7 +182,7 @@ defmodule OctopusWeb.PixelFun3DConfigComponent do
           </button>
           <button
             :if={@editor_preset}
-            class="btn btn-ghost text-[#ff6266] ml-auto"
+            class="btn btn-ghost text-error ml-auto"
             phx-click="request_delete"
             phx-value-id={@editor_preset.id}
             phx-target={@myself}
@@ -194,8 +193,8 @@ defmodule OctopusWeb.PixelFun3DConfigComponent do
 
         <p :if={@preset_message} class={[
           "text-xs",
-          match?({:ok, _}, @preset_message) && "text-[#00d390]",
-          match?({:error, _}, @preset_message) && "text-[#ff6266]"
+          match?({:ok, _}, @preset_message) && "text-success",
+          match?({:error, _}, @preset_message) && "text-error"
         ]}>
           {preset_message_text(@preset_message)}
         </p>
@@ -213,7 +212,7 @@ defmodule OctopusWeb.PixelFun3DConfigComponent do
           <input type="text" name="preset_save_name" value={@preset_save_name} placeholder="Scene name" class="input input-bordered w-full" />
           <div class="modal-action mt-0">
             <button type="button" class="btn btn-ghost" phx-click="close_save_preset_modal" phx-target={@myself}>Cancel</button>
-            <button type="submit" class="btn btn-primary bg-[#6d7cff] border-[#6d7cff]" disabled={!@formula_valid}>Save</button>
+            <button type="submit" class="btn btn-primary" disabled={!@formula_valid}>Save</button>
           </div>
         </form>
       </div>
@@ -234,7 +233,7 @@ defmodule OctopusWeb.PixelFun3DConfigComponent do
         </p>
         <div class="modal-action">
           <button class="btn btn-ghost" phx-click="cancel_delete" phx-target={@myself}>Cancel</button>
-          <button class="btn text-[#ff6266]" phx-click="confirm_delete" phx-target={@myself}>Delete</button>
+          <button class="btn btn-error btn-outline" phx-click="confirm_delete" phx-target={@myself}>Delete</button>
         </div>
       </div>
       <button type="button" class="modal-backdrop" phx-click="cancel_delete" phx-target={@myself} />
@@ -244,7 +243,7 @@ defmodule OctopusWeb.PixelFun3DConfigComponent do
 
   defp live_badge(assigns) do
     ~H"""
-    <span class="badge badge-sm bg-[#00d390] text-black border-0 font-semibold">LIVE</span>
+    <span class="badge badge-sm badge-success font-semibold">LIVE</span>
     """
   end
 
@@ -370,6 +369,8 @@ defmodule OctopusWeb.PixelFun3DConfigComponent do
 
     case ScenePresets.create(preset_attrs(socket.assigns.config, name)) do
       {:ok, preset} ->
+        send(self(), {:pf3d_scene_saved, preset.id})
+
         {:noreply,
          socket
          |> assign(
