@@ -168,6 +168,7 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:max_people_applying, false)
      |> assign(:max_people_applying_until, 0)
      |> assign(:entropy, safe_entropy())
+     |> assign(:manual_tracking, Radar.manual_tracking?())
      |> assign(:world_radius, world_radius)
      |> assign(:platform_radius, platform_radius)
      |> assign(:ring_layout, ring_layout)
@@ -320,6 +321,32 @@ defmodule OctopusWeb.RadarLive do
       _ ->
         {:noreply, socket}
     end
+  end
+
+  def handle_event("toggle_manual_tracking", _params, socket) do
+    enabled = not socket.assigns.manual_tracking
+    Radar.set_manual_tracking(enabled)
+    {:noreply, assign(socket, :manual_tracking, enabled)}
+  end
+
+  # Pointer moved over the map: map the viewBox coordinates (0..@vb) reported by
+  # the JS hook into world meters using the current (padded) render bounds, and
+  # drive the single manually-tracked object.
+  def handle_event("manual_point", %{"x" => vbx, "y" => vby}, socket) do
+    if socket.assigns.manual_tracking do
+      a = socket.assigns
+      {min_x, max_x} = pad_range(a.min_x, a.max_x)
+      {min_y, max_y} = pad_range(a.min_y, a.max_y)
+      {wx, wy} = svg_to_world(to_f(vbx), to_f(vby), min_x, max_x, min_y, max_y)
+      Radar.set_manual_point(wx, wy)
+    end
+
+    {:noreply, socket}
+  end
+
+  def handle_event("manual_clear", _params, socket) do
+    if socket.assigns.manual_tracking, do: Radar.clear_manual_point()
+    {:noreply, socket}
   end
 
   def handle_event("set_layout_start_angle", %{"layout_start_angle_deg" => v}, socket) do
@@ -516,6 +543,7 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:max_people, safe_max_people())
      |> assign(:max_people_applying, false)
      |> assign(:entropy, safe_entropy())
+     |> assign(:manual_tracking, Radar.manual_tracking?())
      |> assign(:selected_device_id, :all)
      |> assign(:bounds_mode, :static)
      |> assign(:world_objects, [])
@@ -1084,7 +1112,18 @@ defmodule OctopusWeb.RadarLive do
                     class="aspect-square bg-base-200 rounded w-full max-h-[calc(100vh-9rem)]"
                     style="height: min(calc(100vh - 9rem), 100%);"
                   >
-                    <svg viewBox="0 0 1000 1000" class="w-full h-full">
+                    <svg
+                      id="radar-map"
+                      viewBox="0 0 1000 1000"
+                      class={["w-full h-full", @manual_tracking && "cursor-crosshair"]}
+                      phx-hook="RadarManualPointer"
+                      data-active={to_string(@manual_tracking)}
+                    >
+                      <%!-- Transparent backdrop so pointer events (cursor
+                           tracking) fire across the whole map, not just over
+                           drawn shapes. --%>
+                      <rect x="0" y="0" width="1000" height="1000" fill="transparent" />
+
                       <%!-- World border --%>
                       <%= if @visuals.world_border and @world_border do %>
                         <ellipse
@@ -1387,10 +1426,29 @@ defmodule OctopusWeb.RadarLive do
                   </div>
 
                   <%= if mock_source?(@source_mode) do %>
-                    <form phx-change="set_max_people" class="flex flex-col gap-1">
-                      <label for="radar-max-people" class="text-xs font-semibold opacity-70">
-                        Max people
-                      </label>
+                    <div class="flex flex-col gap-1">
+                      <div class="flex items-center justify-between gap-2">
+                        <label for="radar-manual" class="text-xs font-semibold opacity-70">
+                          Cursor tracking
+                        </label>
+                        <input
+                          id="radar-manual"
+                          type="checkbox"
+                          class="toggle toggle-sm toggle-primary"
+                          checked={@manual_tracking}
+                          phx-click="toggle_manual_tracking"
+                        />
+                      </div>
+                      <p :if={@manual_tracking} class="text-xs opacity-60">
+                        Move the cursor over the map to place the tracked object.
+                      </p>
+                    </div>
+
+                    <%= unless @manual_tracking do %>
+                      <form phx-change="set_max_people" class="flex flex-col gap-1">
+                        <label for="radar-max-people" class="text-xs font-semibold opacity-70">
+                          Max people
+                        </label>
                       <div class="join w-full">
                         <input
                           id="radar-max-people"
@@ -1440,6 +1498,7 @@ defmodule OctopusWeb.RadarLive do
                       />
                       <span class="text-sm font-mono text-right">{@entropy}%</span>
                     </form>
+                    <% end %>
                   <% end %>
 
                   <%= if @source_mode == :live do %>
@@ -1850,6 +1909,23 @@ defmodule OctopusWeb.RadarLive do
   defp world_to_svg_x(x, min_x, max_x), do: scale(x, min_x, max_x, @vb)
 
   defp world_to_svg_y(y, min_y, max_y), do: @vb - scale(y, min_y, max_y, @vb)
+
+  # Inverse of world_to_svg_x/y: viewBox coordinates (0..@vb) back to world
+  # meters. Y is flipped because SVG y grows downward while world y grows up.
+  defp svg_to_world(vbx, vby, min_x, max_x, min_y, max_y) do
+    x = min_x + vbx / @vb * (max_x - min_x)
+    y = min_y + (@vb - vby) / @vb * (max_y - min_y)
+    {x, y}
+  end
+
+  defp to_f(v) when is_number(v), do: v * 1.0
+
+  defp to_f(v) when is_binary(v) do
+    case Float.parse(v) do
+      {f, _} -> f
+      :error -> 0.0
+    end
+  end
 
   defp scale(value, lo, hi, span) do
     (value - lo) / (hi - lo) * span

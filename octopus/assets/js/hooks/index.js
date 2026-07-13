@@ -51,6 +51,66 @@ function flash(btn, message) {
   }, 2000);
 }
 
+// Cursor-driven mock object placement for the radar view. While active
+// (data-active="true"), pointer motion over the radar SVG is reported to the
+// server as viewBox coordinates (0..1000), which the LiveView maps into world
+// meters to drive a single tracked object. Updates are throttled to keep the
+// message rate modest, with a trailing send so the final position isn't lost.
+const RadarManualPointer = {
+  mounted() {
+    this._pending = null;
+    this._lastSent = 0;
+    this._timer = null;
+
+    this._flush = () => {
+      this._timer = null;
+      if (!this._pending) return;
+      this._lastSent = performance.now();
+      this.pushEvent("manual_point", this._pending);
+      this._pending = null;
+    };
+
+    this._move = (e) => {
+      if (this.el.dataset.active !== "true") return;
+      const rect = this.el.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+
+      const x = ((e.clientX - rect.left) / rect.width) * 1000;
+      const y = ((e.clientY - rect.top) / rect.height) * 1000;
+      this._pending = {
+        x: Math.max(0, Math.min(1000, x)),
+        y: Math.max(0, Math.min(1000, y)),
+      };
+
+      const elapsed = performance.now() - this._lastSent;
+      if (elapsed >= 40) {
+        this._flush();
+      } else if (this._timer === null) {
+        this._timer = setTimeout(this._flush, 40 - elapsed);
+      }
+    };
+
+    this._leave = () => {
+      if (this.el.dataset.active !== "true") return;
+      if (this._timer !== null) {
+        clearTimeout(this._timer);
+        this._timer = null;
+      }
+      this._pending = null;
+      this.pushEvent("manual_clear", {});
+    };
+
+    this.el.addEventListener("pointermove", this._move);
+    this.el.addEventListener("pointerleave", this._leave);
+  },
+
+  destroyed() {
+    this.el.removeEventListener("pointermove", this._move);
+    this.el.removeEventListener("pointerleave", this._leave);
+    if (this._timer !== null) clearTimeout(this._timer);
+  },
+};
+
 const ConsoleTheme = {
   mounted() {
     const saved = localStorage.getItem("console-theme");
@@ -103,5 +163,6 @@ export const Hooks = {
   CodeEditorHook: CodeEditorHook,
   CopyDump: CopyDump,
   ConsoleTheme: ConsoleTheme,
+  RadarManualPointer: RadarManualPointer,
   TopBar,
 };

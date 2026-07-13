@@ -503,6 +503,42 @@ defmodule Octopus.Radar do
     end
   end
 
+  @doc "Whether mock manual (cursor-driven) tracking is on. See `Octopus.Radar.Mock.World`."
+  @spec manual_tracking?() :: boolean()
+  def manual_tracking? do
+    case Process.whereis(Mock.World) do
+      nil -> false
+      _pid -> Mock.World.manual?()
+    end
+  end
+
+  @doc "Enable/disable mock manual (cursor-driven) tracking."
+  @spec set_manual_tracking(boolean()) :: :ok
+  def set_manual_tracking(enabled) when is_boolean(enabled) do
+    case Process.whereis(Mock.World) do
+      nil -> :ok
+      _pid -> Mock.World.set_manual(enabled)
+    end
+  end
+
+  @doc "Place the manually-tracked mock object at `{x, y}` (global meters)."
+  @spec set_manual_point(number(), number()) :: :ok
+  def set_manual_point(x, y) when is_number(x) and is_number(y) do
+    case Process.whereis(Mock.World) do
+      nil -> :ok
+      _pid -> Mock.World.set_manual_point(x, y)
+    end
+  end
+
+  @doc "Remove the manually-tracked mock object."
+  @spec clear_manual_point() :: :ok
+  def clear_manual_point do
+    case Process.whereis(Mock.World) do
+      nil -> :ok
+      _pid -> Mock.World.clear_manual_point()
+    end
+  end
+
   @doc """
   Return the live status of a single sensor.
 
