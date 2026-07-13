@@ -13,6 +13,10 @@ defmodule Octopus.Radar.Deployment do
 
   @by_id_prefix "/dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_"
   @interface_suffix ~r/-if(\d+)$/
+  @usb_device_segment ~r/^(?<segment>\d+[\d.]*(?:-\d+[\d.]*)*)/
+  @cache_key {__MODULE__, :enrich_cache}
+  @log_fp_key {__MODULE__, :discovery_log_fp}
+  @cache_ttl_ms 5_000
 
   @type port_ref :: {String.t(), atom()}
   @type port_registry :: %{port_ref() => String.t()}
@@ -40,12 +44,35 @@ defmodule Octopus.Radar.Deployment do
   def enrich(nil), do: nil
 
   def enrich(deployment) do
+    now = System.monotonic_time(:millisecond)
+
+    case :persistent_term.get(@cache_key, nil) do
+      {^deployment, enriched, expires_at} when expires_at > now ->
+        enriched
+
+      _ ->
+        enriched = do_enrich(deployment)
+        :persistent_term.put(@cache_key, {deployment, enriched, now + @cache_ttl_ms})
+        enriched
+    end
+  end
+
+  @doc false
+  def clear_cache do
+    :persistent_term.erase(@cache_key)
+    :persistent_term.erase(@log_fp_key)
+    :ok
+  end
+
+  defp do_enrich(deployment) do
     adapters =
       deployment
       |> Keyword.get(:adapters, [])
       |> Enum.map(&enrich_adapter(&1, deployment))
 
-    Keyword.put(deployment, :adapters, adapters)
+    enriched = Keyword.put(deployment, :adapters, adapters)
+    maybe_log_discovery(enriched)
+    enriched
   end
 
   @doc """
@@ -194,13 +221,9 @@ defmodule Octopus.Radar.Deployment do
     with {:ok, tty_path} <- by_id_to_tty(by_id_path),
          tty_name when is_binary(tty_name) <- Path.basename(tty_path),
          device_link = Path.join(["/sys/class/tty", tty_name, "device"]),
-         {:ok, _} <- File.read_link(device_link) do
-      usb_path =
-        device_link
-        |> Path.expand()
-        |> Path.dirname()
-        |> Path.basename()
-
+         {:ok, target} <- File.read_link(device_link),
+         iface_path = Path.expand(target, Path.dirname(device_link)),
+         {:ok, usb_path} <- usb_device_segment(iface_path) do
       {:ok, usb_path}
     else
       {:error, _} = err -> err
@@ -208,30 +231,33 @@ defmodule Octopus.Radar.Deployment do
     end
   end
 
+  defp usb_device_segment(path) do
+    base = Path.basename(path)
+
+    cond do
+      String.contains?(base, ":") ->
+        case Regex.run(@usb_device_segment, base) do
+          [_, segment] -> {:ok, segment}
+          _ -> usb_device_segment(Path.dirname(path))
+        end
+
+      Regex.match?(@usb_device_segment, base) ->
+        {:ok, base}
+
+      true ->
+        parent = Path.dirname(path)
+
+        if parent == path do
+          {:error, :missing_sysfs}
+        else
+          usb_device_segment(parent)
+        end
+    end
+  end
+
   defp enrich_adapter(adapter_opts, deployment) do
     ports = resolve_adapter_ports(adapter_opts, deployment)
-    adapter_opts = Keyword.put(adapter_opts, :ports, ports)
-
-    case Keyword.get(adapter_opts, :serial) do
-      serial when is_binary(serial) and ports != [] ->
-        usb_path =
-          ports
-          |> Keyword.values()
-          |> Enum.find_value(fn path ->
-            if by_id_path?(path) do
-              case usb_path_for_port(path, deployment) do
-                {:ok, usb} -> usb
-                _ -> nil
-              end
-            end
-          end)
-
-        log_discovered_adapter(adapter_opts, serial, ports, usb_path)
-        adapter_opts
-
-      _ ->
-        adapter_opts
-    end
+    Keyword.put(adapter_opts, :ports, ports)
   end
 
   defp by_id_path?(path), do: String.starts_with?(path, @by_id_prefix)
@@ -287,16 +313,63 @@ defmodule Octopus.Radar.Deployment do
     end
   end
 
-  defp log_discovered_adapter(adapter_opts, serial, ports, usb_path) do
+  defp maybe_log_discovery(deployment) do
+    unless linux_usb?(deployment) do
+      :ok
+    else
+      fingerprint = discovery_fingerprint(deployment)
+
+      case :persistent_term.get(@log_fp_key, nil) do
+        ^fingerprint ->
+          :ok
+
+        _ ->
+          :persistent_term.put(@log_fp_key, fingerprint)
+          log_discovery(deployment)
+      end
+    end
+  end
+
+  defp discovery_fingerprint(deployment) do
+    deployment
+    |> Keyword.get(:adapters, [])
+    |> Enum.map(fn adapter ->
+      {Keyword.get(adapter, :name), Keyword.get(adapter, :serial), Keyword.get(adapter, :ports, [])}
+    end)
+  end
+
+  defp log_discovery(deployment) do
+    deployment
+    |> Keyword.get(:adapters, [])
+    |> Enum.each(&log_discovered_adapter(&1, deployment))
+  end
+
+  defp log_discovered_adapter(adapter_opts, deployment) do
+    serial = Keyword.get(adapter_opts, :serial)
+    ports = Keyword.get(adapter_opts, :ports, [])
     name = Keyword.fetch!(adapter_opts, :name)
 
-    port_labels =
-      ports
-      |> Enum.map(fn {port_name, path} -> "#{port_name}=#{LogFormat.short_port(path)}" end)
-      |> Enum.join(", ")
+    if serial && ports != [] do
+      usb_path =
+        ports
+        |> Keyword.values()
+        |> Enum.find_value(fn path ->
+          if by_id_path?(path) do
+            case usb_path_for_port(path, deployment) do
+              {:ok, usb} -> usb
+              _ -> nil
+            end
+          end
+        end)
 
-    Logger.info(
-      "[radar] adapter #{name} serial #{serial} usb_path=#{usb_path || "?"} ports: #{port_labels}"
-    )
+      port_labels =
+        ports
+        |> Enum.map(fn {port_name, path} -> "#{port_name}=#{LogFormat.short_port(path)}" end)
+        |> Enum.join(", ")
+
+      Logger.info(
+        "[radar] adapter #{name}, serial #{serial}, usb_path=#{usb_path || "?"}, ports: #{port_labels}"
+      )
+    end
   end
 end
