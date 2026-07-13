@@ -32,7 +32,8 @@ defmodule Octopus.Apps.Collective do
     dots: Animations.Dots,
     orbital: Animations.Orbital,
     lava_lamp: Animations.LavaLamp,
-    ring_noise: Animations.RingNoise
+    ring_noise: Animations.RingNoise,
+    presence: Animations.PresencePanels
   }
 
   def name, do: "Collective"
@@ -43,7 +44,8 @@ defmodule Octopus.Apps.Collective do
     dots: "Dots",
     orbital: "Orbital drift",
     lava_lamp: "Lava lamp",
-    ring_noise: "Ring noise"
+    ring_noise: "Ring noise",
+    presence: "Presence"
   }
 
   @mode_accents %{
@@ -52,7 +54,8 @@ defmodule Octopus.Apps.Collective do
     dots: "#F1C40F",
     orbital: "#9B59B6",
     lava_lamp: "#E67E22",
-    ring_noise: "#1ABC9C"
+    ring_noise: "#1ABC9C",
+    presence: "#2ECC71"
   }
 
   @mode_presets Module.concat(["Octopus", "AppModePresets"])
@@ -124,6 +127,16 @@ defmodule Octopus.Apps.Collective do
           ring_noise_pulse_amount: 0.65,
           ring_noise_counter_wave: true,
           ring_noise_palette: :lava
+        }
+
+      "presence" ->
+        %{
+          animation: :presence,
+          presence_sensitivity: 1.0,
+          presence_floor: 0.12,
+          presence_smoothing: 0.4,
+          presence_bleed: 0.35,
+          presence_adaptive: true
         }
 
       _ ->
@@ -271,6 +284,53 @@ defmodule Octopus.Apps.Collective do
     ]
   end
 
+  def mode_tweakables_for("presence") do
+    [
+      %{
+        key: :presence_sensitivity,
+        label: "Sensitivity",
+        type: :slider,
+        min: 0.3,
+        max: 3.0,
+        step: 0.05,
+        default: 1.0
+      },
+      %{
+        key: :presence_floor,
+        label: "Base glow",
+        type: :slider,
+        min: 0.0,
+        max: 0.4,
+        step: 0.02,
+        default: 0.12
+      },
+      %{
+        key: :presence_smoothing,
+        label: "Smoothing",
+        type: :slider,
+        min: 0.0,
+        max: 1.0,
+        step: 0.05,
+        default: 0.4
+      },
+      %{
+        key: :presence_bleed,
+        label: "Neighbour bleed",
+        type: :slider,
+        min: 0.0,
+        max: 0.7,
+        step: 0.05,
+        default: 0.35
+      },
+      %{
+        key: :presence_adaptive,
+        label: "Auto-gain",
+        type: :toggle,
+        default: true
+      }
+    ]
+  end
+
   def mode_tweakables_for(_mode_id), do: []
 
   def apply_mode(app_id, mode_id) do
@@ -304,6 +364,11 @@ defmodule Octopus.Apps.Collective do
     ring_noise_pulse_amount = Map.get(config, :ring_noise_pulse_amount, 0.65)
     ring_noise_counter_wave = Map.get(config, :ring_noise_counter_wave, true)
     ring_noise_palette = Map.get(config, :ring_noise_palette, :lava)
+    presence_sensitivity = Map.get(config, :presence_sensitivity, 1.0)
+    presence_floor = Map.get(config, :presence_floor, 0.12)
+    presence_smoothing = Map.get(config, :presence_smoothing, 0.4)
+    presence_bleed = Map.get(config, :presence_bleed, 0.35)
+    presence_adaptive = Map.get(config, :presence_adaptive, true)
     background = Map.get(config, :background, :deep_dark) |> coerce_atom(:deep_dark)
     animation = Map.get(config, :animation, :storm) |> coerce_atom(:storm)
     anim_mod = Map.fetch!(@animations, animation)
@@ -332,6 +397,11 @@ defmodule Octopus.Apps.Collective do
       ring_noise_pulse_amount: ring_noise_pulse_amount,
       ring_noise_counter_wave: ring_noise_counter_wave,
       ring_noise_palette: ring_noise_palette,
+      presence_sensitivity: presence_sensitivity,
+      presence_floor: presence_floor,
+      presence_smoothing: presence_smoothing,
+      presence_bleed: presence_bleed,
+      presence_adaptive: presence_adaptive,
       background: background,
       animation: animation,
       anim_mod: anim_mod,
@@ -395,6 +465,11 @@ defmodule Octopus.Apps.Collective do
       ring_noise_pulse_amount: state.ring_noise_pulse_amount,
       ring_noise_counter_wave: state.ring_noise_counter_wave,
       ring_noise_palette: state.ring_noise_palette,
+      presence_sensitivity: state.presence_sensitivity,
+      presence_floor: state.presence_floor,
+      presence_smoothing: state.presence_smoothing,
+      presence_bleed: state.presence_bleed,
+      presence_adaptive: state.presence_adaptive,
       background: state.background,
       display_info: state.display_info
     }
@@ -428,7 +503,8 @@ defmodule Octopus.Apps.Collective do
              {"Crowd Dots", :dots},
              {"Orbital", :orbital},
              {"Lava Lamp", :lava_lamp},
-             {"Ring Noise", :ring_noise}
+             {"Ring Noise", :ring_noise},
+             {"Presence", :presence}
            ]
          }},
       background:
@@ -592,7 +668,46 @@ defmodule Octopus.Apps.Collective do
              {"Aurora", :aurora}
            ],
            visible_when: {:animation, [:ring_noise]}
-         }}
+         }},
+      presence_sensitivity:
+        {"Presence Sensitivity", :float,
+         %{
+           min: 0.3,
+           max: 3.0,
+           default: 1.0,
+           step: 0.05,
+           visible_when: {:animation, [:presence]}
+         }},
+      presence_floor:
+        {"Base Glow", :float,
+         %{
+           min: 0.0,
+           max: 0.4,
+           default: 0.12,
+           step: 0.02,
+           visible_when: {:animation, [:presence]}
+         }},
+      presence_smoothing:
+        {"Smoothing", :float,
+         %{
+           min: 0.0,
+           max: 1.0,
+           default: 0.4,
+           step: 0.05,
+           visible_when: {:animation, [:presence]}
+         }},
+      presence_bleed:
+        {"Neighbour Bleed", :float,
+         %{
+           min: 0.0,
+           max: 0.7,
+           default: 0.35,
+           step: 0.05,
+           visible_when: {:animation, [:presence]}
+         }},
+      presence_adaptive:
+        {"Auto-Gain", :boolean,
+         %{default: true, visible_when: {:animation, [:presence]}}}
     ]
   end
 
@@ -676,6 +791,20 @@ defmodule Octopus.Apps.Collective do
     """
   end
 
+  def config_info(%{animation: :presence}) do
+    """
+    Presence — each panel glows fully in a fixed random colour.
+    Brightness = per-panel crowd activity: near the mast counts 1, near the
+    panels up to 3, and walking counts double. Normalised, softly smoothed in
+    time and bled into neighbour panels — soft, not flickery.
+    • Presence Sensitivity — overall gain (higher = brighter for the same crowd).
+    • Base Glow — brightness of an inactive panel (0 = black).
+    • Smoothing — low = snappy, high = slow/soft.
+    • Neighbour Bleed — how much activity spills into adjacent panels.
+    • Auto-Gain — auto-levels to the current crowd (off = absolute intensity).
+    """
+  end
+
   def config_info(_config), do: nil
 
   def now_playing_meta(config) do
@@ -711,7 +840,12 @@ defmodule Octopus.Apps.Collective do
       ring_noise_pulse_period: state.ring_noise_pulse_period,
       ring_noise_pulse_amount: state.ring_noise_pulse_amount,
       ring_noise_counter_wave: state.ring_noise_counter_wave,
-      ring_noise_palette: state.ring_noise_palette
+      ring_noise_palette: state.ring_noise_palette,
+      presence_sensitivity: state.presence_sensitivity,
+      presence_floor: state.presence_floor,
+      presence_smoothing: state.presence_smoothing,
+      presence_bleed: state.presence_bleed,
+      presence_adaptive: state.presence_adaptive
     }
   end
 
@@ -755,7 +889,13 @@ defmodule Octopus.Apps.Collective do
            Map.get(config, :ring_noise_pulse_amount, state.ring_noise_pulse_amount),
          ring_noise_counter_wave:
            Map.get(config, :ring_noise_counter_wave, state.ring_noise_counter_wave),
-         ring_noise_palette: Map.get(config, :ring_noise_palette, state.ring_noise_palette)
+         ring_noise_palette: Map.get(config, :ring_noise_palette, state.ring_noise_palette),
+         presence_sensitivity:
+           Map.get(config, :presence_sensitivity, state.presence_sensitivity),
+         presence_floor: Map.get(config, :presence_floor, state.presence_floor),
+         presence_smoothing: Map.get(config, :presence_smoothing, state.presence_smoothing),
+         presence_bleed: Map.get(config, :presence_bleed, state.presence_bleed),
+         presence_adaptive: Map.get(config, :presence_adaptive, state.presence_adaptive)
      }}
   end
 
