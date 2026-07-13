@@ -385,6 +385,15 @@ defmodule OctopusWeb.RadarLive do
     {:noreply, socket}
   end
 
+  def handle_event("dump_track_history", params, socket) do
+    with {device_id, ""} <- Integer.parse(params["device_id"]),
+         {track_id, ""} <- Integer.parse(params["track_id"]) do
+      dump_track_history(device_id, track_id)
+    end
+
+    {:noreply, socket}
+  end
+
   def handle_event("fit_bounds", _params, socket) do
     {min_x, max_x, min_y, max_y, min_z, max_z} = compute_minmax(socket.assigns.samples)
 
@@ -1055,8 +1064,12 @@ defmodule OctopusWeb.RadarLive do
                   <ul class="flex flex-col gap-1">
                     <%= for item <- group.items do %>
                       <li
-                        class="text-xs font-mono rounded px-2 py-1.5 bg-base-200/80 border border-base-300/60"
+                        class="text-xs font-mono rounded px-2 py-1.5 bg-base-200/80 border border-base-300/60 cursor-pointer hover:bg-base-300/80"
                         style={"opacity: #{fmt_f(item.opacity)}"}
+                        phx-click="dump_track_history"
+                        phx-value-device_id={item.device_id}
+                        phx-value-track_id={item.id}
+                        title="Dump last 10s movement history to server log"
                       >
                         <div class="flex items-center justify-between gap-2">
                           <span class="flex items-center gap-1.5 min-w-0">
@@ -1289,7 +1302,13 @@ defmodule OctopusWeb.RadarLive do
                       <%!-- Detections --%>
                       <%= if @visuals.detections do %>
                         <%= for v <- @view_targets do %>
-                          <g opacity={fmt_f(v.opacity)}>
+                          <g
+                            opacity={fmt_f(v.opacity)}
+                            phx-click="dump_track_history"
+                            phx-value-device_id={v.device_id}
+                            phx-value-track_id={v.track_id}
+                            style="cursor: pointer"
+                          >
                             <%= if @visuals.trails do %>
                               <%= for seg <- v.trail do %>
                                 <line
@@ -1652,6 +1671,8 @@ defmodule OctopusWeb.RadarLive do
         |> build_trail_segments(now, hue, min_x, max_x, min_y, max_y)
 
       %{
+        device_id: device_id,
+        track_id: id,
         label: track_label(device_id, id),
         cx: cx,
         cy: cy,
@@ -2082,6 +2103,27 @@ defmodule OctopusWeb.RadarLive do
   defp sensor_status_label(_), do: "Unknown"
 
   ## Detection dump (coordinate debugging)
+
+  defp dump_track_history(device_id, track_id) do
+    label = track_label(device_id, track_id)
+
+    case Radar.clutter_filter_track_debug(device_id, track_id) do
+      nil ->
+        Logger.info(
+          "RADAR-TRACK-HISTORY-DUMP[#{label}] track not found in clutter-filter registry (device_id=#{device_id}, track_id=#{track_id})"
+        )
+
+      payload ->
+        dump_id = track_history_dump_id(label)
+        json = Jason.encode!(Map.put(payload, "dump_id", dump_id))
+        Logger.info("RADAR-TRACK-HISTORY-DUMP[#{dump_id}] #{json}")
+    end
+  end
+
+  defp track_history_dump_id(label) do
+    ts = Calendar.strftime(DateTime.utc_now(), "%Y%m%dT%H%M%SZ")
+    "history-#{label}-#{ts}"
+  end
 
   defp dump_detections_id do
     Calendar.strftime(DateTime.utc_now(), "detections-%Y%m%dT%H%M%SZ")

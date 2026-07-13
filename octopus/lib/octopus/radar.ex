@@ -435,6 +435,12 @@ defmodule Octopus.Radar do
   @spec reset_clutter_filter() :: :ok
   def reset_clutter_filter, do: ClutterFilter.reset()
 
+  @doc false
+  @spec clutter_filter_track_debug(pos_integer(), non_neg_integer()) :: map() | nil
+  def clutter_filter_track_debug(device_id, track_id) when is_integer(track_id) and track_id >= 0 do
+    ClutterFilter.track_debug(device_id, track_id)
+  end
+
   @doc """
   Re-run the full init sequence on a sensor, resetting all internal
   tracker state on the device. Useful when track ids have drifted into
