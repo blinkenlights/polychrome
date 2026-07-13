@@ -45,6 +45,10 @@ defmodule OctopusWeb.RadarLive do
   # re-render then runs at most once per this interval (~15 fps).
   @render_interval_ms 66
 
+  # Position change below this threshold (meters, 3D) is treated as stationary
+  # for dump analysis — filters radar jitter from true movement.
+  @position_stationary_threshold_m 0.05
+
   # Lightness range for the trail's per-segment color. The newest
   # segment (closest to the body circle) is rendered at `@trail_l_near`
   # and brightens linearly toward `@trail_l_far` for the oldest segment.
@@ -586,7 +590,17 @@ defmodule OctopusWeb.RadarLive do
     tracks_now =
       tracks
       |> Enum.reduce(socket.assigns.tracks_now, fn %Track{} = t, acc ->
-        Map.put(acc, {device_id, t.id}, %{
+        key = {device_id, t.id}
+        prev = Map.get(acc, key)
+
+        position_last_changed =
+          if prev == nil or track_position_moved?(prev, t) do
+            now
+          else
+            prev.position_last_changed
+          end
+
+        Map.put(acc, key, %{
           device_id: device_id,
           id: t.id,
           x: t.x,
@@ -595,7 +609,9 @@ defmodule OctopusWeb.RadarLive do
           vx: t.vx,
           vy: t.vy,
           vz: t.vz,
-          last_seen: now
+          last_seen: now,
+          first_seen: if(prev, do: prev.first_seen, else: now),
+          position_last_changed: position_last_changed
         })
       end)
       |> Enum.reject(fn {_key, t} -> t.last_seen < fade_cutoff end)
@@ -2114,7 +2130,9 @@ defmodule OctopusWeb.RadarLive do
         "local" => coords_map(lx, ly, lz),
         "velocity" => coords_map(t.vx, t.vy, vz),
         "speed_m_s" => fmt_json_float(speed),
-        "last_seen_ms_ago" => now - t.last_seen
+        "last_seen_ms_ago" => now - t.last_seen,
+        "first_seen_ms_ago" => now - t.first_seen,
+        "stationary_ms" => now - t.position_last_changed
       }
     end)
     |> Enum.sort_by(&{&1["device_id"], &1["track_id"]})
@@ -2135,6 +2153,14 @@ defmodule OctopusWeb.RadarLive do
 
   defp fmt_json_float(v) when is_float(v), do: Float.round(v, 4)
   defp fmt_json_float(v) when is_integer(v), do: v * 1.0
+
+  defp track_position_moved?(prev, %Track{} = t) do
+    dx = t.x - prev.x
+    dy = t.y - prev.y
+    dz = t.z - prev.z
+
+    :math.sqrt(dx * dx + dy * dy + dz * dz) > @position_stationary_threshold_m
+  end
 
   ## Formatting helpers
 
