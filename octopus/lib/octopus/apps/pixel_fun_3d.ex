@@ -65,7 +65,6 @@ defmodule Octopus.Apps.PixelFun3D do
     color_mode: :random,
     saturation_percent: 70,
     brightness_percent: 100,
-    palette_phase: 0.0,
     color_interval: 5.0,
     palette_auto: true,
     orbit_rate: 0.0,
@@ -101,7 +100,6 @@ defmodule Octopus.Apps.PixelFun3D do
                         :color_mode,
                         :saturation_percent,
                         :brightness_percent,
-                        :palette_phase,
                         :color_interval,
                         :palette_auto,
                         :orbit_rate,
@@ -397,7 +395,6 @@ defmodule Octopus.Apps.PixelFun3D do
       :color_mode,
       :saturation_percent,
       :brightness_percent,
-      :palette_phase,
       :color_interval,
       :palette_auto,
       # Id of the scene currently rendered on the wall.
@@ -439,7 +436,6 @@ defmodule Octopus.Apps.PixelFun3D do
       sat_auto_min: {"Saturation Min", :float, %{default: 20.0, min: 0, max: 100, step: 1}},
       sat_auto_max: {"Saturation Max", :float, %{default: 100.0, min: 0, max: 100, step: 1}},
       sat_auto_interval: {"Saturation Interval", :float, %{default: 30.0, min: 4, max: 60, step: 1}},
-      palette_phase: {"Palette", :float, %{default: 0.0, min: 0.0, max: 1.0, step: 0.01}},
       color_interval: {"Palette tempo (s)", :float, %{default: 5, min: 1, max: 20, step: 0.5}},
       palette_auto: {"Palette Auto", :boolean, %{default: true}},
       orbit_rate: {"Translate X (px/s)", :float, %{default: 0.0, min: -30, max: 30, step: 0.5}},
@@ -517,7 +513,6 @@ defmodule Octopus.Apps.PixelFun3D do
         color_mode: state.color_mode,
         saturation_percent: state.saturation_percent,
         brightness_percent: state.brightness_percent || 100,
-        palette_phase: state.palette_phase || 0.0,
         color_interval: state.color_interval,
         palette_auto: state.palette_auto != false,
         orbit_rate: state.orbit_rate,
@@ -619,14 +614,14 @@ defmodule Octopus.Apps.PixelFun3D do
           if Map.get(config, :palette_auto, true) do
             "white auto #{format_num(config[:color_interval])}s"
           else
-            "white #{format_phase(config[:palette_phase])}"
+            "white static"
           end
 
         _ ->
           if Map.get(config, :palette_auto, true) do
             "palette auto #{format_num(config[:color_interval])}s"
           else
-            "palette #{format_phase(config[:palette_phase])}"
+            "palette static"
           end
       end
 
@@ -666,10 +661,6 @@ defmodule Octopus.Apps.PixelFun3D do
   defp format_num(n) when is_float(n), do: :erlang.float_to_binary(n, decimals: 1)
   defp format_num(n) when is_integer(n), do: Integer.to_string(n)
   defp format_num(n), do: to_string(n)
-
-  defp format_phase(nil), do: "0°"
-  defp format_phase(phase) when is_number(phase), do: "#{trunc(wrap_unit(phase) * 360)}°"
-  defp format_phase(_), do: "0°"
 
   def mode_tweakables(_mode_id) do
     [
@@ -745,22 +736,11 @@ defmodule Octopus.Apps.PixelFun3D do
         visible_when: {:sat_auto, [true]}
       },
       %{
-        key: :palette_phase,
-        label: "Palette",
-        type: :slider,
-        min: 0.0,
-        max: 1.0,
-        step: 0.01,
-        default: 0.0,
-        auto_key: :palette_auto,
-        visible_when: {:color_mode, [:random, :white]}
-      },
-      %{
         key: :palette_auto,
-        label: "Auto",
+        label: "Cycle colors",
         type: :toggle,
         default: true,
-        companion_of: :palette_phase
+        visible_when: {:color_mode, [:random, :white]}
       },
       %{
         key: :color_interval,
@@ -1039,8 +1019,7 @@ defmodule Octopus.Apps.PixelFun3D do
     color_mode = Map.get(config, :color_mode, :random)
     saturation_percent = Map.get(config, :saturation_percent, 70)
     brightness_percent = coerce_saturation_percent(Map.get(config, :brightness_percent, 100))
-    palette_phase = coerce_palette_phase(Map.get(config, :palette_phase, 0.0))
-    palette = palette_from_phase(palette_phase, color_mode, saturation_percent)
+    palette = generate_random_palette(color_mode, saturation_percent)
     time_frozen = Map.get(config, :time_frozen, false) |> coerce_boolean()
 
     palette_auto = Map.get(config, :palette_auto, true) |> coerce_boolean()
@@ -1066,11 +1045,10 @@ defmodule Octopus.Apps.PixelFun3D do
       colors: palette,
       last_colors: palette,
       target_colors: palette,
-      lerp_time: 0.0,
+      lerp_time: palette_interval_s(config.color_interval),
       color_mode: color_mode,
       saturation_percent: saturation_percent,
       brightness_percent: brightness_percent,
-      palette_phase: palette_phase,
       color_interval: config.color_interval,
       palette_auto: palette_auto,
       orbit_rate: config.orbit_rate,
@@ -1182,13 +1160,6 @@ defmodule Octopus.Apps.PixelFun3D do
     palette_auto =
       Map.get(config, :palette_auto, state.palette_auto != false) |> coerce_boolean()
 
-    palette_phase =
-      if palette_auto do
-        state.palette_phase || 0.0
-      else
-        coerce_palette_phase(Map.get(config, :palette_phase, state.palette_phase || 0.0))
-      end
-
     old_autos = auto_flags(state)
 
     state = %State{
@@ -1215,7 +1186,6 @@ defmodule Octopus.Apps.PixelFun3D do
         color_mode: color_mode,
         saturation_percent: saturation_percent,
         brightness_percent: brightness_percent,
-        palette_phase: palette_phase,
         color_interval: color_interval,
         palette_auto: palette_auto,
         show_advanced:
@@ -1234,27 +1204,12 @@ defmodule Octopus.Apps.PixelFun3D do
     apply_time_frozen(state, config)
   end
 
+  # Colours are random now, so only a colour-mode switch forces a fresh pair.
+  # Saturation is applied at render time and palette_auto only gates cycling, so
+  # neither should re-roll the live pair (that would make dragging Saturation or
+  # toggling Auto jump colours).
   defp palette_needs_refresh?(%State{} = state, %State{} = old_state) do
-    cond do
-      state.color_mode != old_state.color_mode ->
-        true
-
-      palette_auto_on?(state) != palette_auto_on?(old_state) ->
-        true
-
-      not palette_auto_on?(state) and
-          abs((state.palette_phase || 0.0) - (old_state.palette_phase || 0.0)) > 1.0e-9 ->
-        true
-
-      (state.sat_auto || false) != (old_state.sat_auto || false) ->
-        true
-
-      not (state.sat_auto || false) and state.saturation_percent != old_state.saturation_percent ->
-        true
-
-      true ->
-        false
-    end
+    state.color_mode != old_state.color_mode
   end
 
   defp palette_auto_on?(%State{} = state), do: state.palette_auto != false
@@ -1312,7 +1267,6 @@ defmodule Octopus.Apps.PixelFun3D do
       {:color_mode, value} -> {:color_mode, coerce_color_mode(value)}
       {:saturation_percent, value} -> {:saturation_percent, coerce_saturation_percent(value)}
       {:brightness_percent, value} -> {:brightness_percent, coerce_saturation_percent(value)}
-      {:palette_phase, value} -> {:palette_phase, coerce_palette_phase(value)}
       {:time_direction, value} -> {:time_direction, coerce_time_direction(value)}
       {:time_frozen, value} -> {:time_frozen, coerce_boolean(value)}
       {:palette_auto, value} -> {:palette_auto, coerce_boolean(value)}
@@ -1849,7 +1803,7 @@ defmodule Octopus.Apps.PixelFun3D do
         state
       else
         state
-        |> advance_palette_phase()
+        |> advance_palette_colors()
         |> advance_tick_state()
         |> maybe_broadcast_transform_live(tick_start)
       end
@@ -2932,70 +2886,113 @@ defmodule Octopus.Apps.PixelFun3D do
     (1 - t) * a + t * b
   end
 
-  defp advance_palette_phase(%State{} = state) do
-    if state.color_mode in [:random, :white] and state.palette_auto != false do
-      period = max(state.color_interval || 5.0, 0.1)
-      dt = (1 / @fps) * param(:time_scale, 1.0) * state.speed
-      phase = wrap_unit((state.palette_phase || 0.0) + dt / period)
+  defp advance_palette_colors(%State{color_mode: mode} = state) when mode in [:random, :white] do
+    state
+    |> lerp_toward_target_colors()
+    |> maybe_swap_palette()
+  end
 
-      apply_palette_colors(%State{state | palette_phase: phase})
+  defp advance_palette_colors(%State{} = state), do: state
+
+  # Crossfade the live pair from last_colors toward target_colors across one
+  # color_interval, mirroring the original PixelFun. Progress is derived from the
+  # remaining lerp_time so the fade finishes exactly as the next swap is due.
+  defp lerp_toward_target_colors(%State{} = state) do
+    interval = palette_interval_s(state)
+    current = max(interval - (state.lerp_time || 0.0), 0.0)
+    t = current / interval
+    lerp_time = max((state.lerp_time || 0.0) - 1 / @fps, 0.0)
+
+    {last_a, last_b} = state.last_colors
+    {target_a, target_b} = state.target_colors
+    new_a = lerp_hsv(last_a, target_a, t)
+    new_b = lerp_hsv(last_b, target_b, t)
+
+    %State{state | colors: {new_a, new_b}, lerp_time: lerp_time}
+  end
+
+  # With Auto (palette_auto) on, roll a fresh random pair the moment the current
+  # crossfade completes. Auto off leaves the pair static (needed for presets like
+  # wabengitter that rely on two frozen colours).
+  defp maybe_swap_palette(%State{} = state) do
+    if palette_auto_on?(state) and (state.lerp_time || 0.0) <= 0.0 do
+      target = generate_random_palette(state.color_mode, state.saturation_percent)
+
+      %State{
+        state
+        | last_colors: state.colors,
+          target_colors: target,
+          lerp_time: palette_interval_s(state)
+      }
     else
       state
     end
   end
 
   defp apply_palette_colors(%State{color_mode: mode} = state) when mode in [:random, :white] do
-    palette =
-      palette_from_phase(state.palette_phase || 0.0, mode, effective_saturation_percent(state))
+    palette = generate_random_palette(mode, state.saturation_percent)
 
-    %State{state | colors: palette, last_colors: palette, target_colors: palette}
+    %State{
+      state
+      | colors: palette,
+        last_colors: palette,
+        target_colors: palette,
+        lerp_time: palette_interval_s(state)
+    }
   end
 
   defp apply_palette_colors(%State{} = state), do: state
 
-  defp wrap_unit(x) when is_number(x), do: x - :math.floor(x)
-  defp wrap_unit(_), do: 0.0
+  defp palette_interval_s(%State{} = state), do: palette_interval_s(state.color_interval)
+  defp palette_interval_s(interval) when is_number(interval), do: max(interval, 0.1)
+  defp palette_interval_s(_), do: 5.0
 
-  defp coerce_palette_phase(value) when is_number(value), do: wrap_unit(value)
+  # Interpolate in RGB space then return HSV so the render path (which expects
+  # %Chameleon.HSV{}) keeps working for both hue pairs and white levels.
+  defp lerp_hsv(a, b, value) do
+    a_rgb = Chameleon.convert(a, Chameleon.RGB)
+    b_rgb = Chameleon.convert(b, Chameleon.RGB)
 
-  defp coerce_palette_phase(value) when is_binary(value) do
-    case Float.parse(value) do
-      {n, _} -> wrap_unit(n)
-      :error -> 0.0
-    end
+    r = lerp(a_rgb.r, b_rgb.r, value) |> trunc()
+    g = lerp(a_rgb.g, b_rgb.g, value) |> trunc()
+    bl = lerp(a_rgb.b, b_rgb.b, value) |> trunc()
+
+    Chameleon.RGB.new(r, g, bl) |> Chameleon.convert(Chameleon.HSV)
   end
 
-  defp coerce_palette_phase(_), do: 0.0
+  defp generate_random_palette(:white, _saturation_percent), do: generate_random_white_levels()
+
+  defp generate_random_palette(_color_mode, saturation_percent),
+    do: generate_random_colors(saturation_percent)
 
   @doc false
-  def palette_from_phase(phase, color_mode, saturation_percent \\ 70)
+  def generate_random_white_levels do
+    low_max = 100 - @min_white_level_gap
+    low = @min_white_level + :rand.uniform(low_max - @min_white_level + 1) - 1
+    extra = 100 - low - @min_white_level_gap
 
-  def palette_from_phase(phase, :white, _saturation_percent) do
-    t = wrap_unit(phase)
-    # Continuous brightness pair with guaranteed gap (≥ @min_white_level_gap).
-    center = 50.0 + 15.0 * :math.sin(t * :math.pi() * 2)
-    half = @min_white_level_gap / 2 + 10.0 + 8.0 * :math.cos(t * :math.pi() * 2)
-    a = trunc(max(@min_white_level, min(100, center - half)))
-    b = trunc(max(@min_white_level, min(100, center + half)))
+    high =
+      if extra <= 0 do
+        100
+      else
+        low + @min_white_level_gap + :rand.uniform(extra)
+      end
 
     {a, b} =
-      if abs(a - b) < @min_white_level_gap do
-        if a <= b do
-          {a, min(100, a + @min_white_level_gap)}
-        else
-          {min(100, b + @min_white_level_gap), b}
-        end
-      else
-        {a, b}
+      case :rand.uniform(2) do
+        1 -> {low, high}
+        2 -> {high, low}
       end
 
     {%Chameleon.HSV{h: 0, s: 0, v: a}, %Chameleon.HSV{h: 0, s: 0, v: b}}
   end
 
-  def palette_from_phase(phase, _color_mode, saturation_percent) do
-    t = wrap_unit(phase)
-    hue_a = trunc(t * 360) |> rem(360)
-    hue_b = rem(hue_a + 180, 360)
+  # Random pair with a guaranteed minimum 60° hue gap (up to 239°), matching the
+  # original PixelFun. Saturation is (re)applied at render time.
+  @doc false
+  def generate_random_colors(saturation_percent) do
+    hue_a = :rand.uniform(360) - 1
+    hue_b = Integer.mod(hue_a + 60 + :rand.uniform(180) - 1, 360)
     sat = saturation_percent |> max(0) |> min(100)
     {Chameleon.HSV.new(hue_a, sat, 100), Chameleon.HSV.new(hue_b, sat, 100)}
   end

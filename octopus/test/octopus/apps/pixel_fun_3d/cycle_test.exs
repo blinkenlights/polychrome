@@ -58,7 +58,6 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
           roll_angle: 0.0,
           color_mode: :random,
           saturation_percent: 70,
-          palette_phase: 0.0,
           color_interval: 5.0,
           palette_auto: true,
           live_scene_id: nil,
@@ -192,17 +191,12 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
       assert_in_delta updated.roll_rate, 2.0 * 180 / :math.pi(), 0.1
     end
 
-    test "applies color_interval and palette_phase via handle_config" do
-      state = base_state(%{live_scene_id: @classic, color_interval: 5.0, palette_phase: 0.0})
+    test "applies color_interval via handle_config" do
+      state = base_state(%{live_scene_id: @classic, color_interval: 5.0})
 
-      {:noreply, updated} =
-        pixel_fun_handle_config(%{color_interval: 10.0, palette_phase: 0.25}, state)
+      {:noreply, updated} = pixel_fun_handle_config(%{color_interval: 10.0}, state)
 
       assert updated.color_interval == 10.0
-      assert_in_delta updated.palette_phase, 0.25, 1.0e-6
-      {a, b} = updated.colors
-      assert a.h == 90
-      assert b.h == 270
     end
 
     test "applies saturation_percent via handle_config" do
@@ -221,69 +215,72 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
   end
 
   describe "time freeze" do
-    test "freezing stops palette phase advance" do
+    test "freezing stops palette cycling" do
       state =
         base_state(%{
           time_frozen: false,
           color_mode: :random,
           palette_auto: true,
-          palette_phase: 0.1,
           color_interval: 5.0,
+          lerp_time: 0.0,
           speed: 1.0
         })
 
       {:noreply, running} = pixel_fun_handle_info(:tick, state)
-      assert running.palette_phase > 0.1
 
       {:noreply, frozen} = pixel_fun_handle_config(%{time_frozen: true}, running)
-      phase = frozen.palette_phase
+      colors = frozen.colors
+      target = frozen.target_colors
+      lerp_time = frozen.lerp_time
+
       {:noreply, still} = pixel_fun_handle_info(:tick, frozen)
-      assert_in_delta still.palette_phase, phase, 1.0e-12
+      assert still.colors == colors
+      assert still.target_colors == target
+      assert still.lerp_time == lerp_time
     end
 
-    test "freeze/unfreeze with stale full config does not reset palette phase or colors" do
+    test "freeze/unfreeze with stale full config does not reset colors" do
       state =
         base_state(%{
           time_frozen: false,
           color_mode: :random,
           palette_auto: true,
-          palette_phase: 0.0,
           color_interval: 1.0,
           saturation_percent: 70,
+          lerp_time: 0.0,
           speed: 1.0
         })
 
       {:noreply, running} = pixel_fun_handle_info(:tick, state)
-      assert running.palette_phase > 0.0
-      phase = running.palette_phase
       colors = running.colors
 
       stale_config =
         pixel_fun_get_config(running)
-        |> Map.put(:palette_phase, 0.0)
         |> Map.put(:time_frozen, true)
 
       {:noreply, frozen} = pixel_fun_handle_config(stale_config, running)
-      assert_in_delta frozen.palette_phase, phase, 1.0e-12
       assert frozen.colors == colors
+
+      {:noreply, still} = pixel_fun_handle_info(:tick, frozen)
+      assert still.colors == colors
 
       stale_unfreeze = Map.put(stale_config, :time_frozen, false)
 
       {:noreply, resumed} = pixel_fun_handle_config(stale_unfreeze, frozen)
-      assert_in_delta resumed.palette_phase, phase, 1.0e-12
       assert resumed.colors == colors
 
+      # Cycling machinery resumes once unfrozen.
       {:noreply, ticking} = pixel_fun_handle_info(:tick, resumed)
-      assert ticking.palette_phase > phase
+      assert ticking.lerp_time < resumed.lerp_time
     end
 
     test "tick does not advance time when frozen" do
-      state = base_state(%{time_frozen: true, seconds: 42.0, palette_phase: 0.3})
+      state = base_state(%{time_frozen: true, seconds: 42.0})
 
       {:noreply, updated} = pixel_fun_handle_info(:tick, state)
 
       assert updated.seconds == 42.0
-      assert_in_delta updated.palette_phase, 0.3, 1.0e-12
+      assert updated.colors == state.colors
     end
 
     test "tick advances time when not frozen" do
@@ -393,35 +390,40 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
       assert_in_delta resumed.roll_angle, 0.5 + 30.0 * :math.pi() / 180.0, 1.0e-9
     end
 
-    test "palette auto advances phase and updates complementary hues" do
+    test "palette auto rolls a fresh pair when the crossfade completes" do
       state =
         base_state(%{
           color_mode: :random,
           palette_auto: true,
-          palette_phase: 0.0,
           color_interval: 1.0,
           saturation_percent: 70,
+          lerp_time: 0.0,
           speed: 1.0
         })
 
       {:noreply, updated} = pixel_fun_handle_info(:tick, state)
-      assert updated.palette_phase > 0.0
-      {a, b} = updated.colors
-      assert rem(a.h + 180, 360) == b.h
+
+      # Crossfade reached the target (lerp_time hit 0), so a new sweep was armed
+      # by resetting lerp_time to the full interval.
+      assert_in_delta updated.lerp_time, 1.0, 1.0e-9
     end
 
-    test "palette auto off keeps phase fixed" do
+    test "palette auto off does not roll new pairs" do
       state =
         base_state(%{
           color_mode: :random,
           palette_auto: false,
-          palette_phase: 0.4,
           color_interval: 1.0,
+          lerp_time: 0.0,
           speed: 1.0
         })
 
+      target = state.target_colors
+
       {:noreply, updated} = pixel_fun_handle_info(:tick, state)
-      assert_in_delta updated.palette_phase, 0.4, 1.0e-12
+
+      assert updated.target_colors == target
+      assert updated.lerp_time == 0.0
     end
 
     test "auto toggle on seeds X offset at 0 and Y at manual base; off clears wanderer" do
@@ -628,6 +630,8 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
       state =
         base_state(%{
           rot_auto: true,
+          # Keep palette from consuming the seeded RNG so rot drives it alone.
+          palette_auto: false,
           roll_angle: 0.0,
           rot_auto_range: 60.0,
           rot_auto_interval: 0.3,

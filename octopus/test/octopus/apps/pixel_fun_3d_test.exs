@@ -319,35 +319,41 @@ defmodule Octopus.Apps.PixelFun3DTest do
     end)
   end
 
-  test "palette_from_phase/3 complementary hues and white gap", _context do
-    {a, b} = pixel_fun_palette_from_phase(0.0, :random, 70)
-    assert a.h == 0
-    assert b.h == 180
-    assert a.s == 70
-
-    {a, b} = pixel_fun_palette_from_phase(0.5, :random, 100)
-    assert a.h == 180
-    assert b.h == 0
-
-    for t <- 0..20 do
-      {wa, wb} = pixel_fun_palette_from_phase(t / 20, :white)
-      assert abs(wa.v - wb.v) >= 30
-      assert wa.v >= 32
-      assert wb.v >= 32
+  test "generate_random_colors/1 keeps a minimum 60° hue gap", _context do
+    for _ <- 1..500 do
+      {a, b} = pixel_fun_generate_random_colors(70)
+      offset = Integer.mod(b.h - a.h, 360)
+      circular = min(offset, 360 - offset)
+      assert circular >= 60
+      assert a.s == 70
+      assert b.s == 70
     end
   end
 
-  test "mode_tweakables/1 exposes palette phase with auto tempo nest" do
+  test "generate_random_white_levels/0 keeps brightness gap and floor", _context do
+    for _ <- 1..500 do
+      {a, b} = pixel_fun_generate_random_white_levels()
+      assert abs(a.v - b.v) >= 30
+      assert a.v >= 32
+      assert b.v >= 32
+      assert a.s == 0
+      assert b.s == 0
+    end
+  end
+
+  test "mode_tweakables/1 exposes palette auto toggle and tempo, no phase slider" do
     tweaks = pixel_fun_mode_tweakables("classic_ripple")
 
-    phase = Enum.find(tweaks, &(&1.key == :palette_phase))
-    assert phase.label == "Palette"
-    assert phase.auto_key == :palette_auto
-    assert phase.visible_when == {:color_mode, [:random, :white]}
+    auto = Enum.find(tweaks, &(&1.key == :palette_auto))
+    assert auto.label == "Cycle colors"
+    assert auto.type == :toggle
+    assert auto.visible_when == {:color_mode, [:random, :white]}
 
     tempo = Enum.find(tweaks, &(&1.key == :color_interval))
     assert tempo.label == "Tempo"
     assert tempo.visible_when == {:palette_auto, [true]}
+
+    refute Enum.any?(tweaks, &(&1.key == :palette_phase))
   end
 
   test "mode_tweakables/1 exposes disabled_when on transform sliders" do
@@ -429,8 +435,11 @@ defmodule Octopus.Apps.PixelFun3DTest do
   defp pixel_fun_build_canvas(state), do: apply(@pixel_fun, :build_canvas, [state])
   defp pixel_fun_mode_tweakables(mode_id), do: apply(@pixel_fun, :mode_tweakables, [mode_id])
 
-  defp pixel_fun_palette_from_phase(phase, mode, sat \\ 70),
-    do: apply(@pixel_fun, :palette_from_phase, [phase, mode, sat])
+  defp pixel_fun_generate_random_colors(sat),
+    do: apply(@pixel_fun, :generate_random_colors, [sat])
+
+  defp pixel_fun_generate_random_white_levels,
+    do: apply(@pixel_fun, :generate_random_white_levels, [])
 
   test "nx ny nz are available and unit length in formulas", _context do
     with_installation(Octopus.Installation.Nation2026, fn ->
