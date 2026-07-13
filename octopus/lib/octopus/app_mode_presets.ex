@@ -274,6 +274,12 @@ defmodule Octopus.AppModePresets do
           |> preset_changeset(attrs)
           |> Repo.insert()
 
+        # Keep builtin presets in sync with the code defaults; leave user presets alone.
+        %{origin: "builtin"} = record ->
+          record
+          |> preset_changeset(attrs)
+          |> Repo.update()
+
         _record ->
           :ok
       end
@@ -657,7 +663,7 @@ defmodule Octopus.AppModePresets do
       tilt_speed: Map.get(config, :tilt_speed, 0.5),
       tilt_mode: pixelfun_tilt_mode(Map.get(config, :tilt_mode, :wobble)),
       elev_base: Map.get(config, :elev_base, 0.0),
-      zoom_base: Map.get(config, :zoom_base, 0.0),
+      zoom_base: Map.get(config, :zoom_base, 1.0),
       zoom_pivot: Map.get(config, :zoom_pivot, 0),
       pattern_speed: Map.get(config, :pattern_speed, 1.0),
       time_direction: pixelfun_time_direction(Map.get(config, :time_direction, :forward)),

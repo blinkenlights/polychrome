@@ -152,7 +152,14 @@ defmodule Octopus.InstallationTransport do
   end
 
   def handle_call(:discard_now_playing_overrides, _from, state) do
-    {:reply, :ok, state |> clear_now_playing_overrides() |> apply_now_playing_config() |> broadcast()}
+    state =
+      state
+      |> clear_now_playing_overrides()
+      |> reapply_now_playing_mode()
+      |> apply_now_playing_config()
+      |> broadcast()
+
+    {:reply, :ok, state}
   end
 
   def handle_call({:save_now_playing_as_new, name}, _from, state) do
@@ -564,6 +571,22 @@ defmodule Octopus.InstallationTransport do
     state = %State{state | now_playing_overrides: overrides}
     apply_now_playing_config(state)
   end
+
+  # Discard is a hard reset: re-apply the live mode so the app fully reinitializes
+  # to the stored preset (e.g. PixelFun3D resets integrated yaw/roll/zoom + wanderers
+  # via reset_orientation_from_scene), not just the config overrides.
+  defp reapply_now_playing_mode(%State{live_entry: %{app: app, mode_id: mode_id}} = state) do
+    case resolve_now_playing_app_id(state) do
+      {app_id, state} when is_binary(app_id) ->
+        app_apply_mode(app_id, app, mode_id)
+        state
+
+      {_, state} ->
+        state
+    end
+  end
+
+  defp reapply_now_playing_mode(%State{} = state), do: state
 
   defp apply_now_playing_config(%State{live_entry: nil} = state), do: state
 

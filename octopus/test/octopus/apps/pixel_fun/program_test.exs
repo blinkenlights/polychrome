@@ -113,6 +113,15 @@ defmodule Octopus.Apps.PixelFun.ProgramTest do
 
   test "eval/2 evaluates atan2 without raising" do
     assert_in_delta 0.7853, eval("atan2(1, 1)"), 0.001
+    # atan2(y, x) convention; degenerate origin stays finite
+    assert_in_delta :math.pi() / 2, eval("atan2(1, 0)"), 0.001
+    assert_in_delta 0.0, eval("atan2(0, 0)"), 0.001
+  end
+
+  test "eval/2 clamps acos input to [-1, 1]" do
+    assert_in_delta :math.pi(), eval("acos(-1.5)"), 0.001
+    assert_in_delta 0.0, eval("acos(1.5)"), 0.001
+    assert_in_delta :math.pi(), eval("acos(-1)"), 0.001
   end
 
   test "eval/2 returns 0.0 for unknown functions instead of crashing" do

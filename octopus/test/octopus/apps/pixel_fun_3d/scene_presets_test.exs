@@ -17,14 +17,14 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
     color_interval: 5.0,
     orbit_rate: 0.0,
     roll_rate: 0.0,
-    zoom_base: 0.0
+    zoom_base: 1.0
   }
 
   describe "builtins/0" do
     test "returns presets with valid formulas and scene fields" do
       presets = ScenePresets.builtins()
 
-      assert length(presets) == 22
+      assert length(presets) == 28
 
       for preset <- presets do
         assert preset.builtin
@@ -44,13 +44,18 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
       samples = [
         %{x: 0.0, y: 0.0, i: 0.0, nx: 1.0, ny: 0.0, nz: 0.0},
         %{x: 78.0, y: 1.5, i: 5.0, nx: 0.0, ny: 1.0, nz: 0.0},
-        %{x: -50.0, y: -2.0, i: 11.0, nx: 0.3, ny: -0.4, nz: 0.866}
+        %{x: -50.0, y: -2.0, i: 11.0, nx: 0.3, ny: -0.4, nz: 0.866},
+        # acos/atan2 edge cases: antipode of panel 0 and both poles
+        %{x: 0.0, y: 0.0, i: 0.0, nx: -1.0, ny: 0.0, nz: 0.0},
+        %{x: 0.0, y: 0.0, i: 0.0, nx: 0.0, ny: 0.0, nz: 1.0},
+        %{x: 0.0, y: 0.0, i: 0.0, nx: 0.0, ny: 0.0, nz: -1.0}
       ]
 
       new_slugs = ~w(
         kreiswelle chaser doppelhelix nordlicht wolkenzug seegras quallenpuls
         weiche_blobs leuchtplankton wasserwaage sternenhimmel nebeldrift
         facettenstrudel marmor
+        strudel spiralband globus polarlicht_parade kippende_baender
       )
 
       for slug <- new_slugs do
@@ -96,8 +101,21 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
 
       assert facetten_config.rot_auto == true
       assert facetten_config.zoom_auto == true
-      assert_in_delta facetten_config.rot_auto_range, 30.0, 0.0001
-      assert_in_delta facetten_config.zoom_auto_range, 1.4, 0.0001
+      assert_in_delta facetten_config.rot_auto_range, 60.0, 0.0001
+      assert_in_delta facetten_config.zoom_auto_range, 1.05, 0.0001
+
+      globus_config = ScenePresets.to_config(ScenePresets.get("builtin:globus"))
+      assert_in_delta globus_config.roll_rate, 6.0, 0.0001
+      assert globus_config.roll_pivot == 0
+
+      polar_config = ScenePresets.to_config(ScenePresets.get("builtin:polarlicht_parade"))
+      assert_in_delta polar_config.roll_rate, 4.0, 0.0001
+      assert polar_config.roll_pivot == 6
+
+      kipp_config = ScenePresets.to_config(ScenePresets.get("builtin:kippende_baender"))
+      assert kipp_config.rot_auto == true
+      assert_in_delta kipp_config.rot_auto_range, 45.0, 0.0001
+      assert_in_delta kipp_config.rot_auto_interval, 60.0, 0.0001
     end
 
     test "config_matches? identifies each new builtin against its own config" do
@@ -105,6 +123,7 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
         kreiswelle chaser doppelhelix nordlicht wolkenzug seegras quallenpuls
         weiche_blobs leuchtplankton wasserwaage sternenhimmel nebeldrift
         facettenstrudel marmor
+        strudel spiralband globus polarlicht_parade kippende_baender
       )
 
       for slug <- new_slugs do

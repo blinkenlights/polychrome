@@ -6,6 +6,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
   alias Octopus.{AppManager, AppSupervisor, InstallationTransport}
   alias Octopus.Apps.{PixelFun3D, PixieDebug}
+  alias Octopus.Apps.PixelFun3D.ScenePresets
 
   @app Module.concat(["Octopus", "App"])
   @app_mode_presets Module.concat(["Octopus", "AppModePresets"])
@@ -31,8 +32,15 @@ defmodule OctopusWeb.InstallationConsoleComponent do
        browse_app_count: 0,
        console_theme: "light",
        library_sections: nil,
-       transform_live: nil
+       transform_live: nil,
+       editing_pf3d: nil,
+       pf3d_app_id: nil,
+       show_discard_new_modal: false
      )}
+  end
+
+  def update(%{close_pf3d: true}, socket) do
+    {:ok, assign(socket, editing_pf3d: nil, pf3d_app_id: nil, show_discard_new_modal: false)}
   end
 
   def update(assigns, socket) do
@@ -157,6 +165,94 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         preset_label={now_playing_preset_label(@transport)}
         target={@myself}
       />
+
+      <.pf3d_drawer
+        :if={@editing_pf3d}
+        app_id={@pf3d_app_id}
+        mode={@editing_pf3d}
+        target={@myself}
+      />
+      <.discard_new_scene_modal show={@show_discard_new_modal} target={@myself} />
+    </div>
+    """
+  end
+
+  attr :app_id, :string, default: nil
+  attr :mode, :any, required: true
+  attr :target, :any, required: true
+
+  defp pf3d_drawer(assigns) do
+    ~H"""
+    <div
+      id="pf3d-drawer"
+      class="fixed top-10 right-0 bottom-0 z-50 w-full max-w-xl bg-base-100 border-l border-base-300 shadow-2xl overflow-y-auto"
+    >
+      <div class="sticky top-0 z-10 flex items-center justify-between gap-2 px-4 py-3 bg-base-100 border-b border-base-300">
+        <h2 class="text-lg font-semibold">
+          {if @mode == :new, do: "Pixel Fun 3D · New scene", else: "Pixel Fun 3D · Scene editor"}
+        </h2>
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-square"
+          phx-click="close_pf3d_editor"
+          phx-target={@target}
+          aria-label="Close editor"
+        >
+          ✕
+        </button>
+      </div>
+      <div class="p-4">
+        <.live_component
+          :if={@app_id}
+          id="pf3d-drawer-editor"
+          module={OctopusWeb.PixelFun3DConfigComponent}
+          app_id={@app_id}
+          app_module={PixelFun3D}
+        />
+      </div>
+    </div>
+    """
+  end
+
+  attr :show, :boolean, required: true
+  attr :target, :any, required: true
+
+  defp discard_new_scene_modal(assigns) do
+    ~H"""
+    <div :if={@show} class="modal modal-open" role="dialog">
+      <div class="modal-box bg-base-200">
+        <h3 class="font-bold text-lg">Unsaved new scene</h3>
+        <p class="py-2 text-sm opacity-80">
+          You have an unsaved new scene playing on the wall. Save it as a scene or discard it?
+        </p>
+        <form phx-submit="discard_new_save" phx-target={@target} class="space-y-3 mt-1">
+          <input
+            type="text"
+            name="name"
+            placeholder="Scene name"
+            class="input input-bordered w-full"
+          />
+          <div class="modal-action mt-0 flex-wrap gap-2">
+            <button
+              type="button"
+              class="btn btn-ghost"
+              phx-click="close_discard_new_modal"
+              phx-target={@target}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="btn btn-error btn-outline"
+              phx-click="discard_new_discard"
+              phx-target={@target}
+            >
+              Discard
+            </button>
+            <button type="submit" class="btn btn-primary">Save scene</button>
+          </div>
+        </form>
+      </div>
     </div>
     """
   end
@@ -230,13 +326,15 @@ defmodule OctopusWeb.InstallationConsoleComponent do
               target={@target}
             />
             <.soon_tile :for={label <- section.soon} label={label} />
-            <.link
-              :if={section.new_scene_path}
-              navigate={section.new_scene_path}
+            <button
+              :if={section.new_scene?}
+              type="button"
+              phx-click="new_scene"
+              phx-target={@target}
               class="card border-2 border-dashed border-base-content/20 hover:border-primary min-h-[7rem] flex items-center justify-center text-center p-3 text-sm opacity-70 hover:opacity-100"
             >
               ＋ New scene
-            </.link>
+            </button>
           </div>
         </div>
       </div>
@@ -376,11 +474,52 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
     case AppSupervisor.start_or_select_app(module) do
       {:ok, app_id} ->
-        {:noreply, push_navigate(socket, to: ~p"/app/#{app_id}")}
+        if module == PixelFun3D do
+          {:noreply, assign(socket, editing_pf3d: :existing, pf3d_app_id: app_id)}
+        else
+          {:noreply, push_navigate(socket, to: ~p"/app/#{app_id}")}
+        end
 
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Could not open #{app_name(module)} configuration")}
     end
+  end
+
+  def handle_event("new_scene", _params, socket) do
+    case AppSupervisor.start_or_select_app(PixelFun3D) do
+      {:ok, app_id} ->
+        InstallationTransport.play_now(PixelFun3D, default_scene_mode_id())
+
+        {:noreply,
+         socket
+         |> refresh_transport()
+         |> assign(editing_pf3d: :new, pf3d_app_id: app_id)}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Could not start #{app_name(PixelFun3D)}")}
+    end
+  end
+
+  def handle_event("close_pf3d_editor", _params, socket) do
+    {:noreply, close_pf3d_editor(socket)}
+  end
+
+  def handle_event("close_discard_new_modal", _params, socket) do
+    {:noreply, assign(socket, show_discard_new_modal: false)}
+  end
+
+  def handle_event("discard_new_discard", _params, socket) do
+    InstallationTransport.discard_now_playing_overrides()
+    InstallationTransport.resume_rotation_after_takeover()
+
+    {:noreply,
+     socket
+     |> assign(show_discard_new_modal: false, editing_pf3d: nil, pf3d_app_id: nil)
+     |> refresh_transport(refresh_library: true)}
+  end
+
+  def handle_event("discard_new_save", %{"name" => name}, socket) do
+    commit_new_scene(socket, name)
   end
 
   def handle_event("select_tab", %{"tab" => tab}, socket), do: {:noreply, assign(socket, active_tab: tab)}
@@ -418,29 +557,20 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   end
 
   def handle_event("play_now", %{"app" => app, "mode_id" => mode_id}, socket) do
-    module = parse_app_module(app)
-
-    message =
-      case InstallationTransport.play_now(module, mode_id) do
-        :ok ->
-          nil
-
-        {:error, :incompatible} ->
-          "#{app_name(module)} is not compatible with this installation"
-
-        {:error, _} ->
-          "Could not play #{app_name(module)} · #{mode_id}"
-      end
-
-    socket = refresh_transport(socket)
-    socket = if message, do: put_flash(socket, :error, message), else: socket
-
-    {:noreply, socket}
+    if blocking_new_scene?(socket) do
+      {:noreply, assign(socket, show_discard_new_modal: true)}
+    else
+      run_play_now(socket, app, mode_id)
+    end
   end
 
   def handle_event("queue_toggle", %{"app" => app, "mode_id" => mode_id}, socket) do
-    InstallationTransport.queue_toggle(parse_app_module(app), mode_id)
-    {:noreply, refresh_transport(socket)}
+    if blocking_new_scene?(socket) do
+      {:noreply, assign(socket, show_discard_new_modal: true)}
+    else
+      InstallationTransport.queue_toggle(parse_app_module(app), mode_id)
+      {:noreply, refresh_transport(socket)}
+    end
   end
 
   def handle_event("queue_remove", %{"index" => index}, socket) do
@@ -633,6 +763,9 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
   def handle_event("now_playing_full_editor", _params, socket) do
     case socket.assigns.transport.now_playing do
+      %{app: PixelFun3D, app_id: app_id} when is_binary(app_id) ->
+        {:noreply, assign(socket, editing_pf3d: :existing, pf3d_app_id: app_id)}
+
       %{app_id: app_id} when is_binary(app_id) ->
         {:noreply, push_navigate(socket, to: ~p"/app/#{app_id}")}
 
@@ -679,6 +812,82 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       refresh_library_transport(socket)
     end
   end
+
+  # Closing a brand-new scene with unsaved edits prompts to save/discard;
+  # otherwise the scratch takeover is dropped and rotation resumes.
+  defp close_pf3d_editor(%{assigns: %{editing_pf3d: :new}} = socket) do
+    if now_playing_dirty?(socket) do
+      assign(socket, show_discard_new_modal: true)
+    else
+      InstallationTransport.discard_now_playing_overrides()
+      InstallationTransport.resume_rotation_after_takeover()
+
+      socket
+      |> assign(editing_pf3d: nil, pf3d_app_id: nil)
+      |> refresh_transport(refresh_library: true)
+    end
+  end
+
+  defp close_pf3d_editor(socket) do
+    assign(socket, editing_pf3d: nil, pf3d_app_id: nil)
+  end
+
+  # Persist the live scratch config as a new preset, then make it now-playing
+  # so the wall keeps showing the just-saved formula and the editor drawer closes.
+  defp commit_new_scene(socket, name) do
+    case String.trim(name) do
+      "" ->
+        {:noreply, put_flash(socket, :error, "Enter a scene name")}
+
+      trimmed ->
+        config = socket.assigns.transport.now_playing.effective
+        attrs = ScenePresets.attrs_from_config(config) |> Map.put(:name, trimmed)
+
+        case ScenePresets.create(attrs) do
+          {:ok, preset} ->
+            InstallationTransport.play_now(PixelFun3D, preset.id)
+
+            {:noreply,
+             socket
+             |> assign(show_discard_new_modal: false, editing_pf3d: nil, pf3d_app_id: nil)
+             |> refresh_transport(refresh_library: true)}
+
+          {:error, _} ->
+            {:noreply, put_flash(socket, :error, "Could not save scene")}
+        end
+    end
+  end
+
+  defp now_playing_dirty?(socket) do
+    match?(%{dirty: true}, socket.assigns.transport.now_playing)
+  end
+
+  defp blocking_new_scene?(socket) do
+    socket.assigns.editing_pf3d == :new and now_playing_dirty?(socket)
+  end
+
+  defp run_play_now(socket, app, mode_id) do
+    module = parse_app_module(app)
+
+    message =
+      case InstallationTransport.play_now(module, mode_id) do
+        :ok ->
+          nil
+
+        {:error, :incompatible} ->
+          "#{app_name(module)} is not compatible with this installation"
+
+        {:error, _} ->
+          "Could not play #{app_name(module)} · #{mode_id}"
+      end
+
+    socket = refresh_transport(socket)
+    socket = if message, do: put_flash(socket, :error, message), else: socket
+
+    {:noreply, socket}
+  end
+
+  defp default_scene_mode_id, do: "pixelfun3d:classic_ripple"
 
   defp parse_app_module(str) when is_binary(str) do
     cond do
@@ -835,12 +1044,11 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
   defp assign_library(socket) do
     transport = socket.assigns.transport
-    pixel_fun_3d_app_id = AppSupervisor.find_running_app(PixelFun3D) |> elem_or_nil()
 
     pixel_section = %{
       title: "Pixel Fun 3D",
       app: PixelFun3D,
-      new_scene_path: if(pixel_fun_3d_app_id, do: ~p"/app/#{pixel_fun_3d_app_id}", else: nil),
+      new_scene?: true,
       soon: [],
       tiles: tile_list(PixelFun3D, app_list_modes(PixelFun3D), transport)
     }
@@ -850,7 +1058,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         %{
           title: app_name(app),
           app: app,
-          new_scene_path: nil,
+          new_scene?: false,
           soon: [],
           tiles: tile_list(app, app_list_modes(app), transport)
         }
@@ -1049,9 +1257,6 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
   defp entry_match?(%{app: app, mode_id: mode_id}, %{app: app, mode_id: mode_id}), do: true
   defp entry_match?(_, _), do: false
-
-  defp elem_or_nil({:ok, id}), do: id
-  defp elem_or_nil(_), do: nil
 
   defp parse_number(value) when is_binary(value) do
     case Float.parse(value) do

@@ -10,6 +10,7 @@ defmodule Octopus.Apps.PixelFun3D do
   alias Octopus.Events.Event.Proximity, as: ProximityEvent
   alias Octopus.AppSupervisor
   alias Octopus.Apps.PixelFun.Program
+  alias Octopus.Apps.PixelFun3D.Zoom
   alias Octopus.Installation
   alias Octopus.Sphere
   alias Octopus.Wander
@@ -18,16 +19,18 @@ defmodule Octopus.Apps.PixelFun3D do
 
   @auto_channels [:trans, :rot, :zoom, :sway, :sat]
 
+  @rot_sweep_easings [:sine_in_out, :smoothstep, :cubic_in_out]
+
   @auto_defaults %{
     trans_auto: false,
-    trans_auto_range_x: 6.0,
-    trans_auto_range_y: 2.0,
-    trans_auto_interval: 30.0,
+    trans_auto_range_x: 80.0,
+    trans_auto_range_y: 3.0,
+    trans_auto_interval: 80.0,
     rot_auto: false,
-    rot_auto_range: 30.0,
-    rot_auto_interval: 30.0,
+    rot_auto_range: 60.0,
+    rot_auto_interval: 60.0,
     zoom_auto: false,
-    zoom_auto_range: 1.5,
+    zoom_auto_range: 1.05,
     zoom_auto_interval: 30.0,
     sway_auto: false,
     sway_auto_range: 2.0,
@@ -39,15 +42,17 @@ defmodule Octopus.Apps.PixelFun3D do
   }
 
   @channel_bounds %{
-    trans_x: {-30.0, 30.0},
+    # trans_x is now a horizontal position offset (px, pan) up to ~half the ring;
+    # yaw wraps so this only bounds the wander target range.
+    trans_x: {-156.0, 156.0},
     trans_y: {-4.0, 4.0},
     rot: {-180.0, 180.0},
     sway: {0.0, 4.0},
     sat: {0.0, 100.0}
   }
 
-  @zoom_factor_min 0.25
-  @zoom_factor_max 4.0
+  @zoom_factor_min 0.7
+  @zoom_factor_max 11.0
 
   @channel_base_key %{
     rot: :roll_rate,
@@ -167,7 +172,8 @@ defmodule Octopus.Apps.PixelFun3D do
       slug: "organic_swirl",
       name: "Organic swirl",
       formula: "sin(x*y*0.06+sin(t*0.06)*x*0.2-t*0.12)*cos(hypot(x,y)*2+t*0.06)",
-      accent_color: "#2ECC71"
+      accent_color: "#2ECC71",
+      saturation_percent: 50
     },
     %{
       slug: "swaytest",
@@ -216,7 +222,7 @@ defmodule Octopus.Apps.PixelFun3D do
       slug: "quallenpuls",
       name: "Quallen-Puls",
       formula:
-        "exp(-hypot(sin((x-78)*PI/312)*14,y)*0.25)*sin(hypot(sin((x-78)*PI/312)*14,y)*1.5-t*0.4)",
+        "exp(-hypot(sin((x+9)*PI/312)*14,y)*0.1)*sin(hypot(sin((x+9)*PI/312)*14,y)*1.5-t*0.4)",
       accent_color: "#2ECC71"
     },
     %{
@@ -250,13 +256,13 @@ defmodule Octopus.Apps.PixelFun3D do
     %{
       slug: "nebeldrift",
       name: "Nebeldrift",
-      formula: "noise(nx*2,ny*2,nz*2+t*0.13)",
+      formula: "noise(nx*2,ny*2,nz*2+t*0.08)",
       accent_color: "#1ABC9C",
-      color_mode: :rainbow,
+      color_mode: :random,
       trans_auto: true,
-      trans_auto_range_x: 4.0,
-      trans_auto_range_y: 1.5,
-      trans_auto_interval: 40
+      trans_auto_range_x: 80.0,
+      trans_auto_range_y: 3.0,
+      trans_auto_interval: 80
     },
     %{
       slug: "facettenstrudel",
@@ -264,10 +270,10 @@ defmodule Octopus.Apps.PixelFun3D do
       formula: "sin(nx*8+t*0.4)*sin(ny*8-t*0.27)",
       accent_color: "#F39C12",
       rot_auto: true,
-      rot_auto_range: 30,
-      rot_auto_interval: 30,
+      rot_auto_range: 60,
+      rot_auto_interval: 60,
       zoom_auto: true,
-      zoom_auto_range: 1.4,
+      zoom_auto_range: 1.05,
       zoom_auto_interval: 45
     },
     %{
@@ -279,6 +285,63 @@ defmodule Octopus.Apps.PixelFun3D do
       sway_auto: true,
       sway_auto_range: 1.5,
       sway_auto_interval: 35
+    },
+    %{
+      slug: "strudel",
+      name: "Strudel",
+      formula: "sin(3*atan2(nz,ny)+acos(nx)*6-t*0.4)",
+      accent_color: "#2ECC71"
+    },
+    %{
+      slug: "spiralband",
+      name: "Spiralband",
+      formula: "sin(4*atan2(ny,nx)+nz*30-t*0.4)",
+      accent_color: "#FF7043"
+    },
+    %{
+      slug: "globus",
+      name: "Globus",
+      formula:
+        "exp(-pow(nz*5,2))*sin(4*atan2(ny,nx)+nz*20-t*0.4)+exp(-pow((nz-1)*4,2))*sin(3*atan2(ny,nx)+acos(nz)*10+t*0.3)+exp(-pow((nz+1)*4,2))*sin(3*atan2(ny,nx)-acos(-nz)*10-t*0.3)",
+      accent_color: "#E74C3C",
+      # With roll_pivot 0 the panels near the pivot axis see less parade —
+      # the full equator→pole cycle is most dramatic a quarter-ring away.
+      roll_rate: 6.0,
+      roll_pivot: 0
+    },
+    %{
+      slug: "polarlicht_parade",
+      name: "Polar-Parade",
+      formula:
+        "exp(-pow((nz-1)*3,2))*sin(2*atan2(ny,nx)+acos(nz)*8+t*0.4)+exp(-pow((nz+1)*3,2))*sin(2*atan2(ny,nx)+acos(-nz)*8-t*0.4)",
+      accent_color: "#3498DB",
+      roll_rate: 4.0,
+      roll_pivot: 6
+    },
+    %{
+      slug: "kippende_baender",
+      name: "Kippende Bänder",
+      formula: "sin(nx*10-t*0.13)",
+      accent_color: "#9B59B6",
+      rot_auto: true,
+      rot_auto_range: 45,
+      rot_auto_interval: 60
+    },
+    %{
+      slug: "wabengitter",
+      name: "Wabengitter (Debug)",
+      # Static two-colour honeycomb defined in direction space (lon=atan2(ny,nx),
+      # lat=asin(nz)) via a three-cosine hex lattice. N=48 (even) keeps every lon
+      # frequency integer -> seamless around the ring; 41.569 = 48*sqrt(3)/2. Cells
+      # are regular hexagons at the equator, so any visible distortion comes from
+      # transforms, not the pattern. No `t` -> no motion; palette_auto off freezes
+      # the two colours.
+      formula:
+        "tanh(3*(cos(48*atan2(ny,nx))+cos(24*atan2(ny,nx)+41.569*asin(nz))+cos(24*atan2(ny,nx)-41.569*asin(nz))))",
+      accent_color: "#2ECC71",
+      color_mode: :random,
+      palette_auto: false,
+      saturation_percent: 100
     }
   ]
 
@@ -324,6 +387,7 @@ defmodule Octopus.Apps.PixelFun3D do
       :sat_auto_max,
       :sat_auto_interval,
       :auto_wanderers,
+      :rot_auto_pivot,
       :yaw_angle,
       :roll_angle,
       :time_direction,
@@ -343,9 +407,15 @@ defmodule Octopus.Apps.PixelFun3D do
       :display_info,
       :pixel_dirs,
       :time_frozen,
+      # Rates captured when freezing; slider deltas against these scrub the
+      # frozen image (1 px/s ≙ 1 px, 1 °/s ≙ 1°). nil while unfrozen.
+      :frozen_orbit_ref,
+      :frozen_roll_ref,
       :show_advanced,
       :formula_seconds,
-      :transform_live_last_ms
+      :transform_live_last_ms,
+      :zoom_octave_n,
+      :octave_fade
     ]
   end
 
@@ -370,21 +440,21 @@ defmodule Octopus.Apps.PixelFun3D do
       orbit_rate: {"Translate X (px/s)", :float, %{default: 0.0, min: -30, max: 30, step: 0.5}},
       elev_base: {"Translate Y (px)", :float, %{default: 0.0, min: -4, max: 4, step: 0.1}},
       roll_rate: {"Rotation (°/s)", :float, %{default: 0.0, min: -180, max: 180, step: 1}},
-      zoom_base: {"Zoom (×)", :float, %{default: 1.0, min: 0.25, max: 4, step: 0.05}},
+      zoom_base: {"Zoom (×)", :float, %{default: 1.0, min: 0.7, max: 11, step: 0.05}},
       tilt_scale: {"Sway (px)", :float, %{default: 0.0, min: 0, max: 4, step: 0.1}},
       trans_auto: {"Translate Auto", :boolean, %{default: false}},
-      trans_auto_range_x: {"Translate Range X (px/s)", :float, %{default: 6.0, min: 0, max: 15, step: 0.5}},
-      trans_auto_range_y: {"Translate Range Y (px)", :float, %{default: 2.0, min: 0, max: 4, step: 0.1}},
-      trans_auto_interval: {"Translate Interval", :float, %{default: 30.0, min: 4, max: 60, step: 1}},
+      trans_auto_range_x: {"Translate Range X (px)", :float, %{default: 80.0, min: 0, max: 156, step: 2}},
+      trans_auto_range_y: {"Translate Range Y (px)", :float, %{default: 3.0, min: 0, max: 4, step: 0.1}},
+      trans_auto_interval: {"Translate Interval", :float, %{default: 80.0, min: 4, max: 120, step: 1}},
       rot_auto: {"Rotation Auto", :boolean, %{default: false}},
-      rot_auto_range: {"Rotation Range (°/s)", :float, %{default: 30.0, min: 0, max: 90, step: 1}},
-      rot_auto_interval: {"Rotation Interval", :float, %{default: 30.0, min: 4, max: 60, step: 1}},
+      rot_auto_range: {"Rotation Sweep (° max)", :float, %{default: 60.0, min: 0, max: 360, step: 5}},
+      rot_auto_interval: {"Rotation Interval", :float, %{default: 60.0, min: 4, max: 120, step: 1}},
       zoom_auto: {"Zoom Auto", :boolean, %{default: false}},
-      zoom_auto_range: {"Zoom Range (×÷)", :float, %{default: 1.5, min: 1.0, max: 3.0, step: 0.05}},
-      zoom_auto_interval: {"Zoom Interval", :float, %{default: 30.0, min: 4, max: 60, step: 1}},
+      zoom_auto_range: {"Zoom Range (×÷)", :float, %{default: 1.05, min: 1.0, max: 2.0, step: 0.01}},
+      zoom_auto_interval: {"Zoom Interval", :float, %{default: 30.0, min: 4, max: 120, step: 1}},
       sway_auto: {"Sway Auto", :boolean, %{default: false}},
       sway_auto_range: {"Sway Range (px)", :float, %{default: 2.0, min: 0, max: 4, step: 0.05}},
-      sway_auto_interval: {"Sway Interval", :float, %{default: 30.0, min: 4, max: 60, step: 1}},
+      sway_auto_interval: {"Sway Interval", :float, %{default: 30.0, min: 4, max: 120, step: 1}},
       roll_pivot: {"Rotation pivot (panel)", :float, %{default: 0, min: 0, max: 12, step: 1}},
       tilt_speed: {"Sway speed", :float, %{default: 0.5, min: 0, max: 3, step: 0.05}},
       tilt_mode:
@@ -415,13 +485,13 @@ defmodule Octopus.Apps.PixelFun3D do
 
     Saturation — colour vividness for Random dual and Rainbow (0 = grey, 100 = full; default 70). Auto wanders between Min and Max. White dual ignores saturation.
 
-    Translate X — ring yaw drift in px/s (8 px/s ≈ one panel per second). Auto wanders the rate (± Range X).
+    Translate X — ring yaw drift in px/s (8 px/s ≈ one panel per second). Auto pans a horizontal position offset instead of scrolling (± Range X px around the current view; the manual rate is paused while Auto is on).
 
-    Translate Y — vertical band shift in px. Shared Translate Auto also wanders this (± Range Y).
+    Translate Y — vertical band shift in px. Shared Translate Auto also pans this (± Range Y px).
 
-    Rotation — roll rate in °/s (30°/s ≈ one full spin per 12 s). Auto wanders the rate. Rotation pivot (Advanced) selects which panel.
+    Rotation — roll rate in °/s (30°/s ≈ one full spin per 12 s). Auto instead does eased rotation sweeps: each sweep turns by a random angle (up to ± Sweep°) in a random direction over a random time around a random pivot panel, then a new sweep begins (the manual rate is paused while Auto is on). Rotation pivot (Advanced) only applies when Auto is off; panels near the pivot axis see less parade.
 
-    Zoom — conformal Möbius scale factor × (1.0 = neutral). Auto wanders symmetrically in log space (± Range multiplier).
+    Zoom — frequency multiplier × (×1 = neutral; higher = finer/denser / farther away; below ×1 = mild magnification toward the zoom pivot). Auto eases very gently in and out around the base (± Range multiplier, e.g. ×1.05), alternating direction across the base. The pattern anchors at the zoom pivot while zooming (phase reference moves toward the pivot as octaves increase). Changing zoom pivot while an octave is active visibly repositions the pattern — acceptable for an Advanced setting. Direction variables nx/ny/nz react only to the bounded Möbius residual (≤ ~×1.41 per octave); use explicit frequency constants in direction-space formulas.
 
     Sway — small-angle tilt strength in px (Wobble precesses; Pendulum oscillates). Auto wanders strength; Sway speed/mode live in Advanced.
 
@@ -498,10 +568,13 @@ defmodule Octopus.Apps.PixelFun3D do
       if Map.get(config, :"#{ch}_auto", false) do
         case ch do
           :trans ->
-            "trans auto±#{format_num(Map.get(config, :trans_auto_range_x, 0))}px/s/#{format_num(Map.get(config, :trans_auto_range_y, 0))}px"
+            "trans auto±#{format_num(Map.get(config, :trans_auto_range_x, 0))}px/±#{format_num(Map.get(config, :trans_auto_range_y, 0))}px"
 
           :zoom ->
-            "zoom auto×÷#{format_num(Map.get(config, :zoom_auto_range, 1.5))}"
+            "zoom auto×÷#{format_num(Map.get(config, :zoom_auto_range, 1.05))}"
+
+          :rot ->
+            "rot sweep±#{format_num(Map.get(config, :rot_auto_range, 60))}°"
 
           _ ->
             "#{label} auto±#{format_num(Map.get(config, :"#{ch}_auto_range", 0))}#{unit}"
@@ -561,7 +634,7 @@ defmodule Octopus.Apps.PixelFun3D do
             ]
             |> Enum.join(" · ")
           end,
-          channel_bit.(:rot, "rot", :roll_rate, "°/s"),
+          channel_bit.(:rot, "rot", :roll_rate, "°"),
           channel_bit.(:zoom, "zoom", :zoom_base, ""),
           channel_bit.(:sway, "sway", :tilt_scale, "px"),
           if Map.get(config, :sat_auto, false) do
@@ -713,10 +786,10 @@ defmodule Octopus.Apps.PixelFun3D do
         label: "Range X",
         type: :slider,
         min: 0.0,
-        max: 15.0,
-        step: 0.5,
-        default: 6.0,
-        unit: "px/s",
+        max: 156.0,
+        step: 2.0,
+        default: 80.0,
+        unit: "px",
         visible_when: {:trans_auto, [true]}
       },
       %{
@@ -726,7 +799,7 @@ defmodule Octopus.Apps.PixelFun3D do
         min: 0.0,
         max: 4.0,
         step: 0.1,
-        default: 2.0,
+        default: 3.0,
         unit: "px",
         visible_when: {:trans_auto, [true]}
       },
@@ -735,9 +808,9 @@ defmodule Octopus.Apps.PixelFun3D do
         label: "Interval",
         type: :slider,
         min: 4.0,
-        max: 60.0,
+        max: 120.0,
         step: 1.0,
-        default: 30.0,
+        default: 80.0,
         unit: "s",
         visible_when: {:trans_auto, [true]}
       },
@@ -756,13 +829,13 @@ defmodule Octopus.Apps.PixelFun3D do
       %{key: :rot_auto, label: "Auto", type: :toggle, default: false, companion_of: :roll_rate},
       %{
         key: :rot_auto_range,
-        label: "Range",
+        label: "Sweep",
         type: :slider,
         min: 0.0,
-        max: 90.0,
-        step: 1.0,
-        default: 30.0,
-        unit: "°/s",
+        max: 360.0,
+        step: 5.0,
+        default: 60.0,
+        unit: "°",
         visible_when: {:rot_auto, [true]}
       },
       %{
@@ -770,9 +843,9 @@ defmodule Octopus.Apps.PixelFun3D do
         label: "Interval",
         type: :slider,
         min: 4.0,
-        max: 60.0,
+        max: 120.0,
         step: 1.0,
-        default: 30.0,
+        default: 60.0,
         unit: "s",
         visible_when: {:rot_auto, [true]}
       },
@@ -780,8 +853,8 @@ defmodule Octopus.Apps.PixelFun3D do
         key: :zoom_base,
         label: "Zoom",
         type: :slider,
-        min: 0.25,
-        max: 4.0,
+        min: 0.7,
+        max: 11.0,
         step: 0.05,
         default: 1.0,
         unit: "×",
@@ -794,9 +867,9 @@ defmodule Octopus.Apps.PixelFun3D do
         label: "Range",
         type: :slider,
         min: 1.0,
-        max: 3.0,
-        step: 0.05,
-        default: 1.5,
+        max: 2.0,
+        step: 0.01,
+        default: 1.05,
         unit: "×÷",
         visible_when: {:zoom_auto, [true]}
       },
@@ -805,7 +878,7 @@ defmodule Octopus.Apps.PixelFun3D do
         label: "Interval",
         type: :slider,
         min: 4.0,
-        max: 60.0,
+        max: 120.0,
         step: 1.0,
         default: 30.0,
         unit: "s",
@@ -840,7 +913,7 @@ defmodule Octopus.Apps.PixelFun3D do
         label: "Interval",
         type: :slider,
         min: 4.0,
-        max: 60.0,
+        max: 120.0,
         step: 1.0,
         default: 30.0,
         unit: "s",
@@ -1004,7 +1077,9 @@ defmodule Octopus.Apps.PixelFun3D do
       time_frozen: time_frozen,
       show_advanced: Map.get(config, :show_advanced, false) |> coerce_boolean(),
       yaw_angle: 0.0,
-      roll_angle: 0.0
+      roll_angle: 0.0,
+      zoom_octave_n: 0,
+      octave_fade: nil
     }
 
     state =
@@ -1012,12 +1087,24 @@ defmodule Octopus.Apps.PixelFun3D do
       |> put_auto_fields(config)
       |> init_auto_wanderers()
 
+    state = if state.time_frozen, do: capture_frozen_refs(state), else: state
+
     {:ok, state}
   end
 
   def handle_config(config, %State{} = state) do
     state = apply_scene_fields(state, config)
-    state = if state.time_frozen, do: push_frame(state), else: state
+
+    state =
+      if Map.has_key?(config, :zoom_base) do
+        z = max(state.zoom_base || 1.0, @zoom_factor_min)
+        {updates, _committed_n, _fade} = Zoom.advance_octave_state(state, z, state.seconds)
+        struct(State, Map.merge(Map.from_struct(state), updates))
+      else
+        state
+      end
+
+    state = push_frame(state)
     broadcast_config(state)
     {:noreply, state}
   end
@@ -1055,6 +1142,7 @@ defmodule Octopus.Apps.PixelFun3D do
 
   defp apply_scene_fields(%State{} = state, config) do
     config = coerce_config(config)
+    old_state = state
     program_source = Map.get(config, :program, state.source)
 
     program =
@@ -1066,9 +1154,15 @@ defmodule Octopus.Apps.PixelFun3D do
     color_interval = Map.get(config, :color_interval, state.color_interval)
     color_mode = Map.get(config, :color_mode, state.color_mode)
     saturation_percent = Map.get(config, :saturation_percent, state.saturation_percent || 70)
-    palette_phase = coerce_palette_phase(Map.get(config, :palette_phase, state.palette_phase || 0.0))
     palette_auto =
       Map.get(config, :palette_auto, state.palette_auto != false) |> coerce_boolean()
+
+    palette_phase =
+      if palette_auto do
+        state.palette_phase || 0.0
+      else
+        coerce_palette_phase(Map.get(config, :palette_phase, state.palette_phase || 0.0))
+      end
 
     old_autos = auto_flags(state)
 
@@ -1105,7 +1199,7 @@ defmodule Octopus.Apps.PixelFun3D do
     state = state |> put_auto_fields(config) |> sync_auto_wanderers(old_autos)
 
     state =
-      if color_mode in [:random, :white] do
+      if color_mode in [:random, :white] and palette_needs_refresh?(state, old_state) do
         apply_palette_colors(state)
       else
         state
@@ -1114,10 +1208,76 @@ defmodule Octopus.Apps.PixelFun3D do
     apply_time_frozen(state, config)
   end
 
-  defp apply_time_frozen(%State{} = state, config) do
-    new_frozen = Map.get(config, :time_frozen, state.time_frozen || false) |> coerce_boolean()
-    %State{state | time_frozen: new_frozen}
+  defp palette_needs_refresh?(%State{} = state, %State{} = old_state) do
+    cond do
+      state.color_mode != old_state.color_mode ->
+        true
+
+      palette_auto_on?(state) != palette_auto_on?(old_state) ->
+        true
+
+      not palette_auto_on?(state) and
+          abs((state.palette_phase || 0.0) - (old_state.palette_phase || 0.0)) > 1.0e-9 ->
+        true
+
+      (state.sat_auto || false) != (old_state.sat_auto || false) ->
+        true
+
+      not (state.sat_auto || false) and state.saturation_percent != old_state.saturation_percent ->
+        true
+
+      true ->
+        false
+    end
   end
+
+  defp palette_auto_on?(%State{} = state), do: state.palette_auto != false
+
+  defp apply_time_frozen(%State{} = state, config) do
+    was_frozen = state.time_frozen || false
+    new_frozen = Map.get(config, :time_frozen, was_frozen) |> coerce_boolean()
+
+    cond do
+      new_frozen and not was_frozen ->
+        %State{capture_frozen_refs(state) | time_frozen: true}
+
+      was_frozen and not new_frozen ->
+        %State{bake_frozen_scrub(state) | time_frozen: false}
+
+      true ->
+        %State{state | time_frozen: new_frozen}
+    end
+  end
+
+  # Remember the rates at freeze time; slider deltas against these scrub the
+  # frozen image without any jump at the freeze moment itself.
+  defp capture_frozen_refs(%State{} = state) do
+    %State{
+      state
+      | frozen_orbit_ref: state.orbit_rate || 0.0,
+        frozen_roll_ref: state.roll_rate || 0.0
+    }
+  end
+
+  # Fold the scrub offset into the integrated angles so unfreezing resumes
+  # exactly from the on-screen orientation.
+  defp bake_frozen_scrub(%State{} = state) do
+    alpha = Sphere.alpha(Installation.width())
+
+    {yaw, roll} =
+      frozen_scrub_angles(state, state.yaw_angle || 0.0, state.roll_angle || 0.0, alpha)
+
+    %State{state | yaw_angle: yaw, roll_angle: roll, frozen_orbit_ref: nil, frozen_roll_ref: nil}
+  end
+
+  @doc false
+  def frozen_scrub_angles(%State{time_frozen: true} = state, yaw, roll, alpha) do
+    yaw_off = ((state.orbit_rate || 0.0) - (state.frozen_orbit_ref || 0.0)) * alpha
+    roll_off = ((state.roll_rate || 0.0) - (state.frozen_roll_ref || 0.0)) * :math.pi() / 180.0
+    {yaw + yaw_off, roll + roll_off}
+  end
+
+  def frozen_scrub_angles(_state, yaw, roll, _alpha), do: {yaw, roll}
 
   defp coerce_config(config) when is_map(config) do
     config
@@ -1153,6 +1313,7 @@ defmodule Octopus.Apps.PixelFun3D do
       |> maybe_migrate_trans_auto()
       |> maybe_migrate_auto_tempos()
       |> maybe_migrate_display_units(needs_units?, original_keys)
+      |> normalize_zoom_base()
       |> strip_removed_zoom_keys()
       |> Map.drop(@removed_elev_keys ++ @removed_tx_ty_keys ++ @removed_tempo_keys)
 
@@ -1385,9 +1546,7 @@ defmodule Octopus.Apps.PixelFun3D do
     if MapSet.member?(keys, :zoom_base) do
       case Map.get(config, :zoom_base) do
         v when is_number(v) ->
-          factor = :math.exp(v)
-          {clamped, _} = clamp_log(factor, @zoom_factor_min, @zoom_factor_max, :zoom_base)
-          Map.put(config, :zoom_base, clamped)
+          Map.put(config, :zoom_base, :math.exp(v))
 
         _ ->
           config
@@ -1418,7 +1577,7 @@ defmodule Octopus.Apps.PixelFun3D do
       case Map.get(config, :rot_auto_range) do
         v when is_number(v) ->
           deg = v * 180.0 / :math.pi()
-          {clamped, _} = clamp_log(deg, 0.0, 90.0, :rot_auto_range)
+          {clamped, _} = clamp_log(deg, 0.0, 360.0, :rot_auto_range)
           Map.put(config, :rot_auto_range, clamped)
 
         _ ->
@@ -1453,6 +1612,20 @@ defmodule Octopus.Apps.PixelFun3D do
       {clamped, true}
     else
       {clamped, false}
+    end
+  end
+
+  defp normalize_zoom_base(config) do
+    case Map.get(config, :zoom_base) do
+      v when is_number(v) and v < @zoom_factor_min ->
+        Logger.warning("PixelFun3D: legacy zoom_base #{inspect(v)} clamped to #{@zoom_factor_min}")
+        Map.put(config, :zoom_base, @zoom_factor_min * 1.0)
+
+      v when is_number(v) ->
+        Map.put(config, :zoom_base, v |> max(@zoom_factor_min) |> min(@zoom_factor_max))
+
+      _ ->
+        config
     end
   end
 
@@ -1574,7 +1747,7 @@ defmodule Octopus.Apps.PixelFun3D do
   # Scene load must win over auto-off handover and leftover integrated angles,
   # otherwise a prior sway/orbit auto leaves a tilted "horizon" on neutral presets.
   defp reset_orientation_from_scene(%State{} = state, config) do
-    %State{
+    state = %State{
       state
       | orbit_rate: Map.get(config, :orbit_rate, 0.0),
         elev_base: Map.get(config, :elev_base, 0.0),
@@ -1587,8 +1760,12 @@ defmodule Octopus.Apps.PixelFun3D do
           |> Map.get(:tilt_mode, @tilt_defaults.tilt_mode)
           |> Octopus.Sway.normalize_mode(),
         yaw_angle: 0.0,
-        roll_angle: 0.0
+        roll_angle: 0.0,
+        rot_auto_pivot: nil
     }
+
+    # New scene, new rates — rebase the frozen scrub so it starts at zero.
+    if state.time_frozen, do: capture_frozen_refs(state), else: state
   end
 
   defp broadcast_config(%State{} = state) do
@@ -1636,6 +1813,12 @@ defmodule Octopus.Apps.PixelFun3D do
 
     state =
       if state.time_frozen do
+        # Freeze means a static image: pattern time, palette, autos AND the
+        # rate-driven yaw/roll drift all halt. Translate X / Rotation are
+        # velocities — integrating them while frozen would keep the image
+        # moving whenever a scene has nonzero drift. Positional controls
+        # (Translate Y, Zoom, pivots, palette) still act on the frozen frame
+        # via handle_config/push_frame.
         state
       else
         state
@@ -1711,7 +1894,14 @@ defmodule Octopus.Apps.PixelFun3D do
 
     state
     |> step_auto_wanderers()
+    |> advance_octave_state_step()
     |> accumulate_orientation(dt_signed)
+  end
+
+  defp advance_octave_state_step(%State{} = state) do
+    z = max(effective_transform_values(state).zoom_base || 1.0, @zoom_factor_min)
+    {updates, _committed_n, _fade} = Zoom.advance_octave_state(state, z, state.seconds)
+    struct(State, Map.merge(Map.from_struct(state), updates))
   end
 
   @doc false
@@ -1725,44 +1915,67 @@ defmodule Octopus.Apps.PixelFun3D do
   defp accumulate_orientation(%State{} = state, dt_signed) do
     eff = effective_transform_values(state)
     alpha = Sphere.alpha(Installation.width())
+    # When trans_auto is on, eff.orbit_rate is 0 (pan replaces scroll), so yaw
+    # stops integrating on its own — the pan lives in eff.yaw_offset instead.
+    # When rot_auto is on, roll is driven directly by the sweep wanderer (an
+    # eased absolute angle), not integrated from roll_rate.
     orbit_rad_s = eff.orbit_rate * alpha
     roll_rad_s = eff.roll_rate * :math.pi() / 180.0
-    dt_yaw = if state.trans_auto, do: abs(dt_signed), else: dt_signed
-    dt_roll = if state.rot_auto, do: abs(dt_signed), else: dt_signed
 
-    {yaw, roll} =
+    {yaw, roll_integrated} =
       accumulate_orientation_angles(
         state.yaw_angle || 0.0,
         state.roll_angle || 0.0,
         orbit_rad_s,
         roll_rad_s,
-        dt_yaw,
-        dt_roll
+        dt_signed,
+        dt_signed
       )
+
+    roll = rot_sweep_angle(state) || roll_integrated
 
     %State{state | yaw_angle: yaw, roll_angle: roll}
   end
 
+  defp rot_sweep_angle(%State{rot_auto: true} = state) do
+    case state.auto_wanderers do
+      %{rot: %{value: a}} when is_number(a) -> a
+      _ -> nil
+    end
+  end
+
+  defp rot_sweep_angle(_state), do: nil
+
   defp step_auto_wanderers(%State{} = state) do
     now = state.seconds
 
-    wanderers =
-      Enum.reduce(@auto_channels, state.auto_wanderers || %{}, fn ch, acc ->
+    {wanderers, rot_pivot} =
+      Enum.reduce(@auto_channels, {state.auto_wanderers || %{}, state.rot_auto_pivot}, fn ch,
+                                                                                          {acc,
+                                                                                           pivot} ->
         if Map.get(state, :"#{ch}_auto") do
           interval = Map.get(state, :"#{ch}_auto_interval") || @auto_defaults[:"#{ch}_auto_interval"]
           w = Map.get(acc, ch) || new_channel_wanderer(state, ch)
           {_v, next} = step_channel_wanderer(w, now, state, ch, interval)
-          Map.put(acc, ch, next)
+          # Rot keeps its pivot inside the sweeper (rerolled at the neutral point of
+          # each new sweep); mirror it to state so build_motion_params can read it.
+          next_pivot = if ch == :rot, do: Map.get(next, :pivot), else: pivot
+          {Map.put(acc, ch, next), next_pivot}
         else
-          Map.delete(acc, ch)
+          {Map.delete(acc, ch), if(ch == :rot, do: nil, else: pivot)}
         end
       end)
 
-    %State{state | auto_wanderers: wanderers}
+    %State{state | auto_wanderers: wanderers, rot_auto_pivot: rot_pivot}
+  end
+
+  defp random_rot_pivot do
+    (:rand.uniform(max(Installation.num_panels(), 1)) - 1) * 1.0
   end
 
   defp new_channel_wanderer(%State{} = state, :trans) do
-    Wander.new({state.orbit_rate || 0.0, state.elev_base || 0.0})
+    # X wanders a position offset centered on the current view (0); Y around elev_base.
+    Wander.new({0.0, state.elev_base || 0.0})
   end
 
   defp new_channel_wanderer(%State{} = state, :zoom) do
@@ -1774,12 +1987,32 @@ defmodule Octopus.Apps.PixelFun3D do
     Wander.new((state.saturation_percent || 70) * 1.0)
   end
 
+  defp new_channel_wanderer(%State{} = state, :rot) do
+    # Rot auto runs out-and-back sweeps: ease from baseline by ±θ and exactly back,
+    # so each cycle returns to the start (no drift, no jump). A short pause upright
+    # follows, then a new cycle rerolls θ/direction/pivot/duration/easing. Pivot is
+    # rerolled at the neutral point so it never jumps visibly. First step (:pending)
+    # rolls the initial sweep.
+    base = state.roll_angle || 0.0
+
+    %{
+      baseline: base,
+      amp: 0.0,
+      pivot: nil,
+      phase: :sweep,
+      start: :pending,
+      dur: 0.0,
+      easing: :sine_in_out,
+      value: base
+    }
+  end
+
   defp new_channel_wanderer(%State{} = state, ch) do
     Wander.new(Map.get(state, @channel_base_key[ch]) || 0.0)
   end
 
   defp step_channel_wanderer(w, now, state, :trans, interval) do
-    ox = state.orbit_rate || 0.0
+    # X pans a position offset around 0 (± range_x px); Y around elev_base (± range_y px).
     ey = state.elev_base || 0.0
     rx = Map.get(state, :trans_auto_range_x) || @auto_defaults.trans_auto_range_x
     ry = Map.get(state, :trans_auto_range_y) || @auto_defaults.trans_auto_range_y
@@ -1787,9 +2020,10 @@ defmodule Octopus.Apps.PixelFun3D do
     {loy, hiy} = @channel_bounds.trans_y
 
     Wander.step(w, now, %{
-      mins: {max(ox - rx, lox), max(ey - ry, loy)},
-      maxs: {min(ox + rx, hix), min(ey + ry, hiy)},
-      interval: interval
+      mins: {max(-rx, lox), max(ey - ry, loy)},
+      maxs: {min(rx, hix), min(ey + ry, hiy)},
+      interval: interval,
+      bias: :pingpong
     })
   end
 
@@ -1798,12 +2032,51 @@ defmodule Octopus.Apps.PixelFun3D do
     r = max(Map.get(state, :zoom_auto_range) || @auto_defaults.zoom_auto_range, 1.0)
     lo = max(:math.log(b / r), :math.log(@zoom_factor_min))
     hi = min(:math.log(b * r), :math.log(@zoom_factor_max))
-    Wander.step(w, now, %{min: lo, max: hi, interval: interval})
+    Wander.step(w, now, %{min: lo, max: hi, interval: interval, bias: :pingpong})
   end
 
   defp step_channel_wanderer(w, now, state, :sat, interval) do
     {lo, hi} = ordered_sat_bounds(state)
     Wander.step(w, now, %{min: lo, max: hi, interval: interval})
+  end
+
+  defp step_channel_wanderer(w, now, state, :rot, interval) do
+    # Out-and-back cycle: :sweep eases baseline -> baseline±amp -> baseline (equal
+    # halves, mirrored easing), then :pause holds baseline briefly, then a new sweep
+    # is rolled. Value stays at baseline across boundaries -> seamless pivot changes.
+    range_deg = Map.get(state, :rot_auto_range) || @auto_defaults.rot_auto_range
+
+    case w.start do
+      :pending ->
+        next = roll_rot_sweep(w, now, interval, range_deg)
+        {next.value, next}
+
+      _ ->
+        p = (now - w.start) / max(w.dur, 1.0e-9)
+
+        case w.phase do
+          :sweep ->
+            e = if p < 0.5, do: Wander.ease(w.easing, p * 2.0), else: Wander.ease(w.easing, (1.0 - p) * 2.0)
+            value = w.baseline + w.amp * e
+
+            if p >= 1.0 do
+              # Sweep finished exactly at baseline; pause upright before the next one.
+              pause = interval * (0.2 + :rand.uniform() * 0.4)
+              next = %{w | value: w.baseline, phase: :pause, start: now, dur: max(pause, 1.0e-9)}
+              {next.value, next}
+            else
+              {value, %{w | value: value}}
+            end
+
+          _ ->
+            if p >= 1.0 do
+              next = roll_rot_sweep(%{w | value: w.baseline}, now, interval, range_deg)
+              {next.value, next}
+            else
+              {w.baseline, %{w | value: w.baseline}}
+            end
+        end
+    end
   end
 
   defp step_channel_wanderer(w, now, state, ch, interval) do
@@ -1812,7 +2085,28 @@ defmodule Octopus.Apps.PixelFun3D do
     {lo, hi} = @channel_bounds[ch]
     min_v = max(base - range, lo)
     max_v = min(base + range, hi)
-    Wander.step(w, now, %{min: min_v, max: max_v, interval: interval})
+    Wander.step(w, now, %{min: min_v, max: max_v, interval: interval, bias: :pingpong})
+  end
+
+  # Roll a fresh out-and-back sweep: random magnitude (0.3..1.0 of range), random
+  # direction, random duration (0.7..1.4 * interval), random easing, new pivot.
+  defp roll_rot_sweep(w, now, interval, range_deg) do
+    max_rad = range_deg * :math.pi() / 180.0
+    sign = if :rand.uniform() < 0.5, do: -1.0, else: 1.0
+    amp = sign * (0.3 + :rand.uniform() * 0.7) * max_rad
+    dur = interval * (0.7 + :rand.uniform() * 0.7)
+    easing = Enum.at(@rot_sweep_easings, :rand.uniform(length(@rot_sweep_easings)) - 1)
+
+    %{
+      w
+      | amp: amp,
+        pivot: random_rot_pivot(),
+        phase: :sweep,
+        start: now,
+        dur: max(dur, 1.0e-9),
+        easing: easing,
+        value: w.baseline
+    }
   end
 
   defp ordered_sat_bounds(%State{} = state) do
@@ -1878,7 +2172,10 @@ defmodule Octopus.Apps.PixelFun3D do
   defp render_canvas(%State{display_info: display_info} = state) do
     # Deterministic motion (tilt) uses signed formula clock; auto wanderers use state.seconds.
     seconds = state.formula_seconds || state.seconds
-    transform_params = build_transform_params(state, seconds)
+    eff = effective_transform_values(state)
+    z = max(eff.zoom_base || 1.0, @zoom_factor_min)
+    motion_params = build_motion_params(state, seconds)
+    zoom_branches = resolve_zoom_branches(state, z, seconds)
 
     canvas_mode = if state.color_mode == :white, do: :grayscale, else: :rgb
     canvas = Canvas.new(display_info.width, display_info.height, canvas_mode)
@@ -1904,70 +2201,22 @@ defmodule Octopus.Apps.PixelFun3D do
       audio = state.audio_input
 
       Enum.reduce(Enum.with_index(panel), canvas, fn {{x, y, d}, i}, canvas ->
-        {x_scaled, y_scaled, {nx, ny, nz}} = sample_pixel(d, x, y, transform_params)
-
         pixel =
-          case state.color_mode do
-            :white ->
-              {color_a, color_b} = state.colors
-
-              state.program
-              |> eval_pixel_value(
-                x_scaled,
-                y_scaled,
-                nx,
-                ny,
-                nz,
-                i,
-                pixel_time,
-                audio.low,
-                audio.mid,
-                audio.high
-              )
-              |> white_pixel_value(color_a, color_b)
-
-            :rainbow ->
-              value =
-                eval_pixel_value(
-                  state.program,
-                  x_scaled,
-                  y_scaled,
-                  nx,
-                  ny,
-                  nz,
-                  i,
-                  pixel_time,
-                  audio.low,
-                  audio.mid,
-                  audio.high
-                )
-
-              rainbow_pixel_color(x_scaled, y_scaled, value, hue_shift, saturation_percent)
-
-            _ ->
-              {color_a, color_b} = state.colors
-
-              colors = {
-                %Chameleon.HSV{(%Chameleon.HSV{} = color_a) | h: rem(trunc(color_a.h + hue_shift), 360)},
-                %Chameleon.HSV{(%Chameleon.HSV{} = color_b) | h: rem(trunc(color_b.h + hue_shift), 360)}
-              }
-
-              pixels(
-                state.program,
-                x_scaled,
-                y_scaled,
-                nx,
-                ny,
-                nz,
-                i,
-                pixel_time,
-                audio.low,
-                audio.mid,
-                audio.high,
-                colors,
-                lerp_fn
-              )
-          end
+          render_pixel(
+            state,
+            motion_params,
+            z,
+            zoom_branches,
+            d,
+            x,
+            y,
+            i,
+            pixel_time,
+            hue_shift,
+            saturation_percent,
+            audio,
+            lerp_fn
+          )
 
         Canvas.put_pixel(canvas, {x, y}, pixel)
       end)
@@ -1984,7 +2233,10 @@ defmodule Octopus.Apps.PixelFun3D do
     end)
   end
 
-  defp build_transform_params(%State{} = state, seconds) do
+  @doc false
+  def build_transform_params(state, seconds), do: build_motion_params(state, seconds)
+
+  defp build_motion_params(%State{} = state, seconds) do
     w = Installation.width()
     h = Installation.height()
     alpha = Sphere.alpha(w)
@@ -1996,23 +2248,29 @@ defmodule Octopus.Apps.PixelFun3D do
     roll_rate = eff.roll_rate
     tilt_scale = eff.tilt_scale
     elev_base = eff.elev_base
-    zoom_factor = max(eff.zoom_base || 1.0, @zoom_factor_min)
-    sigma = :math.log(zoom_factor)
+    z = max(eff.zoom_base || 1.0, @zoom_factor_min)
 
     # Orientation angles are already integrated in rad; fallback uses display→rad.
-    yaw_angle = state.yaw_angle || orbit_rate * alpha * seconds
+    # Translate auto adds a horizontal position offset (yaw_offset px → rad).
+    yaw_angle = (state.yaw_angle || orbit_rate * alpha * seconds) + eff.yaw_offset * alpha
     roll_angle = state.roll_angle || roll_rate * :math.pi() / 180.0 * seconds
+
+    # While frozen, slider deltas since the freeze scrub the still image.
+    {yaw_angle, roll_angle} = frozen_scrub_angles(state, yaw_angle, roll_angle, alpha)
 
     neutral? =
       orbit_rate == 0.0 and roll_rate == 0.0 and tilt_scale == 0.0 and elev_base == 0.0 and
-        zoom_factor == 1.0 and not any_auto?(state) and yaw_angle == 0.0 and roll_angle == 0.0
+        z == 1.0 and (state.zoom_octave_n || 0) == 0 and state.octave_fade == nil and
+        not any_auto?(state) and yaw_angle == 0.0 and roll_angle == 0.0
 
     if neutral? do
       %{neutral?: true, center_x: cx, center_y: cy, alpha: alpha}
     else
       tilt_amp_rad = tilt_scale * alpha
-      roll_pivot_phi = panel_to_phi(state.roll_pivot || 0, w, alpha)
+      roll_pivot_panel = if state.rot_auto, do: state.rot_auto_pivot || state.roll_pivot || 0, else: state.roll_pivot || 0
+      roll_pivot_phi = panel_to_phi(roll_pivot_panel, w, alpha)
       zoom_pivot_phi = panel_to_phi(state.zoom_pivot || 0, w, alpha)
+      x_p = zoom_pivot_phi / alpha
 
       matrix =
         Sphere.orientation(
@@ -2028,14 +2286,163 @@ defmodule Octopus.Apps.PixelFun3D do
       %{
         neutral?: false,
         matrix: matrix,
-        sigma: sigma,
         mobius_basis: Sphere.mobius_basis(zoom_pivot_phi),
         elev_rad: Sphere.elev_offset(elev_base, alpha),
         alpha: alpha,
         center_x: cx,
-        center_y: cy
+        center_y: cy,
+        x_p: x_p
       }
     end
+  end
+
+  defp resolve_zoom_branches(%State{} = state, z, seconds) do
+    current_n = state.zoom_octave_n || 0
+
+    cond do
+      state.time_frozen ->
+        {n, _r} = Zoom.decompose(z, current_n)
+        {:steady, n}
+
+      state.octave_fade == nil ->
+        {:steady, current_n}
+
+      true ->
+        fade = state.octave_fade
+        u = Zoom.fade_u(fade, seconds)
+
+        if u >= 1.0 do
+          {:steady, fade.to_n}
+        else
+          {:fade, fade.from_n, fade.to_n, u}
+        end
+    end
+  end
+
+  defp render_pixel(
+         state,
+         motion_params,
+         z,
+         zoom_branches,
+         d,
+         x,
+         y,
+         i,
+         pixel_time,
+         hue_shift,
+         saturation_percent,
+         audio,
+         lerp_fn
+       ) do
+    sample_ctx = {motion_params, z, x, y, d}
+
+    case zoom_branches do
+      {:steady, n} ->
+        sample_ctx
+        |> sample_zoom_branch(n)
+        |> colorize_sample(state, i, pixel_time, hue_shift, saturation_percent, audio, lerp_fn)
+
+      {:fade, from_n, to_n, u} ->
+        c_from =
+          sample_ctx
+          |> sample_zoom_branch(from_n)
+          |> colorize_sample(state, i, pixel_time, hue_shift, saturation_percent, audio, lerp_fn)
+
+        c_to =
+          sample_ctx
+          |> sample_zoom_branch(to_n)
+          |> colorize_sample(state, i, pixel_time, hue_shift, saturation_percent, audio, lerp_fn)
+
+        blend_pixels(c_from, c_to, u)
+    end
+  end
+
+  defp sample_zoom_branch({motion_params, z, x, y, d}, n) do
+    m = Zoom.octave_factor(n)
+    r = z / m
+
+    if motion_params.neutral? do
+      {xs, ys, dir} = Sphere.sample(d, Map.merge(motion_params, %{x: x, y: y}))
+      {xs, ys, dir}
+    else
+      Zoom.sample_pixel(d, motion_params, m, r, motion_params.x_p)
+    end
+  end
+
+  defp colorize_sample({x_scaled, y_scaled, {nx, ny, nz}}, state, i, pixel_time, hue_shift, sat, audio, lerp_fn) do
+    case state.color_mode do
+      :white ->
+        {color_a, color_b} = state.colors
+
+        state.program
+        |> eval_pixel_value(
+          x_scaled,
+          y_scaled,
+          nx,
+          ny,
+          nz,
+          i,
+          pixel_time,
+          audio.low,
+          audio.mid,
+          audio.high
+        )
+        |> white_pixel_value(color_a, color_b)
+
+      :rainbow ->
+        value =
+          eval_pixel_value(
+            state.program,
+            x_scaled,
+            y_scaled,
+            nx,
+            ny,
+            nz,
+            i,
+            pixel_time,
+            audio.low,
+            audio.mid,
+            audio.high
+          )
+
+        rainbow_pixel_color(x_scaled, y_scaled, value, hue_shift, sat)
+
+      _ ->
+        {color_a, color_b} = state.colors
+
+        colors = {
+          %Chameleon.HSV{(%Chameleon.HSV{} = color_a) | h: rem(trunc(color_a.h + hue_shift), 360)},
+          %Chameleon.HSV{(%Chameleon.HSV{} = color_b) | h: rem(trunc(color_b.h + hue_shift), 360)}
+        }
+
+        pixels(
+          state.program,
+          x_scaled,
+          y_scaled,
+          nx,
+          ny,
+          nz,
+          i,
+          pixel_time,
+          audio.low,
+          audio.mid,
+          audio.high,
+          colors,
+          lerp_fn
+        )
+    end
+  end
+
+  defp blend_pixels(c_from, c_to, u) when is_integer(c_from) and is_integer(c_to) do
+    round((1 - u) * c_from + u * c_to)
+  end
+
+  defp blend_pixels({r1, g1, b1}, {r2, g2, b2}, u) do
+    {
+      round((1 - u) * r1 + u * r2),
+      round((1 - u) * g1 + u * g2),
+      round((1 - u) * b1 + u * b2)
+    }
   end
 
   defp panel_to_phi(panel, w, alpha) do
@@ -2047,11 +2454,13 @@ defmodule Octopus.Apps.PixelFun3D do
     (center_x - cx) * alpha
   end
 
-  defp sample_pixel(d, x, y, %{neutral?: true} = params) do
-    Sphere.sample(d, Map.put(params, :x, x) |> Map.put(:y, y))
-  end
+  defp sample_pixel(d, x, y, motion_params, z, n) do
+    {xs, ys, _dir} =
+      {motion_params, z, x, y, d}
+      |> sample_zoom_branch(n)
 
-  defp sample_pixel(d, _x, _y, params), do: Sphere.sample(d, params)
+    {xs, ys}
+  end
 
   @doc false
   def transform_pixel_coords(x, y, params) do
@@ -2059,7 +2468,7 @@ defmodule Octopus.Apps.PixelFun3D do
     h = Installation.height()
     d = Map.get(params, :direction) || Sphere.direction(x, y, w, h)
 
-    transform_params =
+    motion_params =
       case params do
         %{neutral?: _} = p ->
           p
@@ -2069,12 +2478,15 @@ defmodule Octopus.Apps.PixelFun3D do
             default_motion_state()
             |> Map.merge(Map.take(params, Map.keys(default_motion_state())))
 
-          state_like = struct(State, motion)
-          build_transform_params(state_like, Map.get(params, :seconds, 0.0))
+          state_like = struct(State, Map.put(motion, :zoom_octave_n, Map.get(params, :zoom_octave_n, 0)))
+          build_motion_params(state_like, Map.get(params, :seconds, 0.0))
       end
 
-    {xs, ys, _d} = sample_pixel(d, x, y, Map.merge(transform_params, %{x: x, y: y}))
-    {xs, ys}
+    z = max(Map.get(params, :zoom_base, 1.0), @zoom_factor_min)
+    current_n = Map.get(params, :zoom_octave_n, 0)
+    {n, _r} = Zoom.decompose(z, current_n)
+
+    sample_pixel(d, x, y, motion_params, z, n)
   end
 
   defp default_motion_state do
@@ -2088,6 +2500,8 @@ defmodule Octopus.Apps.PixelFun3D do
       elev_base: 0.0,
       zoom_base: 1.0,
       zoom_pivot: 0,
+      zoom_octave_n: 0,
+      octave_fade: nil,
       pattern_speed: 1.0,
       trans_auto: false,
       rot_auto: false,
@@ -2243,22 +2657,13 @@ defmodule Octopus.Apps.PixelFun3D do
     state
   end
 
-  defp handover_wanderer_value(%State{} = state, _ch, nil), do: state
-
-  defp handover_wanderer_value(%State{} = state, :trans, %Wander{value: {ox, ey}}) do
-    %State{state | orbit_rate: ox, elev_base: ey}
-  end
-
-  defp handover_wanderer_value(%State{} = state, :zoom, %Wander{value: {sigma}}) do
-    %State{state | zoom_base: :math.exp(sigma)}
-  end
-
-  defp handover_wanderer_value(%State{} = state, :sat, %Wander{value: {v}}) do
-    %State{state | saturation_percent: coerce_saturation_percent(v)}
-  end
-
-  defp handover_wanderer_value(%State{} = state, ch, %Wander{value: {v}}) do
-    Map.put(state, @channel_base_key[ch], v)
+  # Auto OFF resets the channel to its base/preset value: the wanderer is dropped
+  # (by the caller) and no live value is baked in. Only rot needs an explicit
+  # reset because it is the only channel whose integrated state (roll_angle) is
+  # driven per-tick while auto is on; every other channel keeps its untouched base
+  # in state and simply stops using the (now removed) wander.
+  defp handover_wanderer_value(%State{} = state, :rot, _) do
+    %State{state | roll_angle: 0.0, rot_auto_pivot: nil}
   end
 
   defp handover_wanderer_value(%State{} = state, _ch, _), do: state
@@ -2287,14 +2692,17 @@ defmodule Octopus.Apps.PixelFun3D do
     zoom = state.zoom_base || 1.0
     sway = state.tilt_scale || 0.0
 
-    {orbit, elev} =
+    # Translate auto pans a horizontal position offset (yaw_offset, px) instead
+    # of driving the scroll rate — so the manual orbit_rate scroll is suppressed
+    # while auto is on. yaw_offset (X) and elev_base (Y) are both positions.
+    {orbit, yaw_offset, elev} =
       if state.trans_auto do
         case state.auto_wanderers do
-          %{trans: %Wander{value: {ox, ey}}} -> {ox, ey}
-          _ -> {orbit, elev}
+          %{trans: %Wander{value: {ox, ey}}} -> {0.0, ox, ey}
+          _ -> {orbit, 0.0, elev}
         end
       else
-        {orbit, elev}
+        {orbit, 0.0, elev}
       end
 
     wander_val = fn ch, base ->
@@ -2311,10 +2719,13 @@ defmodule Octopus.Apps.PixelFun3D do
       end
     end
 
+    # Rot auto drives roll via the sweep angle (see accumulate_orientation), so the
+    # manual roll_rate is suppressed while auto is on — same idea as orbit/trans.
     %{
       orbit_rate: orbit,
+      yaw_offset: yaw_offset,
       elev_base: elev,
-      roll_rate: wander_val.(:rot, roll),
+      roll_rate: if(state.rot_auto, do: 0.0, else: roll),
       zoom_base: wander_val.(:zoom, zoom),
       tilt_scale: wander_val.(:sway, sway)
     }

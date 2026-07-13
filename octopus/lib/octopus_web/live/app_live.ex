@@ -7,6 +7,10 @@ defmodule OctopusWeb.AppLive do
 
   def mount(%{"id" => app_id}, _session, socket) do
     case AppSupervisor.lookup_app(app_id) do
+      {_pid, PixelFun3D} ->
+        # PixelFun3D is edited via the foyer drawer now; keep old links working.
+        {:ok, redirect(socket, to: ~p"/")}
+
       {_pid, module} ->
         if connected?(socket) do
           AppSupervisor.subscribe()
@@ -21,7 +25,6 @@ defmodule OctopusWeb.AppLive do
             name: apply(module, :name, []),
             app_config: AppSupervisor.config(app_id)
           )
-          |> assign_playlist_config()
 
         {:ok, socket}
 
@@ -52,14 +55,6 @@ defmodule OctopusWeb.AppLive do
                 app_module={@module}
                 config={@app_config}
               />
-            <% @module == PixelFun3D -> %>
-              <.live_component
-                id={"app-config-#{@app_id}"}
-                module={OctopusWeb.PixelFun3DConfigComponent}
-                app_id={@app_id}
-                app_module={@module}
-                config={@app_config}
-              />
             <% @module == Wood -> %>
               <.live_component
                 id={"app-config-#{@app_id}"}
@@ -76,15 +71,6 @@ defmodule OctopusWeb.AppLive do
                 app_module={@module}
               />
           <% end %>
-        </div>
-      </div>
-
-      <div class="card bg-base-100 shadow-lg max-w-2xl mx-auto mt-4">
-        <div class="card-body">
-          <h2 class="card-title">Config for Playlist</h2>
-          <div class="mockup-code">
-            <pre><code>{@playlist_config}</code></pre>
-          </div>
         </div>
       </div>
     </div>
@@ -132,25 +118,9 @@ defmodule OctopusWeb.AppLive do
   end
 
   defp config_component_module(PixelFun), do: OctopusWeb.PixelFunConfigComponent
-  defp config_component_module(PixelFun3D), do: OctopusWeb.PixelFun3DConfigComponent
   defp config_component_module(Wood), do: OctopusWeb.WoodConfigComponent
   defp config_component_module(_), do: OctopusWeb.AppConfigComponent
 
   defp wide_config?(PixelFun), do: true
-  defp wide_config?(PixelFun3D), do: true
   defp wide_config?(_), do: false
-
-  defp assign_playlist_config(socket) do
-    config = %{
-      app: Module.split(socket.assigns.module) |> List.last(),
-      config: AppSupervisor.config(socket.assigns.app_id),
-      timeout: 60_000
-    }
-
-    socket =
-      socket
-      |> assign(playlist_config: JSON.encode!(config))
-
-    socket
-  end
 end
