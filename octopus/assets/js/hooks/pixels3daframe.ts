@@ -199,7 +199,7 @@ const LABEL_OUTWARD_OFFSET_M = 0.28;
 const LABEL_FONT =
   '700 15px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace';
 
-type SceneLabelKind = 'panel' | 'sensor';
+type SceneLabelKind = 'panel' | 'panel-activity' | 'sensor';
 
 type SceneLabel = {
   kind: SceneLabelKind;
@@ -213,6 +213,61 @@ type SceneLabel = {
 const sceneLabels: SceneLabel[] = [];
 let labelsOverlayEl: HTMLDivElement | null = null;
 let labelsHookRoot: HTMLElement | null = null;
+
+type PanelLabelAnchor = {
+  panelNumber: number;
+  x: number;
+  y: number;
+  z: number;
+};
+
+let panelActivityFactors: Record<number, number> = {};
+const panelLabelAnchors: PanelLabelAnchor[] = [];
+
+function normalizePanelFactors(
+  factors: Record<string, number> | Record<number, number> | undefined,
+): Record<number, number> {
+  const out: Record<number, number> = {};
+  if (!factors) return out;
+  for (const [key, value] of Object.entries(factors)) {
+    const n = Number(key);
+    if (!Number.isFinite(n)) continue;
+    out[n] = Number(value);
+  }
+  return out;
+}
+
+function rebuildPanelLabels() {
+  clearSceneLabels('panel');
+  clearSceneLabels('panel-activity');
+  for (const anchor of panelLabelAnchors) {
+    addSceneLabel(
+      'panel',
+      String(anchor.panelNumber),
+      anchor.x,
+      anchor.y,
+      anchor.z,
+      PANEL_LABEL_COLOR,
+    );
+    const factor = panelActivityFactors[anchor.panelNumber] ?? 0;
+    addSceneLabel(
+      'panel-activity',
+      factor.toFixed(2),
+      anchor.x,
+      anchor.y - 0.28,
+      anchor.z,
+      '#a7f3d0',
+    );
+  }
+  if (labelsHookRoot) refreshSceneLabelsDom(labelsHookRoot);
+}
+
+function setPanelActivityFactors(
+  factors: Record<string, number> | Record<number, number> | undefined,
+) {
+  panelActivityFactors = normalizePanelFactors(factors);
+  if (panelLabelAnchors.length > 0) rebuildPanelLabels();
+}
 
 function clearSceneLabels(kind?: SceneLabelKind) {
   if (kind) {
@@ -275,6 +330,13 @@ function refreshSceneLabelsDom(root: HTMLElement) {
       el.style.border = '1.5px solid rgba(255, 255, 255, 0.35)';
       el.style.boxShadow = '0 1px 6px rgba(0, 0, 0, 0.55)';
       el.style.textShadow = '0 1px 2px rgba(0, 0, 0, 0.9)';
+    } else if (label.kind === 'panel-activity') {
+      el.style.background = PANEL_LABEL_BG;
+      el.style.border = '1px solid rgba(167, 243, 208, 0.45)';
+      el.style.boxShadow = '0 1px 6px rgba(0, 0, 0, 0.55)';
+      el.style.textShadow = '0 1px 2px rgba(0, 0, 0, 0.9)';
+      el.style.font =
+        '700 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace';
     } else {
       el.style.background = SENSOR_LABEL_BG;
     }
@@ -609,6 +671,12 @@ class Pixels3dAframeHook extends Hook {
           world.setMockWorldObjects(objects);
         }
       }
+    );
+    this.handleEvent(
+      `panel_activity:${id}`,
+      (payload: { factors?: Record<string, number> }) => {
+        setPanelActivityFactors(payload?.factors);
+      },
     );
     const events = ['frame:pixels-*', `frame:${id}`];
     events.forEach((event) => {
@@ -1229,6 +1297,8 @@ class Pixels3dAframeHook extends Hook {
 
   createPanels() {
     clearSceneLabels('panel');
+    clearSceneLabels('panel-activity');
+    panelLabelAnchors.length = 0;
     panels.length = 0;
     textures.length = 0;
     const panelsEl = document.createElement('a-entity') as any;
@@ -1292,17 +1362,15 @@ class Pixels3dAframeHook extends Hook {
       const outwardZ = slot.zM / ringDist;
       const labelY = poleHeight + panelWidthM + 0.35;
       const labelOutward = panelDepthM / 2 + 0.45;
-      addSceneLabel(
-        'panel',
-        String(slot.panelNumber),
-        slot.xM + outwardX * labelOutward,
-        labelY,
-        slot.zM + outwardZ * labelOutward,
-        PANEL_LABEL_COLOR,
-      );
+      panelLabelAnchors.push({
+        panelNumber: slot.panelNumber,
+        x: slot.xM + outwardX * labelOutward,
+        y: labelY,
+        z: slot.zM + outwardZ * labelOutward,
+      });
     }
     panelsEl.setAttribute('update-panel-textures', '');
-    if (labelsHookRoot) refreshSceneLabelsDom(labelsHookRoot);
+    rebuildPanelLabels();
     return panelsEl;
   }
 
@@ -1514,7 +1582,7 @@ class Pixels3dAframeHook extends Hook {
       tick: function () {
         for (let i = 0; i < numPanels; i++) {
           for (let j = 0; j < 64; j++) {
-            const textureIdx = numPanels - i - 1;
+            const textureIdx = i;
             const pixelIdx = i * 64 + j;
             if (pixels[pixelIdx]) {
               const texture = textures[textureIdx];

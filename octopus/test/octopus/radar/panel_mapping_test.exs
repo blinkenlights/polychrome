@@ -27,6 +27,18 @@ defmodule Octopus.Radar.PanelMappingTest do
       assert frame == 0
     end
 
+    test "installation_panel_of_frame respects north_panel" do
+      # +Y (north) → 3D panel 0; with north_panel 10 that is physical panel 10.
+      assert PanelMapping.installation_panel_of_frame(11, @num_panels, 10) == 10
+
+      # East (+X) → 3D panel 3; with north_panel 10 that is physical panel 1.
+      assert PanelMapping.installation_panel_of_frame(8, @num_panels, 10) == 1
+
+      # Default north_panel 1: +Y → physical panel 1, 11/12 turn → panel 12.
+      assert PanelMapping.installation_panel_of_frame(11, @num_panels, 1) == 1
+      assert PanelMapping.installation_panel_of_frame(0, @num_panels, 1) == 12
+    end
+
     test "round beats trunc near sector boundary (no +1 panel slip)" do
       # Between 3D panel 10 and 11 — closer to 11
       norm = (10.0 + 0.6) / @num_panels

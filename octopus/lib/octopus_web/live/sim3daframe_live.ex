@@ -28,7 +28,11 @@ defmodule OctopusWeb.Sim3dAframeLive do
     socket =
       if connected?(socket) do
         Mixer.subscribe()
-        if Radar.configured?(), do: Radar.subscribe()
+
+        if Radar.configured?() do
+          Radar.subscribe()
+          Radar.subscribe_panel_activity()
+        end
 
         frame = %RGBFrame{
           data: List.duplicate([0, 0, 0], 80 * 8) |> IO.iodata_to_binary()
@@ -45,6 +49,7 @@ defmodule OctopusWeb.Sim3dAframeLive do
         |> push_initial_params()
         |> push_installation()
         |> maybe_push_mock_world(source_mode)
+        |> maybe_push_panel_activity()
       else
         socket
       end
@@ -147,6 +152,10 @@ defmodule OctopusWeb.Sim3dAframeLive do
 
   def handle_info({:mock_world, objects}, socket) do
     {:noreply, push_mock_world(socket, objects)}
+  end
+
+  def handle_info({:panel_activity, snapshot}, socket) do
+    {:noreply, push_panel_activity(socket, snapshot)}
   end
 
   def handle_info({:view_settings_changed, _settings}, socket) do
@@ -289,6 +298,20 @@ defmodule OctopusWeb.Sim3dAframeLive do
   defp push_mock_world(socket, objects) when is_list(objects) do
     push_event(socket, "mock_world:#{@id_prefix}-#{socket.id}", %{
       objects: serialize_mock_objects(objects)
+    })
+  end
+
+  defp maybe_push_panel_activity(socket) do
+    if Radar.configured?(), do: push_panel_activity(socket), else: socket
+  end
+
+  defp push_panel_activity(socket, snapshot \\ nil) do
+    snapshot = snapshot || Radar.panel_activity()
+
+    push_event(socket, "panel_activity:#{@id_prefix}-#{socket.id}", %{
+      factors: Map.get(snapshot, :factors, %{}),
+      raw: Map.get(snapshot, :raw, %{}),
+      ref: Map.get(snapshot, :ref, 0.0)
     })
   end
 

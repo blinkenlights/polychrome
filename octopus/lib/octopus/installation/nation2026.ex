@@ -45,6 +45,11 @@ defmodule Octopus.Installation.Nation2026 do
         sensors: [:a, :b, :c, :d, :e, :f],
         start_angle_deg: 150,
         distance_cm: 300
+      ],
+      panel_activity: [
+        sensitivity: 1.0,
+        adaptive: true,
+        release_tau: 5.0
       ]
     ],
     network_config: [

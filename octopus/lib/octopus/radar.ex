@@ -104,6 +104,7 @@ defmodule Octopus.Radar do
     ClutterFilter,
     LogFormat,
     Mock,
+    PanelActivity,
     PoseTweak,
     Runtime,
     Sensitivity,
@@ -743,6 +744,54 @@ defmodule Octopus.Radar do
   @spec reset_stats() :: :ok
   defdelegate reset_stats(), to: Octopus.Radar.Stats, as: :reset
 
+  @doc "PubSub topic for per-panel activity snapshots."
+  @spec panel_activity_topic() :: String.t()
+  def panel_activity_topic, do: PanelActivity.topic()
+
+  @doc "Subscribe to per-panel activity snapshots."
+  @spec subscribe_panel_activity() :: :ok | {:error, term()}
+  def subscribe_panel_activity do
+    Phoenix.PubSub.subscribe(Octopus.PubSub, panel_activity_topic())
+  end
+
+  @doc """
+  Return the latest per-panel activity snapshot.
+
+  Shape: `%{factors: %{panel => float}, raw: %{panel => float}, ref: float, at: ms}`
+  Panel keys are 1-based installation panel numbers.
+  """
+  @spec panel_activity() :: map()
+  def panel_activity do
+    if Process.whereis(PanelActivity), do: PanelActivity.snapshot(), else: empty_panel_activity()
+  end
+
+  @doc "Return normalised per-panel activity factors (1-based installation panels)."
+  @spec panel_factors() :: %{pos_integer() => float()}
+  def panel_factors do
+    case panel_activity() do
+      %{factors: factors} -> factors
+      _ -> %{}
+    end
+  end
+
+  @doc "Return current panel-activity tuning settings."
+  @spec panel_activity_config() :: PanelActivity.Settings.t()
+  def panel_activity_config do
+    if Process.whereis(PanelActivity.Settings),
+      do: PanelActivity.Settings.get(),
+      else: struct(PanelActivity.Settings, PanelActivity.Settings.defaults())
+  end
+
+  @doc "Update panel-activity tuning settings at runtime."
+  @spec set_panel_activity_config(keyword()) :: :ok
+  def set_panel_activity_config(opts) when is_list(opts) do
+    if Process.whereis(PanelActivity.Settings) do
+      PanelActivity.Settings.update(opts)
+    else
+      :ok
+    end
+  end
+
   @doc """
   Return `true` when the active radar setup uses a `:radial` layout block.
 
@@ -872,6 +921,8 @@ defmodule Octopus.Radar do
         {Sensitivity, []},
         {ViewSettings, []},
         {ClutterFilter, []},
+        {PanelActivity.Settings, []},
+        Octopus.Radar.PanelActivity,
         Octopus.Radar.StatusHistory,
         Octopus.Radar.Stats,
         {Mock.World, [mode: mock_world_mode(boot)]}
@@ -1188,6 +1239,18 @@ defmodule Octopus.Radar do
       visuals: ViewSettings.default_visuals(),
       bounds_mode: :static,
       clutter_filter: true
+    }
+  end
+
+  defp empty_panel_activity do
+    num_panels = max(Octopus.Installation.num_panels(), 1)
+    empty = for p <- 1..num_panels, into: %{}, do: {p, 0.0}
+
+    %{
+      factors: empty,
+      raw: empty,
+      ref: Map.fetch!(PanelActivity.Settings.defaults(), :min_ref),
+      at: 0
     }
   end
 end
