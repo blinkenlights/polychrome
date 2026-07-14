@@ -23,14 +23,15 @@ Octopus should now be reachable on [`localhost:4000`](http://localhost:4000).
 
 Start the "UDP Server" app to receive external frames on UDP port 2342
 
-### Dual Octopus instances (Pixie + Woodstock on one device)
+### Dual Octopus instances (Pixie + Pixie2 / Woodstock on one device)
 
 The `:pixie` catalog controller exposes two UDP buses (`ports: 2`):
 
-| Installation | Slot | Device UDP | Typical local bind |
-|--------------|------|------------|--------------------|
-| `Octopus.Installation.Pixie` | `port: 1` | 1337 | 4422 (default) |
-| `Octopus.Installation.Woodstock` | `port: 2` | 1338 | 4423 |
+| Installation | Slot | Device UDP | Typical local bind | Layout |
+|--------------|------|------------|--------------------|--------|
+| `Octopus.Installation.Pixie` | `port: 1` | 1337 | 4422 (default) | 8×8 |
+| `Octopus.Installation.Pixie2` | `port: 2` | 1338 | 4423 | 8×8 |
+| `Octopus.Installation.Woodstock` | `port: 2` | 1338 | 4423 | 2×32 |
 
 Run two processes with distinct installation modules and local reply ports:
 
@@ -39,8 +40,8 @@ Run two processes with distinct installation modules and local reply ports:
 INSTALLATION_MODULE=Octopus.Installation.Pixie \
   mix phx.server
 
-# Terminal 2 — Woodstock (GPIO 3 / UDP 1338); use another HTTP port if needed
-INSTALLATION_MODULE=Octopus.Installation.Woodstock \
+# Terminal 2 — Pixie2 (GPIO 3 / UDP 1338); use another HTTP port if needed
+INSTALLATION_MODULE=Octopus.Installation.Pixie2 \
   FIRMWARE_BROADCASTER_LOCAL_PORT=4423 \
   PORT=4001 \
   mix phx.server

@@ -386,6 +386,9 @@ void Network::setup()
   Serial.println("Ethernet setup done");
 }
 
+// Keep large protobuf message off the stack (RGBFrame payload ~2.3KB).
+static Packet decode_packet;
+
 static void handle_bus_udp(int bus_index)
 {
   BusNetwork &bus = buses[bus_index];
@@ -402,14 +405,14 @@ static void handle_bus_udp(int bus_index)
     {
       bus.packetcount++;
       pb_istream_t stream = pb_istream_from_buffer(udp_buffer, bytes);
-      Packet packet = Packet_init_zero;
-      bool status = pb_decode(&stream, Packet_fields, &packet);
+      decode_packet = Packet_init_zero;
+      bool status = pb_decode(&stream, Packet_fields, &decode_packet);
 
       if (!status)
       {
         Network::remote_log("Protobuf decoding failed: " + String(PB_GET_ERROR(&stream)));
       }
-      else if (is_pixel_packet(packet))
+      else if (is_pixel_packet(decode_packet))
       {
         bool was_idle = bus.sender_mode == DisplayMode::Idle;
 
@@ -423,12 +426,12 @@ static void handle_bus_udp(int bus_index)
 
         if (bus.sender_mode == DisplayMode::Normal && bus.remote_configured)
         {
-          Display::handle_packet(bus_index, packet);
+          Display::handle_packet(bus_index, decode_packet);
         }
       }
       else
       {
-        Display::handle_packet(bus_index, packet);
+        Display::handle_packet(bus_index, decode_packet);
       }
     }
   }

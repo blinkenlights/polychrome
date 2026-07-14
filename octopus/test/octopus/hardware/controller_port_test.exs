@@ -26,9 +26,16 @@ defmodule Octopus.Hardware.ControllerPortTest do
     assert [[address: "blinkenleds-prototype.local", panel_index: 1, port: 1337]] = panels
   end
 
+  test "Pixie2 network target uses UDP 1338" do
+    panels = Octopus.Installation.Pixie2.network_config()[:panels]
+
+    assert [[address: "blinkenleds-prototype.local", panel_index: 1, port: 1338]] = panels
+  end
+
   test "Woodstock network target uses UDP 1338" do
     panels = Octopus.Installation.Woodstock.network_config()[:panels]
 
     assert [[address: "blinkenleds-prototype.local", panel_index: 1, port: 1338]] = panels
   end
 end
+

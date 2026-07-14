@@ -8,27 +8,75 @@
 #define WIDTH 8
 #define HEIGHT 8
 #define PIXEL_COUNT (WIDTH * HEIGHT)
-#define DATA_PIN_0 16
-#define DATA_PIN_1 3
+#define DATA_PIN_0 16 // Dig-Uno LED1
+#define DATA_PIN_1 3  // Dig-Uno LED2
 
-#ifdef SKIP_LEDS
-NeoPixelBus<NeoWrgbTm1814Feature, NeoTm1814Method> strip0(PIXEL_COUNT * 2, DATA_PIN_0);
+// Dual-port (WLED/QuinLED style): one NeoEsp32RmtNTm1814Method per strip with
+// distinct RMT channels. Same qualitative path as former single-strip I2S1
+// NeoTm1814Method, but allows parallel bus 1 without sharing I2S.
+// Single-port panels keep the proven I2S1 default.
 #if BUS_COUNT > 1
-NeoPixelBus<NeoWrgbTm1814Feature, NeoTm1814Method> strip1(PIXEL_COUNT * 2, DATA_PIN_1);
+using StripMethod = NeoEsp32RmtNTm1814Method;
+#ifdef SKIP_LEDS
+static NeoPixelBus<NeoWrgbTm1814Feature, StripMethod> strip0(PIXEL_COUNT * 2, DATA_PIN_0, NeoBusChannel_0);
+static NeoPixelBus<NeoWrgbTm1814Feature, StripMethod> strip1(PIXEL_COUNT * 2, DATA_PIN_1, NeoBusChannel_1);
+#else
+static NeoPixelBus<NeoWrgbTm1814Feature, StripMethod> strip0(PIXEL_COUNT, DATA_PIN_0, NeoBusChannel_0);
+static NeoPixelBus<NeoWrgbTm1814Feature, StripMethod> strip1(PIXEL_COUNT, DATA_PIN_1, NeoBusChannel_1);
 #endif
 #else
-NeoPixelBus<NeoWrgbTm1814Feature, NeoTm1814Method> strip0(PIXEL_COUNT, DATA_PIN_0);
-#if BUS_COUNT > 1
-NeoPixelBus<NeoWrgbTm1814Feature, NeoTm1814Method> strip1(PIXEL_COUNT, DATA_PIN_1);
+using StripMethod = NeoTm1814Method;
+#ifdef SKIP_LEDS
+static NeoPixelBus<NeoWrgbTm1814Feature, StripMethod> strip0(PIXEL_COUNT * 2, DATA_PIN_0);
+#else
+static NeoPixelBus<NeoWrgbTm1814Feature, StripMethod> strip0(PIXEL_COUNT, DATA_PIN_0);
 #endif
 #endif
 
-static NeoPixelBus<NeoWrgbTm1814Feature, NeoTm1814Method> *strips[BUS_COUNT] = {
+static NeoPixelBus<NeoWrgbTm1814Feature, StripMethod> *strips[BUS_COUNT] = {
     &strip0,
 #if BUS_COUNT > 1
     &strip1,
 #endif
 };
+
+static void strip_begin(int bus)
+{
+  if (bus >= 0 && bus < BUS_COUNT)
+  {
+    strips[bus]->Begin();
+  }
+}
+
+static void strip_set_settings(int bus, const NeoTm1814Settings &settings)
+{
+  if (bus >= 0 && bus < BUS_COUNT)
+  {
+    strips[bus]->SetPixelSettings(settings);
+  }
+}
+
+static void strip_set_pixel(int bus, uint32_t index, const RgbwColor &color)
+{
+  if (bus >= 0 && bus < BUS_COUNT)
+  {
+    strips[bus]->SetPixelColor(index, color);
+  }
+}
+
+static void strip_show(int bus)
+{
+  if (bus < 0 || bus >= BUS_COUNT)
+  {
+    return;
+  }
+  while (!strips[bus]->CanShow())
+  {
+    yield();
+  }
+  strips[bus]->Dirty();
+  strips[bus]->Show();
+}
 
 static Pixel pixels[BUS_COUNT][PIXEL_COUNT];
 static DisplayMode display_modes[BUS_COUNT];
@@ -51,8 +99,8 @@ void Display::setup()
     config_phash[bus] = 0;
     luminances[bus] = 255;
 
-    strips[bus]->Begin();
-    strips[bus]->SetPixelSettings(NeoTm1814Settings(225, 225, 225, 225));
+    strip_begin(bus);
+    strip_set_settings(bus, NeoTm1814Settings(225, 225, 225, 225));
 
     for (int i = 0; i < PIXEL_COUNT; i++)
     {
@@ -60,8 +108,7 @@ void Display::setup()
     }
 
     render_test_frame(bus);
-    strips[bus]->Dirty();
-    strips[bus]->Show();
+    strip_show(bus);
   }
 }
 
@@ -88,14 +135,13 @@ void Display::loop()
       {
         for (int i = 0; i < PIXEL_COUNT; i++)
         {
-          strips[bus]->SetPixelColor(map_index(i), pixels[bus][i].get_display_color().Dim(luminances[bus]));
+          strip_set_pixel(bus, map_index(i), pixels[bus][i].get_display_color().Dim(luminances[bus]));
         }
       }
       break;
     }
 
-    strips[bus]->Dirty();
-    strips[bus]->Show();
+    strip_show(bus);
   }
 }
 
@@ -297,19 +343,19 @@ void Display::render_test_frame(int bus_index)
   for (int i = 0; i < PIXEL_COUNT; i++)
   {
     RgbwColor color = HsbColor(float(i) / float(PIXEL_COUNT), 1, 1);
-    strips[bus_index]->SetPixelColor(map_index(i), color);
+    strip_set_pixel(bus_index, map_index(i), color);
   }
 }
 
 void Display::render_idle_grey(int bus_index)
 {
-  const uint8_t w = 26;
+  const uint8_t w = 128; // ~50% for visibility while debugging; later back to ~10% (26)
   const uint8_t r = enable_wframe_red ? calculate_r_for_wframe(w) : 0;
   RgbwColor color(r, 0, 0, w);
 
   for (int i = 0; i < PIXEL_COUNT; i++)
   {
-    strips[bus_index]->SetPixelColor(map_index(i), color);
+    strip_set_pixel(bus_index, map_index(i), color);
   }
 }
 
@@ -320,7 +366,7 @@ void Display::render_conflict_red(int bus_index)
 
   for (int i = 0; i < PIXEL_COUNT; i++)
   {
-    strips[bus_index]->SetPixelColor(map_index(i), color);
+    strip_set_pixel(bus_index, map_index(i), color);
   }
 }
 

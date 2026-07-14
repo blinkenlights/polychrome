@@ -21,5 +21,10 @@ upload:
 upload_prototype: 
 	$(pio_binary) run --target upload -e panel_prototype
 
+# Serial recovery (same dual-port build as upload_prototype). Override port if needed:
+#   make upload_prototype_uart UPLOAD_PORT=/dev/cu.usbserial-XXXX
+upload_prototype_uart:
+	$(pio_binary) run --target upload -e panel_prototype_uart --upload-port $(or $(UPLOAD_PORT),/dev/cu.usbserial-110)
+
 upload_all: 
 	$(pio_binary) run --target upload -e panel_1 -e panel_2 -e panel_3 -e panel_4 -e panel_5 -e panel_6 -e panel_7 -e panel_8 -e panel_9 -e panel_10 -e panel_11 -e panel_12
