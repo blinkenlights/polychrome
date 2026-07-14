@@ -1,25 +1,16 @@
 defmodule Octopus.Apps.Collective.Animations.PresencePanels do
   @moduledoc """
   Presence — each panel glows fully in a fixed random colour; brightness follows
-  a per-panel crowd activity factor.
+  the shared per-panel activity factors from `Octopus.Radar.PanelActivity`.
 
-  Activity factor per panel = Σ over people mapped to that panel of
-  `radius_weight * walk_multiplier`:
-
-    * radius weight — near the mast (centre) counts 1, near the panels (ring
-      outer) counts up to 3 (linear in `r / ring_radius`).
-    * walk multiplier — moving faster than a small threshold counts double.
-
-  The factor is normalised with a slow auto-gain (tracks the running panel max),
-  soft-compressed, then smoothed in time (per panel) and space (bleeds into the
-  two neighbours) so the result reads as soft crowd presence, not flicker.
+  Neighbour bleed and base glow are visual-only tuning on top of the service
+  output.
   """
 
   @behaviour Octopus.Apps.Collective.Animation
 
-  alias Octopus.Apps.Collective.CrowdActivity
   alias Octopus.Canvas
-  alias Octopus.Radar.PanelMapping
+  alias Octopus.Radar
 
   @panel_width 8
 
@@ -39,63 +30,56 @@ defmodule Octopus.Apps.Collective.Animations.PresencePanels do
         {p, panel_color(p)}
       end
 
-    level = for p <- 0..(num_panels - 1), into: %{}, do: {p, 0.0}
-
-    %{colors: colors, level: level, ref: CrowdActivity.min_ref()}
+    %{colors: colors}
   end
 
   @impl true
-  def render(canvas, people, ctx, state) do
-    dt = ctx.dt
+  def render(canvas, _people, ctx, state) do
     width = canvas.width
     height = canvas.height
     num_panels = max(div(width, @panel_width), 1)
 
-    sensitivity = Map.get(ctx, :presence_sensitivity, 1.0)
-    floor = Map.get(ctx, :presence_floor, 0.12) |> clamp01()
-    smoothing = Map.get(ctx, :presence_smoothing, 0.4) |> clamp01()
+    floor = Map.get(ctx, :presence_floor, 0.0) |> clamp01()
     bleed = Map.get(ctx, :presence_bleed, 0.35) |> clamp01()
-    adaptive = Map.get(ctx, :presence_adaptive, true)
 
-    ring_outer = PanelMapping.ring_radius()
-    raw = CrowdActivity.raw_factors(people, num_panels, ring_outer)
-
-    ref = CrowdActivity.update_ref(state.ref, raw, adaptive, dt)
-
-    target =
-      for p <- 0..(num_panels - 1), into: %{} do
-        {p, CrowdActivity.soft(sensitivity * Map.get(raw, p, 0.0) / ref)}
-      end
-
-    time_tau = lerp(0.15, 1.2, smoothing)
-    alpha = 1.0 - :math.exp(-dt / time_tau)
-
-    level =
-      for p <- 0..(num_panels - 1), into: %{} do
-        cur = Map.get(state.level, p, 0.0)
-        {p, cur + (Map.fetch!(target, p) - cur) * alpha}
-      end
+    factors = Radar.panel_factors()
 
     lit =
-      for p <- 0..(num_panels - 1), into: %{} do
-        left = Map.get(level, wrap(p - 1, num_panels), 0.0)
-        right = Map.get(level, wrap(p + 1, num_panels), 0.0)
-        {p, clamp01(Map.fetch!(level, p) + bleed * (left + right) / 2.0)}
+      for frame_panel <- 0..(num_panels - 1), into: %{} do
+        install_panel = frame_panel + 1
+        base = Map.get(factors, install_panel, 0.0)
+
+        left = Map.get(factors, wrap_install_panel(install_panel - 1, num_panels), 0.0)
+        right = Map.get(factors, wrap_install_panel(install_panel + 1, num_panels), 0.0)
+
+        {frame_panel, {base, clamp01(base + bleed * (left + right) / 2.0)}}
       end
 
     canvas = paint(canvas, state.colors, lit, num_panels, height, floor)
 
-    {canvas, %{state | level: level, ref: ref}}
+    {canvas, state}
   end
 
   defp paint(canvas, colors, lit, num_panels, height, floor) do
     Enum.reduce(0..(num_panels - 1), canvas, fn p, c ->
-      brightness = floor + (1.0 - floor) * Map.fetch!(lit, p)
-      color = scale(Map.fetch!(colors, p), brightness)
+      {base, level} = Map.fetch!(lit, p)
+      brightness = floor + (1.0 - floor) * level
+
+      color =
+        if base <= 0.0 do
+          {0, 0, 0}
+        else
+          scale(Map.fetch!(colors, p), brightness)
+        end
+
       x0 = p * @panel_width
       x1 = x0 + @panel_width - 1
       Canvas.fill_rect(c, {x0, 0}, {x1, height - 1}, color)
     end)
+  end
+
+  defp wrap_install_panel(panel, num_panels) do
+    rem(rem(panel - 1, num_panels) + num_panels, num_panels) + 1
   end
 
   # Deterministic per-panel colour: same layout every boot, still looks random.
@@ -103,8 +87,6 @@ defmodule Octopus.Apps.Collective.Animations.PresencePanels do
     hue = :math.fmod(p * 0.61803398875 + 0.13, 1.0)
     hsl_to_rgb(hue, @color_sat, @color_light)
   end
-
-  defp wrap(p, n), do: rem(rem(p, n) + n, n)
 
   defp hsl_to_rgb(h, s, l) do
     if s == 0.0 do
@@ -134,7 +116,6 @@ defmodule Octopus.Apps.Collective.Animations.PresencePanels do
   end
 
   defp scale({r, g, b}, f), do: {clamp_byte(r * f), clamp_byte(g * f), clamp_byte(b * f)}
-  defp lerp(a, b, t), do: a + (b - a) * t
   defp clamp_byte(v), do: v |> trunc() |> max(0) |> min(255)
   defp clamp01(v), do: v |> max(0.0) |> min(1.0)
 end

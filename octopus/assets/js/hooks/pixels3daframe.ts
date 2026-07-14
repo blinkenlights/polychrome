@@ -7,7 +7,7 @@ import "aframe-orbit-controls";
 import { GUI } from "three/addons/libs/lil-gui.module.min.js";
 import { Frame, RGB, rgbPixelsFromFrame } from "./shared/frame";
 import { getHumanWorld, registerHumanComponents } from "./humanComponents";
-import type { MockWorldObject, RadarTrack } from "./humanWorld";
+import { radarGlobalToAframeXZ, type MockWorldObject, type RadarTrack } from "./humanWorld";
 
 /** A-Frame ships its own THREE (~r173). Never mix the npm `three` package here — duplicate runtime breaks `setObject3D` / materials. */
 function getThree() {
@@ -123,82 +123,319 @@ const skyFragmentShader = `
   }
 `;
 
-let panelDiameter = 20;
-const PANEL_DIAMETER_MIN = 10;
-const PANEL_DIAMETER_MAX = 20;
-
-function clampPanelDiameter(v: number): number {
-  return Math.min(
-    PANEL_DIAMETER_MAX,
-    Math.max(PANEL_DIAMETER_MIN, Number(v))
-  );
-}
-
 const buttonPoleHeight = 1.0;
 const buttonPoleRadius = 0.05;
 const buttonBaseHeight = 0.02;
-let buttonPolesRadius = (panelDiameter / 2) - 2;
-const PANEL_SIZE = 1.6;
-const PANEL_DEPTH = 0.3;
-const numPanels = 12;
+let buttonPolesRadius = 8;
+/** Panel outer dimensions (m); default until overridden by the installation. */
+let panelWidthM = 1.6;
+let panelDepthM = 0.3;
+let numPanels = 12;
 const panels: any[] = [];
 const pixels: RGB[] = Array(numPanels * 8 * 8).fill([0, 0, 0]);
 let poleDiameter: number = 0.4;
 let poleHeight: number = 0.4;
 const textures: any[] = [];
 
-/** Radar sensors: distance to center (m) via lil-gui; cone visualization; height via radarHeight */
-let radarHeight = 4.5;
-const RADAR_RADIUS_MIN_M = 0;
-const RADAR_RADIUS_MAX_M = 8;
-/** Arm length (m): at 0° tilt = horizontal distance of the chips from the Y axis. Default comes from Phoenix (`radar_arm_length_m`). */
-let radarRadiusM = 3.0;
-/** Radar chip at the arm end (replaces the black box): 5×5 cm base, 1 cm thick, green, sits on the underside of the arm. */
+/**
+ * Radar sensors are placed at their real global poses coming from the
+ * installation radar layout (`installation:<id>` event). Each sensor always
+ * looks straight down (ceiling installation, no tilt).
+ */
+type SensorPose = {
+  deviceId: number;
+  angleDeg: number;
+  rotationDeg: number;
+  distanceCm: number;
+  rangeCm: number;
+  heightCm: number;
+  xM: number;
+  zM: number;
+};
+let sensorPoses: SensorPose[] = [];
+type PanelSlot = {
+  index: number;
+  panelNumber: number;
+  xM: number;
+  zM: number;
+  rotationY: number;
+};
+let panelSlots: PanelSlot[] = [];
+/** Outer LED panel ring radius (m) and which 1-based panel faces north (+Z). */
+let ringRadiusM = 10.0;
+let northPanel = 1;
+/** Radar chip at each sensor: 5×5 cm base, 1 cm thick, green. */
 const RADAR_CHIP_W_M = 0.05;
 const RADAR_CHIP_D_M = 0.05;
 const RADAR_CHIP_H_M = 0.01;
 const RADAR_CHIP_COLOR = "#22c55e";
-/** Top edge of the central pedestal (platform); mast/arms start here. */
-const PEDESTAL_TOP_Y_M = 0.5;
-/** Central platform ("sofa/plate"): radius via GUI 0.5–3 m, default 2.5 m. */
-let platformRadiusM = 2.5;
-const PLATFORM_RADIUS_MIN_M = 0.5;
-const PLATFORM_RADIUS_MAX_M = 3;
-/** Tilt of the arms (and thus the chips/cones): arms tilt upward from the mast, one value for all. */
-let radarTiltDeg = 15;
-/** Toggle: semi-transparent blue cone meshes (`radar-cone-viz`) on each sensor */
+/** Central radar mast, wooden hub disk, and slats to each sensor mount. */
+const RADAR_MAST_HEIGHT_M = 4.2;
+const RADAR_MAST_RADIUS_M = 0.1;
+const RADAR_DISK_RADIUS_M = 0.3;
+const RADAR_DISK_THICKNESS_M = 0.04;
+const RADAR_SLAT_RADIUS_M = 0.02;
+const RADAR_WOOD_COLOR = "#8B4513";
+const RADAR_DISK_COLOR = "#a0522d";
+/** Central platform ("sofa/plate"); radius from installation payload. */
+let platformRadiusM = 2.25;
+/** Toggle: semi-transparent blue coverage cone + yellow axis per sensor. */
 let renderRadarCones = false;
 /**
- * Toggle: sensor look direction (blue cone + yellow axis) independent of the
- * arm tilt. If true, the cone points straight down (−Y) no matter how far the
- * arm is tilted (counter-rotation against the `tilt` group).
- */
-let radarConeStraightDown = true;
-/**
- * Full opening angle of the radar spotlight (A-Frame `light.angle`, degrees).
- * The blue cone (`radar-cone-viz`) uses the same angle — half-angle = /2.
+ * Full opening angle of the LD6001A (±60° azimuth/pitch → 120° cone). The blue
+ * cone (`radar-cone-viz`) uses the same angle — half-angle = /2.
  */
 const RADAR_SPOT_ANGLE_DEG = 120;
 const RADAR_SPOT_HALF_ANGLE_DEG = RADAR_SPOT_ANGLE_DEG / 2;
-/** Three.js SpotLight: intensity falls to 0 at this distance (m) */
-const RADAR_SPOT_DISTANCE_M = 8;
-/**
- * Number of sensors: one upward-tilting arm (spoke) per sensor from the mast.
- * Stays even in steps of 2 so the star is symmetric.
- */
-const RADAR_COUNT_MIN = 4;
-const RADAR_COUNT_MAX = 12;
-const RADAR_COUNT_STEP = 2;
-let radarCount = 6;
-/** Central mast (below the radar boxes): diameter 5–50 cm, default comes from Phoenix (`mast_diameter_m`). */
-let mastDiameterM = 0.35;
-const MAST_DIAMETER_MIN_M = 0.05;
-const MAST_DIAMETER_MAX_M = 0.5;
-/** Beam star instead of a plate: cross-section (m) and a small central hub against beam crossings. */
-const BEAM_HEIGHT_M = 0.06;
-const BEAM_WIDTH_M = 0.1;
 
-/** Leaning frustum on the platform around the mast: wide at the bottom, narrow at the top. Editable via GUI. */
+/** Same hue palette as `radar_live.ex` `@hues` / `sensor_color/1`. */
+const SENSOR_HUES = [0, 36, 72, 108, 144, 180, 216, 252, 288, 324];
+const SENSOR_BODY_SATURATION = 70;
+const SENSOR_BODY_LIGHTNESS = 75;
+const PANEL_LABEL_COLOR = '#ffffff';
+const PANEL_LABEL_BG = 'rgba(0, 0, 0, 0.88)';
+const SENSOR_LABEL_BG = 'rgba(17, 24, 39, 0.82)';
+const LABEL_OUTWARD_OFFSET_M = 0.28;
+const LABEL_FONT =
+  '700 15px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace';
+
+type SceneLabelKind = 'panel' | 'panel-activity' | 'sensor';
+
+type SceneLabel = {
+  kind: SceneLabelKind;
+  text: string;
+  x: number;
+  y: number;
+  z: number;
+  color: string;
+};
+
+const sceneLabels: SceneLabel[] = [];
+let labelsOverlayEl: HTMLDivElement | null = null;
+let labelsHookRoot: HTMLElement | null = null;
+
+type PanelLabelAnchor = {
+  panelNumber: number;
+  x: number;
+  y: number;
+  z: number;
+};
+
+let panelActivityFactors: Record<number, number> = {};
+const panelLabelAnchors: PanelLabelAnchor[] = [];
+
+function normalizePanelFactors(
+  factors: Record<string, number> | Record<number, number> | undefined,
+): Record<number, number> {
+  const out: Record<number, number> = {};
+  if (!factors) return out;
+  for (const [key, value] of Object.entries(factors)) {
+    const n = Number(key);
+    if (!Number.isFinite(n)) continue;
+    out[n] = Number(value);
+  }
+  return out;
+}
+
+function rebuildPanelLabels() {
+  clearSceneLabels('panel');
+  clearSceneLabels('panel-activity');
+  for (const anchor of panelLabelAnchors) {
+    addSceneLabel(
+      'panel',
+      String(anchor.panelNumber),
+      anchor.x,
+      anchor.y,
+      anchor.z,
+      PANEL_LABEL_COLOR,
+    );
+    const factor = panelActivityFactors[anchor.panelNumber] ?? 0;
+    addSceneLabel(
+      'panel-activity',
+      factor.toFixed(2),
+      anchor.x,
+      anchor.y - 0.28,
+      anchor.z,
+      '#a7f3d0',
+    );
+  }
+  if (labelsHookRoot) refreshSceneLabelsDom(labelsHookRoot);
+}
+
+function setPanelActivityFactors(
+  factors: Record<string, number> | Record<number, number> | undefined,
+) {
+  panelActivityFactors = normalizePanelFactors(factors);
+  if (panelLabelAnchors.length > 0) rebuildPanelLabels();
+}
+
+function clearSceneLabels(kind?: SceneLabelKind) {
+  if (kind) {
+    for (let i = sceneLabels.length - 1; i >= 0; i--) {
+      if (sceneLabels[i]!.kind === kind) sceneLabels.splice(i, 1);
+    }
+  } else {
+    sceneLabels.length = 0;
+  }
+}
+
+function addSceneLabel(
+  kind: SceneLabelKind,
+  text: string,
+  x: number,
+  y: number,
+  z: number,
+  color: string,
+) {
+  sceneLabels.push({ kind, text, x, y, z, color });
+}
+
+function ensureLabelsOverlay(root: HTMLElement): HTMLDivElement {
+  labelsHookRoot = root;
+  if (getComputedStyle(root).position === 'static') {
+    root.style.position = 'relative';
+  }
+  if (!labelsOverlayEl) {
+    labelsOverlayEl = document.createElement('div');
+    labelsOverlayEl.className = 'scene-labels-overlay';
+    Object.assign(labelsOverlayEl.style, {
+      position: 'absolute',
+      inset: '0',
+      pointerEvents: 'none',
+      overflow: 'hidden',
+      zIndex: '2',
+    });
+    root.appendChild(labelsOverlayEl);
+  }
+  return labelsOverlayEl;
+}
+
+function refreshSceneLabelsDom(root: HTMLElement) {
+  const overlay = ensureLabelsOverlay(root);
+  overlay.replaceChildren();
+  for (const label of sceneLabels) {
+    const el = document.createElement('div');
+    el.className = `scene-label scene-label--${label.kind}`;
+    el.textContent = label.text;
+    el.style.position = 'absolute';
+    el.style.transform = 'translate(-50%, -50%)';
+    el.style.font = LABEL_FONT;
+    el.style.color = label.color;
+    el.style.padding = '3px 8px';
+    el.style.borderRadius = '4px';
+    el.style.whiteSpace = 'nowrap';
+    el.style.visibility = 'hidden';
+    if (label.kind === 'panel') {
+      el.style.background = PANEL_LABEL_BG;
+      el.style.border = '1.5px solid rgba(255, 255, 255, 0.35)';
+      el.style.boxShadow = '0 1px 6px rgba(0, 0, 0, 0.55)';
+      el.style.textShadow = '0 1px 2px rgba(0, 0, 0, 0.9)';
+    } else if (label.kind === 'panel-activity') {
+      el.style.background = PANEL_LABEL_BG;
+      el.style.border = '1px solid rgba(167, 243, 208, 0.45)';
+      el.style.boxShadow = '0 1px 6px rgba(0, 0, 0, 0.55)';
+      el.style.textShadow = '0 1px 2px rgba(0, 0, 0, 0.9)';
+      el.style.font =
+        '700 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace';
+    } else {
+      el.style.background = SENSOR_LABEL_BG;
+    }
+    el.dataset.x = String(label.x);
+    el.dataset.y = String(label.y);
+    el.dataset.z = String(label.z);
+    overlay.appendChild(el);
+  }
+}
+
+function syncSceneLabelsDom() {
+  if (!labelsOverlayEl) return;
+  const sceneEl = document.querySelector('a-scene') as any;
+  const camEl = document.querySelector('#cameraRig') as any;
+  if (!sceneEl?.canvas || !camEl) return;
+
+  const T = getThree();
+  const threeCam = camEl.getObject3D('camera');
+  if (!threeCam) return;
+
+  const canvas = sceneEl.canvas as HTMLCanvasElement;
+  const canvasRect = canvas.getBoundingClientRect();
+  const overlayRect = labelsOverlayEl.getBoundingClientRect();
+  const offsetX = canvasRect.left - overlayRect.left;
+  const offsetY = canvasRect.top - overlayRect.top;
+  const w = canvasRect.width;
+  const h = canvasRect.height;
+  const pos = new T.Vector3();
+
+  for (const child of labelsOverlayEl.children) {
+    const el = child as HTMLDivElement;
+    pos.set(Number(el.dataset.x), Number(el.dataset.y), Number(el.dataset.z));
+    pos.project(threeCam);
+    if (pos.z > 1) {
+      el.style.visibility = 'hidden';
+      continue;
+    }
+    el.style.left = `${(pos.x * 0.5 + 0.5) * w + offsetX}px`;
+    el.style.top = `${(-pos.y * 0.5 + 0.5) * h + offsetY}px`;
+    el.style.visibility = 'visible';
+  }
+}
+
+function destroySceneLabels() {
+  labelsOverlayEl?.remove();
+  labelsOverlayEl = null;
+  labelsHookRoot = null;
+  sceneLabels.length = 0;
+}
+
+function sensorHue(deviceId: number): number {
+  return SENSOR_HUES[(deviceId * 7) % SENSOR_HUES.length]!;
+}
+
+function sensorColor(deviceId: number): string {
+  return `hsl(${sensorHue(deviceId)}, ${SENSOR_BODY_SATURATION}%, ${SENSOR_BODY_LIGHTNESS}%)`;
+}
+
+function deviceLetter(deviceId: number): string {
+  return String.fromCharCode(64 + Math.max(1, deviceId));
+}
+
+/** Cylinder between two world-space points (local Y axis of `a-cylinder`). */
+function createWoodSlat(
+  x1: number,
+  y1: number,
+  z1: number,
+  x2: number,
+  y2: number,
+  z2: number,
+  radiusM: number,
+  color: string,
+): HTMLElement {
+  const T = getThree();
+  const start = new T.Vector3(x1, y1, z1);
+  const end = new T.Vector3(x2, y2, z2);
+  const dir = new T.Vector3().subVectors(end, start);
+  const length = dir.length();
+  const host = document.createElement('a-entity');
+  if (length < 0.001) return host;
+
+  const mid = new T.Vector3().addVectors(start, end).multiplyScalar(0.5);
+  const quat = new T.Quaternion().setFromUnitVectors(
+    new T.Vector3(0, 1, 0),
+    dir.normalize(),
+  );
+  host.object3D.position.copy(mid);
+  host.object3D.quaternion.copy(quat);
+
+  const slat = document.createElement('a-cylinder');
+  slat.setAttribute('radius', radiusM.toString());
+  slat.setAttribute('height', length.toString());
+  slat.setAttribute('color', color);
+  slat.setAttribute('roughness', '0.78');
+  host.appendChild(slat);
+  return host;
+}
+
+/** Leaning frustum on the platform: wide at the bottom, narrow at the top. Editable via GUI. */
 let leanPostBottomR = 0.5;
 let leanPostTopR = 0.1;
 let leanPostHeight = 1.2;
@@ -209,11 +446,6 @@ const LEAN_POST_TOP_R_MIN_M = 0.02;
 const LEAN_POST_TOP_R_MAX_M = 2.5;
 const LEAN_POST_HEIGHT_MIN_M = 0.2;
 const LEAN_POST_HEIGHT_MAX_M = 3.0;
-
-function clampRadarCount(v: number): number {
-  const snapped = Math.round(Number(v) / RADAR_COUNT_STEP) * RADAR_COUNT_STEP;
-  return Math.min(RADAR_COUNT_MAX, Math.max(RADAR_COUNT_MIN, snapped));
-}
 
 let radarLilGui: GUI | null = null;
 
@@ -231,7 +463,8 @@ let cameraDamping = 0.1;
 let cameraAutoRotate = false;
 let cameraAutoRotateSpeed = 0.6;
 let cameraEnablePan = true;
-let cameraInitialPos: [number, number, number] = [0, 4, 14];
+/** South of center (+Z = north / north_panel faces away) — matches radar top-down. */
+let cameraInitialPos: [number, number, number] = [0, 4, -14];
 
 function applyCameraAttributes() {
   const cam = document.querySelector("#cameraRig") as any;
@@ -261,243 +494,142 @@ function applyCameraAttributes() {
 }
 
 /**
- * Footprint of the spherically-capped radar cone on the ground plane (y = 0).
- *
- * The `radar-cone-viz` cone has its apex at the sensor, half-angle θ and slant
- * length L (= spherical cap instead of a flat base). At tilt > 0 the ground
- * intersection is a conic (ellipse/parabola), additionally bounded by the cap.
- * We derive the longest chord (Ø max) and the extent perpendicular to it
- * (Ø min) from the sampled boundary points.
- *
- * Assumption: yaw = 0 (all sensors are parametrized identically, only rotated
- * in yaw — the footprint is invariant under yaw-rotation of the apex position).
+ * Shared straight-down cone geometry: apex at the chip underside, ground circle
+ * radius = min(range, yApex·tan(60°)). When range-limited the viz uses a
+ * smaller effective half-angle so the blue cone rim meets the yellow footprint.
  */
-type RadarFootprint = {
-  hasGroundHit: boolean;
-  maxDiameterM: number;
-  minDiameterM: number;
-  groundReachMaxM: number;
-  groundReachMinM: number;
-};
+function sensorConeParams(pose: SensorPose): {
+  yApex: number;
+  groundRadiusM: number;
+  slantLengthM: number;
+  halfAngleDeg: number;
+} {
+  const heightM = pose.heightCm / 100;
+  const yApex = heightM - RADAR_CHIP_H_M;
+  const rangeM = pose.rangeCm / 100;
+  const halfAngleRad = (RADAR_SPOT_HALF_ANGLE_DEG * Math.PI) / 180;
+  const geomRadiusM = yApex * Math.tan(halfAngleRad);
+  const groundRadiusM = Math.max(0, Math.min(rangeM, geomRadiusM));
 
-/**
- * Ground footprint outline of a single radar cone. For each azimuth ψ around
- * the sensor's foot point (0, r0) we intersect the beam with the ground plane
- * (y = 0). A ground point is lit iff it lies within the spherical cap (distance
- * ≤ L from the apex) AND inside the cone half-angle θ, so the boundary radius
- * at ψ is min(R_cap, R_cone(ψ)). The cone condition is a quadratic in R.
- * Points come out ordered by ψ (no convex sorting needed) as (x, z) in the
- * sensor-local frame (yaw = 0, +z radially outward). Empty when the cone
- * never reaches the ground. Handles the straight-down case (tilt = 0) too,
- * where the footprint is a plain circle.
- */
-function computeRadarConeGroundBoundary(): Array<[number, number]> {
-  const { armTiltDeg, chipHeight, horizontalRadius } = computeRadarArmGeometry();
-  const h = chipHeight;
-  const r0 = horizontalRadius;
-  if (h <= 0) return [];
-
-  // Cone axis is vertical (tilt = 0) when the sensor is decoupled to point straight down.
-  const coneTiltDeg = radarConeStraightDown ? 0 : armTiltDeg;
-  const tiltRad = (coneTiltDeg * Math.PI) / 180;
-  const theta = (RADAR_SPOT_HALF_ANGLE_DEG * Math.PI) / 180;
-  const L = RADAR_SPOT_DISTANCE_M;
-  // Apex sits at height h; if h ≥ L not even the spherical cap can touch the ground.
-  if (h >= L) return [];
-  const cosT = Math.cos(tiltRad);
-  const sinT = Math.sin(tiltRad);
-  const c = Math.cos(theta);
-  const rCap = Math.sqrt(L * L - h * h);
-
-  const pts: Array<[number, number]> = [];
-  const steps = 240;
-  for (let i = 0; i < steps; i++) {
-    const psi = (i / steps) * 2 * Math.PI;
-    // Cone boundary: (A²−c²)R² + 2AB·R + (B²−c²h²) = 0 with A = sinψ·sinT, B = h·cosT.
-    const A = Math.sin(psi) * sinT;
-    const B = h * cosT;
-    const qa = A * A - c * c;
-    const qb = 2 * A * B;
-    const qc = B * B - c * c * h * h;
-    let rCone = Infinity;
-    const cand: number[] = [];
-    if (Math.abs(qa) < 1e-9) {
-      if (Math.abs(qb) > 1e-9) cand.push(-qc / qb);
-    } else {
-      const disc = qb * qb - 4 * qa * qc;
-      if (disc >= 0) {
-        const s = Math.sqrt(disc);
-        cand.push((-qb + s) / (2 * qa));
-        cand.push((-qb - s) / (2 * qa));
-      }
-    }
-    for (const R of cand) {
-      // Keep the nearest positive root on the downward-facing sheet.
-      if (R > 1e-6 && B + A * R >= -1e-9 && R < rCone) rCone = R;
-    }
-    const R = Math.min(rCone, rCap);
-    if (Number.isFinite(R)) pts.push([R * Math.cos(psi), r0 + R * Math.sin(psi)]);
+  if (groundRadiusM <= 0 || yApex <= 0) {
+    return {
+      yApex,
+      groundRadiusM: 0,
+      slantLengthM: 0,
+      halfAngleDeg: RADAR_SPOT_HALF_ANGLE_DEG,
+    };
   }
-  return pts;
+
+  const rangeLimited = rangeM + 1e-6 < geomRadiusM;
+  const slantLengthM = rangeLimited
+    ? Math.hypot(yApex, groundRadiusM)
+    : yApex / Math.cos(halfAngleRad);
+  const halfAngleDeg = rangeLimited
+    ? (Math.atan(groundRadiusM / yApex) * 180) / Math.PI
+    : RADAR_SPOT_HALF_ANGLE_DEG;
+
+  return { yApex, groundRadiusM, slantLengthM, halfAngleDeg };
 }
 
-function computeRadarConeGroundFootprint(): RadarFootprint {
-  const empty: RadarFootprint = {
-    hasGroundHit: false,
-    maxDiameterM: 0,
-    minDiameterM: 0,
-    groundReachMaxM: 0,
-    groundReachMinM: 0,
-  };
-  const { horizontalRadius } = computeRadarArmGeometry();
-  const r0 = horizontalRadius;
-  const points = computeRadarConeGroundBoundary();
+/** Ground footprint radius (m) — see `sensorConeParams/1`. */
+function sensorGroundRadiusM(pose: SensorPose): number {
+  return sensorConeParams(pose).groundRadiusM;
+}
 
-  if (points.length < 2) return empty;
-
-  // Ø max: longest pairwise distance (O(N²), N ≈ 240 → fine, runs only on-change).
-  let maxD2 = 0;
-  let i1 = 0;
-  let i2 = 0;
-  for (let i = 0; i < points.length; i++) {
-    for (let j = i + 1; j < points.length; j++) {
-      const dx = points[i][0] - points[j][0];
-      const dz = points[i][1] - points[j][1];
-      const d2 = dx * dx + dz * dz;
-      if (d2 > maxD2) {
-        maxD2 = d2;
-        i1 = i;
-        i2 = j;
-      }
-    }
+/**
+ * Sensor mount position on the ground plane (aframe X/Z). Uses server-computed
+ * coordinates when present (matches radar_live sensor_position).
+ */
+function sensorGroundPos(pose: SensorPose): { x: number; z: number } {
+  if (Number.isFinite(pose.xM) && Number.isFinite(pose.zM)) {
+    return radarGlobalToAframeXZ(pose.xM, pose.zM);
   }
-  const major = Math.sqrt(maxD2);
+  const d = pose.distanceCm / 100;
+  const a = (pose.angleDeg * Math.PI) / 180;
+  return radarGlobalToAframeXZ(d * Math.cos(a), d * Math.sin(a));
+}
 
-  // Ø min: extent perpendicular to the major axis.
-  const dx = points[i2][0] - points[i1][0];
-  const dz = points[i2][1] - points[i1][1];
-  const len = Math.sqrt(dx * dx + dz * dz) || 1;
-  const ux = -dz / len;
-  const uz = dx / len;
-  let pMin = Infinity;
-  let pMax = -Infinity;
-  for (const p of points) {
-    const proj = p[0] * ux + p[1] * uz;
-    if (proj < pMin) pMin = proj;
-    if (proj > pMax) pMax = proj;
-  }
-  const minor = pMax - pMin;
+function panelSlotForIndex(i: number): PanelSlot {
+  const slot = panelSlots.find((p) => p.index === i);
+  if (slot) return slot;
 
-  // Reach from the sensor foot point (0, r0) on the ground.
-  let reachMin = Infinity;
-  let reachMax = -Infinity;
-  for (const p of points) {
-    const ddx = p[0];
-    const ddz = p[1] - r0;
-    const d = Math.sqrt(ddx * ddx + ddz * ddz);
-    if (d < reachMin) reachMin = d;
-    if (d > reachMax) reachMax = d;
-  }
-
+  const offset = ((i - (northPanel - 1)) % numPanels + numPanels) % numPanels;
+  const angle = (offset / numPanels) * Math.PI * 2;
+  const centerR = ringRadiusM + panelDepthM / 2;
+  const { x, z } = radarGlobalToAframeXZ(
+    centerR * Math.sin(angle),
+    centerR * Math.cos(angle),
+  );
   return {
-    hasGroundHit: true,
-    maxDiameterM: major,
-    minDiameterM: minor,
-    groundReachMaxM: reachMax,
-    groundReachMinM: reachMin,
+    index: i,
+    panelNumber: i + 1,
+    xM: x,
+    zM: z,
+    rotationY: Math.atan2(x, z) + Math.PI,
   };
 }
 
 const radarFootprintInfo = {
-  footprintMaxM: 0,
-  footprintMinM: 0,
-  reachMaxM: 0,
-  reachMinM: 0,
-  beamTopMaxM: 0,
+  footprintDiameterM: 0,
+  reachM: 0,
+  sensorHeightM: 0,
 };
 
-/**
- * Highest point of the arms: top outer edge at the free arm end. The center
- * line ends at `chipHeight`; due to the arm thickness the top edge sits
- * BEAM_HEIGHT_M/2 higher perpendicular to the arm axis, projected vertically
- * by ·cos(tilt).
- */
-function computeBeamTopMaxHeight(): number {
-  const { armTiltDeg, chipHeight } = computeRadarArmGeometry();
-  const tiltRad = (armTiltDeg * Math.PI) / 180;
-  return chipHeight + (BEAM_HEIGHT_M / 2) * Math.cos(tiltRad);
-}
-
 function updateRadarFootprintInfo() {
-  const fp = computeRadarConeGroundFootprint();
   const round3 = (v: number) => Math.round(v * 1000) / 1000;
-  radarFootprintInfo.footprintMaxM = round3(fp.maxDiameterM);
-  radarFootprintInfo.footprintMinM = round3(fp.minDiameterM);
-  radarFootprintInfo.reachMaxM = round3(fp.groundReachMaxM);
-  radarFootprintInfo.reachMinM = round3(fp.groundReachMinM);
-  radarFootprintInfo.beamTopMaxM = round3(computeBeamTopMaxHeight());
+  const pose = sensorPoses[0];
+
+  if (!pose) {
+    radarFootprintInfo.footprintDiameterM = 0;
+    radarFootprintInfo.reachM = 0;
+    radarFootprintInfo.sensorHeightM = 0;
+    return;
+  }
+
+  const r = sensorGroundRadiusM(pose);
+  radarFootprintInfo.footprintDiameterM = round3(2 * r);
+  radarFootprintInfo.reachM = round3(r);
+  radarFootprintInfo.sensorHeightM = round3(pose.heightCm / 100);
 }
 
-/** Cone axis (from the sensor into the cone) as in `createRadarSensors`: R_y(yaw) · R_x(-tilt) · (0,-1,0). */
-function radarConeAxisFromTiltYawDeg(tiltDeg: number, yawDeg: number) {
-  const T = getThree();
-  const ax = new T.Vector3(0, -1, 0);
-  const xAxis = new T.Vector3(1, 0, 0);
-  const yAxis = new T.Vector3(0, 1, 0);
-  ax.applyAxisAngle(xAxis, T.MathUtils.degToRad(-tiltDeg));
-  ax.applyAxisAngle(yAxis, T.MathUtils.degToRad(yawDeg));
-  ax.normalize();
-  return ax;
-}
-
-/** Max arm tilt; prevents `armLen`/`chipHeight` from diverging as tilt→90°. */
-const RADAR_ARM_TILT_MAX_DEG = 85;
-
-/**
- * Geometry of the upward-tilting arms: the mount at the mast is fixed at
- * `radarHeight` (= mast height). `radarRadiusM` is the **arm length** itself
- * (not the horizontal distance): at 0° tilt both coincide; at tilt t the
- * horizontal distance shrinks to `L·cos(t)` and the outer end rises to
- * `innerY + L·sin(t)`.
- * `armLen = radarRadiusM`, `horizontalRadius = L·cos(tilt)`,
- * `chipHeight = innerY + L·sin(tilt)`.
- */
-function computeRadarArmGeometry(): {
-  innerY: number;
-  armTiltDeg: number;
-  armLen: number;
-  horizontalRadius: number;
-  chipHeight: number;
-} {
-  const innerY = radarHeight;
-  const armTiltDeg = Math.max(0, Math.min(RADAR_ARM_TILT_MAX_DEG, radarTiltDeg));
-  const tiltRad = (armTiltDeg * Math.PI) / 180;
-  const armLen = radarRadiusM;
-  const horizontalRadius = radarRadiusM * Math.cos(tiltRad);
-  const chipHeight = innerY + radarRadiusM * Math.sin(tiltRad);
-  return { innerY, armTiltDeg, armLen, horizontalRadius, chipHeight };
-}
+type InstallationPayload = {
+  ring_radius_m?: number | null;
+  num_panels?: number;
+  north_panel?: number;
+  platform_radius_m?: number | null;
+  panel_width_m?: number | null;
+  panel_depth_m?: number | null;
+  panels?: Array<{
+    index: number;
+    panel_number: number;
+    x_m: number;
+    z_m: number;
+    rotation_y: number;
+  }>;
+  sensors?: Array<{
+    device_id?: number;
+    angle_deg: number;
+    rotation_deg?: number;
+    distance_cm: number;
+    range_cm: number;
+    height_cm: number;
+    x_m?: number;
+    z_m?: number;
+  }>;
+};
 
 type Param = {
   param: {
-    diameter?: number;
     move?: [number, number];
     position?: [number, number];
     height?: number;
     pole_diameter?: number;
     foot_diameter?: number;
     button_diameter?: number;
-    radar_count?: number;
-    radar_height?: number;
-    radar_tilt_deg?: number;
-    radar_arm_length_m?: number;
-    mast_diameter_m?: number;
-    platform_radius_m?: number;
     lean_post_bottom_r?: number;
     lean_post_top_r?: number;
     lean_post_height?: number;
     render_radar_cones?: boolean;
-    radar_cone_straight_down?: boolean;
   };
 };
 
@@ -509,12 +641,14 @@ class Pixels3dAframeHook extends Hook {
       console.error('AFRAME not loaded!');
       return;
     }
-    const canvas = this.el as HTMLCanvasElement;
-    const id = canvas.id;
-    this.registerShaders();
-    this.createScene();
+    const root = this.el as HTMLElement;
+    const id = root.id;
+
     this.handleEvent(`param:${id}`, ({ param: param }: Param) => {
       this.handleParams(param)
+    });
+    this.handleEvent(`installation:${id}`, (payload: InstallationPayload) => {
+      this.handleInstallation(payload);
     });
     this.handleEvent(
       `radar_frame:${id}`,
@@ -538,6 +672,12 @@ class Pixels3dAframeHook extends Hook {
         }
       }
     );
+    this.handleEvent(
+      `panel_activity:${id}`,
+      (payload: { factors?: Record<string, number> }) => {
+        setPanelActivityFactors(payload?.factors);
+      },
+    );
     const events = ['frame:pixels-*', `frame:${id}`];
     events.forEach((event) => {
       this.handleEvent(event, ({ frame }: { frame: Frame }) => {
@@ -546,6 +686,17 @@ class Pixels3dAframeHook extends Hook {
         }
       });
     });
+
+    const embedded = root.dataset.installation;
+    if (embedded) {
+      try {
+        this.applyInstallationState(JSON.parse(embedded));
+      } catch (error) {
+        console.warn("Pixels3dAframe: failed to parse data-installation", error);
+      }
+    }
+
+    this.createScene();
   }
 
   createScene() {
@@ -560,6 +711,7 @@ class Pixels3dAframeHook extends Hook {
     sceneEl.style.width = "100%";
     sceneEl.style.height = "100vh";
 
+    this.registerShaders();
     this.registerComponents();
     const assetsEl = this.createAssets();
     sceneEl.appendChild(assetsEl);
@@ -584,16 +736,8 @@ class Pixels3dAframeHook extends Hook {
     const centralCylinder = this.createCentralCylinder();
     sceneEl.appendChild(centralCylinder);
 
-    const leanPost = this.createLeanPost();
-    sceneEl.appendChild(leanPost);
-
-    this.applyRadarMastConstraints();
-
     const radarGround = this.createRadarGroundRings();
     sceneEl.appendChild(radarGround);
-
-    const radarMast = this.createRadarMast();
-    sceneEl.appendChild(radarMast);
 
     const radarSensors = this.createRadarSensors();
     sceneEl.appendChild(radarSensors);
@@ -608,6 +752,8 @@ class Pixels3dAframeHook extends Hook {
     sceneEl.appendChild(cameraRig);
 
     this.el.appendChild(sceneEl);
+    refreshSceneLabelsDom(root);
+    sceneEl.setAttribute('html-labels-sync', '');
     this.setupRadarGui();
   }
 
@@ -626,34 +772,24 @@ class Pixels3dAframeHook extends Hook {
     // Collapsed by default.
     gui.close();
 
-    // World geometry (panels/radar/platform/backrest) is now driven exclusively
-    // via Phoenix (`Params.Sim3d` → `handleParams`). lil-gui only holds the
-    // read-only info HUD and the client-side camera controls.
+    // Panel ring, radar poses, and platform come from the installation payload;
+    // lean-post cosmetics from `Params.Sim3d`. lil-gui holds the read-only info
+    // HUD and client-side camera controls.
     updateRadarFootprintInfo();
     const infoFolder = gui.addFolder("Info (Boden-Footprint)");
     infoFolder
-      .add(radarFootprintInfo, "footprintMaxM")
-      .name("Ø max (m)")
+      .add(radarFootprintInfo, "footprintDiameterM")
+      .name("Ø (m)")
       .listen()
       .disable();
     infoFolder
-      .add(radarFootprintInfo, "footprintMinM")
-      .name("Ø min (m)")
+      .add(radarFootprintInfo, "reachM")
+      .name("Reichweite (m)")
       .listen()
       .disable();
     infoFolder
-      .add(radarFootprintInfo, "reachMaxM")
-      .name("Reichweite max (m)")
-      .listen()
-      .disable();
-    infoFolder
-      .add(radarFootprintInfo, "reachMinM")
-      .name("Reichweite min (m)")
-      .listen()
-      .disable();
-    infoFolder
-      .add(radarFootprintInfo, "beamTopMaxM")
-      .name("Latten-Oberkante max (m)")
+      .add(radarFootprintInfo, "sensorHeightM")
+      .name("Sensor-Höhe (m)")
       .listen()
       .disable();
     infoFolder.open();
@@ -746,6 +882,7 @@ class Pixels3dAframeHook extends Hook {
   destroyed() {
     radarLilGui?.destroy();
     radarLilGui = null;
+    destroySceneLabels();
   }
 
   /**
@@ -885,31 +1022,37 @@ class Pixels3dAframeHook extends Hook {
   createRadarGroundRings() {
     const g = document.createElement('a-entity');
     g.setAttribute('id', 'radar-ground-rings');
-    const inner = document.createElement('a-ring');
-    inner.setAttribute('position', '0 0.02 0');
-    inner.setAttribute('rotation', '-90 0 0');
-    const { horizontalRadius } = computeRadarArmGeometry();
-    const rInner = Math.max(0, horizontalRadius - 0.01);
-    const rOuter = horizontalRadius + 0.01;
-    inner.setAttribute('radius-inner', rInner.toString());
-    inner.setAttribute('radius-outer', rOuter.toString());
-    inner.setAttribute(
-      'material',
-      'shader: flat; color: #222; opacity: 0.85; transparent: true; side: double'
-    );
-    g.appendChild(inner);
-    const outer = document.createElement('a-ring');
-    outer.setAttribute('id', 'radar-outer-ring');
-    outer.setAttribute('position', '0 0.015 0');
-    outer.setAttribute('rotation', '-90 0 0');
-    const outerR = panelDiameter / 2;
-    outer.setAttribute('radius-inner', (outerR - 0.04).toString());
-    outer.setAttribute('radius-outer', (outerR + 0.04).toString());
-    outer.setAttribute(
-      'material',
-      'shader: flat; color: #4488cc; opacity: 0.35; transparent: true; side: double'
-    );
-    g.appendChild(outer);
+
+    // Thin ring marking the sensor mounting circle (radial distance from center).
+    const sensorRadius =
+      sensorPoses.length > 0 ? sensorPoses[0].distanceCm / 100 : 0;
+    if (sensorRadius > 0) {
+      const inner = document.createElement('a-ring');
+      inner.setAttribute('position', '0 0.02 0');
+      inner.setAttribute('rotation', '-90 0 0');
+      inner.setAttribute('radius-inner', Math.max(0, sensorRadius - 0.01).toString());
+      inner.setAttribute('radius-outer', (sensorRadius + 0.01).toString());
+      inner.setAttribute(
+        'material',
+        'shader: flat; color: #222; opacity: 0.85; transparent: true; side: double'
+      );
+      g.appendChild(inner);
+    }
+
+    // Outer ring on the LED panel ring radius (optional radar debug overlay).
+    if (renderRadarCones) {
+      const outer = document.createElement('a-ring');
+      outer.setAttribute('id', 'radar-outer-ring');
+      outer.setAttribute('position', '0 0.015 0');
+      outer.setAttribute('rotation', '-90 0 0');
+      outer.setAttribute('radius-inner', (ringRadiusM - 0.04).toString());
+      outer.setAttribute('radius-outer', (ringRadiusM + 0.04).toString());
+      outer.setAttribute(
+        'material',
+        'shader: flat; color: #4488cc; opacity: 0.35; transparent: true; side: double'
+      );
+      g.appendChild(outer);
+    }
     return g;
   }
 
@@ -923,179 +1066,160 @@ class Pixels3dAframeHook extends Hook {
   createRadarGroundFootprints() {
     const root = document.createElement('a-entity');
     root.setAttribute('id', 'radar-ground-footprints');
-    if (!renderRadarCones) return root;
-
-    const boundary = computeRadarConeGroundBoundary();
-    if (boundary.length < 3) return root;
+    if (!renderRadarCones || sensorPoses.length === 0) return root;
 
     const T = getThree();
-    const n = clampRadarCount(radarCount);
     const y = 0.03;
     const FOOTPRINT_COLOR = 0xffee00;
 
-    // Centroid for the fill's triangle fan.
-    let cx = 0;
-    let cz = 0;
-    for (const p of boundary) {
-      cx += p[0];
-      cz += p[1];
-    }
-    cx /= boundary.length;
-    cz /= boundary.length;
+    for (const pose of sensorPoses) {
+      const r = sensorGroundRadiusM(pose);
+      if (r <= 0) continue;
+      const { x, z } = sensorGroundPos(pose);
 
-    // Fill: triangle fan from the centroid (footprint is convex).
-    const fillPos: number[] = [];
-    for (let i = 0; i < boundary.length; i++) {
-      const a = boundary[i];
-      const b = boundary[(i + 1) % boundary.length];
-      fillPos.push(cx, y, cz, a[0], y, a[1], b[0], y, b[1]);
-    }
-    const fillGeo = new T.BufferGeometry();
-    fillGeo.setAttribute(
-      'position',
-      new T.Float32BufferAttribute(fillPos, 3)
-    );
-    const fillMat = new T.MeshBasicMaterial({
-      color: FOOTPRINT_COLOR,
-      transparent: true,
-      opacity: 0.15,
-      depthWrite: false,
-      side: T.DoubleSide,
-    });
+      const disc = document.createElement('a-ring');
+      disc.setAttribute('position', `${x} ${y} ${z}`);
+      disc.setAttribute('rotation', '-90 0 0');
+      disc.setAttribute('radius-inner', '0');
+      disc.setAttribute('radius-outer', r.toString());
+      disc.setAttribute(
+        'material',
+        'shader: flat; color: #ffee00; opacity: 0.15; transparent: true; side: double'
+      );
+      root.appendChild(disc);
 
-    // Outline: closed line along the boundary, nudged up slightly to avoid z-fighting.
-    const linePts = boundary.map(
-      (p) => new T.Vector3(p[0], y + 0.002, p[1])
-    );
-    const lineGeo = new T.BufferGeometry().setFromPoints(linePts);
-    const lineMat = new T.LineBasicMaterial({ color: FOOTPRINT_COLOR });
-
-    for (let i = 0; i < n; i++) {
-      const yawDeg = T.MathUtils.radToDeg((i / n) * Math.PI * 2);
+      // Bright outline slightly above the fill to avoid z-fighting.
+      const steps = 96;
+      const pts: any[] = [];
+      for (let i = 0; i <= steps; i++) {
+        const a = (i / steps) * Math.PI * 2;
+        pts.push(new T.Vector3(x + r * Math.cos(a), y + 0.002, z + r * Math.sin(a)));
+      }
+      const lineGeo = new T.BufferGeometry().setFromPoints(pts);
+      const lineMat = new T.LineBasicMaterial({ color: FOOTPRINT_COLOR });
       const host = document.createElement('a-entity');
-      host.setAttribute('rotation', `0 ${yawDeg} 0`);
-      const group = new T.Group();
-      group.add(new T.Mesh(fillGeo, fillMat));
-      group.add(new T.LineLoop(lineGeo, lineMat));
-      host.setObject3D('mesh', group);
+      host.setObject3D('mesh', new T.LineLoop(lineGeo, lineMat));
       root.appendChild(host);
     }
     return root;
   }
 
   /**
-   * Circle of the radar boxes: radius at least the mast radius (distance ≥ mast-diameter/2).
-   * @returns true if radarRadiusM was adjusted (GUI may need to be rebuilt)
+   * Central mast + hub disk + slats to each sensor. Sensors stay at their real
+   * installation poses; slats run from the disk edge up (~15° with Nation2026
+   * geometry) to the underside of each radar chip.
    */
-  applyRadarMastConstraints(): boolean {
-    const rMin = mastDiameterM / 2;
-    const prev = radarRadiusM;
-    radarRadiusM = Math.max(rMin, Math.min(RADAR_RADIUS_MAX_M, radarRadiusM));
-    return Math.abs(prev - radarRadiusM) > 1e-9;
-  }
+  createRadarMastAssembly() {
+    const root = document.createElement('a-entity');
+    root.setAttribute('id', 'radar-mast');
 
-  /**
-   * Central mast (#8B4513) from the pedestal (0.5 m) up to the hub (`innerY`),
-   * where the upward-tilting arms converge. The arms themselves (one per sensor)
-   * and the chips are built in `createRadarSensors`, because they share the same
-   * tilt per sensor.
-   */
-  createRadarMast() {
-    const holder = document.createElement("a-entity");
-    holder.setAttribute("id", "radar-mast");
-    const { innerY } = computeRadarArmGeometry();
+    const mast = document.createElement('a-cylinder');
+    mast.setAttribute('radius', RADAR_MAST_RADIUS_M.toString());
+    mast.setAttribute('height', RADAR_MAST_HEIGHT_M.toString());
+    mast.setAttribute('color', RADAR_WOOD_COLOR);
+    mast.setAttribute('roughness', '0.72');
+    mast.setAttribute('position', `0 ${RADAR_MAST_HEIGHT_M / 2} 0`);
+    root.appendChild(mast);
 
-    const mastBodyH = Math.max(0, innerY - PEDESTAL_TOP_Y_M);
-    if (mastBodyH > 1e-6) {
-      const cyl = document.createElement("a-cylinder");
-      cyl.setAttribute("radius", (mastDiameterM / 2).toString());
-      cyl.setAttribute("height", mastBodyH.toString());
-      cyl.setAttribute("color", "#8B4513");
-      cyl.setAttribute("roughness", "0.65");
-      cyl.setAttribute("position", `0 ${PEDESTAL_TOP_Y_M + mastBodyH / 2} 0`);
-      holder.appendChild(cyl);
+    const disk = document.createElement('a-cylinder');
+    disk.setAttribute('radius', RADAR_DISK_RADIUS_M.toString());
+    disk.setAttribute('height', RADAR_DISK_THICKNESS_M.toString());
+    disk.setAttribute('color', RADAR_DISK_COLOR);
+    disk.setAttribute('roughness', '0.68');
+    disk.setAttribute(
+      'position',
+      `0 ${RADAR_MAST_HEIGHT_M + RADAR_DISK_THICKNESS_M / 2} 0`,
+    );
+    root.appendChild(disk);
+
+    const diskTopY = RADAR_MAST_HEIGHT_M + RADAR_DISK_THICKNESS_M;
+
+    for (const pose of sensorPoses) {
+      const { x, z } = sensorGroundPos(pose);
+      const dist = Math.hypot(x, z);
+      if (dist < 0.001) continue;
+
+      const height = pose.heightCm / 100;
+      const chipBottomY = height - RADAR_CHIP_H_M;
+      const ux = x / dist;
+      const uz = z / dist;
+      const innerX = ux * RADAR_DISK_RADIUS_M;
+      const innerZ = uz * RADAR_DISK_RADIUS_M;
+
+      root.appendChild(
+        createWoodSlat(
+          innerX,
+          diskTopY,
+          innerZ,
+          x,
+          chipBottomY,
+          z,
+          RADAR_SLAT_RADIUS_M,
+          RADAR_WOOD_COLOR,
+        ),
+      );
     }
 
-    // Central hub where the arms converge.
-    const hubR = Math.max(mastDiameterM / 2, BEAM_WIDTH_M * 0.9);
-    const hub = document.createElement("a-cylinder");
-    hub.setAttribute("radius", hubR.toString());
-    hub.setAttribute("height", (BEAM_HEIGHT_M * 1.5).toString());
-    hub.setAttribute("color", "#7a3d11");
-    hub.setAttribute("roughness", "0.7");
-    hub.setAttribute("position", `0 ${innerY} 0`);
-    holder.appendChild(hub);
-    return holder;
+    return root;
   }
 
   /**
-   * One arm per sensor, tilting upward from the mast (hub, `innerY`) to the
-   * outer end. At the outer end, on the underside (facing the ground), sits the
-   * green radar chip; the cone extends from the chip underside along the arm's
-   * underside normal (down/outward). Pivot (yaw) → tilt (arm tilt) →
-   * arm/chip/cone share the same transform.
+   * One sensor per installation radar pose. Each sensor sits at its real global
+   * mount position (X/Z from angle + distance, Y = mounting height) on a slat
+   * from the central mast disk, and always looks straight down: green chip plus
+   * a coverage cone (120° full angle) pointing −Y.
    */
   createRadarSensors() {
+    clearSceneLabels('sensor');
     const root = document.createElement('a-entity');
     root.setAttribute('id', 'radar-sensors');
-    const n = clampRadarCount(radarCount);
-    const T = getThree();
-    const { innerY, armTiltDeg, armLen } = computeRadarArmGeometry();
-    const chipY = -(BEAM_HEIGHT_M / 2 + RADAR_CHIP_H_M / 2);
-    const chipZ = armLen - RADAR_CHIP_D_M / 2;
-    for (let i = 0; i < n; i++) {
-      const angle = (i / n) * Math.PI * 2;
-      // +Z radially outward (without +180 — otherwise sensors point to the center)
-      const yawDeg = T.MathUtils.radToDeg(angle);
-      const pivot = document.createElement('a-entity');
-      pivot.setAttribute('position', `0 ${innerY} 0`);
-      pivot.setAttribute('rotation', `0 ${yawDeg} 0`);
-      const tilt = document.createElement('a-entity');
-      // -armTiltDeg about X: the +Z end (outer) goes up, the underside normal
-      // points down/outward (= cone axis), chip on this underside.
-      tilt.setAttribute('rotation', `${-armTiltDeg} 0 0`);
 
-      // Arm: lies along +Z, inner end at the hub, outer end at the chip.
-      const arm = document.createElement('a-box');
-      arm.setAttribute('width', BEAM_WIDTH_M.toString());
-      arm.setAttribute('height', BEAM_HEIGHT_M.toString());
-      arm.setAttribute('depth', armLen.toString());
-      arm.setAttribute('color', '#8B4513');
-      arm.setAttribute('roughness', '0.65');
-      arm.setAttribute('position', `0 0 ${armLen / 2}`);
-      tilt.appendChild(arm);
+    root.appendChild(this.createRadarMastAssembly());
 
-      // Green chip on the underside of the arm end (facing the ground).
+    for (let i = 0; i < sensorPoses.length; i++) {
+      const pose = sensorPoses[i]!;
+      const { x, z } = sensorGroundPos(pose);
+      const height = pose.heightCm / 100;
+      const deviceId = pose.deviceId || i + 1;
+
+      // Green chip at the sensor, antenna facing down.
       const chip = document.createElement('a-box');
       chip.setAttribute('width', RADAR_CHIP_W_M.toString());
       chip.setAttribute('height', RADAR_CHIP_H_M.toString());
       chip.setAttribute('depth', RADAR_CHIP_D_M.toString());
       chip.setAttribute('color', RADAR_CHIP_COLOR);
       chip.setAttribute('roughness', '0.4');
-      chip.setAttribute('position', `0 ${chipY} ${chipZ}`);
-      tilt.appendChild(chip);
+      chip.setAttribute('position', `${x} ${height - RADAR_CHIP_H_M / 2} ${z}`);
+      root.appendChild(chip);
 
       if (renderRadarCones) {
-        const coneHost = document.createElement('a-entity');
-        // Apex at the chip underside; opening in -Y = arm tilt.
-        coneHost.setAttribute('position', `0 ${chipY - RADAR_CHIP_H_M / 2} ${chipZ}`);
-        // For "straight down", counter-rotate against the tilt group
-        // (+armTiltDeg about X) so the cone axis points to −Y in world space.
-        if (radarConeStraightDown) {
-          coneHost.setAttribute('rotation', `${armTiltDeg} 0 0`);
+        const cone = sensorConeParams(pose);
+        if (cone.slantLengthM > 0) {
+          const yawDeg = pose.angleDeg + pose.rotationDeg;
+          const coneHost = document.createElement('a-entity');
+          coneHost.setAttribute('position', `${x} ${cone.yApex} ${z}`);
+          coneHost.setAttribute('rotation', `0 ${yawDeg} 0`);
+          coneHost.setAttribute(
+            'radar-cone-viz',
+            `length: ${cone.slantLengthM}; halfAngleDeg: ${cone.halfAngleDeg}`,
+          );
+          root.appendChild(coneHost);
         }
-        coneHost.setAttribute(
-          'radar-cone-viz',
-          `length: ${RADAR_SPOT_DISTANCE_M}; halfAngleDeg: ${RADAR_SPOT_HALF_ANGLE_DEG}`
-        );
-        // No a-light spot: it would tint other meshes (mast, ground) blue too; the effect
-        // now comes only from the semi-transparent cone mesh (radar-cone-viz), not from scene lighting.
-        tilt.appendChild(coneHost);
       }
 
-      pivot.appendChild(tilt);
-      root.appendChild(pivot);
+      const radial = Math.hypot(x, z) || 1;
+      const labelX = x + (x / radial) * LABEL_OUTWARD_OFFSET_M;
+      const labelZ = z + (z / radial) * LABEL_OUTWARD_OFFSET_M;
+      addSceneLabel(
+        'sensor',
+        deviceLetter(deviceId),
+        labelX,
+        height + 0.28,
+        labelZ,
+        sensorColor(deviceId),
+      );
     }
+    if (labelsHookRoot) refreshSceneLabelsDom(labelsHookRoot);
     return root;
   }
 
@@ -1166,23 +1290,24 @@ class Pixels3dAframeHook extends Hook {
     skyEl.setAttribute('src', '/images/nog_250711.JPG')
     skyEl.setAttribute('scale', '-0.028 0.028 0.028');
     skyEl.setAttribute('position', '0 1.847 0');
+    // Equirectangular pano: 90° clockwise (viewed from inside) → −Y
+    skyEl.setAttribute('rotation', '0 -90 0');
     return skyEl;
   }
 
   createPanels() {
+    clearSceneLabels('panel');
+    clearSceneLabels('panel-activity');
+    panelLabelAnchors.length = 0;
     panels.length = 0;
     textures.length = 0;
     const panelsEl = document.createElement('a-entity') as any;
     panelsEl.setAttribute('id', 'panels');
     for (let i = 0; i < numPanels; i++) {
-      const angle = (i / numPanels) * Math.PI * 2;
+      const slot = panelSlotForIndex(i);
       const group = document.createElement('a-entity') as any;
-      group.object3D.position.set(
-        (panelDiameter / 2) * Math.sin(angle),
-        0,
-        (panelDiameter / 2) * Math.cos(angle)
-      );
-      group.object3D.rotation.y = angle + Math.PI;
+      group.object3D.position.set(slot.xM, 0, slot.zM);
+      group.object3D.rotation.y = slot.rotationY;
       // 8x8 texture
       const size = 8;
       const data = new Uint8Array(size * size * 4);
@@ -1198,50 +1323,58 @@ class Pixels3dAframeHook extends Hook {
       textures.push(texture);
       // Front plane
       const front = document.createElement('a-entity');
-      front.setAttribute('geometry', `primitive: plane; height: ${PANEL_SIZE}; width: ${PANEL_SIZE}`);
+      front.setAttribute('geometry', `primitive: plane; height: ${panelWidthM}; width: ${panelWidthM}`);
       front.setAttribute('material', 'shader: led-shader; transparent: true');
       front.setAttribute('led-panel', `textureIndex: ${i}; side: front`);
-      front.setAttribute('position', `0 ${poleHeight + PANEL_SIZE/2} ${PANEL_DEPTH/2 + 0.1}`);
+      front.setAttribute('position', `0 ${poleHeight + panelWidthM/2} ${panelDepthM/2 + 0.1}`);
       // Back plane
       const back = document.createElement('a-entity');
-      back.setAttribute('geometry', `primitive: plane; height: ${PANEL_SIZE}; width: ${PANEL_SIZE}`);
+      back.setAttribute('geometry', `primitive: plane; height: ${panelWidthM}; width: ${panelWidthM}`);
       back.setAttribute('material', 'shader: led-shader; transparent: true');
       back.setAttribute('led-panel', `textureIndex: ${i}; side: back`);
       back.setAttribute('rotation', `0 180 0`);
-      back.setAttribute('position', `0 ${poleHeight + PANEL_SIZE/2} ${-(PANEL_DEPTH/2 + 0.1)}`);
+      back.setAttribute('position', `0 ${poleHeight + panelWidthM/2} ${-(panelDepthM/2 + 0.1)}`);
       // Center box (optional, as the panel "body")
       const center = document.createElement('a-entity');
-      center.setAttribute('geometry', `primitive: box; height: ${PANEL_SIZE}; width: ${PANEL_SIZE}; depth: ${PANEL_DEPTH}`);
+      center.setAttribute('geometry', `primitive: box; height: ${panelWidthM}; width: ${panelWidthM}; depth: ${panelDepthM}`);
       center.setAttribute('material', 'color: #fff; roughness: 0.4');
-      center.setAttribute('position', `0 ${poleHeight + PANEL_SIZE/2} 0`);
+      center.setAttribute('position', `0 ${poleHeight + panelWidthM/2} 0`);
       // Poles
       const poleLeft = document.createElement('a-cylinder');
       poleLeft.setAttribute('radius', (poleDiameter / 2).toString());
       poleLeft.setAttribute('height', poleHeight.toString());
       poleLeft.setAttribute('color', '#8B4513');
-      poleLeft.setAttribute('position', `${-PANEL_SIZE/2 + poleDiameter/2} ${poleHeight/2} 0`);
+      poleLeft.setAttribute('position', `${-panelWidthM/2 + poleDiameter/2} ${poleHeight/2} 0`);
       const poleRight = document.createElement('a-cylinder');
       poleRight.setAttribute('radius', (poleDiameter / 2).toString());
       poleRight.setAttribute('height', poleHeight.toString());
       poleRight.setAttribute('color', '#8B4513');
-      poleRight.setAttribute('position', `${PANEL_SIZE/2 - poleDiameter/2} ${poleHeight/2} 0`);
+      poleRight.setAttribute('position', `${panelWidthM/2 - poleDiameter/2} ${poleHeight/2} 0`);
       group.appendChild(center);
       group.appendChild(front);
       group.appendChild(back);
       group.appendChild(poleLeft);
       group.appendChild(poleRight);
       panelsEl.appendChild(group);
+
+      const ringDist = Math.hypot(slot.xM, slot.zM) || 1;
+      const outwardX = slot.xM / ringDist;
+      const outwardZ = slot.zM / ringDist;
+      const labelY = poleHeight + panelWidthM + 0.35;
+      const labelOutward = panelDepthM / 2 + 0.45;
+      panelLabelAnchors.push({
+        panelNumber: slot.panelNumber,
+        x: slot.xM + outwardX * labelOutward,
+        y: labelY,
+        z: slot.zM + outwardZ * labelOutward,
+      });
     }
     panelsEl.setAttribute('update-panel-textures', '');
+    rebuildPanelLabels();
     return panelsEl;
   }
 
   handleParams(param: Param["param"]) {
-    if (param.diameter !== undefined && param.diameter !== null) {
-      panelDiameter = clampPanelDiameter(param.diameter);
-      this.updatePanels();
-      this.updateRadarVisualization();
-    }
     if (param.height) {
       poleHeight = param.height;
       this.updatePanels();
@@ -1253,39 +1386,6 @@ class Pixels3dAframeHook extends Hook {
     if (param.button_diameter) {
       buttonPolesRadius = param.button_diameter / 2;
       this.updatePanels();
-    }
-    if (param.radar_count !== undefined && param.radar_count !== null) {
-      radarCount = clampRadarCount(Number(param.radar_count));
-      this.updateRadarVisualization();
-    }
-    if (param.radar_height !== undefined && param.radar_height !== null) {
-      radarHeight = Number(param.radar_height);
-      this.updateRadarVisualization();
-    }
-    if (param.radar_tilt_deg !== undefined && param.radar_tilt_deg !== null) {
-      radarTiltDeg = Number(param.radar_tilt_deg);
-      this.updateRadarVisualization();
-    }
-    if (param.radar_arm_length_m !== undefined && param.radar_arm_length_m !== null) {
-      radarRadiusM = Math.min(
-        RADAR_RADIUS_MAX_M,
-        Math.max(RADAR_RADIUS_MIN_M, Number(param.radar_arm_length_m))
-      );
-      this.updateRadarVisualization();
-    }
-    if (param.mast_diameter_m !== undefined && param.mast_diameter_m !== null) {
-      mastDiameterM = Math.min(
-        MAST_DIAMETER_MAX_M,
-        Math.max(MAST_DIAMETER_MIN_M, Number(param.mast_diameter_m))
-      );
-      this.updateRadarVisualization();
-    }
-    if (param.platform_radius_m !== undefined && param.platform_radius_m !== null) {
-      platformRadiusM = Math.min(
-        PLATFORM_RADIUS_MAX_M,
-        Math.max(PLATFORM_RADIUS_MIN_M, Number(param.platform_radius_m))
-      );
-      this.updateCentralCylinder();
     }
     if (param.lean_post_bottom_r !== undefined && param.lean_post_bottom_r !== null) {
       leanPostBottomR = Math.min(
@@ -1309,20 +1409,71 @@ class Pixels3dAframeHook extends Hook {
       this.updateLeanPost();
     }
     if (param.render_radar_cones !== undefined && param.render_radar_cones !== null) {
-      renderRadarCones = !!param.render_radar_cones;
-      this.updateRadarVisualization();
-    }
-    if (
-      param.radar_cone_straight_down !== undefined &&
-      param.radar_cone_straight_down !== null
-    ) {
-      radarConeStraightDown = !!param.radar_cone_straight_down;
+      renderRadarCones = Boolean(param.render_radar_cones);
       this.updateRadarVisualization();
     }
   }
 
+  /**
+   * Apply the authoritative installation geometry (ring, panel dimensions,
+   * north panel, platform, real radar sensor poses) and rebuild the affected
+   * parts of the scene.
+   */
+  applyInstallationState(payload: InstallationPayload) {
+    if (payload.ring_radius_m != null) ringRadiusM = Number(payload.ring_radius_m);
+    if (payload.num_panels != null) numPanels = Number(payload.num_panels);
+    if (payload.north_panel != null) northPanel = Number(payload.north_panel);
+    if (payload.platform_radius_m != null) {
+      platformRadiusM = Number(payload.platform_radius_m);
+    }
+    if (payload.panel_width_m != null) panelWidthM = Number(payload.panel_width_m);
+    if (payload.panel_depth_m != null) panelDepthM = Number(payload.panel_depth_m);
+
+    if (Array.isArray(payload.panels)) {
+      panelSlots = payload.panels.map((p) => {
+        const { x, z } = radarGlobalToAframeXZ(Number(p.x_m), Number(p.z_m));
+        return {
+          index: Number(p.index),
+          panelNumber: Number(p.panel_number),
+          xM: x,
+          zM: z,
+          rotationY: Math.atan2(x, z) + Math.PI,
+        };
+      });
+    } else {
+      panelSlots = [];
+    }
+
+    if (Array.isArray(payload.sensors)) {
+      sensorPoses = payload.sensors.map((s, i) => ({
+        deviceId: Number(s.device_id ?? i + 1),
+        angleDeg: Number(s.angle_deg),
+        rotationDeg: Number(s.rotation_deg ?? 0),
+        distanceCm: Number(s.distance_cm),
+        rangeCm: Number(s.range_cm),
+        heightCm: Number(s.height_cm),
+        xM: Number(s.x_m),
+        zM: Number(s.z_m),
+      }));
+    }
+  }
+
+  handleInstallation(payload: InstallationPayload) {
+    this.applyInstallationState(payload);
+    this.updatePanels();
+    this.updateCentralCylinder();
+    this.updateRadarVisualization();
+  }
+
   registerComponents() {
     registerHumanComponents();
+    if (!AFRAME.components['html-labels-sync']) {
+      AFRAME.registerComponent('html-labels-sync', {
+        tick() {
+          syncSceneLabelsDom();
+        },
+      });
+    }
     AFRAME.registerComponent('radar-cone-viz', {
       schema: {
         length: { type: 'number', default: 8 },
@@ -1431,7 +1582,7 @@ class Pixels3dAframeHook extends Hook {
       tick: function () {
         for (let i = 0; i < numPanels; i++) {
           for (let j = 0; j < 64; j++) {
-            const textureIdx = numPanels - i - 1;
+            const textureIdx = i;
             const pixelIdx = i * 64 + j;
             if (pixels[pixelIdx]) {
               const texture = textures[textureIdx];
@@ -1454,10 +1605,12 @@ class Pixels3dAframeHook extends Hook {
 
   registerShaders() {
     AFRAME.registerShader('led-shader', {
+      schema: {},
       vertexShader: vertexShader,
       fragmentShader: fragmentShader
     })
     AFRAME.registerShader('sky-shader', {
+      schema: {},
       vertexShader: skyVertexShader,
       fragmentShader: skyFragmentShader
     })
@@ -1480,17 +1633,13 @@ class Pixels3dAframeHook extends Hook {
   updateRadarVisualization() {
     const sceneEl = document.querySelector('a-scene');
     if (!sceneEl) return;
-    this.applyRadarMastConstraints();
     const oldRings = document.querySelector('#radar-ground-rings');
     const oldRadar = document.querySelector('#radar-sensors');
-    const oldMast = document.querySelector('#radar-mast');
     const oldFootprints = document.querySelector('#radar-ground-footprints');
     oldRings?.parentNode?.removeChild(oldRings);
     oldRadar?.parentNode?.removeChild(oldRadar);
-    oldMast?.parentNode?.removeChild(oldMast);
     oldFootprints?.parentNode?.removeChild(oldFootprints);
     sceneEl.appendChild(this.createRadarGroundRings());
-    sceneEl.appendChild(this.createRadarMast());
     sceneEl.appendChild(this.createRadarSensors());
     sceneEl.appendChild(this.createRadarGroundFootprints());
     updateRadarFootprintInfo();

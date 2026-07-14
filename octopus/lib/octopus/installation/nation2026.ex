@@ -4,7 +4,7 @@ defmodule Octopus.Installation.Nation2026 do
     circular: [
       ring_radius_m: 10.0,
       north_panel: 10,
-      platform_radius_m: 2.0
+      platform_radius_m: 2.25
     ],
     panel_type: :polychrome,
     panels: [
@@ -45,6 +45,11 @@ defmodule Octopus.Installation.Nation2026 do
         sensors: [:a, :b, :c, :d, :e, :f],
         start_angle_deg: 150,
         distance_cm: 300
+      ],
+      panel_activity: [
+        sensitivity: 1.0,
+        adaptive: true,
+        release_tau: 5.0
       ]
     ],
     network_config: [

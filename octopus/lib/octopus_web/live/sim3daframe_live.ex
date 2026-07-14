@@ -17,27 +17,22 @@ defmodule OctopusWeb.Sim3dAframeLive do
   @id_prefix "sim_3d_aframe"
 
   @panel_param_keys [
-    :diameter,
-    :radar_count,
-    :radar_height,
-    :radar_tilt_deg,
-    :radar_arm_length_m,
-    :mast_diameter_m,
-    :platform_radius_m,
     :lean_post_bottom_r,
     :lean_post_top_r,
     :lean_post_height,
     :height,
-    :foot_diameter,
-    :render_radar_cones,
-    :radar_cone_straight_down
+    :foot_diameter
   ]
 
   def mount(_params, _session, socket) do
     socket =
       if connected?(socket) do
         Mixer.subscribe()
-        if Radar.configured?(), do: Radar.subscribe()
+
+        if Radar.configured?() do
+          Radar.subscribe()
+          Radar.subscribe_panel_activity()
+        end
 
         frame = %RGBFrame{
           data: List.duplicate([0, 0, 0], 80 * 8) |> IO.iodata_to_binary()
@@ -52,7 +47,9 @@ defmodule OctopusWeb.Sim3dAframeLive do
         |> push_config(@default_config)
         |> push_frame(frame)
         |> push_initial_params()
+        |> push_installation()
         |> maybe_push_mock_world(source_mode)
+        |> maybe_push_panel_activity()
       else
         socket
       end
@@ -61,7 +58,8 @@ defmodule OctopusWeb.Sim3dAframeLive do
      assign(socket,
        id: socket.id,
        id_prefix: @id_prefix,
-       num_panels: Installation.num_panels()
+       num_panels: Installation.num_panels(),
+       installation_json: installation_json()
      )}
   end
 
@@ -71,6 +69,7 @@ defmodule OctopusWeb.Sim3dAframeLive do
       <div
         id={"#{@id_prefix}-#{@id}"}
         num-panels={@num_panels}
+        data-installation={@installation_json}
         class="flex w-full min-h-screen"
         phx-hook="Pixels3dAframe"
       >
@@ -107,6 +106,11 @@ defmodule OctopusWeb.Sim3dAframeLive do
 
   def handle_info({:button_diameter, value}, socket) do
     {:noreply, push_param(socket, %{button_diameter: value})}
+  end
+
+  def handle_info({:render_radar_cones, value}, socket) do
+    send_update(OctopusWeb.Sim3dParamsComponent, id: "sim3d-params")
+    {:noreply, push_param(socket, %{render_radar_cones: value})}
   end
 
   def handle_info({:mixer, {:frame, frame}}, socket) do
@@ -150,6 +154,21 @@ defmodule OctopusWeb.Sim3dAframeLive do
     {:noreply, push_mock_world(socket, objects)}
   end
 
+  def handle_info({:panel_activity, snapshot}, socket) do
+    {:noreply, push_panel_activity(socket, snapshot)}
+  end
+
+  def handle_info({:view_settings_changed, _settings}, socket) do
+    {:noreply,
+     socket
+     |> assign(installation_json: installation_json())
+     |> push_installation()}
+  end
+
+  def handle_info({:pose_tweak_changed, _tweak}, socket) do
+    {:noreply, push_installation(socket)}
+  end
+
   def handle_info(_msg, socket), do: {:noreply, socket}
 
   defp handle_source_mode_changed(socket, mode) do
@@ -185,6 +204,93 @@ defmodule OctopusWeb.Sim3dAframeLive do
     push_event(socket, "param:#{@id_prefix}-#{socket.id}", %{param: param})
   end
 
+  # Authoritative installation geometry for the 3D scene: panel ring, panel
+  # outer dimensions, north panel, platform, and the planned radar sensor poses.
+  # Sensors are placed at their real global mount positions (see Radar.Transform)
+  # and always look straight down.
+  defp push_installation(socket) do
+    push_event(socket, "installation:#{@id_prefix}-#{socket.id}", installation_payload())
+  end
+
+  defp installation_json, do: Jason.encode!(installation_payload())
+
+  # Same geometry as radar_live build_ring_panels / sensor_position so the 3D
+  # scene matches the 2D radar view exactly.
+  defp installation_payload do
+    {panel_width_m, panel_depth_m} = panel_dimensions_m()
+    ring_radius_m = ring_radius_m()
+    num_panels = Installation.num_panels()
+    north_panel = Radar.north_panel()
+    depth_m = panel_depth_m || 0.0
+    panels = panel_slots(ring_radius_m, num_panels, north_panel, depth_m)
+
+    %{
+      ring_radius_m: ring_radius_m,
+      num_panels: num_panels,
+      north_panel: north_panel,
+      platform_radius_m: Installation.platform_radius_m(),
+      panel_width_m: panel_width_m,
+      panel_depth_m: panel_depth_m,
+      panels: panels,
+      sensors: installation_sensors()
+    }
+  end
+
+  defp panel_slots(nil, _num_panels, _north_panel, _panel_depth_m), do: []
+
+  defp panel_slots(ring_radius_m, num_panels, north_panel, panel_depth_m) do
+    center_r = ring_radius_m + panel_depth_m / 2.0
+    step_deg = 360.0 / num_panels
+
+    for i <- 0..(num_panels - 1) do
+      n = i + 1
+      offset = Integer.mod(n - north_panel, num_panels)
+      theta_deg = offset * step_deg
+      theta_rad = theta_deg * :math.pi() / 180.0
+
+      %{
+        index: i,
+        panel_number: n,
+        x_m: center_r * :math.sin(theta_rad),
+        z_m: center_r * :math.cos(theta_rad),
+        rotation_y: theta_rad + :math.pi()
+      }
+    end
+  end
+
+  defp installation_sensors do
+    if Radar.configured?() do
+      Enum.map(Radar.planned_devices(), fn d ->
+        angle_rad = d.angle_deg * :math.pi() / 180.0
+        distance_m = d.distance_cm / 100.0
+
+        %{
+          device_id: d.device_id,
+          angle_deg: d.angle_deg,
+          rotation_deg: d.rotation_deg,
+          distance_cm: d.distance_cm,
+          range_cm: d.range_cm,
+          height_cm: d.height_cm,
+          x_m: distance_m * :math.cos(angle_rad),
+          z_m: distance_m * :math.sin(angle_rad)
+        }
+      end)
+    else
+      []
+    end
+  end
+
+  defp ring_radius_m do
+    if Installation.arrangement() == :circular, do: Installation.ring_radius_m(), else: nil
+  end
+
+  defp panel_dimensions_m do
+    case Installation.panel_outer_dimensions_cm() do
+      {width_cm, _height_cm, depth_cm} -> {width_cm / 100.0, depth_cm / 100.0}
+      _ -> {nil, nil}
+    end
+  end
+
   defp push_radar_frame(socket, payload) do
     push_event(socket, "radar_frame:#{@id_prefix}-#{socket.id}", payload)
   end
@@ -192,6 +298,20 @@ defmodule OctopusWeb.Sim3dAframeLive do
   defp push_mock_world(socket, objects) when is_list(objects) do
     push_event(socket, "mock_world:#{@id_prefix}-#{socket.id}", %{
       objects: serialize_mock_objects(objects)
+    })
+  end
+
+  defp maybe_push_panel_activity(socket) do
+    if Radar.configured?(), do: push_panel_activity(socket), else: socket
+  end
+
+  defp push_panel_activity(socket, snapshot \\ nil) do
+    snapshot = snapshot || Radar.panel_activity()
+
+    push_event(socket, "panel_activity:#{@id_prefix}-#{socket.id}", %{
+      factors: Map.get(snapshot, :factors, %{}),
+      raw: Map.get(snapshot, :raw, %{}),
+      ref: Map.get(snapshot, :ref, 0.0)
     })
   end
 

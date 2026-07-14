@@ -60,6 +60,23 @@ defmodule Octopus.Radar.PanelMapping do
   def frame_panel_of_3d(sim_panel, num_panels), do: num_panels - 1 - sim_panel
 
   @doc """
+  Physical installation panel number (1..N) for a 3D panel index and
+  `:north_panel` orientation.
+  """
+  def installation_panel_of_sim(sim_panel, num_panels, north_panel) do
+    sim = Integer.mod(sim_panel, num_panels)
+    Integer.mod(sim + north_panel - 1, num_panels) + 1
+  end
+
+  @doc """
+  Physical installation panel number (1..N) for a canvas / frame index.
+  """
+  def installation_panel_of_frame(frame_panel, num_panels, north_panel) do
+    sim_panel = frame_panel_of_3d(frame_panel, num_panels)
+    installation_panel_of_sim(sim_panel, num_panels, north_panel)
+  end
+
+  @doc """
   Returns `{frame_panel_index, x_within_panel, radius_m}`.
   `frame_panel_index` is 0-based (canvas column / installation slot).
   """
