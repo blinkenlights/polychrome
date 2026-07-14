@@ -42,7 +42,14 @@ defmodule Octopus.Installation.Nation2026 do
       ],
       layout: [
         type: :radial,
-        sensors: [:a, :b, :c, :d, :e, :f],
+        sensors: [
+          :a,
+          :b,
+          [id: :c, rotation_deg: 323],
+          :d,
+          :e,
+          [id: :f, rotation_deg: 334]
+        ],
         start_angle_deg: 150,
         distance_cm: 300
       ],
