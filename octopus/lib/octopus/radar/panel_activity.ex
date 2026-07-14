@@ -13,7 +13,7 @@ defmodule Octopus.Radar.PanelActivity do
   alias Octopus.Radar.Frame
   alias Octopus.Radar.Mock.World
   alias Octopus.Radar.PanelActivity.{Core, Settings}
-  alias Octopus.Radar.PanelMapping
+  alias Octopus.Radar.{PanelMapping, TrackMerge}
   alias Phoenix.PubSub
 
   @topic_suffix "panel_activity"
@@ -110,7 +110,7 @@ defmodule Octopus.Radar.PanelActivity do
     north_panel = Octopus.Radar.north_panel()
     ring_outer = PanelMapping.ring_radius()
 
-    people = fetch_people(state.track_registry, now, settings.track_stale_ms)
+    people = fetch_people(state.track_registry, now, settings)
 
     raw_frame = Core.raw_factors(people, num_panels, ring_outer, settings)
     ref = Core.update_ref(state.ref, raw_frame, settings.adaptive, dt, settings)
@@ -141,8 +141,11 @@ defmodule Octopus.Radar.PanelActivity do
     %{state | level: level, ref: ref, snapshot: snapshot, last_tick_ms: now}
   end
 
-  defp fetch_people(track_registry, now, stale_ms) do
-    people = active_people(track_registry, now, stale_ms)
+  defp fetch_people(track_registry, now, %Settings{} = settings) do
+    people =
+      track_registry
+      |> active_people(now, settings.track_stale_ms)
+      |> TrackMerge.merge(settings.merge_radius_m)
 
     cond do
       people != [] ->

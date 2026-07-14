@@ -8,6 +8,7 @@ defmodule OctopusWeb.Sim3dAframeLive do
   alias Octopus.Radar
   alias Octopus.Radar.Frame
   alias Octopus.Radar.Mock.World
+  alias Octopus.Radar.PanelMapping
 
   @default_config %FirmwareConfig{
     easing_mode: :LINEAR,
@@ -111,6 +112,11 @@ defmodule OctopusWeb.Sim3dAframeLive do
   def handle_info({:render_radar_cones, value}, socket) do
     send_update(OctopusWeb.Sim3dParamsComponent, id: "sim3d-params")
     {:noreply, push_param(socket, %{render_radar_cones: value})}
+  end
+
+  def handle_info({:render_panel_sectors, value}, socket) do
+    send_update(OctopusWeb.Sim3dParamsComponent, id: "sim3d-params")
+    {:noreply, push_param(socket, %{render_panel_sectors: value})}
   end
 
   def handle_info({:mixer, {:frame, frame}}, socket) do
@@ -231,9 +237,28 @@ defmodule OctopusWeb.Sim3dAframeLive do
       platform_radius_m: Installation.platform_radius_m(),
       panel_width_m: panel_width_m,
       panel_depth_m: panel_depth_m,
+      canvas_to_texture: PanelMapping.canvas_to_texture(num_panels, north_panel),
+      panel_sectors: panel_sectors(num_panels, north_panel),
       panels: panels,
       sensors: installation_sensors()
     }
+  end
+
+  defp panel_sectors(num_panels, north_panel) do
+    step_deg = 360.0 / num_panels
+    half = step_deg / 2.0
+
+    for sim <- 0..(num_panels - 1) do
+      center_deg = sim / num_panels * 360.0
+
+      %{
+        sim: sim,
+        installation_panel: PanelMapping.installation_panel_of_sim(sim, num_panels, north_panel),
+        frame_panel: PanelMapping.frame_panel_of_3d(sim, num_panels),
+        start_deg: center_deg - half,
+        end_deg: center_deg + half
+      }
+    end
   end
 
   defp panel_slots(nil, _num_panels, _north_panel, _panel_depth_m), do: []
@@ -251,6 +276,7 @@ defmodule OctopusWeb.Sim3dAframeLive do
       %{
         index: i,
         panel_number: n,
+        canvas_panel: PanelMapping.frame_panel_for_installation(n, num_panels, north_panel),
         x_m: center_r * :math.sin(theta_rad),
         z_m: center_r * :math.cos(theta_rad),
         rotation_y: theta_rad + :math.pi()

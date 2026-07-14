@@ -21,6 +21,7 @@ defmodule Octopus.Params.Sim3d do
   def lean_post_top_r, do: param(:lean_post_top_r, 0.1)
   def lean_post_height, do: param(:lean_post_height, 1.2)
   def render_radar_cones, do: param(:render_radar_cones, false)
+  def render_panel_sectors, do: param(:render_panel_sectors, false)
   def radar_cone_straight_down, do: param(:radar_cone_straight_down, true)
 
   @doc """
@@ -39,6 +40,9 @@ defmodule Octopus.Params.Sim3d do
          %{default: 1.2, min: 0.2, max: 3.0, step: 0.01, group: "Plattform & Rückenlehne"}},
       render_radar_cones:
         {"Radar-Kegel (blau/gelb)", :boolean,
+         %{default: false, group: "Radar"}},
+      render_panel_sectors:
+        {"Panel-Sektoren (Tortenstücke)", :boolean,
          %{default: false, group: "Radar"}}
     ]
   end
@@ -51,7 +55,8 @@ defmodule Octopus.Params.Sim3d do
       lean_post_bottom_r: lean_post_bottom_r(),
       lean_post_top_r: lean_post_top_r(),
       lean_post_height: lean_post_height(),
-      render_radar_cones: render_radar_cones()
+      render_radar_cones: render_radar_cones(),
+      render_panel_sectors: render_panel_sectors()
     }
   end
 
@@ -136,6 +141,10 @@ defmodule Octopus.Params.Sim3d do
 
   def handle_param("render_radar_cones", [value]) do
     Phoenix.PubSub.broadcast(Octopus.PubSub, topic(), {:render_radar_cones, value})
+  end
+
+  def handle_param("render_panel_sectors", [value]) do
+    Phoenix.PubSub.broadcast(Octopus.PubSub, topic(), {:render_panel_sectors, value})
   end
 
   def handle_param("radar_cone_straight_down", [value]) do

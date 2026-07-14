@@ -19,6 +19,7 @@ defmodule Octopus.Apps.Collective do
   alias Octopus.Radar
   alias Octopus.Radar.Frame
   alias Octopus.Radar.Mock.World
+  alias Octopus.Radar.TrackMerge
   alias Octopus.Apps.Collective.Animations
 
   @fps 30
@@ -104,7 +105,7 @@ defmodule Octopus.Apps.Collective do
         }
 
       "dots" ->
-        %{animation: :dots, dots_smoothing: 0.35}
+        %{animation: :dots, dots_smoothing: 0.35, dots_activity_bleed: 0.2}
 
       "orbital" ->
         %{animation: :orbital, orbital_liveliness: 0.35, orbital_sun_gain: 1.0}
@@ -208,6 +209,15 @@ defmodule Octopus.Apps.Collective do
         max: 1.0,
         step: 0.05,
         default: 0.35
+      },
+      %{
+        key: :dots_activity_bleed,
+        label: "Activity bleed",
+        type: :slider,
+        min: 0.0,
+        max: 0.5,
+        step: 0.05,
+        default: 0.2
       }
     ]
   end
@@ -336,7 +346,12 @@ defmodule Octopus.Apps.Collective do
   def app_init(config) do
     # Instant panel updates — easing on the firmware side never completes when every
     # pixel changes every frame (Lava Lamp / Ring Noise) and can freeze the panel.
-    Octopus.App.configure_display(layout: :adjacent_panels, easing_interval: 0)
+    Octopus.App.configure_display(
+      layout: :adjacent_panels,
+      easing_interval: 0,
+      supports_grayscale: true,
+      merge_rgbw: true
+    )
     display_info = Octopus.App.get_display_info()
 
     Radar.subscribe()
@@ -348,6 +363,7 @@ defmodule Octopus.Apps.Collective do
     breath_hue_shift = Map.get(config, :breath_hue_shift, 0.0)
     breath_layout = Map.get(config, :breath_layout, :wave)
     dots_smoothing = Map.get(config, :dots_smoothing, 0.35)
+    dots_activity_bleed = Map.get(config, :dots_activity_bleed, 0.2)
     orbital_liveliness = Map.get(config, :orbital_liveliness, 0.35)
     orbital_sun_gain = Map.get(config, :orbital_sun_gain, 1.0)
     lava_blob_count = Map.get(config, :lava_blob_count, 7)
@@ -380,6 +396,7 @@ defmodule Octopus.Apps.Collective do
       breath_hue_shift: breath_hue_shift,
       breath_layout: breath_layout,
       dots_smoothing: dots_smoothing,
+      dots_activity_bleed: dots_activity_bleed,
       orbital_liveliness: orbital_liveliness,
       orbital_sun_gain: orbital_sun_gain,
       lava_blob_count: lava_blob_count,
@@ -447,6 +464,7 @@ defmodule Octopus.Apps.Collective do
       breath_hue_shift: state.breath_hue_shift,
       breath_layout: state.breath_layout,
       dots_smoothing: state.dots_smoothing,
+      dots_activity_bleed: state.dots_activity_bleed,
       orbital_liveliness: state.orbital_liveliness,
       orbital_sun_gain: state.orbital_sun_gain,
       lava_blob_count: state.lava_blob_count,
@@ -471,7 +489,8 @@ defmodule Octopus.Apps.Collective do
       Canvas.new(state.display_info.width, state.display_info.height)
       |> state.anim_mod.render(people, ctx, state.anim_state)
 
-    Octopus.App.update_display(canvas)
+    Octopus.App.update_display(canvas, :rgb)
+    Octopus.App.update_display(white_channel_canvas(state, ctx), :grayscale)
 
     elapsed = now_ms() - tick_start
     Process.send_after(self(), :tick, max(frame_ms() - elapsed, 1))
@@ -554,6 +573,15 @@ defmodule Octopus.Apps.Collective do
            min: 0.0,
            max: 1.0,
            default: 0.35,
+           step: 0.05,
+           visible_when: {:animation, [:dots]}
+         }},
+      dots_activity_bleed:
+        {"Activity Bleed", :float,
+         %{
+           min: 0.0,
+           max: 0.5,
+           default: 0.2,
            step: 0.05,
            visible_when: {:animation, [:dots]}
          }},
@@ -736,10 +764,14 @@ defmodule Octopus.Apps.Collective do
     """
     Crowd Dots — one pixel per person.
     X = angular position on the ring (dot wanders horizontally with the person).
-    Y = distance from centre: at the ring / near the panels → bottom row;
-    at the centre → top row. Stable colour per track id.
+    Y = distance from centre: at the ring / near the panels → top row;
+    at the centre → bottom row. Stable colour per track id.
+    Panel activity glows on the warm-white (W) channel from the shared
+    panel-activity service; RGB carries dots and pulses only.
+    Walking speed soft-blinks each dot (cosine fade, faster when moving faster).
     After 3 s without movement, a soft ring pulse expands over ~3–4 panels and fades.
     • Dot Smoothing — low = snappy, high = soft follow (EMA on position).
+    • Activity Bleed — how much activity spills into adjacent panels.
     """
   end
 
@@ -816,6 +848,7 @@ defmodule Octopus.Apps.Collective do
       breath_hue_shift: state.breath_hue_shift,
       breath_layout: state.breath_layout,
       dots_smoothing: state.dots_smoothing,
+      dots_activity_bleed: state.dots_activity_bleed,
       orbital_liveliness: state.orbital_liveliness,
       orbital_sun_gain: state.orbital_sun_gain,
       lava_blob_count: state.lava_blob_count,
@@ -861,6 +894,7 @@ defmodule Octopus.Apps.Collective do
          breath_hue_shift: Map.get(config, :breath_hue_shift, state.breath_hue_shift),
          breath_layout: Map.get(config, :breath_layout, state.breath_layout),
          dots_smoothing: Map.get(config, :dots_smoothing, state.dots_smoothing),
+         dots_activity_bleed: Map.get(config, :dots_activity_bleed, state.dots_activity_bleed),
          orbital_liveliness: Map.get(config, :orbital_liveliness, state.orbital_liveliness),
          orbital_sun_gain: Map.get(config, :orbital_sun_gain, state.orbital_sun_gain),
          lava_blob_count: Map.get(config, :lava_blob_count, state.lava_blob_count),
@@ -885,7 +919,9 @@ defmodule Octopus.Apps.Collective do
 
   defp fetch_people(state, now) do
     registry_people =
-      active_people(Map.get(state, :track_registry, %{}), now, @track_stale_ms)
+      Map.get(state, :track_registry, %{})
+      |> active_people(now, @track_stale_ms)
+      |> TrackMerge.merge()
 
     case registry_people do
       [] -> mock_world_people()
@@ -965,4 +1001,12 @@ defmodule Octopus.Apps.Collective do
   end
 
   defp coerce_atom(_value, default), do: default
+
+  defp white_channel_canvas(%{animation: :dots, display_info: info}, ctx) do
+    Animations.Dots.activity_canvas(info, Map.get(ctx, :dots_activity_bleed, 0.2))
+  end
+
+  defp white_channel_canvas(%{display_info: info}, _ctx) do
+    Canvas.new(info.width, info.height, :grayscale)
+  end
 end

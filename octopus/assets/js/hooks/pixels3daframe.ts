@@ -181,6 +181,18 @@ const RADAR_DISK_COLOR = "#a0522d";
 let platformRadiusM = 2.25;
 /** Toggle: semi-transparent blue coverage cone + yellow axis per sensor. */
 let renderRadarCones = false;
+/** Toggle: ground wedges showing panel mapping sectors. */
+let renderPanelSectors = false;
+/** Canvas frame index f → LED texture index (from installation payload). */
+let canvasToTexture: number[] = [];
+type PanelSector = {
+  sim: number;
+  installation_panel: number;
+  frame_panel: number;
+  start_deg: number;
+  end_deg: number;
+};
+let panelSectors: PanelSector[] = [];
 /**
  * Full opening angle of the LD6001A (±60° azimuth/pitch → 120° cone). The blue
  * cone (`radar-cone-viz`) uses the same angle — half-angle = /2.
@@ -199,7 +211,7 @@ const LABEL_OUTWARD_OFFSET_M = 0.28;
 const LABEL_FONT =
   '700 15px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace';
 
-type SceneLabelKind = 'panel' | 'panel-activity' | 'sensor';
+type SceneLabelKind = 'panel' | 'panel-activity' | 'panel-sector' | 'sensor';
 
 type SceneLabel = {
   kind: SceneLabelKind;
@@ -337,6 +349,11 @@ function refreshSceneLabelsDom(root: HTMLElement) {
       el.style.textShadow = '0 1px 2px rgba(0, 0, 0, 0.9)';
       el.style.font =
         '700 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace';
+    } else if (label.kind === 'panel-sector') {
+      el.style.background = 'rgba(0, 0, 0, 0.72)';
+      el.style.border = '1px solid rgba(255, 255, 255, 0.25)';
+      el.style.font =
+        '600 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace';
     } else {
       el.style.background = SENSOR_LABEL_BG;
     }
@@ -536,6 +553,28 @@ function sensorGroundRadiusM(pose: SensorPose): number {
   return sensorConeParams(pose).groundRadiusM;
 }
 
+function ensureCanvasToTexture() {
+  if (canvasToTexture.length !== numPanels) {
+    canvasToTexture = Array.from({ length: numPanels }, (_, i) => i);
+  }
+}
+
+/** Radar bearing degrees (0 = +Y north) → A-Frame ground X/Z. */
+function radarDegToAframeXZ(radiusM: number, deg: number) {
+  const rad = (deg * Math.PI) / 180;
+  return radarGlobalToAframeXZ(Math.sin(rad) * radiusM, Math.cos(rad) * radiusM);
+}
+
+function sectorColor(installationPanel: number) {
+  const hue = (installationPanel * 47) % 360;
+  return `hsl(${hue}, 55%, 55%)`;
+}
+
+function sectorFillColor(installationPanel: number) {
+  const hue = (installationPanel * 47) % 360;
+  return `hsla(${hue}, 55%, 55%, 0.22)`;
+}
+
 /**
  * Sensor mount position on the ground plane (aframe X/Z). Uses server-computed
  * coordinates when present (matches radar_live sensor_position).
@@ -599,9 +638,12 @@ type InstallationPayload = {
   platform_radius_m?: number | null;
   panel_width_m?: number | null;
   panel_depth_m?: number | null;
+  canvas_to_texture?: number[];
+  panel_sectors?: PanelSector[];
   panels?: Array<{
     index: number;
     panel_number: number;
+    canvas_panel?: number;
     x_m: number;
     z_m: number;
     rotation_y: number;
@@ -630,6 +672,7 @@ type Param = {
     lean_post_top_r?: number;
     lean_post_height?: number;
     render_radar_cones?: boolean;
+    render_panel_sectors?: boolean;
   };
 };
 
@@ -744,6 +787,9 @@ class Pixels3dAframeHook extends Hook {
 
     const radarFootprints = this.createRadarGroundFootprints();
     sceneEl.appendChild(radarFootprints);
+
+    const panelSectorDebug = this.createPanelSectorDebug();
+    sceneEl.appendChild(panelSectorDebug);
 
     const humansRoot = this.createHumansRoot();
     sceneEl.appendChild(humansRoot);
@@ -1105,6 +1151,106 @@ class Pixels3dAframeHook extends Hook {
   }
 
   /**
+   * Ground wedges for each angular panel sector (sim / frame / installation
+   * indices). Toggle via `render_panel_sectors`.
+   */
+  createPanelSectorDebug() {
+    clearSceneLabels('panel-sector');
+    const root = document.createElement('a-entity');
+    root.setAttribute('id', 'panel-sector-debug');
+    if (!renderPanelSectors || panelSectors.length === 0) return root;
+
+    const T = getThree();
+    const innerR = Math.max(platformRadiusM, 0.5);
+    const outerR = ringRadiusM;
+    const y = 0.025;
+
+    for (const sector of panelSectors) {
+      const { start_deg: startDeg, end_deg: endDeg } = sector;
+      const steps = Math.max(6, Math.ceil(Math.abs(endDeg - startDeg) / 4));
+      const shapePts: { x: number; y: number }[] = [];
+
+      const toShape = (r: number, deg: number) => {
+        const { x, z } = radarDegToAframeXZ(r, deg);
+        return { x, y: -z };
+      };
+
+      for (let i = 0; i <= steps; i++) {
+        const deg = startDeg + ((endDeg - startDeg) * i) / steps;
+        shapePts.push(toShape(outerR, deg));
+      }
+      for (let i = steps; i >= 0; i--) {
+        const deg = startDeg + ((endDeg - startDeg) * i) / steps;
+        shapePts.push(toShape(innerR, deg));
+      }
+
+      const shape = new T.Shape();
+      shape.moveTo(shapePts[0]!.x, shapePts[0]!.y);
+      for (let i = 1; i < shapePts.length; i++) {
+        shape.lineTo(shapePts[i]!.x, shapePts[i]!.y);
+      }
+      shape.closePath();
+
+      const geo = new T.ShapeGeometry(shape);
+      const fillMat = new T.MeshBasicMaterial({
+        color: new T.Color(sectorFillColor(sector.installation_panel)),
+        transparent: true,
+        opacity: 0.85,
+        side: T.DoubleSide,
+        depthWrite: false,
+      });
+      const meshHost = document.createElement('a-entity');
+      meshHost.setAttribute('position', `0 ${y} 0`);
+      meshHost.setAttribute('rotation', '-90 0 0');
+      meshHost.setObject3D('mesh', new T.Mesh(geo, fillMat));
+      root.appendChild(meshHost);
+
+      const edgePts: any[] = [];
+      for (let i = 0; i <= steps; i++) {
+        const deg = startDeg + ((endDeg - startDeg) * i) / steps;
+        const { x, z } = radarDegToAframeXZ(outerR, deg);
+        edgePts.push(new T.Vector3(x, y + 0.003, z));
+      }
+      const edgeGeo = new T.BufferGeometry().setFromPoints(edgePts);
+      const edgeMat = new T.LineBasicMaterial({
+        color: new T.Color(sectorColor(sector.installation_panel)),
+        transparent: true,
+        opacity: 0.7,
+      });
+      const edgeHost = document.createElement('a-entity');
+      edgeHost.setObject3D('mesh', new T.Line(edgeGeo, edgeMat));
+      root.appendChild(edgeHost);
+
+      for (const edgeDeg of [startDeg, endDeg]) {
+        const a = radarDegToAframeXZ(innerR, edgeDeg);
+        const b = radarDegToAframeXZ(outerR, edgeDeg);
+        const lineGeo = new T.BufferGeometry().setFromPoints([
+          new T.Vector3(a.x, y + 0.004, a.z),
+          new T.Vector3(b.x, y + 0.004, b.z),
+        ]);
+        const lineHost = document.createElement('a-entity');
+        lineHost.setObject3D('mesh', new T.Line(lineGeo, edgeMat));
+        root.appendChild(lineHost);
+      }
+
+      const midDeg = (startDeg + endDeg) / 2;
+      const labelR = (innerR + outerR) / 2;
+      const labelPos = radarDegToAframeXZ(labelR, midDeg);
+      addSceneLabel(
+        'panel-sector',
+        `${sector.installation_panel} / f${sector.frame_panel} / s${sector.sim}`,
+        labelPos.x,
+        0.12,
+        labelPos.z,
+        sectorColor(sector.installation_panel),
+      );
+    }
+
+    if (labelsHookRoot) refreshSceneLabelsDom(labelsHookRoot);
+    return root;
+  }
+
+  /**
    * Central mast + hub disk + slats to each sensor. Sensors stay at their real
    * installation poses; slats run from the disk edge up (~15° with Nation2026
    * geometry) to the underside of each radar chip.
@@ -1412,6 +1558,10 @@ class Pixels3dAframeHook extends Hook {
       renderRadarCones = Boolean(param.render_radar_cones);
       this.updateRadarVisualization();
     }
+    if (param.render_panel_sectors !== undefined && param.render_panel_sectors !== null) {
+      renderPanelSectors = Boolean(param.render_panel_sectors);
+      this.updatePanelSectorVisualization();
+    }
   }
 
   /**
@@ -1428,6 +1578,23 @@ class Pixels3dAframeHook extends Hook {
     }
     if (payload.panel_width_m != null) panelWidthM = Number(payload.panel_width_m);
     if (payload.panel_depth_m != null) panelDepthM = Number(payload.panel_depth_m);
+
+    if (Array.isArray(payload.canvas_to_texture) && payload.canvas_to_texture.length > 0) {
+      canvasToTexture = payload.canvas_to_texture.map((n) => Number(n));
+    } else {
+      canvasToTexture = [];
+      ensureCanvasToTexture();
+    }
+
+    panelSectors = Array.isArray(payload.panel_sectors)
+      ? payload.panel_sectors.map((s) => ({
+          sim: Number(s.sim),
+          installation_panel: Number(s.installation_panel),
+          frame_panel: Number(s.frame_panel),
+          start_deg: Number(s.start_deg),
+          end_deg: Number(s.end_deg),
+        }))
+      : [];
 
     if (Array.isArray(payload.panels)) {
       panelSlots = payload.panels.map((p) => {
@@ -1463,6 +1630,7 @@ class Pixels3dAframeHook extends Hook {
     this.updatePanels();
     this.updateCentralCylinder();
     this.updateRadarVisualization();
+    this.updatePanelSectorVisualization();
   }
 
   registerComponents() {
@@ -1580,14 +1748,15 @@ class Pixels3dAframeHook extends Hook {
     });
     AFRAME.registerComponent('update-panel-textures', {
       tick: function () {
-        for (let i = 0; i < numPanels; i++) {
+        ensureCanvasToTexture();
+        for (let f = 0; f < numPanels; f++) {
+          const texIdx = canvasToTexture[f] ?? f;
           for (let j = 0; j < 64; j++) {
-            const textureIdx = i;
-            const pixelIdx = i * 64 + j;
+            const pixelIdx = f * 64 + j;
             if (pixels[pixelIdx]) {
-              const texture = textures[textureIdx];
+              const texture = textures[texIdx];
               if (!texture || !texture.image) {
-                console.warn('Texture or texture.image is undefined', textureIdx, texture);
+                console.warn('Texture or texture.image is undefined', texIdx, texture);
                 return;
               }
               const data = texture.image.data;
@@ -1643,6 +1812,14 @@ class Pixels3dAframeHook extends Hook {
     sceneEl.appendChild(this.createRadarSensors());
     sceneEl.appendChild(this.createRadarGroundFootprints());
     updateRadarFootprintInfo();
+  }
+
+  updatePanelSectorVisualization() {
+    const sceneEl = document.querySelector('a-scene');
+    if (!sceneEl) return;
+    const old = document.querySelector('#panel-sector-debug');
+    old?.parentNode?.removeChild(old);
+    sceneEl.appendChild(this.createPanelSectorDebug());
   }
 }
 

@@ -49,6 +49,63 @@ defmodule Octopus.Radar.PanelMappingTest do
     end
   end
 
+  describe "track_to_canvas_xy/3" do
+    test "+Y on ring → top row, canvas panel 11" do
+      track = %{x: 0.0, y: 9.0}
+      height = 32
+
+      {col, row} = PanelMapping.track_to_canvas_xy(track, @num_panels, height, @panel_width)
+
+      assert col >= 11 * @panel_width
+      assert col < 12 * @panel_width
+      assert row < height * 0.3
+    end
+
+    test "centre → bottom row" do
+      track = %{x: 0.0, y: 0.0}
+      height = 32
+
+      {_col, row} = PanelMapping.track_to_canvas_xy(track, @num_panels, height, @panel_width)
+
+      assert row == height - 1.0
+    end
+
+    test "column is float within panel bounds" do
+      norm = 0.42
+      angle = norm * 2.0 * :math.pi()
+      track = %{x: 5.0 * :math.sin(angle), y: 5.0 * :math.cos(angle)}
+      height = 32
+
+      {col, _row} = PanelMapping.track_to_canvas_xy(track, @num_panels, height, @panel_width)
+
+      frame = PanelMapping.frame_panel_of_3d(PanelMapping.sim_panel_3d(track, @num_panels), @num_panels)
+      assert col >= frame * @panel_width
+      assert col < (frame + 1) * @panel_width
+      assert col != trunc(col) or col == frame * @panel_width
+    end
+  end
+
+  describe "texture_index_for_frame/3" do
+    test "north at +Y maps frame 11 → texture 9 (panel 10)" do
+      assert PanelMapping.texture_index_for_frame(11, @num_panels, 10) == 9
+    end
+
+    test "frame_panel_for_installation inverts correctly" do
+      assert PanelMapping.frame_panel_for_installation(10, @num_panels, 10) == 11
+      assert PanelMapping.frame_panel_for_installation(12, @num_panels, 1) == 0
+    end
+
+    test "canvas_to_texture round-trips every frame panel" do
+      mapping = PanelMapping.canvas_to_texture(@num_panels, 10)
+
+      assert length(mapping) == @num_panels
+
+      for f <- 0..(@num_panels - 1) do
+        assert Enum.at(mapping, f) == PanelMapping.texture_index_for_frame(f, @num_panels, 10)
+      end
+    end
+  end
+
   describe "in_ring?/3" do
     test "respects inner and outer bounds" do
       assert PanelMapping.in_ring?(%{x: 0.0, y: 8.0}, 4.0, 10.0)

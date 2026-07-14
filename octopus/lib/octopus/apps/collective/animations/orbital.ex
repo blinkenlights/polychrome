@@ -340,7 +340,7 @@ defmodule Octopus.Apps.Collective.Animations.Orbital do
 
   defp person_canvas_xy(person, num_panels, height, ring_outer) do
     col = person_column_f(person, num_panels)
-    row = radius_to_y(PanelMapping.track_radius(person), height, ring_outer)
+    row = PanelMapping.radius_to_canvas_row(PanelMapping.track_radius(person), height, ring_outer)
     {col, row}
   end
 
@@ -351,11 +351,6 @@ defmodule Octopus.Apps.Collective.Animations.Orbital do
     within = total - sim_panel * @panel_width
     frame_panel = PanelMapping.frame_panel_of_3d(sim_panel, num_panels)
     frame_panel * @panel_width + within
-  end
-
-  defp radius_to_y(r, height, ring_outer) do
-    t = (r / ring_outer) |> clamp01()
-    lerp(0.0, height - 1.0, t)
   end
 
   # --- stars ---------------------------------------------------------------

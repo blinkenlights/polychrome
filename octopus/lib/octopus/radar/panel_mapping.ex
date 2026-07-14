@@ -77,6 +77,30 @@ defmodule Octopus.Radar.PanelMapping do
   end
 
   @doc """
+  Canvas / frame panel index (0..N-1) for a physical installation panel (1..N).
+  """
+  def frame_panel_for_installation(install_panel, num_panels, north_panel) do
+    sim = Integer.mod(install_panel - north_panel, num_panels)
+    frame_panel_of_3d(sim, num_panels)
+  end
+
+  @doc """
+  LED texture index (0..N-1) for a canvas / frame panel block.
+  """
+  def texture_index_for_frame(frame_panel, num_panels, north_panel) do
+    installation_panel_of_frame(frame_panel, num_panels, north_panel) - 1
+  end
+
+  @doc """
+  Returns a length-N list: canvas frame index → texture index.
+  """
+  def canvas_to_texture(num_panels, north_panel) do
+    for f <- 0..(num_panels - 1) do
+      texture_index_for_frame(f, num_panels, north_panel)
+    end
+  end
+
+  @doc """
   Returns `{frame_panel_index, x_within_panel, radius_m}`.
   `frame_panel_index` is 0-based (canvas column / installation slot).
   """
@@ -99,10 +123,39 @@ defmodule Octopus.Radar.PanelMapping do
     {frame_panel, within}
   end
 
+  @doc """
+  Maps radial distance (m) to canvas row (float).
+
+  Ring / outside → top (`row` 0); centre → bottom (`row` height − 1).
+  """
+  def radius_to_canvas_row(radius_m, height, ring_m \\ nil) do
+    ring = ring_m || ring_radius()
+    t = radius_m / ring |> clamp01()
+    (1.0 - t) * (height - 1)
+  end
+
+  @doc """
+  Returns `{column, row}` canvas coordinates (float) for a radar track.
+
+  Column uses sub-pixel precision within panels for smooth animation easing.
+  Row maps radial distance via `radius_to_canvas_row/3`.
+  """
+  def track_to_canvas_xy(track, num_panels, height, panel_width \\ @default_panel_width) do
+    ring = ring_radius()
+    norm = angle_norm(track)
+    sim = sim_panel_3d(track, num_panels)
+    frame = frame_panel_of_3d(sim, num_panels)
+    total = norm * num_panels * panel_width
+    col = frame * panel_width + (total - sim * panel_width)
+    row = radius_to_canvas_row(track_radius(track), height, ring)
+    {col, row}
+  end
+
   def in_ring?(track, inner_m, outer_m) do
     r = track_radius(track)
     r >= inner_m and r <= outer_m
   end
 
   defp clamp(value, lo, hi), do: value |> max(lo) |> min(hi)
+  defp clamp01(v), do: v |> max(0.0) |> min(1.0)
 end

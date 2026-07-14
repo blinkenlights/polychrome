@@ -12,7 +12,8 @@ defmodule Octopus.Radar.PanelActivity.Settings do
     attack_tau: 0.2,
     release_tau: 5.0,
     track_stale_ms: 1500,
-    tick_hz: 25
+    tick_hz: 25,
+    merge_radius_m: 0.75
   }
 
   defstruct [
@@ -25,7 +26,8 @@ defmodule Octopus.Radar.PanelActivity.Settings do
     :attack_tau,
     :release_tau,
     :track_stale_ms,
-    :tick_hz
+    :tick_hz,
+    :merge_radius_m
   ]
 
   @type t :: %__MODULE__{
@@ -38,7 +40,8 @@ defmodule Octopus.Radar.PanelActivity.Settings do
           attack_tau: float(),
           release_tau: float(),
           track_stale_ms: pos_integer(),
-          tick_hz: pos_integer()
+          tick_hz: pos_integer(),
+          merge_radius_m: float()
         }
 
   def start_link(_opts) do

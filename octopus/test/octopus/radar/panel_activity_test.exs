@@ -71,6 +71,25 @@ defmodule Octopus.Radar.PanelActivityTest do
     assert late >= 0.0
   end
 
+  test "merges multi-sensor duplicates before activity calculation" do
+    track = %Track{id: 6, x: 0.09, y: 4.68, z: 0.0, vx: 0.26, vy: 0.0, vz: 0.0}
+
+    single_frame = %Frame{frame_number: 1, tracks: [track], received_at: nil}
+    send(PanelActivity, {:radar_frame, 1, single_frame})
+    PanelActivity.tick()
+    single_peak = Radar.panel_activity().raw |> Map.values() |> Enum.max()
+
+    for device_id <- 2..3 do
+      send(PanelActivity, {:radar_frame, device_id, single_frame})
+    end
+
+    PanelActivity.tick()
+    triple_peak = Radar.panel_activity().raw |> Map.values() |> Enum.max()
+
+    assert single_peak > 0.0
+    assert_in_delta single_peak, triple_peak, single_peak * 0.15
+  end
+
   test "panel_activity snapshot exposes raw and ref" do
     %{factors: factors, raw: raw, ref: ref, at: at} = Radar.panel_activity()
 
