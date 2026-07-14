@@ -12,7 +12,6 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
   @cross "builtin:cross_waves"
 
   setup do
-    preset_sync_all!()
     {:ok, _} = Registry.register(Octopus.AppRegistry, "test-#{System.unique_integer([:positive])}", @pixel_fun)
     :ok
   end
@@ -183,7 +182,6 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
     end
   end
 
-  defp preset_sync_all!, do: apply(@presets, :sync_all!, [])
   defp pixel_fun_config_schema, do: apply(@pixel_fun, :config_schema, [])
   defp pixel_fun_get_config(state), do: apply(@pixel_fun, :get_config, [state])
   defp pixel_fun_mode_config(mode_id), do: apply(@pixel_fun, :mode_config, [mode_id])

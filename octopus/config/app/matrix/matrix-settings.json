@@ -1,0 +1,17 @@
+{
+  "presets": [
+    {
+      "accent_color": "#2ECC71",
+      "config": {
+        "afterglow": 60,
+        "bleeding": 10.0,
+        "density": 1,
+        "max_particles": 24,
+        "speed": 8.0,
+        "trail_length": 135
+      },
+      "name": "matrix",
+      "slug": "matrix"
+    }
+  ]
+}

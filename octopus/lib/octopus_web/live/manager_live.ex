@@ -1,7 +1,6 @@
 defmodule OctopusWeb.ManagerLive do
   use OctopusWeb, :live_view
 
-  alias Octopus.Apps.PixelFun3D
   alias Octopus.InstallationTransport
   alias Octopus.Params.Global
   alias OctopusWeb.PixelsLive
@@ -184,16 +183,4 @@ defmodule OctopusWeb.ManagerLive do
   end
 
   def handle_info({:mixer, _}, socket), do: {:noreply, socket}
-
-  # Editor saved a new scene: make it the live scene and close the drawer.
-  def handle_info({:pf3d_scene_saved, mode_id}, socket) do
-    InstallationTransport.play_now(PixelFun3D, mode_id)
-
-    send_update(OctopusWeb.InstallationConsoleComponent,
-      id: "installation-console",
-      close_pf3d: true
-    )
-
-    {:noreply, socket}
-  end
 end

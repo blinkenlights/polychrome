@@ -1,0 +1,36 @@
+{
+  "presets": [
+    {
+      "accent_color": "#4a7c59",
+      "config": {
+        "blob_count": 1,
+        "blob_size": 3,
+        "blob_spacing": 1,
+        "color_channel": "white",
+        "mode": "endless_up",
+        "panel_stagger": 16,
+        "panel_sync": "sync",
+        "speed": 2.0,
+        "trail_length": 0
+      },
+      "name": "Experiment",
+      "slug": "experiment"
+    },
+    {
+      "accent_color": "#2d6a4f",
+      "config": {
+        "blob_count": 1,
+        "blob_size": 3,
+        "blob_spacing": 1,
+        "color_channel": "white",
+        "mode": "endless_up",
+        "panel_stagger": 16,
+        "panel_sync": "mirror",
+        "speed": 2.0,
+        "trail_length": 0
+      },
+      "name": "Mirror strips",
+      "slug": "mirror_strips"
+    }
+  ]
+}

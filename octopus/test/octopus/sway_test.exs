@@ -51,10 +51,14 @@ defmodule Octopus.SwayTest do
     w = Installation.width()
 
     params = %{
+      offset_x: 0.0,
+      offset_y: 0.0,
+      zoom: 1.0,
+      rotate_scale: 0.0,
       seconds: 1.7,
-      tilt_scale: 1.0,
-      tilt_speed: 0.5,
-      tilt_mode: :wobble
+      sway_scale: 1.0,
+      sway_speed: 0.5,
+      sway_mode: :wobble
     }
 
     x = 42

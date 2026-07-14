@@ -1,9 +1,9 @@
 defmodule Octopus.Apps.PixelFun3D.ScenePresets do
   @moduledoc """
-  Adapter over `Octopus.AppModePresets` for Pixel Fun.
+  Read-only adapter over `Octopus.AppModePresets` for Pixel Fun 3D.
 
-  Keeps the legacy preset map shape (`formula` field, `builtin:` / `user:` ids)
-  used by the full editor and existing tests.
+  Keeps the legacy preset map shape (`formula` field, `builtin:` ids) used by the
+  full editor and existing tests.
   """
 
   alias Octopus.Apps.PixelFun3D
@@ -47,7 +47,6 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresets do
 
   @type preset :: map()
 
-  @doc "Returns user-facing presets (legacy shape)."
   @spec list_all() :: [preset()]
   def list_all do
     pixel_fun()
@@ -55,16 +54,9 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresets do
     |> Enum.map(&to_legacy/1)
   end
 
-  @doc "Returns built-in presets only."
   @spec builtins() :: [preset()]
   def builtins do
-    list_all() |> Enum.filter(& &1.builtin)
-  end
-
-  @doc "Returns user-saved presets only."
-  @spec list_user() :: [preset()]
-  def list_user do
-    list_all() |> Enum.reject(& &1.builtin)
+    list_all()
   end
 
   @spec get(String.t()) :: preset() | nil
@@ -72,59 +64,6 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresets do
     case presets().get(pixel_fun(), mode_id) do
       nil -> nil
       preset -> to_legacy(preset)
-    end
-  end
-
-  @spec create(map()) :: {:ok, preset()} | {:error, Ecto.Changeset.t() | atom()}
-  def create(attrs) do
-    name = Map.fetch!(attrs, :name)
-
-    config =
-      %{
-        program: Map.get(attrs, :formula) || Map.get(attrs, :program),
-        palette_phase: Map.get(attrs, :palette_phase, 0.0),
-        color_interval: Map.get(attrs, :color_interval, 5.0),
-        palette_auto: Map.get(attrs, :palette_auto, true),
-        time_direction: Map.get(attrs, :time_direction, :forward)
-      }
-      |> Map.merge(sphere_attrs_from(attrs))
-      |> PixelFun3D.migrate_legacy_config()
-
-    opts = [accent_color: Map.get(attrs, :accent_color, presets().random_accent_color())]
-
-    case presets().create(pixel_fun(), name, config, opts) do
-      {:ok, preset} -> {:ok, to_legacy(preset)}
-      {:error, :invalid_formula} -> {:error, invalid_formula_changeset(Map.get(attrs, :formula, ""))}
-      error -> error
-    end
-  end
-
-  @spec update(String.t(), map()) :: {:ok, preset()} | {:error, Ecto.Changeset.t() | atom()}
-  def update(mode_id, attrs) do
-    preset = presets().get(pixel_fun(), mode_id)
-    base_config = normalize_config_keys((preset && preset.config) || %{})
-
-    config =
-      base_config
-      |> Map.merge(flat_attrs_to_config(attrs))
-      |> PixelFun3D.migrate_legacy_config()
-
-    update_attrs =
-      %{config: config}
-      |> maybe_put_name(attrs)
-
-    case presets().update(pixel_fun(), mode_id, update_attrs) do
-      {:ok, preset} -> {:ok, to_legacy(preset)}
-      error -> error
-    end
-  end
-
-  @spec delete(String.t()) :: :ok | {:error, atom()}
-  def delete(mode_id) do
-    case presets().archive(pixel_fun(), mode_id) do
-      :ok -> :ok
-      {:error, :not_found} -> {:error, :not_found}
-      _ -> {:error, :failed}
     end
   end
 
@@ -151,40 +90,13 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresets do
     |> Map.update!(:tilt_mode, &Octopus.Sway.normalize_mode/1)
   end
 
-  @spec attrs_from_config(map()) :: map()
-  def attrs_from_config(config) do
-    config = PixelFun3D.migrate_legacy_config(config)
-
-    %{
-      formula: Map.get(config, :program, ""),
-      palette_phase: Map.get(config, :palette_phase, 0.0),
-      color_interval: Map.get(config, :color_interval, 5.0),
-      palette_auto: Map.get(config, :palette_auto, true),
-      time_direction: Map.get(config, :time_direction, :forward)
-    }
-    |> Map.merge(Map.take(config, @sphere_keys))
+  @spec config_matches?(map(), map()) :: boolean()
+  def config_matches?(config, %{id: id}) do
+    id_for_config(config) == id
   end
 
-  @spec config_matches?(map(), map()) :: boolean()
-  def config_matches?(config, preset_or_snapshot) do
-    left = effective_scene_config(config)
-    right = effective_scene_config(normalize_snapshot(preset_or_snapshot))
-
-    Enum.all?(
-      [:program, :color_interval, :palette_auto, :time_direction | @sphere_keys],
-      fn key ->
-        case key do
-          :program -> left.program == right.program
-          :tilt_mode -> left.tilt_mode == right.tilt_mode
-          :time_direction -> left.time_direction == right.time_direction
-          k when k in [:trans_auto, :rot_auto, :zoom_auto, :sway_auto, :sat_auto, :palette_auto] ->
-            Map.get(left, k) == Map.get(right, k)
-
-          _ ->
-            float_eq?(Map.get(left, key), Map.get(right, key))
-        end
-      end
-    )
+  def config_matches?(left, right) when is_map(left) and is_map(right) do
+    id_for_config(left) == id_for_config(right)
   end
 
   @spec id_for_config(map()) :: String.t()
@@ -205,8 +117,6 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresets do
   def summary(%{} = preset) do
     apply(pixel_fun(), :summary_for_preset, [%{config: to_config(preset)}])
   end
-
-  def random_accent_color, do: presets().random_accent_color()
 
   defp presets, do: String.to_existing_atom(@app_mode_presets)
   defp pixel_fun, do: String.to_existing_atom(@pixel_fun)
@@ -232,82 +142,9 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresets do
   defp legacy_id(%{slug: "user_" <> _ = slug}), do: "user:" <> String.replace_prefix(slug, "user_", "")
   defp legacy_id(%{id: id}), do: id
 
-  defp maybe_put_name(attrs, source) do
-    case Map.get(source, :name) do
-      nil -> attrs
-      name -> Map.put(attrs, :name, name)
-    end
-  end
-
-  defp flat_attrs_to_config(attrs) do
-    %{}
-    |> maybe_config_put(:program, Map.get(attrs, :formula) || Map.get(attrs, :program))
-    |> maybe_config_put(:palette_phase, Map.get(attrs, :palette_phase))
-    |> maybe_config_put(:color_interval, Map.get(attrs, :color_interval))
-    |> maybe_config_put(:palette_auto, Map.get(attrs, :palette_auto))
-    |> maybe_config_put(:time_direction, Map.get(attrs, :time_direction))
-    |> then(fn config -> Map.merge(config, sphere_attrs_from(attrs)) end)
-  end
-
-  defp sphere_attrs_from(attrs) do
-    attrs
-    |> Map.take(@sphere_keys ++ [:translate_scale, :rotate_scale, :zoom_scale, :sway_scale, :sway_speed, :sway_mode])
-    |> Map.reject(fn {_k, v} -> is_nil(v) end)
-  end
-
-  defp maybe_config_put(config, _key, nil), do: config
-  defp maybe_config_put(config, key, value), do: Map.put(config, key, value)
-
-  defp normalize_config_keys(config) when is_map(config) do
-    Map.new(config, fn {k, v} -> {normalize_config_key(k), v} end)
-  end
-
-  defp normalize_config_key(k) when is_atom(k), do: k
-
-  defp normalize_config_key(k) when is_binary(k) do
-    case k do
-      "true" -> :true
-      "false" -> :false
-      other -> String.to_existing_atom(other)
-    end
-  rescue
-    ArgumentError -> String.to_atom(k)
-  end
-
-  defp normalize_snapshot(%{formula: formula} = preset) do
-    to_config(Map.put(preset, :formula, formula))
-  end
-
-  defp normalize_snapshot(%{program: _} = snapshot) do
-    effective_scene_config(snapshot)
-  end
-
-  defp effective_scene_config(config) do
-    config = PixelFun3D.migrate_legacy_config(config)
-
-    %{
-      program: Map.get(config, :program),
-      color_interval: Map.get(config, :color_interval, 5.0),
-      palette_auto: Map.get(config, :palette_auto, true),
-      time_direction: normalize_time_direction(Map.get(config, :time_direction, :forward)),
-      tilt_mode: Octopus.Sway.normalize_mode(Map.get(config, :tilt_mode, :wobble))
-    }
-    |> Map.merge(Map.take(config, @sphere_keys))
-  end
-
   defp normalize_time_direction(:forward), do: :forward
   defp normalize_time_direction(:backward), do: :backward
   defp normalize_time_direction("forward"), do: :forward
   defp normalize_time_direction("backward"), do: :backward
   defp normalize_time_direction(_), do: :forward
-
-  defp float_eq?(a, b) when is_number(a) and is_number(b), do: abs(a - b) < 0.001
-  defp float_eq?(a, b), do: a == b
-
-  defp invalid_formula_changeset(formula) do
-    # Reuse PixelFun.ScenePreset solely as a changeset shape for formula errors.
-    %Octopus.Apps.PixelFun.ScenePreset{}
-    |> Ecto.Changeset.change(%{formula: formula})
-    |> Ecto.Changeset.add_error(:formula, "has invalid syntax")
-  end
 end

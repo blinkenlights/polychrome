@@ -66,26 +66,8 @@ defmodule Octopus.Apps.Ocean do
   end
 
   def mode_config(mode_id) do
-    (apply(@mode_presets, :config_for, [__MODULE__, mode_id]) ||
-       legacy_mode_config(apply(@mode_presets, :mode_slug, [mode_id])))
+    apply(@mode_presets, :config_for, [__MODULE__, mode_id]) || %{}
   end
-
-  def builtin_presets do
-    [
-      %{
-        slug: "ocean",
-        name: "Ocean",
-        accent_color: "#2980B9",
-        config: legacy_mode_config("ocean")
-      }
-    ]
-  end
-
-  def legacy_mode_config("ocean") do
-    %{wave_strength: 1.0, damping: 0.95, water_level: 0.6}
-  end
-
-  def legacy_mode_config(_), do: %{}
 
   def mode_tweakables(mode_id) do
     mode_tweakables_for(apply(@mode_presets, :mode_slug, [mode_id]))

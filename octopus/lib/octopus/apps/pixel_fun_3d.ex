@@ -96,27 +96,6 @@ defmodule Octopus.Apps.PixelFun3D do
   ]
   @removed_tempo_keys [:rot_auto_tempo, :zoom_auto_tempo, :sway_auto_tempo, :trans_auto_tempo]
 
-  @builtin_scene_keys ([
-                        :color_mode,
-                        :saturation_percent,
-                        :brightness_percent,
-                        :color_interval,
-                        :palette_auto,
-                        :bleeding,
-                        :orbit_rate,
-                        :roll_rate,
-                        :roll_pivot,
-                        :tilt_scale,
-                        :tilt_speed,
-                        :tilt_mode,
-                        :elev_base,
-                        :zoom_base,
-                        :zoom_pivot,
-                        :pattern_speed,
-                        :time_direction
-                      ] ++ Map.keys(@auto_defaults))
-                      |> Enum.uniq()
-
   @sphere_scene_keys ([
                        :brightness_percent,
                        :orbit_rate,
@@ -131,308 +110,6 @@ defmodule Octopus.Apps.PixelFun3D do
                        :pattern_speed
                      ] ++ Map.keys(@auto_defaults))
                      |> Enum.uniq()
-
-  @builtin_defs [
-    %{
-      slug: "classic_ripple",
-      name: "Classic ripple",
-      formula: "sin(0.4*t-hypot(x,y))",
-      accent_color: "#E74C3C",
-      saturation_percent: 55,
-      brightness_percent: 85,
-      color_interval: 8.0,
-      trans_auto: true
-    },
-    %{
-      slug: "cross_waves",
-      name: "Cross waves",
-      formula: "sin(x*0.7+t*0.4)*cos(y*0.7+t*0.26)",
-      accent_color: "#3498DB",
-      saturation_percent: 60,
-      brightness_percent: 80,
-      color_interval: 6.0,
-      trans_auto: true,
-      rot_auto: true
-    },
-    %{
-      slug: "nested_sincos",
-      name: "Nested sin/cos",
-      formula:
-        "sin(x*0.4+sin(y*0.3+t*0.4)*3+t*0.4)*cos(y*0.4+cos(x*0.3+t*0.4)*3+t*0.4)",
-      accent_color: "#1ABC9C",
-      saturation_percent: 48,
-      brightness_percent: 78,
-      color_interval: 9.0
-    },
-    %{
-      slug: "layered_waves",
-      name: "Layered waves",
-      formula: "sin(x*0.5+t*0.4)*cos(y*0.5+t*0.4)+sin((x+y)*0.35+t*0.6)*0.5",
-      accent_color: "#F39C12",
-      saturation_percent: 50,
-      brightness_percent: 78,
-      color_interval: 9.0,
-      trans_auto: true,
-      rot_auto: true,
-      sat_auto: true
-    },
-    %{
-      slug: "ripple_rings",
-      name: "Ripple rings",
-      formula: "sin(hypot(x,y)*5-t*0.4)*sin(hypot(x+3,y+3)*5+t*0.27)",
-      accent_color: "#E91E63",
-      saturation_percent: 82,
-      brightness_percent: 64,
-      color_interval: 16.0
-    },
-    %{
-      slug: "organic_swirl",
-      name: "Organic swirl",
-      formula: "sin(x*y*0.06+sin(t*0.06)*x*0.2-t*0.12)*cos(hypot(x,y)*2+t*0.06)",
-      accent_color: "#2ECC71",
-      saturation_percent: 50,
-      brightness_percent: 70,
-      color_interval: 10.0
-    },
-    %{
-      slug: "swaytest",
-      name: "Swaytest",
-      formula: "tanh(y*4)",
-      accent_color: "#FF7043",
-      saturation_percent: 40,
-      brightness_percent: 90,
-      color_interval: 7.0
-    },
-    %{
-      slug: "kreiswelle",
-      name: "Kreiswelle",
-      formula: "sin(x*PI*6/156-t*0.4)*cos(y*0.7-t*0.26)",
-      accent_color: "#E74C3C",
-      saturation_percent: 65,
-      brightness_percent: 82,
-      color_interval: 7.0
-    },
-    %{
-      slug: "chaser",
-      name: "Chaser",
-      formula: "pow(sin(x*PI/156-t*0.4),7)",
-      accent_color: "#3498DB",
-      saturation_percent: 70,
-      brightness_percent: 95,
-      color_interval: 5.0
-    },
-    %{
-      slug: "doppelhelix",
-      name: "Doppelhelix",
-      formula: "sin(x*PI*3/156-t*0.4+y*0.4)*sin(x*PI*3/156+t*0.27-y*0.4)",
-      accent_color: "#9B59B6",
-      saturation_percent: 25,
-      brightness_percent: 88,
-      color_interval: 14.0,
-      zoom_auto: true,
-      sway_auto: true
-    },
-    %{
-      slug: "nordlicht",
-      name: "Nordlicht",
-      formula: "sin(y*0.6+sin(x*PI*5/156+t*0.4)*3)*(0.6+0.4*sin(x*PI*2/156-t*0.3))",
-      accent_color: "#1ABC9C",
-      saturation_percent: 20,
-      brightness_percent: 60,
-      color_interval: 18.0
-    },
-    %{
-      slug: "wolkenzug",
-      name: "Wolkenzug",
-      formula:
-        "sin(x*PI*3/156+t*0.2)*0.5+sin(x*PI*7/156-t*0.13+y*0.4)*0.3+sin(x*PI*11/156+t*0.31+y*0.8)*0.25",
-      accent_color: "#F39C12",
-      saturation_percent: 55,
-      brightness_percent: 72,
-      color_interval: 11.0
-    },
-    %{
-      slug: "seegras",
-      name: "Seegras",
-      formula: "pow(sin(x*PI*30/156+sin(t*0.4+y*0.6)*(3.5-y)*0.35),3)",
-      accent_color: "#E91E63",
-      saturation_percent: 35,
-      brightness_percent: 65,
-      color_interval: 10.0,
-      trans_auto: true,
-      trans_auto_range_y: 4.0,
-      trans_auto_interval: 50.0
-    },
-    %{
-      slug: "quallenpuls",
-      name: "Quallen-Puls",
-      formula:
-        "exp(-hypot(sin((x+9)*PI/312)*14,y)*0.1)*sin(hypot(sin((x+9)*PI/312)*14,y)*1.5-t*0.4)",
-      accent_color: "#2ECC71",
-      saturation_percent: 80,
-      brightness_percent: 55,
-      color_interval: 6.0
-    },
-    %{
-      slug: "weiche_blobs",
-      name: "Weiche Blobs",
-      formula: "sin(x*PI*6/156-t*0.4)*sin(y*0.75+sin(x*PI*2/156+t*0.23)*1.5)",
-      accent_color: "#FF7043",
-      saturation_percent: 62,
-      brightness_percent: 78,
-      color_interval: 8.0
-    },
-    # i-only twinkle — translate/rotate auto have no visible effect (panel-synced).
-    %{
-      slug: "leuchtplankton",
-      name: "Leuchtplankton",
-      formula: "pow(sin(i*13.7+t*0.24)*sin(i*5.3-t*0.16),5)",
-      accent_color: "#E74C3C",
-      saturation_percent: 30,
-      brightness_percent: 42,
-      color_interval: 4.0
-    },
-    %{
-      slug: "wasserwaage",
-      name: "Wasserwaage",
-      formula: "tanh(y*1.8)",
-      accent_color: "#3498DB",
-      saturation_percent: 25,
-      brightness_percent: 85,
-      color_interval: 15.0,
-      tilt_scale: 2.5,
-      tilt_speed: 0.4,
-      tilt_mode: :wobble
-    },
-    # i-only twinkle — translate/rotate auto have no visible effect.
-    %{
-      slug: "sternenhimmel",
-      name: "Sternenhimmel",
-      formula: "pow(sin(i*13.7+t*0.24)*sin(i*5.3-t*0.16),5)",
-      accent_color: "#9B59B6",
-      saturation_percent: 28,
-      brightness_percent: 42,
-      color_interval: 22.0,
-      orbit_rate: 2.0,
-      bleeding: 100.0
-    },
-    %{
-      slug: "nebeldrift",
-      name: "Nebeldrift",
-      formula: "noise(nx*2,ny*2,nz*2+t*0.08)",
-      accent_color: "#1ABC9C",
-      color_mode: :random,
-      saturation_percent: 40,
-      brightness_percent: 68,
-      color_interval: 20.0,
-      trans_auto: true,
-      trans_auto_range_x: 80.0,
-      trans_auto_range_y: 3.0,
-      trans_auto_interval: 80
-    },
-    %{
-      slug: "facettenstrudel",
-      name: "Facetten-Strudel",
-      formula: "sin(nx*8+t*0.4)*sin(ny*8-t*0.27)",
-      accent_color: "#F39C12",
-      saturation_percent: 75,
-      brightness_percent: 88,
-      color_interval: 7.0,
-      rot_auto: true,
-      rot_auto_range: 60,
-      rot_auto_interval: 60,
-      zoom_auto: true,
-      zoom_auto_range: 1.05,
-      zoom_auto_interval: 45
-    },
-    %{
-      slug: "marmor",
-      name: "Marmor",
-      formula: "sin(nx*6+noise(nx*2,ny*2,nz*2)*4+t*0.4)",
-      accent_color: "#E91E63",
-      color_mode: :white,
-      saturation_percent: 15,
-      brightness_percent: 90,
-      color_interval: 25.0,
-      sway_auto: true,
-      sway_auto_range: 1.5,
-      sway_auto_interval: 35
-    },
-    %{
-      slug: "strudel",
-      name: "Strudel",
-      formula: "sin(3*atan2(nz,ny)+acos(nx)*6-t*0.4)",
-      accent_color: "#2ECC71",
-      saturation_percent: 68,
-      brightness_percent: 80,
-      color_interval: 9.0
-    },
-    %{
-      slug: "spiralband",
-      name: "Spiralband",
-      formula: "sin(4*atan2(ny,nx)+nz*30-t*0.4)",
-      accent_color: "#FF7043",
-      saturation_percent: 72,
-      brightness_percent: 85,
-      color_interval: 8.0
-    },
-    %{
-      slug: "globus",
-      name: "Globus",
-      formula:
-        "exp(-pow(nz*5,2))*sin(4*atan2(ny,nx)+nz*20-t*0.4)+exp(-pow((nz-1)*4,2))*sin(3*atan2(ny,nx)+acos(nz)*10+t*0.3)+exp(-pow((nz+1)*4,2))*sin(3*atan2(ny,nx)-acos(-nz)*10-t*0.3)",
-      accent_color: "#E74C3C",
-      saturation_percent: 60,
-      brightness_percent: 75,
-      color_interval: 12.0,
-      # With roll_pivot 0 the panels near the pivot axis see less parade —
-      # the full equator→pole cycle is most dramatic a quarter-ring away.
-      roll_rate: 6.0,
-      roll_pivot: 0
-    },
-    %{
-      slug: "polarlicht_parade",
-      name: "Polar-Parade",
-      formula:
-        "exp(-pow((nz-1)*3,2))*sin(2*atan2(ny,nx)+acos(nz)*8+t*0.4)+exp(-pow((nz+1)*3,2))*sin(2*atan2(ny,nx)+acos(-nz)*8-t*0.4)",
-      accent_color: "#3498DB",
-      saturation_percent: 35,
-      brightness_percent: 58,
-      color_interval: 16.0,
-      roll_rate: 4.0,
-      roll_pivot: 6
-    },
-    %{
-      slug: "kippende_baender",
-      name: "Kippende Bänder",
-      formula: "sin(nx*10-t*0.13)",
-      accent_color: "#9B59B6",
-      saturation_percent: 55,
-      brightness_percent: 82,
-      color_interval: 10.0,
-      rot_auto: true,
-      rot_auto_range: 45,
-      rot_auto_interval: 60
-    },
-    %{
-      slug: "wabengitter",
-      name: "Wabengitter (Debug)",
-      # Static two-colour honeycomb defined in direction space (lon=atan2(ny,nx),
-      # lat=asin(nz)) via a three-cosine hex lattice. N=48 (even) keeps every lon
-      # frequency integer -> seamless around the ring; 41.569 = 48*sqrt(3)/2. Cells
-      # are regular hexagons at the equator, so any visible distortion comes from
-      # transforms, not the pattern. No `t` -> no motion; palette_auto off freezes
-      # the two colours.
-      formula:
-        "tanh(3*(cos(48*atan2(ny,nx))+cos(24*atan2(ny,nx)+41.569*asin(nz))+cos(24*atan2(ny,nx)-41.569*asin(nz))))",
-      accent_color: "#2ECC71",
-      color_mode: :random,
-      palette_auto: false,
-      saturation_percent: 100,
-      brightness_percent: 100,
-      color_interval: 5.0
-    }
-  ]
 
   @fps 30
   @frame_time_ms trunc(1000 / @fps)
@@ -632,24 +309,6 @@ defmodule Octopus.Apps.PixelFun3D do
 
   def mode_config(mode_id) do
     presets().config_for(__MODULE__, mode_id) || %{}
-  end
-
-  def builtin_presets do
-    Enum.map(@builtin_defs, fn def ->
-      %{
-        slug: def.slug,
-        name: def.name,
-        accent_color: def.accent_color,
-        config: builtin_config(def)
-      }
-    end)
-  end
-
-  def legacy_mode_config(slug) do
-    case Enum.find(@builtin_defs, &(&1.slug == slug)) do
-      nil -> %{}
-      def -> builtin_config(def)
-    end
   end
 
   def summary_for_preset(%{config: config}) do
@@ -1781,48 +1440,14 @@ defmodule Octopus.Apps.PixelFun3D do
     end
   end
 
-  # Builtin playback prefers `@builtin_defs` over insert-only DB rows so recipe
-  # transforms (wasserwaage sway, etc.) stay in sync with code.
   defp config_for_scene_id(scene_id) when is_binary(scene_id) do
-    slug =
-      cond do
-        String.starts_with?(scene_id, "builtin:") ->
-          String.replace_prefix(scene_id, "builtin:", "")
+    mod = scene_presets()
 
-        String.starts_with?(scene_id, "pixelfun3d:") ->
-          String.replace_prefix(scene_id, "pixelfun3d:", "")
-
-        true ->
-          nil
-      end
-
-    code =
-      if is_binary(slug) do
-        case legacy_mode_config(slug) do
-          %{} = c when map_size(c) > 0 -> migrate_legacy_config(c)
-          _ -> nil
-        end
-      end
-
-    cond do
-      code != nil and (String.starts_with?(scene_id, "builtin:") or builtin_slug?(slug)) ->
-        code
-
-      true ->
-        mod = scene_presets()
-
-        case apply(mod, :get, [scene_id]) do
-          nil -> nil
-          preset -> apply(mod, :to_config, [preset])
-        end
+    case apply(mod, :get, [scene_id]) do
+      nil -> nil
+      preset -> apply(mod, :to_config, [preset])
     end
   end
-
-  defp builtin_slug?(slug) when is_binary(slug) do
-    Enum.any?(@builtin_defs, &(&1.slug == slug))
-  end
-
-  defp builtin_slug?(_), do: false
 
   # Scene load must win over auto-off handover and leftover integrated angles,
   # otherwise a prior sway/orbit auto leaves a tilted "horizon" on neutral presets.
@@ -1873,12 +1498,6 @@ defmodule Octopus.Apps.PixelFun3D do
   defp scene_presets, do: String.to_existing_atom("Elixir.Octopus.Apps.PixelFun3D.ScenePresets")
 
   defp presets, do: String.to_existing_atom(@app_mode_presets)
-
-  defp builtin_config(def) do
-    @default_scene
-    |> Map.put(:program, def.formula)
-    |> Map.merge(Map.take(def, @builtin_scene_keys))
-  end
 
   def handle_info({:param_updated, :speed, new_value}, %State{} = state) do
     {:noreply, %{state | speed: new_value}}

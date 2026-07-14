@@ -41,18 +41,10 @@ defmodule Octopus.Apps.Wood do
   end
 
   def mode_config(mode_id) do
-    slug = apply(@mode_presets, :mode_slug, [mode_id])
-    legacy = legacy_mode_config(slug)
-
-    stored =
-      case apply(@mode_presets, :config_for, [__MODULE__, mode_id]) do
-        nil -> %{}
-        config -> config
-      end
-
-    legacy
-    |> Map.merge(stored)
-    |> normalize_mode_config()
+    case apply(@mode_presets, :config_for, [__MODULE__, mode_id]) do
+      nil -> %{}
+      config -> normalize_mode_config(config)
+    end
   end
 
   def normalize_mode_config(config) do
@@ -64,44 +56,6 @@ defmodule Octopus.Apps.Wood do
     |> Map.update(:panel_sync, :sync, &coerce_panel_sync/1)
     |> Map.update(:panel_stagger, 16, &trunc/1)
   end
-
-  def builtin_presets do
-    [
-      %{
-        slug: "experiment",
-        name: "Experiment",
-        accent_color: "#4a7c59",
-        config: legacy_mode_config("experiment")
-      },
-      %{
-        slug: "mirror_strips",
-        name: "Mirror strips",
-        accent_color: "#2d6a4f",
-        config: legacy_mode_config("mirror_strips")
-      }
-    ]
-  end
-
-  def legacy_mode_config("experiment") do
-    %{
-      mode: :endless_up,
-      speed: 2.0,
-      blob_size: 3,
-      blob_count: 1,
-      blob_spacing: 1,
-      color_channel: :white,
-      trail_length: 0,
-      panel_sync: :sync,
-      panel_stagger: 16
-    }
-  end
-
-  def legacy_mode_config("mirror_strips") do
-    legacy_mode_config("experiment")
-    |> Map.merge(%{panel_sync: :mirror})
-  end
-
-  def legacy_mode_config(_), do: %{}
 
   def mode_tweakables(mode_id) do
     mode_tweakables_for(apply(@mode_presets, :mode_slug, [mode_id]))

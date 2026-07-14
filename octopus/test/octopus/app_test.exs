@@ -69,23 +69,25 @@ defmodule Octopus.AppTest do
   end
 
   test "app-specific display info with different layouts" do
-    # Test that different layouts produce different display info
+    original_installation = Application.get_env(:octopus, :installation)
+    Application.put_env(:octopus, :installation, Octopus.Installation.Nation2026)
 
-    # Create display buffers for different layouts
-    Mixer.create_display_buffers(:test_app_gapped, %{layout: :gapped_panels})
-    Mixer.create_display_buffers(:test_app_adjacent, %{layout: :adjacent_panels})
+    try do
+      Mixer.create_display_buffers(:test_app_gapped, %{layout: :gapped_panels})
+      Mixer.create_display_buffers(:test_app_adjacent, %{layout: :adjacent_panels})
 
-    gapped_info = Mixer.get_app_display_info(:test_app_gapped)
-    adjacent_info = Mixer.get_app_display_info(:test_app_adjacent)
+      gapped_info = Mixer.get_app_display_info(:test_app_gapped)
+      adjacent_info = Mixer.get_app_display_info(:test_app_adjacent)
 
-    # Different layouts should have different widths
-    assert gapped_info.width != adjacent_info.width
-    assert gapped_info.layout == :gapped_panels
-    assert adjacent_info.layout == :adjacent_panels
+      assert gapped_info.width != adjacent_info.width
+      assert gapped_info.layout == :gapped_panels
+      assert adjacent_info.layout == :adjacent_panels
 
-    # Both should have same panel dimensions but different total widths
-    assert gapped_info.panel_width == adjacent_info.panel_width
-    assert gapped_info.panel_height == adjacent_info.panel_height
-    assert gapped_info.num_panels == adjacent_info.num_panels
+      assert gapped_info.panel_width == adjacent_info.panel_width
+      assert gapped_info.panel_height == adjacent_info.panel_height
+      assert gapped_info.num_panels == adjacent_info.num_panels
+    after
+      Application.put_env(:octopus, :installation, original_installation)
+    end
   end
 end

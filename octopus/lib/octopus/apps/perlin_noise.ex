@@ -18,33 +18,8 @@ defmodule Octopus.Apps.PerlinNoise do
   end
 
   def mode_config(mode_id) do
-    apply(@mode_presets, :config_for, [__MODULE__, mode_id]) ||
-      legacy_mode_config(apply(@mode_presets, :mode_slug, [mode_id]))
+    apply(@mode_presets, :config_for, [__MODULE__, mode_id]) || %{}
   end
-
-  def builtin_presets do
-    [
-      %{
-        slug: "perlin",
-        name: "Perlin noise",
-        accent_color: "#95A5A6",
-        config: legacy_mode_config("perlin")
-      }
-    ]
-  end
-
-  def legacy_mode_config("perlin") do
-    %{
-      scale: default_scale(),
-      octaves: 4,
-      persistence: 0.5,
-      speed: 1.0,
-      seed: 42,
-      contrast: @default_contrast
-    }
-  end
-
-  def legacy_mode_config(_), do: %{}
 
   def mode_tweakables(mode_id) do
     mode_tweakables_for(apply(@mode_presets, :mode_slug, [mode_id]))

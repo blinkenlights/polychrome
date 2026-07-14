@@ -6,12 +6,6 @@ defmodule Octopus.Apps.MatrixTest do
   alias Octopus.Canvas
 
   @matrix Module.concat(["Octopus", "Apps", "Matrix"])
-  @presets Module.concat(["Octopus", "AppModePresets"])
-
-  setup do
-    preset_sync_all!()
-    :ok
-  end
 
   defp base_state(overrides \\ []) do
     defaults = %{
@@ -314,7 +308,6 @@ defmodule Octopus.Apps.MatrixTest do
     end
   end
 
-  defp preset_sync_all!, do: apply(@presets, :sync_all!, [])
   defp matrix_list_modes, do: apply(@matrix, :list_modes, [])
   defp matrix_mode_config(mode_id), do: apply(@matrix, :mode_config, [mode_id])
   defp matrix_mode_tweakables(mode_id), do: apply(@matrix, :mode_tweakables, [mode_id])
