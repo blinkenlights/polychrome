@@ -630,31 +630,64 @@ defmodule Octopus.Installation do
     |> Keyword.put(:panels, controller_ids)
   end
 
-  defp parse_panel_entry!([controller: controller_id, wiring: wiring_id])
-       when is_atom(controller_id) and is_atom(wiring_id) do
-    {%Octopus.Hardware.PanelSlot{controller_id: controller_id, wiring_id: wiring_id}, controller_id}
+  defp parse_panel_entry!(entry) when is_list(entry) do
+    controller_id = Keyword.get(entry, :controller)
+    wiring_id = Keyword.get(entry, :wiring)
+    port = Keyword.get(entry, :port, 1)
+
+    allowed = [:controller, :wiring, :port]
+    unknown = Keyword.keys(entry) -- allowed
+
+    cond do
+      unknown != [] ->
+        raise ArgumentError,
+              "invalid panel slot #{inspect(entry)}; unknown keys #{inspect(unknown)}"
+
+      not is_atom(controller_id) or not is_atom(wiring_id) ->
+        raise ArgumentError,
+              "invalid panel slot #{inspect(entry)}; expected [controller: id, wiring: id] with optional port:"
+
+      not (is_integer(port) and port >= 1) ->
+        raise ArgumentError,
+              "invalid panel slot #{inspect(entry)}; port must be a positive integer"
+
+      true ->
+        {%Octopus.Hardware.PanelSlot{
+           controller_id: controller_id,
+           wiring_id: wiring_id,
+           port: port
+         }, controller_id}
+    end
   end
 
   defp parse_panel_entry!(entry) do
     raise ArgumentError,
-          "invalid panel slot #{inspect(entry)}; expected [controller: id, wiring: id], not bare atoms"
+          "invalid panel slot #{inspect(entry)}; expected [controller: id, wiring: id] with optional port:, not bare atoms"
   end
 
   defp derive_panel_network_targets!(opts) do
-    controller_ids = Keyword.fetch!(opts, :panels)
+    panel_slots = Keyword.fetch!(opts, :panel_slots)
 
     Keyword.update!(opts, :network_config, fn network_config ->
-      derive_panel_network_config(controller_ids, network_config)
+      derive_panel_network_config(panel_slots, network_config)
     end)
   end
 
-  defp derive_panel_network_config(controller_ids, network_config) do
+  defp derive_panel_network_config(panel_slots, network_config) do
     registry = Octopus.Hardware.registry()
 
     panel_targets =
-      Enum.map(controller_ids, fn id ->
+      Enum.map(panel_slots, fn %Octopus.Hardware.PanelSlot{
+                                 controller_id: id,
+                                 port: slot_port
+                               } ->
         controller = Map.fetch!(registry, id)
-        [address: controller.hostname, panel_index: controller.firmware_panel_index]
+
+        [
+          address: controller.hostname,
+          panel_index: controller.firmware_panel_index,
+          port: Octopus.Hardware.Controller.udp_port(controller, slot_port)
+        ]
       end)
 
     Keyword.put(network_config, :panels, panel_targets)

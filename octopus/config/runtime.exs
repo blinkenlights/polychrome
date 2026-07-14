@@ -6,6 +6,10 @@ import Config
 # import_config/1, so we evaluate the file instead.
 Code.eval_file(Path.join(__DIR__, "radar.exs"))
 
+if local = System.get_env("FIRMWARE_BROADCASTER_LOCAL_PORT") do
+  config :octopus, :firmware_broadcaster_local_port, String.to_integer(local)
+end
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration

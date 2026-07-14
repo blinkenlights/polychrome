@@ -4,6 +4,9 @@ defmodule Octopus.Hardware.PanelStatus do
 
   Controllers send `FirmwareInfo` every 5 seconds. Thresholds are tuned to ~2×
   and ~6× that interval for online and offline boundaries.
+
+  Heartbeats are matched by MAC (or hostname) plus the device UDP listen port
+  for the installation slot, so multi-port controllers do not share one status.
   """
 
   alias Octopus.Broadcaster
@@ -71,9 +74,10 @@ defmodule Octopus.Hardware.PanelStatus do
 
     panel_slots
     |> Enum.with_index(1)
-    |> Enum.map(fn {%PanelSlot{controller_id: controller_id}, panel} ->
+    |> Enum.map(fn {%PanelSlot{controller_id: controller_id, port: slot_port}, panel} ->
       controller = Hardware.fetch!(controller_id)
-      meta = find_firmware_meta(firmware_stats, controller)
+      udp_port = Controller.udp_port(controller, slot_port)
+      meta = find_firmware_meta(firmware_stats, controller, udp_port)
 
       %{
         panel: panel,
@@ -105,13 +109,24 @@ defmodule Octopus.Hardware.PanelStatus do
   def status_for_age_seconds(age) when age <= @stale_threshold, do: :stale
   def status_for_age_seconds(_age), do: :offline
 
-  defp find_firmware_meta(firmware_stats, %Controller{} = controller) do
-    firmware_stats
-    |> Map.values()
-    |> Enum.find(fn %FirmwareInfoMeta{firmware_info: info} ->
-      macs_match?(info.mac, controller.mac) or
-        hostnames_match?(info.hostname, controller.hostname)
-    end)
+  defp find_firmware_meta(firmware_stats, %Controller{} = controller, udp_port) do
+    case Map.get(firmware_stats, {controller.mac, udp_port}) do
+      %FirmwareInfoMeta{} = meta ->
+        meta
+
+      nil ->
+        firmware_stats
+        |> Map.values()
+        |> Enum.find(fn
+          %FirmwareInfoMeta{firmware_info: info, udp_port: port}
+          when port == udp_port or is_nil(port) ->
+            macs_match?(info.mac, controller.mac) or
+              hostnames_match?(info.hostname, controller.hostname)
+
+          _ ->
+            false
+        end)
+    end
   end
 
   defp macs_match?(left, right) when is_binary(left) and is_binary(right) do

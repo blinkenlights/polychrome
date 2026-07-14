@@ -39,15 +39,15 @@ defmodule Octopus.Hardware.PanelStatusTest do
 
   describe "all/2" do
     test "maps firmware stats to logical panel numbers by MAC" do
-      controller = Octopus.Hardware.fetch!(:polychrome_panel_1)
+      controller = Octopus.Hardware.fetch!(:polychrome_01)
 
       firmware_stats = %{
         controller.mac => meta(controller, @now - 5)
       }
 
       panel_slots = [
-        %PanelSlot{controller_id: :polychrome_panel_1, wiring_id: :serpentine_8x8_bottom_left},
-        %PanelSlot{controller_id: :polychrome_panel_2, wiring_id: :serpentine_8x8_bottom_left}
+        %PanelSlot{controller_id: :polychrome_01, wiring_id: :serpentine_8x8_bottom_left},
+        %PanelSlot{controller_id: :polychrome_02, wiring_id: :serpentine_8x8_bottom_left}
       ]
 
       statuses =
@@ -56,15 +56,15 @@ defmodule Octopus.Hardware.PanelStatusTest do
           panel_slots: panel_slots
         )
 
-      assert [%{panel: 1, status: :online, controller_id: :polychrome_panel_1, firmware_info: %{} = info},
-              %{panel: 2, status: :offline, controller_id: :polychrome_panel_2, firmware_info: nil}] =
+      assert [%{panel: 1, status: :online, controller_id: :polychrome_01, firmware_info: %{} = info},
+              %{panel: 2, status: :offline, controller_id: :polychrome_02, firmware_info: nil}] =
                statuses
 
       assert info.mac == controller.mac
     end
 
     test "falls back to hostname when MAC differs" do
-      controller = Octopus.Hardware.fetch!(:polychrome_panel_1)
+      controller = Octopus.Hardware.fetch!(:polychrome_01)
 
       firmware_stats = %{
         "aa:bb:cc:dd:ee:ff" =>
@@ -79,7 +79,7 @@ defmodule Octopus.Hardware.PanelStatusTest do
       }
 
       panel_slots = [
-        %PanelSlot{controller_id: :polychrome_panel_1, wiring_id: :serpentine_8x8_bottom_left}
+        %PanelSlot{controller_id: :polychrome_01, wiring_id: :serpentine_8x8_bottom_left}
       ]
 
       assert [%{panel: 1, status: :online}] =
@@ -103,10 +103,10 @@ defmodule Octopus.Hardware.PanelStatusTest do
       }
 
       panel_slots = [
-        %PanelSlot{controller_id: :polychrome_panel_9, wiring_id: :serpentine_vertical_bottom_left}
+        %PanelSlot{controller_id: :polychrome_09, wiring_id: :serpentine_vertical_bottom_left}
       ]
 
-      assert [%{panel: 1, status: :online, controller_id: :polychrome_panel_9}] =
+      assert [%{panel: 1, status: :online, controller_id: :polychrome_09}] =
                PanelStatus.all(@now,
                  firmware_stats: firmware_stats,
                  panel_slots: panel_slots
@@ -135,7 +135,8 @@ defmodule Octopus.Hardware.PanelStatusTest do
     %FirmwareInfoMeta{
       last_seen: last_seen,
       firmware_info: info,
-      from_ip: {127, 0, 0, 1}
+      from_ip: {127, 0, 0, 1},
+      udp_port: 1337
     }
   end
 end

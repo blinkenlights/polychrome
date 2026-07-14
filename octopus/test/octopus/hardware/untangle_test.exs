@@ -2,8 +2,8 @@ defmodule Octopus.TestInstallations.BroadcastTwoPanels do
   use Octopus.Installation,
     arrangement: :linear,
     panels: [
-      [controller: :polychrome_panel_1, wiring: :serpentine_horizontal_bottom_left],
-      [controller: :polychrome_panel_2, wiring: :serpentine_horizontal_bottom_left]
+      [controller: :polychrome_01, wiring: :serpentine_horizontal_bottom_left],
+      [controller: :polychrome_02, wiring: :serpentine_horizontal_bottom_left]
     ],
     panel_layout: {8, 8},
     num_buttons: 0,
@@ -34,19 +34,19 @@ defmodule Octopus.Hardware.UntangleTest do
   @installation_opts [
     panel_slots: [
       %PanelSlot{
-        controller_id: :polychrome_panel_1,
+        controller_id: :polychrome_01,
         wiring_id: :serpentine_horizontal_bottom_left
       },
       %PanelSlot{
-        controller_id: :polychrome_panel_3,
+        controller_id: :polychrome_03,
         wiring_id: :serpentine_horizontal_bottom_left
       },
       %PanelSlot{
-        controller_id: :polychrome_panel_2,
+        controller_id: :polychrome_02,
         wiring_id: :serpentine_horizontal_bottom_left
       }
     ],
-    panels: [:polychrome_panel_1, :polychrome_panel_3, :polychrome_panel_2],
+    panels: [:polychrome_01, :polychrome_03, :polychrome_02],
     network_config: [mode: :broadcast]
   ]
 

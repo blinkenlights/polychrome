@@ -33,7 +33,7 @@ defmodule Octopus.Hardware.InstallationValidator do
   end
 
   defp validate_panel_slots!(panel_slots, installation_opts, controller_registry, wiring_registry) do
-    for %PanelSlot{controller_id: controller_id, wiring_id: wiring_id} <- panel_slots do
+    for %PanelSlot{controller_id: controller_id, wiring_id: wiring_id, port: port} <- panel_slots do
       unless Map.has_key?(controller_registry, controller_id) do
         raise Error,
               message:
@@ -44,6 +44,14 @@ defmodule Octopus.Hardware.InstallationValidator do
         raise Error,
               message:
                 "unknown wiring id #{inspect(wiring_id)} in installation panels list; not in wiring catalog"
+      end
+
+      %Controller{ports: ports} = Map.fetch!(controller_registry, controller_id)
+
+      unless port >= 1 and port <= ports do
+        raise Error,
+              message:
+                "controller #{inspect(controller_id)} port #{port} is out of range (available ports: 1..#{ports})"
       end
     end
 

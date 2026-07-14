@@ -3,7 +3,7 @@ defmodule Octopus.Installation.Prototype do
     arrangement: :linear,
     panel_type: :pixie,
     panels: [
-      [controller: :polychrome_panel_prototype, wiring: :serpentine_horizontal_bottom_left]
+      [controller: :pixie, port: 1, wiring: :serpentine_horizontal_bottom_left]
     ],
     panel_layout: {8, 8},
     num_buttons: 1,
