@@ -4,6 +4,8 @@ defmodule Octopus.Apps.Collective.Animations.LavaLampTest do
   alias Octopus.Apps.Collective.Animations.LavaLamp
   alias Octopus.Canvas
   alias Octopus.Installation
+  alias Octopus.Radar
+  alias Octopus.Radar.{Frame, PanelActivity, Track}
 
   @epsilon 1.0e-9
   @two_pi 2.0 * :math.pi()
@@ -116,8 +118,16 @@ defmodule Octopus.Apps.Collective.Animations.LavaLampTest do
       assert dark?, "expected dark background on 8 px ring"
       assert changed?, "expected blob motion between frames"
     end
+  end
 
-    test "crowd presence changes the frame when Crowd Heat > 0" do
+  describe "render/4 with PanelActivity" do
+    setup do
+      start_supervised!(Octopus.Radar.PanelActivity.Settings)
+      start_supervised!(PanelActivity)
+      :ok
+    end
+
+    test "panel activity changes the frame when Crowd Heat > 0" do
       width = Installation.num_panels() * Installation.panel_width()
       height = Installation.panel_height()
       canvas = Canvas.new(width, height)
@@ -131,15 +141,25 @@ defmodule Octopus.Apps.Collective.Animations.LavaLampTest do
         lava_thresh: 0.9,
         lava_palette: :classic,
         lava_reactivity: 1.0,
-        lava_warmth: 0.5,
-        lava_people_blobs: true
+        lava_warmth: 0.5
       }
 
-      person = %{id: 1, x: 8.0, y: 0.0, vx: 1.0, vy: 0.0}
       state = LavaLamp.init(display_info)
-
       {empty_frame, _} = LavaLamp.render(canvas, [], ctx, state)
-      {crowd_frame, _} = LavaLamp.render(canvas, [person], ctx, state)
+
+      frame = %Frame{
+        frame_number: 1,
+        tracks: [%Track{id: 1, x: 0.0, y: 10.0, z: 0.0, vx: 1.0, vy: 0.0, vz: 0.0}],
+        received_at: nil
+      }
+
+      send(PanelActivity, {:radar_frame, 1, frame})
+      PanelActivity.tick()
+      _ = Radar.panel_activity()
+
+      assert Enum.any?(Radar.panel_factors(), fn {_panel, value} -> value > 0.0 end)
+
+      {crowd_frame, _} = LavaLamp.render(canvas, [], ctx, state)
 
       differs? =
         Enum.any?(
@@ -148,14 +168,24 @@ defmodule Octopus.Apps.Collective.Animations.LavaLampTest do
           end
         )
 
-      assert differs?, "expected crowd to change the frame at Crowd Heat 1.0"
+      assert differs?, "expected panel activity to change the frame at Crowd Heat 1.0"
     end
 
-    test "Crowd Heat 0 with People as Blobs off is crowd-blind" do
+    test "Crowd Heat 0 is crowd-blind even when panel activity is high" do
       width = Installation.num_panels() * Installation.panel_width()
       height = Installation.panel_height()
       canvas = Canvas.new(width, height)
       display_info = %{width: width, height: height, num_panels: Installation.num_panels()}
+
+      frame = %Frame{
+        frame_number: 1,
+        tracks: [%Track{id: 1, x: 0.0, y: 10.0, z: 0.0, vx: 1.0, vy: 0.0, vz: 0.0}],
+        received_at: nil
+      }
+
+      send(PanelActivity, {:radar_frame, 1, frame})
+      PanelActivity.tick()
+      _ = Radar.panel_activity()
 
       ctx = %{
         dt: 2.0,
@@ -165,15 +195,13 @@ defmodule Octopus.Apps.Collective.Animations.LavaLampTest do
         lava_thresh: 0.9,
         lava_palette: :classic,
         lava_reactivity: 0.0,
-        lava_warmth: 0.5,
-        lava_people_blobs: false
+        lava_warmth: 0.5
       }
 
-      person = %{id: 1, x: 8.0, y: 0.0, vx: 1.0, vy: 0.0}
       state = LavaLamp.init(display_info)
 
       {empty_frame, _} = LavaLamp.render(canvas, [], ctx, state)
-      {crowd_frame, _} = LavaLamp.render(canvas, [person], ctx, state)
+      {crowd_frame, _} = LavaLamp.render(canvas, [], ctx, state)
 
       identical? =
         Enum.all?(

@@ -4,14 +4,11 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
 
   Slow sinusoidal rise/fall, soft sigmoid colouring, seamless wrap at panel 12→1.
 
-  Crowd input is modelled as **heat** via the shared `CrowdActivity` factor
-  (radius weight × walk multiplier, auto-gained, then per-panel EMA-smoothed):
+  Crowd input comes from `Octopus.Radar.PanelActivity` via `Radar.panel_factors/0`:
 
-    * global heat → convection speed + turbulence and palette temperature.
+    * global heat → convection speed and palette temperature.
     * local heat  → per-blob buoyancy (rises over active panels), radius boost,
       and angular attraction toward hot panels.
-    * people-as-blobs → each present person optionally spawns a transient blob at
-      their angular position that grows while present and decays when they leave.
 
   `Crowd Heat` (`:lava_reactivity`) is the master gain; at 0 the animation is the
   original crowd-blind decorative lava (safe fallback with no sensor).
@@ -22,9 +19,9 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
 
   @behaviour Octopus.Apps.Collective.Animation
 
-  alias Octopus.Apps.Collective.CrowdActivity
   alias Octopus.Canvas
   alias Octopus.Installation
+  alias Octopus.Radar
   alias Octopus.Radar.PanelMapping
 
   @two_pi 2.0 * :math.pi()
@@ -36,22 +33,12 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
   @small_ring_width 16
   @small_ring_min_scale 0.28
 
-  # Time constant (s) for the per-panel heat EMA (keeps crowd input from flickering).
-  @heat_time_tau 0.6
-
   # How strongly local heat lifts a blob toward the top (fraction of strip height).
   @buoyancy_gain 0.6
   # How strongly local heat inflates a blob's radius.
   @radius_gain 0.5
   # Radians a blob drifts toward a hot panel per unit heat gradient.
   @attract_gain 0.6
-
-  # Person-blob dynamics.
-  @person_grow_tau 1.2
-  @person_decay_tau 1.5
-  @person_min_life 0.03
-  @person_rise 0.5
-  @person_base_r 1.6
 
   @palettes %{
     classic: [
@@ -101,21 +88,17 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
   def init(%{width: width}) do
     scale = layout_scale(width)
     count = 7
-    num_panels = max(div(width, @panel_width), 1)
 
     %{
       t: 0.0,
       blob_count: count,
       layout_scale: scale,
-      blobs: generate_blobs(count, scale),
-      ref: CrowdActivity.min_ref(),
-      heat: for(p <- 0..(num_panels - 1), into: %{}, do: {p, 0.0}),
-      person_blobs: %{}
+      blobs: generate_blobs(count, scale)
     }
   end
 
   @impl true
-  def render(%Canvas{} = canvas, people, ctx, state) do
+  def render(%Canvas{} = canvas, _people, ctx, state) do
     dt = ctx.dt
     speed = Map.get(ctx, :lava_speed, 1.0) |> clamp(0.2, 3.0)
     size_mul = Map.get(ctx, :lava_size_mul, 1.25) |> clamp(0.6, 2.2)
@@ -124,7 +107,6 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
     blob_count = Map.get(ctx, :lava_blob_count, 7) |> clamp_int(3, 12)
     reactivity = Map.get(ctx, :lava_reactivity, 0.6) |> clamp(0.0, 1.0)
     warmth = Map.get(ctx, :lava_warmth, 0.5) |> clamp(0.0, 1.0)
-    people_blobs? = Map.get(ctx, :lava_people_blobs, true)
 
     state = ensure_blobs(state, blob_count)
 
@@ -134,24 +116,12 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
     layout_scale = layout_scale(circumference)
     num_panels = max(div(width, @panel_width), 1)
 
-    ring_outer = PanelMapping.ring_radius()
-    raw = CrowdActivity.raw_factors(people, num_panels, ring_outer)
-    ref = CrowdActivity.update_ref(state.ref, raw, true, dt)
-
-    target_heat =
-      for p <- 0..(num_panels - 1), into: %{} do
-        {p, CrowdActivity.soft(Map.get(raw, p, 0.0) / ref)}
-      end
-
-    heat = smooth_heat(state.heat, target_heat, num_panels, dt)
+    heat = frame_heat(num_panels)
     heat_global = (heat |> Map.values() |> Enum.sum()) / num_panels
 
     t = state.t + dt
     t_anim = t * speed * (1.0 + reactivity * heat_global)
     thresh = clamp(base_thresh * (1.0 - 0.35 * reactivity * heat_global), 0.3, 1.6)
-
-    person_blobs =
-      update_person_blobs(state.person_blobs, people, people_blobs?, ring_outer, dt)
 
     posed =
       pose_ambient_blobs(
@@ -163,8 +133,7 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
         heat,
         num_panels,
         reactivity
-      ) ++
-        pose_person_blobs(person_blobs, height, layout_scale, size_mul)
+      )
 
     # Cool the palette toward blue when the room is empty; gated by reactivity so
     # Crowd Heat 0 keeps the full (hot) decorative palette.
@@ -179,14 +148,7 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
         {{x, y}, color}
       end
 
-    new_state = %{
-      state
-      | t: t,
-        layout_scale: layout_scale,
-        ref: ref,
-        heat: heat,
-        person_blobs: person_blobs
-    }
+    new_state = %{state | t: t, layout_scale: layout_scale}
 
     {%Canvas{canvas | pixels: pixels}, new_state}
   end
@@ -307,12 +269,15 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
 
   # --- crowd heat ----------------------------------------------------------
 
-  defp smooth_heat(prev, target, num_panels, dt) do
-    alpha = 1.0 - :math.exp(-dt / @heat_time_tau)
+  defp frame_heat(num_panels) do
+    factors = Radar.panel_factors()
+    north = Radar.north_panel()
 
-    for p <- 0..(num_panels - 1), into: %{} do
-      cur = Map.get(prev, p, 0.0)
-      {p, cur + (Map.get(target, p, 0.0) - cur) * alpha}
+    for frame_panel <- 0..(num_panels - 1), into: %{} do
+      install =
+        PanelMapping.installation_panel_of_frame(frame_panel, num_panels, north)
+
+      {frame_panel, Map.get(factors, install, 0.0)}
     end
   end
 
@@ -332,54 +297,6 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
   defp heat_gradient(theta, heat, num_panels) do
     d = @two_pi / max(num_panels, 1)
     heat_at(theta + d, heat, num_panels) - heat_at(theta - d, heat, num_panels)
-  end
-
-  # --- person blobs --------------------------------------------------------
-
-  defp update_person_blobs(_prev, _people, false, _ring_outer, _dt), do: %{}
-
-  defp update_person_blobs(prev, people, true, ring_outer, dt) do
-    grow = 1.0 - :math.exp(-dt / @person_grow_tau)
-    decay = 1.0 - :math.exp(-dt / @person_decay_tau)
-
-    present =
-      Enum.reduce(people, %{}, fn person, acc ->
-        theta = @two_pi * PanelMapping.angle_norm(person)
-        r = PanelMapping.track_radius(person)
-        w_radius = 1.0 + 2.0 * clamp01(r / ring_outer)
-        target = w_radius / 3.0
-
-        {life0, theta0} =
-          case Map.get(prev, person.id) do
-            nil -> {0.0, theta}
-            b -> {b.life, b.theta}
-          end
-
-        life = life0 + (target - life0) * grow
-        theta_s = norm_theta(theta0 + ang_delta(theta0, theta) * grow)
-        Map.put(acc, person.id, %{theta: theta_s, life: life})
-      end)
-
-    absent =
-      prev
-      |> Map.drop(Map.keys(present))
-      |> Enum.reduce(%{}, fn {id, b}, acc ->
-        life = b.life * (1.0 - decay)
-        if life > @person_min_life, do: Map.put(acc, id, %{b | life: life}), else: acc
-      end)
-
-    Map.merge(present, absent)
-  end
-
-  defp pose_person_blobs(person_blobs, height, layout_scale, size_mul) do
-    y_center = (height - 1) / 2.0
-
-    for {_id, b} <- person_blobs do
-      rise = b.life * (height - 1) * @person_rise
-      y = y_center - rise
-      radius = @person_base_r * size_mul * layout_scale * (0.4 + b.life)
-      {b.theta, y, radius}
-    end
   end
 
   # --- colour / temperature ------------------------------------------------
@@ -436,16 +353,9 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
     if m < 0.0, do: m + @two_pi, else: m
   end
 
-  defp ang_delta(from, to) do
-    d = :math.fmod(to - from + :math.pi(), @two_pi)
-    d = if d < 0.0, do: d + @two_pi, else: d
-    d - :math.pi()
-  end
-
   defp rand_uniform(a, b), do: a + :rand.uniform() * (b - a)
 
   defp lerp(a, b, t), do: a + (b - a) * t
   defp clamp(v, lo, hi), do: v |> max(lo) |> min(hi)
-  defp clamp01(v), do: v |> max(0.0) |> min(1.0)
   defp clamp_int(v, lo, hi), do: v |> trunc() |> max(lo) |> min(hi)
 end

@@ -118,8 +118,7 @@ defmodule Octopus.Apps.Collective do
           lava_thresh: 0.9,
           lava_palette: :classic,
           lava_reactivity: 0.6,
-          lava_warmth: 0.5,
-          lava_people_blobs: true
+          lava_warmth: 0.5
         }
 
       "ring_noise" ->
@@ -269,13 +268,6 @@ defmodule Octopus.Apps.Collective do
         runtime: true
       },
       %{
-        key: :lava_people_blobs,
-        label: "People as blobs",
-        type: :toggle,
-        default: true,
-        runtime: true
-      },
-      %{
         key: :lava_palette,
         label: "Palette",
         type: :choice,
@@ -365,7 +357,6 @@ defmodule Octopus.Apps.Collective do
     lava_palette = Map.get(config, :lava_palette, :classic)
     lava_reactivity = Map.get(config, :lava_reactivity, 0.6)
     lava_warmth = Map.get(config, :lava_warmth, 0.5)
-    lava_people_blobs = Map.get(config, :lava_people_blobs, true)
     ring_noise_speed = Map.get(config, :ring_noise_speed, 1.0)
     ring_noise_pulse_period = Map.get(config, :ring_noise_pulse_period, 24.0)
     ring_noise_pulse_amount = Map.get(config, :ring_noise_pulse_amount, 0.65)
@@ -398,7 +389,6 @@ defmodule Octopus.Apps.Collective do
       lava_palette: lava_palette,
       lava_reactivity: lava_reactivity,
       lava_warmth: lava_warmth,
-      lava_people_blobs: lava_people_blobs,
       ring_noise_speed: ring_noise_speed,
       ring_noise_pulse_period: ring_noise_pulse_period,
       ring_noise_pulse_amount: ring_noise_pulse_amount,
@@ -466,7 +456,6 @@ defmodule Octopus.Apps.Collective do
       lava_palette: state.lava_palette,
       lava_reactivity: state.lava_reactivity,
       lava_warmth: state.lava_warmth,
-      lava_people_blobs: state.lava_people_blobs,
       ring_noise_speed: state.ring_noise_speed,
       ring_noise_pulse_period: state.ring_noise_pulse_period,
       ring_noise_pulse_amount: state.ring_noise_pulse_amount,
@@ -650,8 +639,6 @@ defmodule Octopus.Apps.Collective do
            step: 0.05,
            visible_when: {:animation, [:lava_lamp]}
          }},
-      lava_people_blobs:
-        {"People as Blobs", :boolean, %{default: true, visible_when: {:animation, [:lava_lamp]}}},
       ring_noise_speed:
         {"Noise Speed", :float,
          %{
@@ -772,13 +759,12 @@ defmodule Octopus.Apps.Collective do
   def config_info(%{animation: :lava_lamp}) do
     """
     Lava Lamp — cylindrical metaball blobs driven by crowd heat.
-    Crowd activity (near the panels + walking counts more) heats the ring: hot
+    Brightness and motion follow the shared radar panel-activity service: hot
     zones lift and inflate blobs, speed up convection and warm the palette. Empty
     room = slow cold lamp. Crowd Heat 0 = classic crowd-blind decorative lava.
     • Crowd Heat — master crowd influence (0 = ignore the crowd).
     • Speed — base animation time scale (not frame rate).
     • Warmth — how much the palette cools when the room is empty.
-    • People as Blobs — each person spawns a rising blob at their ring position.
     • Palette — Classic, Magenta, or Slime (hot end of the temperature axis).
     """
   end
@@ -839,7 +825,6 @@ defmodule Octopus.Apps.Collective do
       lava_palette: state.lava_palette,
       lava_reactivity: state.lava_reactivity,
       lava_warmth: state.lava_warmth,
-      lava_people_blobs: state.lava_people_blobs,
       ring_noise_speed: state.ring_noise_speed,
       ring_noise_pulse_period: state.ring_noise_pulse_period,
       ring_noise_pulse_amount: state.ring_noise_pulse_amount,
@@ -885,7 +870,6 @@ defmodule Octopus.Apps.Collective do
          lava_palette: Map.get(config, :lava_palette, state.lava_palette),
          lava_reactivity: Map.get(config, :lava_reactivity, state.lava_reactivity),
          lava_warmth: Map.get(config, :lava_warmth, state.lava_warmth),
-         lava_people_blobs: Map.get(config, :lava_people_blobs, state.lava_people_blobs),
          ring_noise_speed: Map.get(config, :ring_noise_speed, state.ring_noise_speed),
          ring_noise_pulse_period:
            Map.get(config, :ring_noise_pulse_period, state.ring_noise_pulse_period),
