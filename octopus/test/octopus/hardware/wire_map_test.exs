@@ -5,8 +5,8 @@ defmodule Octopus.Hardware.WireMapTest do
   alias Octopus.Hardware.WireMap
   alias Octopus.WireMapAssertions
 
-  @controller Hardware.fetch!(:polychrome_panel_prototype)
-  @panel_1 Hardware.fetch!(:polychrome_panel_1)
+  @controller Hardware.fetch!(:pixie)
+  @panel_1 Hardware.fetch!(:polychrome_01)
   @horizontal Hardware.fetch_wiring!(:serpentine_horizontal_bottom_left)
   @vertical Hardware.fetch_wiring!(:serpentine_vertical_bottom_left)
 
@@ -171,5 +171,9 @@ defmodule Octopus.Hardware.WireMapTest do
 
     result = WireMap.apply_inverse_rgb(data)
     assert byte_size(result) == 64 * 3
+  end
+
+  test "Woodstock 2x32 installation RGB encodes into 64 firmware pixels" do
+    WireMapAssertions.assert_installation_encode_rgb_roundtrip!(Octopus.Installation.Woodstock)
   end
 end

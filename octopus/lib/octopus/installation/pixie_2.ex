@@ -1,9 +1,9 @@
-defmodule Octopus.Installation.Pixie do
+defmodule Octopus.Installation.Pixie2 do
   use Octopus.Installation,
     arrangement: :linear,
     panel_type: :pixie,
     panels: [
-      [controller: :pixie, port: 1, wiring: :serpentine_vertical_bottom_left]
+      [controller: :pixie, port: 2, wiring: :serpentine_vertical_bottom_left]
     ],
     panel_layout: {8, 8},
     num_buttons: 1,
@@ -18,7 +18,7 @@ defmodule Octopus.Installation.Pixie do
     ],
     simulator_layouts: [
       [
-        name: "Pixie",
+        name: "Pixie 2",
         mode: "generic",
         pixel_size: {64, 64}
       ]

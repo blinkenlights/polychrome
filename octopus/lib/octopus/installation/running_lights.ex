@@ -2,7 +2,7 @@ defmodule Octopus.Installation.RunningLights do
   use Octopus.Installation,
     arrangement: :linear,
     panels: [
-      [controller: :polychrome_panel_prototype, wiring: :serpentine_vertical_bottom_left]
+      [controller: :pixie, port: 1, wiring: :serpentine_vertical_bottom_left]
     ],
     panel_layout: {1, 24},
     num_buttons: 1,

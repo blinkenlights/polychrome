@@ -13,15 +13,15 @@ defmodule Octopus.Hardware.InstallationValidatorTest do
                [
                  panel_slots: [
                    %PanelSlot{
-                     controller_id: :polychrome_panel_1,
+                     controller_id: :polychrome_01,
                      wiring_id: :serpentine_horizontal_bottom_left
                    },
                    %PanelSlot{
-                     controller_id: :polychrome_panel_2,
+                     controller_id: :polychrome_02,
                      wiring_id: :serpentine_horizontal_bottom_left
                    }
                  ],
-                 panels: [:polychrome_panel_1, :polychrome_panel_2],
+                 panels: [:polychrome_01, :polychrome_02],
                  panel_layout: {8, 8},
                  network_config: [mode: :broadcast]
                ],
@@ -53,9 +53,9 @@ defmodule Octopus.Hardware.InstallationValidatorTest do
       InstallationValidator.validate!(
         [
           panel_slots: [
-            %PanelSlot{controller_id: :polychrome_panel_1, wiring_id: :not_a_real_wiring}
+            %PanelSlot{controller_id: :polychrome_01, wiring_id: :not_a_real_wiring}
           ],
-          panels: [:polychrome_panel_1],
+          panels: [:polychrome_01],
           panel_layout: {8, 8},
           network_config: [mode: :broadcast]
         ],
@@ -76,9 +76,9 @@ defmodule Octopus.Hardware.InstallationValidatorTest do
       InstallationValidator.validate!(
         [
           panel_slots: [
-            %PanelSlot{controller_id: :polychrome_panel_prototype, wiring_id: :fixed_8x8}
+            %PanelSlot{controller_id: :pixie, wiring_id: :fixed_8x8}
           ],
-          panels: [:polychrome_panel_prototype],
+          panels: [:pixie],
           panel_layout: {1, 64},
           network_config: [mode: :individual]
         ],
@@ -94,11 +94,11 @@ defmodule Octopus.Hardware.InstallationValidatorTest do
         [
           panel_slots: [
             %PanelSlot{
-              controller_id: :polychrome_panel_prototype,
+              controller_id: :pixie,
               wiring_id: :serpentine_vertical_bottom_left
             }
           ],
-          panels: [:polychrome_panel_prototype],
+          panels: [:pixie],
           panel_layout: {8, 9},
           network_config: [mode: :individual]
         ],
@@ -113,11 +113,11 @@ defmodule Octopus.Hardware.InstallationValidatorTest do
                [
                  panel_slots: [
                    %PanelSlot{
-                     controller_id: :polychrome_panel_prototype,
+                     controller_id: :pixie,
                      wiring_id: :serpentine_vertical_bottom_left
                    }
                  ],
-                 panels: [:polychrome_panel_prototype],
+                 panels: [:pixie],
                  panel_layout: {1, 24},
                  network_config: [mode: :individual]
                ],
@@ -131,11 +131,11 @@ defmodule Octopus.Hardware.InstallationValidatorTest do
                [
                  panel_slots: [
                    %PanelSlot{
-                     controller_id: :polychrome_panel_prototype,
+                     controller_id: :pixie,
                      wiring_id: :serpentine_vertical_bottom_left
                    }
                  ],
-                 panels: [:polychrome_panel_prototype],
+                 panels: [:pixie],
                  panel_layout: {1, 64},
                  network_config: [mode: :individual]
                ],
@@ -149,15 +149,15 @@ defmodule Octopus.Hardware.InstallationValidatorTest do
         [
           panel_slots: [
             %PanelSlot{
-              controller_id: :polychrome_panel_1,
+              controller_id: :polychrome_01,
               wiring_id: :serpentine_horizontal_bottom_left
             },
             %PanelSlot{
-              controller_id: :polychrome_panel_prototype,
+              controller_id: :pixie,
               wiring_id: :serpentine_horizontal_bottom_left
             }
           ],
-          panels: [:polychrome_panel_1, :polychrome_panel_prototype],
+          panels: [:polychrome_01, :pixie],
           panel_layout: {8, 8},
           network_config: [mode: :broadcast]
         ],
@@ -172,11 +172,11 @@ defmodule Octopus.Hardware.InstallationValidatorTest do
                [
                  panel_slots: [
                    %PanelSlot{
-                     controller_id: :polychrome_panel_prototype,
+                     controller_id: :pixie,
                      wiring_id: :serpentine_horizontal_bottom_left
                    }
                  ],
-                 panels: [:polychrome_panel_prototype],
+                 panels: [:pixie],
                  panel_layout: {8, 8},
                  network_config: [mode: :individual]
                ],
@@ -208,6 +208,45 @@ defmodule Octopus.Hardware.InstallationValidatorTest do
                  panel_slots: [],
                  panels: [],
                  network_config: [mode: :broadcast]
+               ],
+               Hardware.registry()
+             )
+  end
+
+  test "raises when installation port exceeds controller ports" do
+    assert_raise Error, ~r/port 3 is out of range/, fn ->
+      InstallationValidator.validate!(
+        [
+          panel_slots: [
+            %PanelSlot{
+              controller_id: :pixie,
+              port: 3,
+              wiring_id: :serpentine_vertical_bottom_left
+            }
+          ],
+          panels: [:pixie],
+          panel_layout: {8, 8},
+          network_config: [mode: :individual]
+        ],
+        Hardware.registry()
+      )
+    end
+  end
+
+  test "accepts pixie port 2" do
+    assert :ok =
+             InstallationValidator.validate!(
+               [
+                 panel_slots: [
+                   %PanelSlot{
+                     controller_id: :pixie,
+                     port: 2,
+                     wiring_id: :serpentine_vertical_bottom_left
+                   }
+                 ],
+                 panels: [:pixie],
+                 panel_layout: {2, 32},
+                 network_config: [mode: :individual]
                ],
                Hardware.registry()
              )

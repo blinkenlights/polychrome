@@ -8,74 +8,158 @@
 #define WIDTH 8
 #define HEIGHT 8
 #define PIXEL_COUNT (WIDTH * HEIGHT)
-#define DATA_PIN 16
+#define DATA_PIN_0 16 // Dig-Uno LED1
+#define DATA_PIN_1 3  // Dig-Uno LED2
 
+// Dual-port (WLED/QuinLED style): one NeoEsp32RmtNTm1814Method per strip with
+// distinct RMT channels. Same qualitative path as former single-strip I2S1
+// NeoTm1814Method, but allows parallel bus 1 without sharing I2S.
+// Single-port panels keep the proven I2S1 default.
+#if BUS_COUNT > 1
+using StripMethod = NeoEsp32RmtNTm1814Method;
 #ifdef SKIP_LEDS
-NeoPixelBus<NeoWrgbTm1814Feature, NeoTm1814Method> strip(PIXEL_COUNT * 2, DATA_PIN);
+static NeoPixelBus<NeoWrgbTm1814Feature, StripMethod> strip0(PIXEL_COUNT * 2, DATA_PIN_0, NeoBusChannel_0);
+static NeoPixelBus<NeoWrgbTm1814Feature, StripMethod> strip1(PIXEL_COUNT * 2, DATA_PIN_1, NeoBusChannel_1);
 #else
-NeoPixelBus<NeoWrgbTm1814Feature, NeoTm1814Method> strip(PIXEL_COUNT, DATA_PIN);
+static NeoPixelBus<NeoWrgbTm1814Feature, StripMethod> strip0(PIXEL_COUNT, DATA_PIN_0, NeoBusChannel_0);
+static NeoPixelBus<NeoWrgbTm1814Feature, StripMethod> strip1(PIXEL_COUNT, DATA_PIN_1, NeoBusChannel_1);
+#endif
+#else
+using StripMethod = NeoTm1814Method;
+#ifdef SKIP_LEDS
+static NeoPixelBus<NeoWrgbTm1814Feature, StripMethod> strip0(PIXEL_COUNT * 2, DATA_PIN_0);
+#else
+static NeoPixelBus<NeoWrgbTm1814Feature, StripMethod> strip0(PIXEL_COUNT, DATA_PIN_0);
+#endif
 #endif
 
-Pixel pixel[PIXEL_COUNT];
-DisplayMode display_mode = DisplayMode::Normal;
+static NeoPixelBus<NeoWrgbTm1814Feature, StripMethod> *strips[BUS_COUNT] = {
+    &strip0,
+#if BUS_COUNT > 1
+    &strip1,
+#endif
+};
 
-// Config defaults
-bool show_test_frame = true;
-uint32_t config_phash = 0;
-uint8_t luminance = 255;
-bool enable_wframe_red = false;
+static void strip_begin(int bus)
+{
+  if (bus >= 0 && bus < BUS_COUNT)
+  {
+    strips[bus]->Begin();
+  }
+}
+
+static void strip_set_settings(int bus, const NeoTm1814Settings &settings)
+{
+  if (bus >= 0 && bus < BUS_COUNT)
+  {
+    strips[bus]->SetPixelSettings(settings);
+  }
+}
+
+static void strip_set_pixel(int bus, uint32_t index, const RgbwColor &color)
+{
+  if (bus >= 0 && bus < BUS_COUNT)
+  {
+    strips[bus]->SetPixelColor(index, color);
+  }
+}
+
+static void strip_show(int bus)
+{
+  if (bus < 0 || bus >= BUS_COUNT)
+  {
+    return;
+  }
+  while (!strips[bus]->CanShow())
+  {
+    yield();
+  }
+  strips[bus]->Dirty();
+  strips[bus]->Show();
+}
+
+static Pixel pixels[BUS_COUNT][PIXEL_COUNT];
+static DisplayMode display_modes[BUS_COUNT];
+static bool show_test_frame[BUS_COUNT];
+static uint32_t config_phash[BUS_COUNT];
+static uint8_t luminances[BUS_COUNT];
+static bool enable_wframe_red = false;
+
+int Display::bus_count()
+{
+  return BUS_COUNT;
+}
 
 void Display::setup()
 {
-  strip.Begin();
-  strip.SetPixelSettings(NeoTm1814Settings(225, 225, 225, 225)); // 22.5mA current  rating
-
-  for (int i = 0; i < PIXEL_COUNT; i++)
+  for (int bus = 0; bus < BUS_COUNT; bus++)
   {
-    pixel[i].set_color(RgbwColor(0, 0, 0, 0));
+    display_modes[bus] = DisplayMode::Normal;
+    show_test_frame[bus] = true;
+    config_phash[bus] = 0;
+    luminances[bus] = 255;
+
+    strip_begin(bus);
+    strip_set_settings(bus, NeoTm1814Settings(225, 225, 225, 225));
+
+    for (int i = 0; i < PIXEL_COUNT; i++)
+    {
+      pixels[bus][i].set_color(RgbwColor(0, 0, 0, 0));
+    }
+
+    render_test_frame(bus);
+    strip_show(bus);
   }
-  render_test_frame();
 }
 
 void Display::loop()
 {
-  switch (display_mode)
+  for (int bus = 0; bus < BUS_COUNT; bus++)
   {
-  case DisplayMode::Conflict:
-    render_conflict_red();
-    break;
-
-  case DisplayMode::Idle:
-    render_idle_grey();
-    break;
-
-  case DisplayMode::Normal:
-    if (show_test_frame)
+    switch (display_modes[bus])
     {
-      render_test_frame();
-    }
-    else
-    {
-      for (int i = 0; i < PIXEL_COUNT; i++)
+    case DisplayMode::Conflict:
+      render_conflict_red(bus);
+      break;
+
+    case DisplayMode::Idle:
+      render_idle_grey(bus);
+      break;
+
+    case DisplayMode::Normal:
+      if (show_test_frame[bus])
       {
-        strip.SetPixelColor(map_index(i), pixel[i].get_display_color().Dim(luminance));
+        render_test_frame(bus);
       }
+      else
+      {
+        for (int i = 0; i < PIXEL_COUNT; i++)
+        {
+          strip_set_pixel(bus, map_index(i), pixels[bus][i].get_display_color().Dim(luminances[bus]));
+        }
+      }
+      break;
     }
-    break;
+
+    strip_show(bus);
   }
-
-  strip.Dirty();
-  strip.Show();
 }
 
-void Display::set_display_mode(DisplayMode mode)
+void Display::set_display_mode(int bus_index, DisplayMode mode)
 {
-  display_mode = mode;
+  if (bus_index >= 0 && bus_index < BUS_COUNT)
+  {
+    display_modes[bus_index] = mode;
+  }
 }
 
-DisplayMode Display::get_display_mode()
+DisplayMode Display::get_display_mode(int bus_index)
 {
-  return display_mode;
+  if (bus_index >= 0 && bus_index < BUS_COUNT)
+  {
+    return display_modes[bus_index];
+  }
+  return DisplayMode::Idle;
 }
 
 void Display::set_enable_wframe_red(bool enable)
@@ -88,8 +172,6 @@ bool Display::get_enable_wframe_red()
   return enable_wframe_red;
 }
 
-// Function to calculate R value for a given W value (0-255)
-// Based on the formula: r = max_r * ((max_w - w) / max_w)^2
 uint8_t calculate_r_for_wframe(uint8_t w_value)
 {
   const uint8_t max_w = 255;
@@ -99,14 +181,12 @@ uint8_t calculate_r_for_wframe(uint8_t w_value)
   {
     return 0;
   }
-  else
-  {
-    float ratio = (float)(max_w - w_value) / max_w;
-    return (uint8_t)(max_r * ratio * ratio);
-  }
+
+  float ratio = (float)(max_w - w_value) / max_w;
+  return (uint8_t)(max_r * ratio * ratio);
 }
 
-void apply_rgb_frame(RGBFrame_data_t data, uint16_t first_pixel, uint16_t last_pixel, bool keep_w)
+static void apply_rgb_frame(int bus_index, RGBFrame_data_t data, uint16_t first_pixel, uint16_t last_pixel, bool keep_w)
 {
   RgbwColor color;
   for (int i = first_pixel; i <= last_pixel; i++)
@@ -117,7 +197,7 @@ void apply_rgb_frame(RGBFrame_data_t data, uint16_t first_pixel, uint16_t last_p
 
     if (keep_w)
     {
-      RgbwColor original = pixel[i - first_pixel].get_original_color();
+      RgbwColor original = pixels[bus_index][i - first_pixel].get_original_color();
       color.W = original.W;
       if (enable_wframe_red)
       {
@@ -131,11 +211,11 @@ void apply_rgb_frame(RGBFrame_data_t data, uint16_t first_pixel, uint16_t last_p
       color.W = 0;
     }
 
-    pixel[i - first_pixel].set_color(color);
+    pixels[bus_index][i - first_pixel].set_color(color);
   }
 }
 
-void apply_w_frame(WFrame_data_t data, uint16_t first_pixel, uint16_t last_pixel, bool keep_rgb)
+static void apply_w_frame(int bus_index, WFrame_data_t data, uint16_t first_pixel, uint16_t last_pixel, bool keep_rgb)
 {
   RgbwColor color;
   for (int i = first_pixel; i <= last_pixel; i++)
@@ -144,7 +224,7 @@ void apply_w_frame(WFrame_data_t data, uint16_t first_pixel, uint16_t last_pixel
 
     if (keep_rgb)
     {
-      RgbwColor original = pixel[i - first_pixel].get_original_color();
+      RgbwColor original = pixels[bus_index][i - first_pixel].get_original_color();
       if (enable_wframe_red)
       {
         uint8_t w_r = calculate_r_for_wframe(w);
@@ -173,39 +253,41 @@ void apply_w_frame(WFrame_data_t data, uint16_t first_pixel, uint16_t last_pixel
     }
 
     color.W = w;
-    pixel[i - first_pixel].set_color(color);
+    pixels[bus_index][i - first_pixel].set_color(color);
   }
 }
 
-void Display::handle_packet(Packet packet)
+void Display::handle_packet(int bus_index, Packet packet)
 {
+  if (bus_index < 0 || bus_index >= BUS_COUNT)
+  {
+    return;
+  }
+
   uint16_t first_pixel;
   uint16_t last_pixel;
 
   switch (packet.which_content)
   {
   case Packet_firmware_config_tag:
-    show_test_frame = packet.content.firmware_config.show_test_frame;
-    config_phash = packet.content.firmware_config.config_phash;
+    show_test_frame[bus_index] = packet.content.firmware_config.show_test_frame;
+    config_phash[bus_index] = packet.content.firmware_config.config_phash;
     Pixel::set_easing_mode(EasingMode(packet.content.firmware_config.easing_mode));
     Pixel::set_enable_calibration(packet.content.firmware_config.enable_calibration);
-    luminance = packet.content.firmware_config.luminance;
-
+    luminances[bus_index] = packet.content.firmware_config.luminance;
     break;
 
   case Packet_w_frame_tag:
     first_pixel = PIXEL_COUNT * (PANEL_INDEX - 1);
     last_pixel = first_pixel + PIXEL_COUNT - 1;
-    apply_w_frame(packet.content.w_frame.data, first_pixel, last_pixel, packet.content.w_frame.keep_rgb);
-
+    apply_w_frame(bus_index, packet.content.w_frame.data, first_pixel, last_pixel, packet.content.w_frame.keep_rgb);
     Pixel::set_easing_interval(packet.content.w_frame.easing_interval);
-
     break;
 
   case Packet_rgb_frame_tag:
     first_pixel = PIXEL_COUNT * (PANEL_INDEX - 1);
     last_pixel = first_pixel + PIXEL_COUNT - 1;
-    apply_rgb_frame(packet.content.rgb_frame.data, first_pixel, last_pixel, packet.content.rgb_frame.keep_w);
+    apply_rgb_frame(bus_index, packet.content.rgb_frame.data, first_pixel, last_pixel, packet.content.rgb_frame.keep_w);
     Pixel::set_easing_interval(packet.content.rgb_frame.easing_interval);
     break;
 
@@ -214,8 +296,7 @@ void Display::handle_packet(Packet packet)
     {
       first_pixel = PIXEL_COUNT * (PANEL_INDEX - 1);
       last_pixel = first_pixel + PIXEL_COUNT - 1;
-      apply_rgb_frame(packet.content.rgb_frame_part1.data, first_pixel, last_pixel, packet.content.rgb_frame_part1.keep_w);
-
+      apply_rgb_frame(bus_index, packet.content.rgb_frame_part1.data, first_pixel, last_pixel, packet.content.rgb_frame_part1.keep_w);
       Pixel::set_easing_interval(packet.content.rgb_frame_part1.easing_interval);
     }
     break;
@@ -225,19 +306,16 @@ void Display::handle_packet(Packet packet)
     {
       first_pixel = PIXEL_COUNT * (PANEL_INDEX - 6);
       last_pixel = first_pixel + PIXEL_COUNT - 1;
-      apply_rgb_frame(packet.content.rgb_frame_part2.data, first_pixel, last_pixel, packet.content.rgb_frame_part2.keep_w);
-
+      apply_rgb_frame(bus_index, packet.content.rgb_frame_part2.data, first_pixel, last_pixel, packet.content.rgb_frame_part2.keep_w);
       Pixel::set_easing_interval(packet.content.rgb_frame_part2.easing_interval);
     }
     break;
 
   default:
-    // Ignore other packets
     break;
   }
 }
 
-// maps the pixel index to the physical layout of the LED strip. The first LED should be bottom left (seen from the front).
 uint32_t Display::map_index(uint32_t index)
 {
   uint32_t x = index % WIDTH;
@@ -254,98 +332,49 @@ uint32_t Display::map_index(uint32_t index)
   }
 
 #ifdef SKIP_LEDS
-  // Skip every second LED: logical LEDs 0,1,2,3... map to physical LEDs 0,2,4,6...
   return mapped_index * 2;
 #else
-  // Standard mapping
   return mapped_index;
 #endif
 }
 
-void Display::render_test_frame()
+void Display::render_test_frame(int bus_index)
 {
-  RgbwColor color;
-
   for (int i = 0; i < PIXEL_COUNT; i++)
   {
-    color = HsbColor(float(i) / float(PIXEL_COUNT), 1, 1);
-    strip.SetPixelColor(map_index(i), color);
+    RgbwColor color = HsbColor(float(i) / float(PIXEL_COUNT), 1, 1);
+    strip_set_pixel(bus_index, map_index(i), color);
   }
 }
 
-void Display::render_idle_grey()
+void Display::render_idle_grey(int bus_index)
 {
-  const uint8_t w = 26; // 10% greyscale W-frame
+  const uint8_t w = 128; // ~50% for visibility while debugging; later back to ~10% (26)
   const uint8_t r = enable_wframe_red ? calculate_r_for_wframe(w) : 0;
   RgbwColor color(r, 0, 0, w);
 
   for (int i = 0; i < PIXEL_COUNT; i++)
   {
-    strip.SetPixelColor(map_index(i), color);
+    strip_set_pixel(bus_index, map_index(i), color);
   }
 }
 
-void Display::render_conflict_red()
+void Display::render_conflict_red(int bus_index)
 {
   bool on = (millis() / 1000) % 2 == 0;
   RgbwColor color = on ? RgbwColor(255, 0, 0, 0) : RgbwColor(0, 0, 0, 0);
 
   for (int i = 0; i < PIXEL_COUNT; i++)
   {
-    strip.SetPixelColor(map_index(i), color);
+    strip_set_pixel(bus_index, map_index(i), color);
   }
 }
 
-uint32_t Display::get_config_phash()
+uint32_t Display::get_config_phash(int bus_index)
 {
-  return config_phash;
+  if (bus_index >= 0 && bus_index < BUS_COUNT)
+  {
+    return config_phash[bus_index];
+  }
+  return 0;
 }
-
-// void Display::render_test_frame()
-// {
-//   RgbwColor on = RgbwColor(255, 255, 255, 255);
-//   RgbwColor off = RgbwColor(0, 0, 0, 0);
-
-//   float brightness;
-//   for (int i = 0; i < 8; i++)
-//   {
-//     EasingMode easing_mode = EasingMode_EASE_IN_OUT_QUAD;
-//     switch (i)
-//     {
-//     case 0:
-//       easing_mode = EasingMode_EASE_IN_QUAD;
-//       break;
-//     case 1:
-//       easing_mode = EasingMode_EASE_IN_CUBIC;
-//       break;
-//     case 2:
-//       easing_mode = EasingMode_EASE_IN_QUART;
-//       break;
-//     case 3:
-//       easing_mode = EasingMode_LINEAR;
-//       break;
-//     case 4:
-//       easing_mode = EasingMode_EASE_OUT_QUAD;
-//       break;
-//     case 5:
-//       easing_mode = EasingMode_EASE_OUT_CUBIC;
-//       break;
-//     case 6:
-//       easing_mode = EasingMode_EASE_OUT_QUART;
-//       break;
-//     case 7:
-//       easing_mode = EasingMode_EASE_IN_OUT_CUBIC;
-//       break;
-//     }
-//     for (int j = 0; j < 8; j++)
-//     {
-//       brightness = Easing::get_easing(easing_mode, float(j) / 8.0);
-//       RgbwColor color = RgbwColor::LinearBlend(off, on, brightness);
-//       strip.SetPixelColor(map_index(i * 8 + j), color);
-//       strip.SetPixelColor(map_index(i * 8 + j), off);
-//     }
-//   }
-
-//   strip.Dirty();
-//   strip.Show();
-// }
