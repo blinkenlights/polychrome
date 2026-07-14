@@ -127,7 +127,7 @@ defmodule OctopusWeb.PixelFun3DConfigComponent do
             </p>
           </div>
 
-          <div :for={{key, {name, type, opts}} <- scene_entries(@config_schema)}>
+          <div :for={{key, {name, type, opts}} <- scene_entries(@config_schema, @config)}>
             <div class="flex items-center justify-between">
               <label class="label-text font-semibold" for={"#{@app_id}-#{key}"}>{name}</label>
               <span :if={type != :select} class="pf-mono text-sm opacity-80">{format_slider(@config[key])}</span>
@@ -354,9 +354,16 @@ defmodule OctopusWeb.PixelFun3DConfigComponent do
     keys != [] and Enum.all?(keys, &MapSet.member?(tweakable_keys, &1))
   end
 
-  defp scene_entries(config_schema) do
-    Enum.reject(config_schema, fn {key, {_name, type, _opts}} ->
+  defp scene_entries(config_schema, config) do
+    config_schema
+    |> Enum.reject(fn {key, {_name, type, _opts}} ->
       key == :program or type == :internal
+    end)
+    |> Enum.filter(fn {_key, {_name, _type, opts}} ->
+      case Map.get(opts, :visible_when) do
+        nil -> true
+        {dep_key, allowed} -> Map.get(config, dep_key) in allowed
+      end
     end)
   end
 

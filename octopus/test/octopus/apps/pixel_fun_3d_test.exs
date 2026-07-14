@@ -28,6 +28,8 @@ defmodule Octopus.Apps.PixelFun3DTest do
   use ExUnit.Case, async: false
 
   alias Octopus.Apps.PixelFun.Program
+  alias Octopus.Apps.PixelFun3D
+  alias Octopus.Apps.PixelFun3D.GradientPalettes
   alias Octopus.Apps.PixelFun3D.State
   alias Octopus.Canvas
   alias Octopus.Installation
@@ -152,14 +154,15 @@ defmodule Octopus.Apps.PixelFun3DTest do
     end)
   end
 
-  test "build_canvas/1 rainbow mode spreads hues across horizontal strip", _context do
+  test "build_canvas/1 gradient mode spreads hues across horizontal strip", _context do
     with_installation(Octopus.TestInstallations.HorizontalStrip64PixelFun3D, fn ->
       {:ok, program} = Program.parse("1")
 
       state = %State{
         program: program,
         display_info: %{width: Installation.width(), height: Installation.height()},
-        color_mode: :rainbow,
+        color_mode: :gradient,
+        gradient_palette: :rainbow,
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
@@ -176,14 +179,15 @@ defmodule Octopus.Apps.PixelFun3DTest do
     end)
   end
 
-  test "build_canvas/1 rainbow mode keeps formula zero black", _context do
+  test "build_canvas/1 gradient mode keeps formula zero black", _context do
     with_installation(Octopus.TestInstallations.HorizontalStrip64PixelFun3D, fn ->
       {:ok, program} = Program.parse("0")
 
       state = %State{
         program: program,
         display_info: %{width: Installation.width(), height: Installation.height()},
-        color_mode: :rainbow,
+        color_mode: :gradient,
+        gradient_palette: :rainbow,
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
@@ -197,6 +201,32 @@ defmodule Octopus.Apps.PixelFun3DTest do
       for x <- 0..63 do
         assert Canvas.get_pixel(canvas, {x, 0}) == {0, 0, 0}
       end
+    end)
+  end
+
+  test "build_canvas/1 sunset and ocean palettes differ across horizontal strip", _context do
+    with_installation(Octopus.TestInstallations.HorizontalStrip64PixelFun3D, fn ->
+      {:ok, program} = Program.parse("1")
+
+      base = %{
+        program: program,
+        display_info: %{width: Installation.width(), height: Installation.height()},
+        color_mode: :gradient,
+        seconds: 0.0,
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_base: 1.0,
+        panel_interaction_factors: %{},
+        audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
+      }
+
+      sunset = pixel_fun_build_canvas(%State{base | gradient_palette: :sunset})
+      ocean = pixel_fun_build_canvas(%State{base | gradient_palette: :ocean})
+
+      assert Canvas.get_pixel(sunset, {0, 0}) != Canvas.get_pixel(sunset, {63, 0})
+      assert Canvas.get_pixel(ocean, {0, 0}) != Canvas.get_pixel(ocean, {63, 0})
+      assert Canvas.get_pixel(sunset, {0, 0}) != Canvas.get_pixel(ocean, {0, 0})
+      assert Canvas.get_pixel(sunset, {63, 0}) != Canvas.get_pixel(ocean, {63, 0})
     end)
   end
 
@@ -363,8 +393,32 @@ defmodule Octopus.Apps.PixelFun3DTest do
       |> Enum.find(&(&1.key == :saturation_percent))
 
     assert spec.label == "Saturation"
-    assert spec.visible_when == {:color_mode, [:random, :rainbow]}
+    assert spec.visible_when == {:color_mode, [:random, :gradient]}
     assert spec.default == 70
+  end
+
+  test "mode_tweakables/1 exposes gradient palette picker for gradient mode" do
+    spec =
+      pixel_fun_mode_tweakables("classic_ripple")
+      |> Enum.find(&(&1.key == :gradient_palette))
+
+    assert spec.label == "Palette"
+    assert spec.visible_when == {:color_mode, [:gradient]}
+    assert spec.default == :rainbow
+    assert length(spec.options) == 6
+  end
+
+  test "GradientPalettes.apply_tone/4 handles sunset greens without Chameleon HSV crash" do
+    # Regression: RGB→HSV→RGB round-trip blew up on h=360 (sector 6) for some stops.
+    assert GradientPalettes.apply_tone({79, 196, 79}, 1.0, 60, 80) == {85, 141, 85}
+    assert GradientPalettes.pixel_color(0, 0, :sunset, 1.0, 60, 80) != {0, 0, 0}
+  end
+
+  test "normalize_config/1 migrates legacy rainbow color_mode" do
+    assert PixelFun3D.normalize_config(%{color_mode: "rainbow"})[:color_mode] == :gradient
+    assert PixelFun3D.normalize_config(%{color_mode: "rainbow"})[:gradient_palette] == :rainbow
+    assert PixelFun3D.normalize_config(%{color_mode: :sunset})[:color_mode] == :gradient
+    assert PixelFun3D.normalize_config(%{color_mode: :sunset})[:gradient_palette] == :sunset
   end
 
   test "mode_tweakables/1 exposes runtime freeze toggle" do

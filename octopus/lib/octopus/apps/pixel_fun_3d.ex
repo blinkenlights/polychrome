@@ -9,6 +9,7 @@ defmodule Octopus.Apps.PixelFun3D do
   alias Octopus.Events.Event.Input, as: InputEvent
   alias Octopus.AppSupervisor
   alias Octopus.Apps.PixelFun.Program
+  alias Octopus.Apps.PixelFun3D.GradientPalettes
   alias Octopus.Apps.PixelFun3D.Zoom
   alias Octopus.Installation
   alias Octopus.Sphere
@@ -60,8 +61,24 @@ defmodule Octopus.Apps.PixelFun3D do
     sat: :saturation_percent
   }
 
+  @gradient_palettes GradientPalettes.palette_names()
+
+  @gradient_palette_labels %{
+    rainbow: "Rainbow",
+    sunset: "Sonnenuntergang",
+    ocean: "Ozean",
+    wood: "Holz",
+    desert: "Wüste",
+    rainforest: "Regenwald"
+  }
+
+  @gradient_palette_options Enum.map(@gradient_palettes, fn palette ->
+                              {Map.fetch!(@gradient_palette_labels, palette), palette}
+                            end)
+
   @default_scene %{
     color_mode: :random,
+    gradient_palette: :rainbow,
     saturation_percent: 70,
     brightness_percent: 100,
     color_interval: 5.0,
@@ -157,6 +174,7 @@ defmodule Octopus.Apps.PixelFun3D do
       :roll_angle,
       :time_direction,
       :color_mode,
+      :gradient_palette,
       :saturation_percent,
       :brightness_percent,
       :color_interval,
@@ -192,7 +210,23 @@ defmodule Octopus.Apps.PixelFun3D do
   def config_schema() do
     %{
       program: {"Formula", :string, %{default: "sin(0.4*t-hypot(x,y))"}},
-      color_mode: {"Colors", :atom, %{default: :random}},
+      color_mode:
+        {"Colors", :select,
+         %{
+           default: 0,
+           options: [
+             {"Random dual", :random},
+             {"Farbverlauf", :gradient},
+             {"White dual (W channel)", :white}
+           ]
+         }},
+      gradient_palette:
+        {"Palette", :select,
+         %{
+           default: 0,
+           options: @gradient_palette_options,
+           visible_when: {:color_mode, [:gradient]}
+         }},
       saturation_percent: {"Saturation", :int, %{default: 70, min: 0, max: 100}},
       brightness_percent: {"Brightness", :int, %{default: 100, min: 0, max: 100}},
       sat_auto: {"Saturation Auto", :boolean, %{default: false}},
@@ -241,15 +275,15 @@ defmodule Octopus.Apps.PixelFun3D do
 
   def config_info(_config) do
     """
-    Pixel Fun draws a math formula per pixel. Result −1…1 controls brightness; zero renders black. Random dual mode maps positive/negative lobes to two palette colours; Rainbow mode derives hue from pattern coordinates so the full spectrum is visible at once.
+    Pixel Fun draws a math formula per pixel. Result −1…1 controls brightness; zero renders black. Random dual mode maps positive/negative lobes to two palette colours; Farbverlauf mode maps position to themed RGB gradients (Rainbow, Sonnenuntergang, Ozean, Holz, Wüste, Regenwald).
 
     Formula — expression evaluated per pixel. Pick a scene preset tile or type your own; saved scenes persist across restarts. Variables: x, y (chart position on the sphere band), nx/ny/nz (unit view direction — seamless under all transforms), t (time, scaled by global Speed and Pattern speed), i (pixel index), l/m/h (audio bass/mid/high if present), pi, tau. Classic formulas in x remain ring-periodic (azimuth wraps). Builtin formulas are normalized to ~0.4 rad/s; use Pattern speed (Advanced) to deviate per scene.
 
     Brightness — master output gain (0…100 %, default 100) applied to every colour mode. Saved per scene. The hidden OSC value_percent multiplies on top of this.
 
-    Colors — Random dual maps positive/negative lobes to a complementary hue pair on the colour circle; scrub Palette to pick the hue, Auto advances it (Tempo = seconds per full circle). Rainbow spreads hue across the pattern (moves with orbit/rotation). White dual maps lobes to two brightness levels on the warm W channel of the TM1814 LEDs (no RGB tint); Palette/Auto work the same for brightness pairs.
+    Colors — Random dual maps positive/negative lobes to a complementary hue pair on the colour circle; scrub Palette to pick the hue, Auto advances it (Tempo = seconds per full circle). Farbverlauf spreads themed palette colours across the pattern (moves with orbit/rotation); pick the palette in the Palette control. White dual maps lobes to two brightness levels on the warm W channel of the TM1814 LEDs (no RGB tint); Palette/Auto work the same for brightness pairs.
 
-    Saturation — colour vividness for Random dual and Rainbow (0 = grey, 100 = full; default 70). Auto wanders between Min and Max. White dual ignores saturation.
+    Saturation — colour vividness for Random dual and Farbverlauf (0 = grey, 100 = full; default 70). Auto wanders between Min and Max. White dual ignores saturation.
 
     Translate X — ring yaw drift in px/s (8 px/s ≈ one panel per second). Auto pans a horizontal position offset instead of scrolling (± Range X px around the current view; the manual rate is paused while Auto is on).
 
@@ -274,6 +308,7 @@ defmodule Octopus.Apps.PixelFun3D do
       %{
         program: state.source,
         color_mode: state.color_mode,
+        gradient_palette: Map.get(state, :gradient_palette, :rainbow),
         saturation_percent: state.saturation_percent,
         brightness_percent: state.brightness_percent || 100,
         color_interval: state.color_interval,
@@ -352,6 +387,9 @@ defmodule Octopus.Apps.PixelFun3D do
 
     palette =
       case color_mode do
+        :gradient ->
+          Map.get(config, :gradient_palette, :rainbow) |> Atom.to_string()
+
         :rainbow ->
           "rainbow"
 
@@ -421,7 +459,19 @@ defmodule Octopus.Apps.PixelFun3D do
         label: "Colors",
         type: :choice,
         default: :random,
-        options: [{:random, "Random dual"}, {:rainbow, "Rainbow"}, {:white, "White dual (W channel)"}]
+        options: [
+          {:random, "Random dual"},
+          {:gradient, "Farbverlauf"},
+          {:white, "White dual (W channel)"}
+        ]
+      },
+      %{
+        key: :gradient_palette,
+        label: "Palette",
+        type: :choice,
+        default: :rainbow,
+        visible_when: {:color_mode, [:gradient]},
+        options: Enum.map(@gradient_palette_options, fn {label, value} -> {value, label} end)
       },
       %{
         key: :brightness_percent,
@@ -444,7 +494,7 @@ defmodule Octopus.Apps.PixelFun3D do
         unit: "%",
         auto_key: :sat_auto,
         disabled_when: {:sat_auto, [true]},
-        visible_when: {:color_mode, [:random, :rainbow]}
+        visible_when: {:color_mode, [:random, :gradient]}
       },
       %{key: :sat_auto, label: "Auto", type: :toggle, default: false, companion_of: :saturation_percent},
       %{
@@ -792,6 +842,7 @@ defmodule Octopus.Apps.PixelFun3D do
       target_colors: palette,
       lerp_time: palette_interval_s(config.color_interval),
       color_mode: color_mode,
+      gradient_palette: Map.get(config, :gradient_palette, :rainbow),
       saturation_percent: saturation_percent,
       brightness_percent: brightness_percent,
       color_interval: config.color_interval,
@@ -895,6 +946,9 @@ defmodule Octopus.Apps.PixelFun3D do
 
     color_interval = Map.get(config, :color_interval, state.color_interval)
     color_mode = Map.get(config, :color_mode, state.color_mode)
+    gradient_palette =
+      Map.get(config, :gradient_palette, Map.get(state, :gradient_palette, :rainbow))
+      |> coerce_gradient_palette()
     saturation_percent = Map.get(config, :saturation_percent, state.saturation_percent || 70)
 
     brightness_percent =
@@ -928,6 +982,7 @@ defmodule Octopus.Apps.PixelFun3D do
           |> Map.get(:time_direction, state.time_direction || :forward)
           |> coerce_time_direction(),
         color_mode: color_mode,
+        gradient_palette: gradient_palette,
         saturation_percent: saturation_percent,
         brightness_percent: brightness_percent,
         color_interval: color_interval,
@@ -1015,11 +1070,15 @@ defmodule Octopus.Apps.PixelFun3D do
 
   def frozen_scrub_angles(_state, yaw, roll, _alpha), do: {yaw, roll}
 
+  @doc false
+  def normalize_config(config) when is_map(config), do: coerce_config(config)
+
   defp coerce_config(config) when is_map(config) do
     config
     |> migrate_legacy_config()
     |> Map.new(fn
       {:color_mode, value} -> {:color_mode, coerce_color_mode(value)}
+      {:gradient_palette, value} -> {:gradient_palette, coerce_gradient_palette(value)}
       {:saturation_percent, value} -> {:saturation_percent, coerce_saturation_percent(value)}
       {:brightness_percent, value} -> {:brightness_percent, coerce_saturation_percent(value)}
       {:time_direction, value} -> {:time_direction, coerce_time_direction(value)}
@@ -1031,6 +1090,7 @@ defmodule Octopus.Apps.PixelFun3D do
       {:tilt_mode, value} -> {:tilt_mode, Octopus.Sway.normalize_mode(value)}
       {key, value} -> {key, value}
     end)
+    |> normalize_color_config()
   end
 
   @doc false
@@ -1388,12 +1448,55 @@ defmodule Octopus.Apps.PixelFun3D do
     case value do
       "random" -> :random
       "rainbow" -> :rainbow
+      "gradient" -> :gradient
       "white" -> :white
+      "sunset" -> :sunset
+      "ocean" -> :ocean
+      "wood" -> :wood
+      "desert" -> :desert
+      "rainforest" -> :rainforest
       _ -> :random
     end
   end
 
   defp coerce_color_mode(_), do: :random
+
+  defp coerce_gradient_palette(value) when is_atom(value) and value in @gradient_palettes, do: value
+
+  defp coerce_gradient_palette(value) when is_binary(value) do
+    value |> String.to_existing_atom() |> coerce_gradient_palette()
+  rescue
+    ArgumentError -> :rainbow
+  end
+
+  defp coerce_gradient_palette(_), do: :rainbow
+
+  defp normalize_color_config(config) do
+    palette = Map.get(config, :gradient_palette, :rainbow) |> coerce_gradient_palette()
+
+    case Map.get(config, :color_mode, :random) do
+      :rainbow ->
+        config |> Map.put(:color_mode, :gradient) |> Map.put(:gradient_palette, :rainbow)
+
+      mode when mode in @gradient_palettes ->
+        config |> Map.put(:color_mode, :gradient) |> Map.put(:gradient_palette, mode)
+
+      :gradient ->
+        Map.put(config, :gradient_palette, palette)
+
+      _ ->
+        config
+    end
+  end
+
+  defp gradient_palette_for(%State{color_mode: :rainbow}), do: :rainbow
+
+  defp gradient_palette_for(%State{color_mode: :gradient} = state) do
+    Map.get(state, :gradient_palette, :rainbow)
+    |> coerce_gradient_palette()
+  end
+
+  defp gradient_palette_for(_state), do: :rainbow
 
   defp coerce_saturation_percent(value) when is_integer(value), do: value |> max(0) |> min(100)
 
@@ -2063,7 +2166,7 @@ defmodule Octopus.Apps.PixelFun3D do
         )
         |> white_pixel_value(color_a, color_b, gain)
 
-      :rainbow ->
+      mode when mode in [:gradient, :rainbow] ->
         value =
           eval_pixel_value(
             state.program,
@@ -2079,7 +2182,14 @@ defmodule Octopus.Apps.PixelFun3D do
             audio.high
           )
 
-        rainbow_pixel_color(x_scaled, y_scaled, value, sat, gain)
+        GradientPalettes.pixel_color(
+          x_scaled,
+          y_scaled,
+          gradient_palette_for(state),
+          value,
+          sat,
+          gain
+        )
 
       _ ->
         {color_a, color_b} = state.colors
@@ -2505,37 +2615,6 @@ defmodule Octopus.Apps.PixelFun3D do
     |> round()
     |> max(0)
     |> min(255)
-  end
-
-  defp rainbow_pixel_color(_x, _y, value, _saturation_percent, _gain) when value == 0.0,
-    do: {0, 0, 0}
-
-  defp rainbow_pixel_color(x, y, value, saturation_percent, gain) do
-    hue = rainbow_hue(x, y)
-
-    saturation = saturation_percent |> max(0) |> min(100)
-    brightness = trunc(gain * abs(value)) |> max(0) |> min(100)
-
-    %Chameleon.RGB{r: r, g: g, b: b} =
-      Chameleon.HSV.new(hue, saturation, brightness) |> Chameleon.convert(Chameleon.RGB)
-
-    {r, g, b}
-  end
-
-  # Spread hue evenly across pattern space (both axes). Pure atan2 clusters
-  # two colours on flat/circular layouts where one axis barely varies.
-  defp rainbow_hue(x, y) do
-    w = max(Installation.width(), 1) * 1.0
-    h = max(Installation.height(), 1) * 1.0
-
-    x_frac = (x + w / 2) / w
-    y_frac = (y + h / 2) / h
-
-    hue = x_frac * 240.0 + y_frac * 120.0
-    hue = :math.fmod(hue, 360.0)
-    hue = if hue < 0, do: hue + 360.0, else: hue
-
-    trunc(hue)
   end
 
   defp interpolate_colors_with_black(%Chameleon.HSV{} = a, %Chameleon.HSV{} = b, value),
