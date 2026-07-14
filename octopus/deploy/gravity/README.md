@@ -94,14 +94,14 @@ ssh tim@gravity.crested-frog.ts.net \
 
 ## Installation profile
 
-Gravity builds with the **Pixie** installation (`Octopus.Installation.Pixie`) — a
-single 8×8 panel. This is set via `INSTALLATION_MODULE` in `.env` and passed as a
-Docker build arg by `deploy.sh`. Change it there and redeploy to use a different
-profile.
+Gravity builds with the **Woodstock** installation (`Octopus.Installation.Woodstock`) —
+a single 2×32 panel on Pixie port 2. This is set via `INSTALLATION_MODULE` in
+`.env` and passed as a Docker build arg by `deploy.sh`. Change it there and
+redeploy to use a different profile.
 
 ## Radar sensors
 
-The Pixie installation does not define radar sensors. If you add radar to an
+The Woodstock installation does not define radar sensors. If you add radar to an
 installation later, add an entry for this host (keyed by its hostname) to the
 `deployments` map in `config/radar.exs` and mount serial devices via
 `docker-compose.yml`.
