@@ -298,7 +298,6 @@ defmodule OctopusWeb.InstallationConsoleComponent do
             <.mode_tile
               :for={tile <- section.tiles}
               mode={tile.mode}
-              app_name={section.title}
               app_module={tile.app}
               live?={tile.live?}
               queued_pos={tile.queued_pos}
@@ -313,7 +312,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
               type="button"
               phx-click="new_scene"
               phx-target={@target}
-              class="card border-2 border-dashed border-base-content/20 hover:border-primary min-h-[7rem] flex items-center justify-center text-center p-3 text-sm opacity-70 hover:opacity-100"
+              class="card border-2 border-dashed border-base-content/20 hover:border-primary min-h-[3.5rem] flex items-center justify-center text-center p-2 text-sm opacity-70 hover:opacity-100"
             >
               ＋ New scene
             </button>

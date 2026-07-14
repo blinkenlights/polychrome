@@ -451,7 +451,6 @@ defmodule OctopusWeb.ConsoleComponents do
   end
 
   attr :mode, :map, required: true
-  attr :app_name, :string, required: true
   attr :app_module, :atom, required: true
   attr :live?, :boolean, default: false
   attr :queued_pos, :integer, default: nil
@@ -464,65 +463,52 @@ defmodule OctopusWeb.ConsoleComponents do
     ~H"""
     <div class="card bg-base-100 border border-base-300 overflow-hidden">
       <div class="h-1" style={"background-color: #{@mode.accent_color}"} />
-      <div class="card-body p-3 gap-2">
-        <div class="flex items-start justify-between gap-2">
-          <div class="min-w-0">
-            <div class="text-[10px] uppercase tracking-wide opacity-60">{@app_name}</div>
-            <h3 class="font-semibold text-sm leading-tight truncate">{@mode.name}</h3>
-          </div>
+      <div class="card-body p-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <h3 class="font-semibold text-sm leading-tight truncate min-w-0 flex-1">{@mode.name}</h3>
           <div class="flex items-center gap-1 shrink-0">
             <.live_badge :if={@live?} />
-            <span :if={@queued_pos} class="badge badge-outline badge-sm">Nr. {@queued_pos}</span>
-            <span :if={Map.get(@mode, :builtin) == false} class="badge badge-outline badge-sm opacity-70">
+            <span :if={@queued_pos} class="badge badge-outline badge-xs">Nr. {@queued_pos}</span>
+            <span :if={Map.get(@mode, :builtin) == false} class="badge badge-outline badge-xs opacity-70">
               yours
             </span>
+            <button
+              :if={@stop_takeover?}
+              class="btn btn-xs btn-square btn-error min-h-8 min-w-8"
+              phx-click="stop_takeover"
+              phx-value-app={Atom.to_string(@app_module)}
+              phx-value-mode_id={@mode.id}
+              phx-target={@target}
+              title="Stop"
+            >
+              ■
+            </button>
+            <button
+              :if={!@stop_takeover?}
+              class="btn btn-xs btn-square min-h-8 min-w-8"
+              phx-click="play_now"
+              phx-value-app={Atom.to_string(@app_module)}
+              phx-value-mode_id={@mode.id}
+              phx-target={@target}
+              title={@play_now_title}
+            >
+              ▶
+            </button>
+            <button
+              :if={@queueable?}
+              class={[
+                "btn btn-xs btn-square min-h-8 min-w-8",
+                @queued_pos && "btn-primary bg-[#6d7cff] border-[#6d7cff]"
+              ]}
+              phx-click="queue_toggle"
+              phx-value-app={Atom.to_string(@app_module)}
+              phx-value-mode_id={@mode.id}
+              phx-target={@target}
+              title={if @queued_pos, do: "In playlist", else: "Add to playlist"}
+            >
+              {if @queued_pos, do: "✓", else: "＋"}
+            </button>
           </div>
-        </div>
-
-        <p :if={@mode[:formula]} class="console-mono text-xs opacity-70 truncate" title={@mode.formula}>
-          {@mode.formula}
-        </p>
-        <p :if={@mode[:summary] && @mode[:summary] != ""} class="text-xs opacity-70 truncate">
-          {@mode.summary}
-        </p>
-
-        <div class="flex gap-2 mt-1">
-          <button
-            :if={@stop_takeover?}
-            class="btn btn-sm btn-square btn-error min-h-11 min-w-11"
-            phx-click="stop_takeover"
-            phx-value-app={Atom.to_string(@app_module)}
-            phx-value-mode_id={@mode.id}
-            phx-target={@target}
-            title="Stop"
-          >
-            ■
-          </button>
-          <button
-            :if={!@stop_takeover?}
-            class="btn btn-sm btn-square min-h-11 min-w-11"
-            phx-click="play_now"
-            phx-value-app={Atom.to_string(@app_module)}
-            phx-value-mode_id={@mode.id}
-            phx-target={@target}
-            title={@play_now_title}
-          >
-            ▶
-          </button>
-          <button
-            :if={@queueable?}
-            class={[
-              "btn btn-sm btn-square min-h-11 min-w-11",
-              @queued_pos && "btn-primary bg-[#6d7cff] border-[#6d7cff]"
-            ]}
-            phx-click="queue_toggle"
-            phx-value-app={Atom.to_string(@app_module)}
-            phx-value-mode_id={@mode.id}
-            phx-target={@target}
-            title={if @queued_pos, do: "In playlist", else: "Add to playlist"}
-          >
-            {if @queued_pos, do: "✓", else: "＋"}
-          </button>
         </div>
       </div>
     </div>
@@ -533,7 +519,7 @@ defmodule OctopusWeb.ConsoleComponents do
 
   def soon_tile(assigns) do
     ~H"""
-    <div class="card border-2 border-dashed border-base-content/20 min-h-[7rem] flex items-center justify-center text-center p-3 text-sm opacity-50">
+    <div class="card border-2 border-dashed border-base-content/20 min-h-[3.5rem] flex items-center justify-center text-center p-2 text-sm opacity-50">
       {@label} — soon
     </div>
     """
