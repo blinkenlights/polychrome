@@ -6,9 +6,19 @@
  * `mock_world` snapshots from `Octopus.Radar.Mock.World`.
  *
  * Coordinate system: A-Frame world frame. Y is up, ground is the X/Z plane.
- * Radar `x` → world X, radar `y` → world Z. Pose correction (mount offset +
- * rotation) happens server-side in `Octopus.Radar.Transform` before broadcast.
+ * Installation global radar `(x, y)` maps to A-Frame `(X, Z)` via
+ * `radarGlobalToAframeXZ/2` so detections line up with the 2D radar SVG.
+ * Pose correction (mount offset + rotation) happens server-side in
+ * `Octopus.Radar.Transform` before broadcast.
  */
+
+/** Installation global meters (radar `x`/`y`) → A-Frame ground `X`/`Z`. */
+export function radarGlobalToAframeXZ(
+  radarX: number,
+  radarY: number,
+): { x: number; z: number } {
+  return { x: -radarX, z: radarY };
+}
 
 /**
  * Externer Track aus dem Radar-Backend (`Octopus.Radar.Track`):
@@ -146,7 +156,7 @@ export class HumanWorld {
    * raus. Heading wird aus dem Velocity-Vektor abgeleitet (sofern Bewegung
    * > 5 cm/s, sonst behält ein bekannter Track sein letztes Heading).
    *
-   * Koordinaten-Mapping: Radar-`x` → Welt-X, Radar-`y` → Welt-Z.
+   * Koordinaten-Mapping: `radarGlobalToAframeXZ(t.x, t.y)`.
    */
   private applyTracks(tracks: RadarTrack[]) {
     const seen = new Set<string>();
@@ -154,28 +164,29 @@ export class HumanWorld {
     for (const t of tracks) {
       const id = `radar_${t.id}`;
       seen.add(id);
+      const { x, z } = radarGlobalToAframeXZ(t.x, t.y);
       const moving = Math.hypot(t.vx, t.vy) > 0.05;
       const existing = this.humans.get(id);
-      const heading = moving ? Math.atan2(t.vx, t.vy) : existing?.heading ?? 0;
+      const heading = moving ? Math.atan2(-t.vx, t.vy) : existing?.heading ?? 0;
 
       if (existing) {
         existing.prevPos.x = existing.pos.x;
         existing.prevPos.z = existing.pos.z;
-        existing.pos.x = t.x;
-        existing.pos.z = t.y;
+        existing.pos.x = x;
+        existing.pos.z = z;
         existing.heading = heading;
-        existing.vel.x = t.vx;
+        existing.vel.x = -t.vx;
         existing.vel.z = t.vy;
       } else {
         this.humans.set(id, {
           id,
-          pos: { x: t.x, z: t.y },
-          prevPos: { x: t.x, z: t.y },
+          pos: { x, z },
+          prevPos: { x, z },
           heading,
           height: HUMAN_HEIGHT_M,
           color: colorForId(id),
           ghost: false,
-          vel: { x: t.vx, z: t.vy },
+          vel: { x: -t.vx, z: t.vy },
         });
       }
     }
@@ -194,30 +205,31 @@ export class HumanWorld {
 
       const id = `ghost_${o.id}`;
       seen.add(id);
+      const { x, z } = radarGlobalToAframeXZ(o.x, o.y);
       const moving = Math.hypot(o.vx, o.vy) > 0.05;
       const existing = this.ghosts.get(id);
-      const heading = moving ? Math.atan2(o.vx, o.vy) : existing?.heading ?? 0;
+      const heading = moving ? Math.atan2(-o.vx, o.vy) : existing?.heading ?? 0;
       const height = o.z > 0 ? o.z : HUMAN_HEIGHT_M;
 
       if (existing) {
         existing.prevPos.x = existing.pos.x;
         existing.prevPos.z = existing.pos.z;
-        existing.pos.x = o.x;
-        existing.pos.z = o.y;
+        existing.pos.x = x;
+        existing.pos.z = z;
         existing.heading = heading;
         existing.height = height;
-        existing.vel.x = o.vx;
+        existing.vel.x = -o.vx;
         existing.vel.z = o.vy;
       } else {
         this.ghosts.set(id, {
           id,
-          pos: { x: o.x, z: o.y },
-          prevPos: { x: o.x, z: o.y },
+          pos: { x, z },
+          prevPos: { x, z },
           heading,
           height,
           color: "#ffffff",
           ghost: true,
-          vel: { x: o.vx, z: o.vy },
+          vel: { x: -o.vx, z: o.vy },
         });
       }
     }

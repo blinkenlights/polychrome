@@ -4,7 +4,7 @@ defmodule Octopus.Installation.Nation2026 do
     circular: [
       ring_radius_m: 10.0,
       north_panel: 10,
-      platform_radius_m: 2.0
+      platform_radius_m: 2.25
     ],
     panel_type: :polychrome,
     panels: [
