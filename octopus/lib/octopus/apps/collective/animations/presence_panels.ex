@@ -17,16 +17,11 @@ defmodule Octopus.Apps.Collective.Animations.PresencePanels do
 
   @behaviour Octopus.Apps.Collective.Animation
 
+  alias Octopus.Apps.Collective.CrowdActivity
   alias Octopus.Canvas
   alias Octopus.Radar.PanelMapping
 
   @panel_width 8
-  # m/s over which a person is considered "walking" (counts double).
-  @walk_threshold 0.35
-  # Floor for the auto-gain reference so an empty ring doesn't amplify noise.
-  @min_ref 4.0
-  # Time constant (s) for the slow auto-gain reference.
-  @ref_tau 8.0
 
   # Fixed HSL for the random panel colours — only hue is random.
   @color_sat 0.85
@@ -46,7 +41,7 @@ defmodule Octopus.Apps.Collective.Animations.PresencePanels do
 
     level = for p <- 0..(num_panels - 1), into: %{}, do: {p, 0.0}
 
-    %{colors: colors, level: level, ref: @min_ref}
+    %{colors: colors, level: level, ref: CrowdActivity.min_ref()}
   end
 
   @impl true
@@ -63,13 +58,13 @@ defmodule Octopus.Apps.Collective.Animations.PresencePanels do
     adaptive = Map.get(ctx, :presence_adaptive, true)
 
     ring_outer = PanelMapping.ring_radius()
-    raw = raw_factors(people, num_panels, ring_outer)
+    raw = CrowdActivity.raw_factors(people, num_panels, ring_outer)
 
-    ref = update_ref(state.ref, raw, adaptive, dt)
+    ref = CrowdActivity.update_ref(state.ref, raw, adaptive, dt)
 
     target =
       for p <- 0..(num_panels - 1), into: %{} do
-        {p, soft(sensitivity * Map.get(raw, p, 0.0) / ref)}
+        {p, CrowdActivity.soft(sensitivity * Map.get(raw, p, 0.0) / ref)}
       end
 
     time_tau = lerp(0.15, 1.2, smoothing)
@@ -93,34 +88,6 @@ defmodule Octopus.Apps.Collective.Animations.PresencePanels do
     {canvas, %{state | level: level, ref: ref}}
   end
 
-  defp raw_factors(people, num_panels, ring_outer) do
-    base = for p <- 0..(num_panels - 1), into: %{}, do: {p, 0.0}
-
-    Enum.reduce(people, base, fn person, acc ->
-      r = PanelMapping.track_radius(person)
-      w_radius = 1.0 + 2.0 * clamp01(r / ring_outer)
-      w_walk = if PanelMapping.track_speed(person) > @walk_threshold, do: 2.0, else: 1.0
-
-      panel =
-        person
-        |> PanelMapping.sim_panel_3d(num_panels)
-        |> PanelMapping.frame_panel_of_3d(num_panels)
-
-      Map.update(acc, panel, w_radius * w_walk, &(&1 + w_radius * w_walk))
-    end)
-  end
-
-  # Slow auto-gain: track the running panel max, floored. Non-adaptive mode
-  # holds a fixed reference so the factor reads as an absolute intensity.
-  defp update_ref(_ref, _raw, false, _dt), do: @min_ref
-
-  defp update_ref(ref, raw, true, dt) do
-    cur_max = raw |> Map.values() |> Enum.max(fn -> 0.0 end)
-    target = max(cur_max, @min_ref)
-    alpha = 1.0 - :math.exp(-dt / @ref_tau)
-    ref + (target - ref) * alpha
-  end
-
   defp paint(canvas, colors, lit, num_panels, height, floor) do
     Enum.reduce(0..(num_panels - 1), canvas, fn p, c ->
       brightness = floor + (1.0 - floor) * Map.fetch!(lit, p)
@@ -136,10 +103,6 @@ defmodule Octopus.Apps.Collective.Animations.PresencePanels do
     hue = :math.fmod(p * 0.61803398875 + 0.13, 1.0)
     hsl_to_rgb(hue, @color_sat, @color_light)
   end
-
-  # x/(1+x): 0->0, saturates smoothly toward 1, never hard-clips.
-  defp soft(x) when x <= 0.0, do: 0.0
-  defp soft(x), do: x / (1.0 + x)
 
   defp wrap(p, n), do: rem(rem(p, n) + n, n)
 

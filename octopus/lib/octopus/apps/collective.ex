@@ -116,7 +116,10 @@ defmodule Octopus.Apps.Collective do
           lava_speed: 1.0,
           lava_size_mul: 1.25,
           lava_thresh: 0.9,
-          lava_palette: :classic
+          lava_palette: :classic,
+          lava_reactivity: 0.6,
+          lava_warmth: 0.5,
+          lava_people_blobs: true
         }
 
       "ring_noise" ->
@@ -239,13 +242,41 @@ defmodule Octopus.Apps.Collective do
   def mode_tweakables_for("lava_lamp") do
     [
       %{
+        key: :lava_reactivity,
+        label: "Crowd heat",
+        type: :slider,
+        min: 0.0,
+        max: 1.0,
+        step: 0.05,
+        default: 0.6,
+        runtime: true
+      },
+      %{
         key: :lava_speed,
         label: "Speed",
         type: :slider,
         min: 0.2,
         max: 3.0,
         step: 0.05,
-        default: 1.0
+        default: 1.0,
+        runtime: true
+      },
+      %{
+        key: :lava_warmth,
+        label: "Warmth",
+        type: :slider,
+        min: 0.0,
+        max: 1.0,
+        step: 0.05,
+        default: 0.5,
+        runtime: true
+      },
+      %{
+        key: :lava_people_blobs,
+        label: "People as blobs",
+        type: :toggle,
+        default: true,
+        runtime: true
       },
       %{
         key: :lava_palette,
@@ -359,6 +390,9 @@ defmodule Octopus.Apps.Collective do
     lava_size_mul = Map.get(config, :lava_size_mul, 1.25)
     lava_thresh = Map.get(config, :lava_thresh, 0.9)
     lava_palette = Map.get(config, :lava_palette, :classic)
+    lava_reactivity = Map.get(config, :lava_reactivity, 0.6)
+    lava_warmth = Map.get(config, :lava_warmth, 0.5)
+    lava_people_blobs = Map.get(config, :lava_people_blobs, true)
     ring_noise_speed = Map.get(config, :ring_noise_speed, 1.0)
     ring_noise_pulse_period = Map.get(config, :ring_noise_pulse_period, 24.0)
     ring_noise_pulse_amount = Map.get(config, :ring_noise_pulse_amount, 0.65)
@@ -392,6 +426,9 @@ defmodule Octopus.Apps.Collective do
       lava_size_mul: lava_size_mul,
       lava_thresh: lava_thresh,
       lava_palette: lava_palette,
+      lava_reactivity: lava_reactivity,
+      lava_warmth: lava_warmth,
+      lava_people_blobs: lava_people_blobs,
       ring_noise_speed: ring_noise_speed,
       ring_noise_pulse_period: ring_noise_pulse_period,
       ring_noise_pulse_amount: ring_noise_pulse_amount,
@@ -460,6 +497,9 @@ defmodule Octopus.Apps.Collective do
       lava_size_mul: state.lava_size_mul,
       lava_thresh: state.lava_thresh,
       lava_palette: state.lava_palette,
+      lava_reactivity: state.lava_reactivity,
+      lava_warmth: state.lava_warmth,
+      lava_people_blobs: state.lava_people_blobs,
       ring_noise_speed: state.ring_noise_speed,
       ring_noise_pulse_period: state.ring_noise_pulse_period,
       ring_noise_pulse_amount: state.ring_noise_pulse_amount,
@@ -628,6 +668,26 @@ defmodule Octopus.Apps.Collective do
            ],
            visible_when: {:animation, [:lava_lamp]}
          }},
+      lava_reactivity:
+        {"Crowd Heat", :float,
+         %{
+           min: 0.0,
+           max: 1.0,
+           default: 0.6,
+           step: 0.05,
+           visible_when: {:animation, [:lava_lamp]}
+         }},
+      lava_warmth:
+        {"Warmth", :float,
+         %{
+           min: 0.0,
+           max: 1.0,
+           default: 0.5,
+           step: 0.05,
+           visible_when: {:animation, [:lava_lamp]}
+         }},
+      lava_people_blobs:
+        {"People as Blobs", :boolean, %{default: true, visible_when: {:animation, [:lava_lamp]}}},
       ring_noise_speed:
         {"Noise Speed", :float,
          %{
@@ -656,8 +716,7 @@ defmodule Octopus.Apps.Collective do
            visible_when: {:animation, [:ring_noise]}
          }},
       ring_noise_counter_wave:
-        {"Counter Wave", :boolean,
-         %{default: true, visible_when: {:animation, [:ring_noise]}}},
+        {"Counter Wave", :boolean, %{default: true, visible_when: {:animation, [:ring_noise]}}},
       ring_noise_palette:
         {"Palette", :select,
          %{
@@ -706,8 +765,7 @@ defmodule Octopus.Apps.Collective do
            visible_when: {:animation, [:presence]}
          }},
       presence_adaptive:
-        {"Auto-Gain", :boolean,
-         %{default: true, visible_when: {:animation, [:presence]}}}
+        {"Auto-Gain", :boolean, %{default: true, visible_when: {:animation, [:presence]}}}
     ]
   end
 
@@ -769,13 +827,15 @@ defmodule Octopus.Apps.Collective do
 
   def config_info(%{animation: :lava_lamp}) do
     """
-    Lava Lamp — cylindrical metaball blobs, no crowd input.
-    Blobs rise and fall on sinusoidal paths and merge when close.
-    • Blob Count — re-rolls blob layout when changed (3–12).
-    • Speed — animation time scale (not frame rate).
-    • Size — global blob radius multiplier.
-    • Threshold — sigmoid field cutoff (lower = more blob visible).
-    • Palette — Classic, Magenta, or Slime colour stops.
+    Lava Lamp — cylindrical metaball blobs driven by crowd heat.
+    Crowd activity (near the panels + walking counts more) heats the ring: hot
+    zones lift and inflate blobs, speed up convection and warm the palette. Empty
+    room = slow cold lamp. Crowd Heat 0 = classic crowd-blind decorative lava.
+    • Crowd Heat — master crowd influence (0 = ignore the crowd).
+    • Speed — base animation time scale (not frame rate).
+    • Warmth — how much the palette cools when the room is empty.
+    • People as Blobs — each person spawns a rising blob at their ring position.
+    • Palette — Classic, Magenta, or Slime (hot end of the temperature axis).
     """
   end
 
@@ -836,6 +896,9 @@ defmodule Octopus.Apps.Collective do
       lava_size_mul: state.lava_size_mul,
       lava_thresh: state.lava_thresh,
       lava_palette: state.lava_palette,
+      lava_reactivity: state.lava_reactivity,
+      lava_warmth: state.lava_warmth,
+      lava_people_blobs: state.lava_people_blobs,
       ring_noise_speed: state.ring_noise_speed,
       ring_noise_pulse_period: state.ring_noise_pulse_period,
       ring_noise_pulse_amount: state.ring_noise_pulse_amount,
@@ -882,6 +945,9 @@ defmodule Octopus.Apps.Collective do
          lava_size_mul: Map.get(config, :lava_size_mul, state.lava_size_mul),
          lava_thresh: Map.get(config, :lava_thresh, state.lava_thresh),
          lava_palette: Map.get(config, :lava_palette, state.lava_palette),
+         lava_reactivity: Map.get(config, :lava_reactivity, state.lava_reactivity),
+         lava_warmth: Map.get(config, :lava_warmth, state.lava_warmth),
+         lava_people_blobs: Map.get(config, :lava_people_blobs, state.lava_people_blobs),
          ring_noise_speed: Map.get(config, :ring_noise_speed, state.ring_noise_speed),
          ring_noise_pulse_period:
            Map.get(config, :ring_noise_pulse_period, state.ring_noise_pulse_period),
@@ -890,8 +956,7 @@ defmodule Octopus.Apps.Collective do
          ring_noise_counter_wave:
            Map.get(config, :ring_noise_counter_wave, state.ring_noise_counter_wave),
          ring_noise_palette: Map.get(config, :ring_noise_palette, state.ring_noise_palette),
-         presence_sensitivity:
-           Map.get(config, :presence_sensitivity, state.presence_sensitivity),
+         presence_sensitivity: Map.get(config, :presence_sensitivity, state.presence_sensitivity),
          presence_floor: Map.get(config, :presence_floor, state.presence_floor),
          presence_smoothing: Map.get(config, :presence_smoothing, state.presence_smoothing),
          presence_bleed: Map.get(config, :presence_bleed, state.presence_bleed),
