@@ -1,9 +1,17 @@
 defmodule Octopus.Apps.Collective.Animations.LavaLamp do
   @moduledoc """
-  Lava Lamp — cylindrical metaball blobs on the LED ring.
+  Lava Lamp — cylindrical metaball blobs on the LED ring, driven by crowd heat.
 
   Slow sinusoidal rise/fall, soft sigmoid colouring, seamless wrap at panel 12→1.
-  No crowd input.
+
+  Crowd input comes from `Octopus.Radar.PanelActivity` via `Radar.panel_factors/0`:
+
+    * global heat → convection speed and palette temperature.
+    * local heat  → per-blob buoyancy (rises over active panels), radius boost,
+      and angular attraction toward hot panels.
+
+  `Crowd Heat` (`:lava_reactivity`) is the master gain; at 0 the animation is the
+  original crowd-blind decorative lava (safe fallback with no sensor).
 
   Blob sizes are tuned for a 12-panel (96 px wide) ring and scaled down for
   smaller installations (e.g. Pixie 8×8) so the field does not saturate every pixel.
@@ -13,14 +21,24 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
 
   alias Octopus.Canvas
   alias Octopus.Installation
+  alias Octopus.Radar
+  alias Octopus.Radar.PanelMapping
 
   @two_pi 2.0 * :math.pi()
   @field_softness 0.35
+  @panel_width 8
   # Ring layout the blob parameters were authored for (12 panels × 8 px).
   @reference_circumference 96
   # Below this width, linear scale alone makes blobs invisible; floor keeps Pixie readable.
   @small_ring_width 16
   @small_ring_min_scale 0.28
+
+  # How strongly local heat lifts a blob toward the top (fraction of strip height).
+  @buoyancy_gain 0.6
+  # How strongly local heat inflates a blob's radius.
+  @radius_gain 0.5
+  # Radians a blob drifts toward a hot panel per unit heat gradient.
+  @attract_gain 0.6
 
   @palettes %{
     classic: [
@@ -52,6 +70,17 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
     ]
   }
 
+  # Cold end of the temperature axis: an empty room reads as a slow blue lamp.
+  @cold_palette [
+    {2, 4, 14},
+    {6, 14, 40},
+    {12, 40, 90},
+    {24, 86, 150},
+    {60, 150, 210},
+    {150, 210, 240},
+    {230, 248, 255}
+  ]
+
   @impl true
   def name, do: "Lava Lamp"
 
@@ -73,43 +102,91 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
     dt = ctx.dt
     speed = Map.get(ctx, :lava_speed, 1.0) |> clamp(0.2, 3.0)
     size_mul = Map.get(ctx, :lava_size_mul, 1.25) |> clamp(0.6, 2.2)
-    thresh = Map.get(ctx, :lava_thresh, 0.9) |> clamp(0.4, 1.6)
+    base_thresh = Map.get(ctx, :lava_thresh, 0.9) |> clamp(0.4, 1.6)
     palette = palette_stops(Map.get(ctx, :lava_palette, :classic))
     blob_count = Map.get(ctx, :lava_blob_count, 7) |> clamp_int(3, 12)
+    reactivity = Map.get(ctx, :lava_reactivity, 0.6) |> clamp(0.0, 1.0)
+    warmth = Map.get(ctx, :lava_warmth, 0.5) |> clamp(0.0, 1.0)
 
     state = ensure_blobs(state, blob_count)
-    t = state.t + dt
-    t_anim = t * speed
 
     width = canvas.width
     height = canvas.height
     circumference = max(width, 1)
     layout_scale = layout_scale(circumference)
+    num_panels = max(div(width, @panel_width), 1)
+
+    heat = frame_heat(num_panels)
+    heat_global = (heat |> Map.values() |> Enum.sum()) / num_panels
+
+    t = state.t + dt
+    t_anim = t * speed * (1.0 + reactivity * heat_global)
+    thresh = clamp(base_thresh * (1.0 - 0.35 * reactivity * heat_global), 0.3, 1.6)
+
+    posed =
+      pose_ambient_blobs(
+        state.blobs,
+        t_anim,
+        circumference,
+        height,
+        size_mul,
+        heat,
+        num_panels,
+        reactivity
+      )
+
+    # Cool the palette toward blue when the room is empty; gated by reactivity so
+    # Crowd Heat 0 keeps the full (hot) decorative palette.
+    temp_cool = clamp(warmth * (1.0 - heat_global) * reactivity, 0.0, 1.0)
+    stops = temperature_palette(palette, temp_cool)
 
     pixels =
       for x <- 0..(width - 1), y <- 0..(height - 1), into: %{} do
         theta_px = x / circumference * @two_pi
-        field = field_at(theta_px, y, t_anim, state.blobs, circumference, height, size_mul)
-        color = pixel_color(field, y, height, thresh, palette)
+        field = field_at(theta_px, y, posed, circumference, height)
+        color = pixel_color(field, y, height, thresh, stops)
         {{x, y}, color}
       end
 
-    {%Canvas{canvas | pixels: pixels}, %{state | t: t, layout_scale: layout_scale}}
+    new_state = %{state | t: t, layout_scale: layout_scale}
+
+    {%Canvas{canvas | pixels: pixels}, new_state}
   end
 
   @doc false
-  def field_at(theta_px, y, t, blobs, circumference, height \\ 8, size_mul \\ 1.25) do
+  def field_at(theta_px, y, posed_blobs, circumference, height \\ 8) do
+    _ = height
     layout_scale = layout_scale(circumference)
     k = circumference / @two_pi
     softness = @field_softness * layout_scale * layout_scale
 
-    Enum.reduce(blobs, 0.0, fn blob, acc ->
-      {theta_blob, y_blob, radius} = blob_pose(blob, t, size_mul, layout_scale, height)
+    Enum.reduce(posed_blobs, 0.0, fn {theta_blob, y_blob, radius}, acc ->
       dth = angular_dist(theta_px, theta_blob)
       dx = dth * k
       dy = (y - y_blob) * 1.15
       r2 = radius * radius
       acc + r2 / (dx * dx + dy * dy + softness)
+    end)
+  end
+
+  @doc """
+  Poses the ambient (crowd-blind) blobs into `{theta, y, radius}` tuples once per
+  frame, folding in crowd heat (buoyancy, radius, attraction) when supplied.
+  """
+  def pose_ambient_blobs(
+        blobs,
+        t,
+        circumference,
+        height \\ 8,
+        size_mul \\ 1.25,
+        heat \\ %{},
+        num_panels \\ 1,
+        reactivity \\ 0.0
+      ) do
+    layout_scale = layout_scale(circumference)
+
+    Enum.map(blobs, fn blob ->
+      blob_pose(blob, t, size_mul, layout_scale, height, heat, num_panels, reactivity)
     end)
   end
 
@@ -164,23 +241,78 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
     %{state | blob_count: count, blobs: generate_blobs(count, scale)}
   end
 
-  defp blob_pose(blob, t, size_mul, layout_scale, height) do
+  defp blob_pose(blob, t, size_mul, layout_scale, height, heat, num_panels, reactivity) do
     y_center = (height - 1) / 2.0
 
-    y_blob =
-      y_center +
-        blob.y_amp * layout_scale *
-          :math.sin(@two_pi * t / blob.y_period + blob.y_phase)
-
-    theta_blob =
+    theta_base =
       blob.theta0 + blob.drift * t +
         0.12 * :math.sin(@two_pi * t / blob.wob_period + blob.wob_phase)
 
+    heat_local = heat_at(theta_base, heat, num_panels)
+    grad = heat_gradient(theta_base, heat, num_panels)
+
+    theta_blob = theta_base + reactivity * @attract_gain * grad
+    rise = reactivity * heat_local * (height - 1) * @buoyancy_gain
+
+    y_blob =
+      y_center - rise +
+        blob.y_amp * layout_scale *
+          :math.sin(@two_pi * t / blob.y_period + blob.y_phase)
+
     radius =
       blob.r * size_mul * layout_scale *
-        (1 + 0.18 * :math.sin(@two_pi * t / blob.pulse_period + blob.pulse_phase))
+        (1 + 0.18 * :math.sin(@two_pi * t / blob.pulse_period + blob.pulse_phase)) *
+        (1.0 + reactivity * heat_local * @radius_gain)
 
     {theta_blob, y_blob, radius}
+  end
+
+  # --- crowd heat ----------------------------------------------------------
+
+  defp frame_heat(num_panels) do
+    factors = Radar.panel_factors()
+    north = Radar.north_panel()
+
+    for frame_panel <- 0..(num_panels - 1), into: %{} do
+      install =
+        PanelMapping.installation_panel_of_frame(frame_panel, num_panels, north)
+
+      {frame_panel, Map.get(factors, install, 0.0)}
+    end
+  end
+
+  defp heat_at(_theta, heat, _num_panels) when map_size(heat) == 0, do: 0.0
+
+  defp heat_at(theta, heat, num_panels) do
+    pos = norm_theta(theta) / @two_pi * num_panels
+    i = trunc(pos)
+    frac = pos - i
+    p0 = rem(i, num_panels)
+    p1 = rem(p0 + 1, num_panels)
+    lerp(Map.get(heat, p0, 0.0), Map.get(heat, p1, 0.0), frac)
+  end
+
+  defp heat_gradient(_theta, heat, _num_panels) when map_size(heat) == 0, do: 0.0
+
+  defp heat_gradient(theta, heat, num_panels) do
+    d = @two_pi / max(num_panels, 1)
+    heat_at(theta + d, heat, num_panels) - heat_at(theta - d, heat, num_panels)
+  end
+
+  # --- colour / temperature ------------------------------------------------
+
+  defp temperature_palette(hot_stops, cool_amount) do
+    hot_mix = clamp(1.0 - cool_amount, 0.0, 1.0)
+
+    if hot_mix >= 0.999 do
+      hot_stops
+    else
+      @cold_palette
+      |> Enum.zip(hot_stops)
+      |> Enum.map(fn {{cr, cg, cb}, {hr, hg, hb}} ->
+        {round(lerp(cr, hr, hot_mix)), round(lerp(cg, hg, hot_mix)), round(lerp(cb, hb, hot_mix))}
+      end)
+    end
   end
 
   defp angular_dist(a, b) do
@@ -214,6 +346,11 @@ defmodule Octopus.Apps.Collective.Animations.LavaLamp do
     {r2, g2, b2} = Enum.at(stops, min(i + 1, n - 1))
 
     {round(lerp(r1, r2, t)), round(lerp(g1, g2, t)), round(lerp(b1, b2, t))}
+  end
+
+  defp norm_theta(theta) do
+    m = :math.fmod(theta, @two_pi)
+    if m < 0.0, do: m + @two_pi, else: m
   end
 
   defp rand_uniform(a, b), do: a + :rand.uniform() * (b - a)

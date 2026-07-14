@@ -23,12 +23,12 @@ defmodule Octopus.Radar.SensorType do
   ## HLK-LD6001A
 
   Mounted on the ceiling facing down, the LD6001A reports a right-handed frame
-  (vendor manual §10: `X` lateral, `Y` front/back, `Z` height). Read as a
-  top-down plot it behaves "flipped" — objects to the left get `+x`, objects
-  toward the bottom get `+y`. That is the standard math frame rotated 180°, not
-  a mirror image, so it is still right-handed. Because we mount the unit so its
-  raw `+x` points outward, the raw axes already coincide with the canonical
-  frame above: **the mapping is the identity**.
+  (vendor manual §10: `X` lateral, `Y` front/back, `Z` height). With raw `+x`
+  aligned outward, raw `+y` points to the sensor's **right** when viewed
+  top-down — the mirror of canonical `+y`, which is 90° counter-clockwise from
+  `+x`. We therefore **negate `y` and `vy`** in `to_canonical/2` so circular
+  motion around the installation center matches the global frame handedness
+  used by the radar map and panel mapping.
 
   ### Sensitivity (`AT+DPKTH`)
 
@@ -61,14 +61,18 @@ defmodule Octopus.Radar.SensorType do
   frame described in the moduledoc.
   """
   @spec to_canonical(atom(), Track.t()) :: Track.t()
-  def to_canonical(:ld6001a, %Track{} = track), do: track
+  def to_canonical(:ld6001a, %Track{} = track) do
+    %{track | y: -track.y, vy: -track.vy}
+  end
 
   @doc """
   Inverse of `to_canonical/2`: express a canonical-frame track in a sensor
   type's native raw axes. Used by the mock device to fabricate readings.
   """
   @spec from_canonical(atom(), Track.t()) :: Track.t()
-  def from_canonical(:ld6001a, %Track{} = track), do: track
+  def from_canonical(:ld6001a, %Track{} = track) do
+    %{track | y: -track.y, vy: -track.vy}
+  end
 
   @doc """
   Default sensitivity preset for installations (maps to the vendor default on

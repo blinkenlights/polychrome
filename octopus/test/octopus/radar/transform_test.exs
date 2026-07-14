@@ -26,14 +26,14 @@ defmodule Octopus.Radar.TransformTest do
   end
 
   describe "transform_track/2" do
-    test "identity transform leaves coordinates unchanged" do
+    test "identity transform maps raw device y through ld6001a flip" do
       t = track(x: 1.5, y: -0.3, vx: 0.2, vy: -0.1, z: 1.7, vz: 0.05)
       result = Transform.transform_track(t, @base_config)
 
       assert result.x == t.x
-      assert result.y == t.y
+      assert result.y == -t.y
       assert result.vx == t.vx
-      assert result.vy == t.vy
+      assert result.vy == -t.vy
       assert result.z == t.z
       assert result.vz == t.vz
     end
@@ -46,15 +46,14 @@ defmodule Octopus.Radar.TransformTest do
       assert_in_delta result.y, 0.0, 1.0e-6
     end
 
-    test "sensor on +Y beam (90°) translates and rotates local frame by 90°" do
-      # rotation_deg: 0 with angle_deg: 90 → effective rotation = 90° CCW.
-      # Mount at (0, 0.5 m). Local (0, 1) rotated by 90°:
-      #   x_global = 0 + 0*cos90 - 1*sin90 = -1.0
-      #   y_global = 0.5 + 0*sin90 + 1*cos90 = 0.5
+    test "sensor on +Y beam (90°) translates and rotates raw local frame by 90°" do
+      # Raw local (0, 1) → canonical (0, -1). Mount at (0, 0.5 m), rotate 90° CCW:
+      #   x_global = 0 + 0*cos90 - (-1)*sin90 = 1.0
+      #   y_global = 0.5 + 0*sin90 + (-1)*cos90 = 0.5
       config = Keyword.merge(@base_config, distance_cm: 50, angle_deg: 90)
       result = Transform.transform_track(track(x: 0.0, y: 1.0), config)
 
-      assert_in_delta result.x, -1.0, 1.0e-6
+      assert_in_delta result.x, 1.0, 1.0e-6
       assert_in_delta result.y, 0.5, 1.0e-6
     end
 
@@ -76,16 +75,20 @@ defmodule Octopus.Radar.TransformTest do
       assert_in_delta result.y, 1.0, 1.0e-6
     end
 
-    test "global origin target maps to expected local coords (inverse check)" do
+    test "global origin target maps to expected raw local coords (inverse check)" do
       config = Keyword.merge(@base_config, distance_cm: 100, angle_deg: 0, rotation_deg: 45)
 
       {tx, ty, cos_r, sin_r} = Transform.pose_factors(config)
 
-      # Local coords that should map to global (0, 0): Rᵀ * (-tx, -ty)
-      local_x = cos_r * (-tx) + sin_r * (-ty)
-      local_y = -sin_r * (-tx) + cos_r * (-ty)
+      # Canonical locals that map to global (0, 0): Rᵀ * (-tx, -ty)
+      canonical_x = cos_r * (-tx) + sin_r * (-ty)
+      canonical_y = -sin_r * (-tx) + cos_r * (-ty)
 
-      result = Transform.transform_track(track(x: local_x, y: local_y), config)
+      result =
+        Transform.transform_track(
+          track(x: canonical_x, y: -canonical_y),
+          config
+        )
 
       assert_in_delta result.x, 0.0, 1.0e-6
       assert_in_delta result.y, 0.0, 1.0e-6
@@ -140,10 +143,11 @@ defmodule Octopus.Radar.TransformTest do
       end
     end
 
-    test "local +Y points 90° CCW from the outward radial at every bearing" do
+    test "canonical +Y points 90° CCW from the outward radial at every bearing" do
       for angle <- [0, 60, 120, 180, 240, 300] do
         config = Keyword.merge(@base_config, angle_deg: angle, distance_cm: 100, rotation_deg: 0)
-        result = Transform.transform_track(track(x: 0.0, y: 1.0), config)
+        # Raw y = -1 → canonical +Y = 1
+        result = Transform.transform_track(track(x: 0.0, y: -1.0), config)
         {tx, ty, _, _} = Transform.pose_factors(config)
 
         dx = result.x - tx
@@ -214,7 +218,7 @@ defmodule Octopus.Radar.TransformTest do
       assert_in_delta hd(result.tracks).x, 2.0, 1.0e-6
       assert_in_delta hd(result.tracks).y, 0.0, 1.0e-6
       assert_in_delta Enum.at(result.tracks, 1).x, 1.0, 1.0e-6
-      assert_in_delta Enum.at(result.tracks, 1).y, 2.0, 1.0e-6
+      assert_in_delta Enum.at(result.tracks, 1).y, -2.0, 1.0e-6
     end
   end
 end

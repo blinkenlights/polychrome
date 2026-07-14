@@ -1,7 +1,49 @@
 defmodule Octopus.Radar.SensorTypeTest do
   use ExUnit.Case, async: true
 
-  alias Octopus.Radar.SensorType
+  alias Octopus.Radar.{SensorType, Track}
+
+  describe "ld6001a coordinate convention" do
+    test "negates y and vy in to_canonical/2" do
+      track = %Track{
+        id: 1,
+        reserved: 0,
+        x: 1.0,
+        y: 2.0,
+        z: 1.7,
+        vx: 0.3,
+        vy: -0.4,
+        vz: 0.0
+      }
+
+      canonical = SensorType.to_canonical(:ld6001a, track)
+
+      assert canonical.x == 1.0
+      assert canonical.y == -2.0
+      assert canonical.vx == 0.3
+      assert canonical.vy == 0.4
+    end
+
+    test "from_canonical/2 inverts to_canonical/2" do
+      track = %Track{
+        id: 1,
+        reserved: 0,
+        x: 1.0,
+        y: 2.0,
+        z: 1.7,
+        vx: 0.3,
+        vy: -0.4,
+        vz: 0.0
+      }
+
+      round_trip = track |> then(&SensorType.to_canonical(:ld6001a, &1)) |> then(&SensorType.from_canonical(:ld6001a, &1))
+
+      assert round_trip.x == track.x
+      assert round_trip.y == track.y
+      assert round_trip.vx == track.vx
+      assert round_trip.vy == track.vy
+    end
+  end
 
   describe "resolve_sensitivity/2 for :ld6001a" do
     test "presets map to vendor-oriented DPKTH values" do

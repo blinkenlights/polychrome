@@ -17,6 +17,8 @@ defmodule OctopusWeb.RadarLive do
 
   use OctopusWeb, :live_view
 
+  require Logger
+
   alias Octopus.Installation
   alias Octopus.Radar
   alias Octopus.Radar.{Frame, Track, Transform}
@@ -42,6 +44,10 @@ defmodule OctopusWeb.RadarLive do
   # data only updates raw state and requests a render. A single coalesced
   # re-render then runs at most once per this interval (~15 fps).
   @render_interval_ms 66
+
+  # Position change below this threshold (meters, 3D) is treated as stationary
+  # for dump analysis — filters radar jitter from true movement.
+  @position_stationary_threshold_m 0.05
 
   # Lightness range for the trail's per-segment color. The newest
   # segment (closest to the body circle) is rendered at `@trail_l_near`
@@ -159,6 +165,7 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:coords_frame, view_settings.coords_frame)
      |> assign(:render_scheduled, false)
      |> assign(:bounds_mode, view_settings.bounds_mode)
+     |> assign(:clutter_filter, view_settings.clutter_filter)
      |> assign(:static_bounds, world_bounds(world_radius))
      |> reset_radar_state()}
   end
@@ -335,6 +342,11 @@ defmodule OctopusWeb.RadarLive do
     ArgumentError -> {:noreply, socket}
   end
 
+  def handle_event("toggle_clutter_filter", _params, socket) do
+    Radar.toggle_clutter_filter()
+    {:noreply, socket}
+  end
+
   def handle_event("toggle_sensor", %{"device_id" => id_str}, socket) do
     case Integer.parse(id_str) do
       {id, ""} ->
@@ -362,7 +374,24 @@ defmodule OctopusWeb.RadarLive do
 
   def handle_event("reinitialize", _params, socket) do
     Enum.each(socket.assigns.devices, &Radar.reinitialize(&1.device_id))
+    Radar.reset_clutter_filter()
     {:noreply, reset_radar_state(socket)}
+  end
+
+  def handle_event("dump_detections", _params, socket) do
+    dump_id = dump_detections_id()
+    json = generate_detections_dump_json(socket.assigns, dump_id)
+    Logger.info("RADAR-DETECTIONS-DUMP[#{dump_id}] #{json}")
+    {:noreply, socket}
+  end
+
+  def handle_event("dump_track_history", params, socket) do
+    with {device_id, ""} <- Integer.parse(params["device_id"]),
+         {track_id, ""} <- Integer.parse(params["track_id"]) do
+      dump_track_history(device_id, track_id)
+    end
+
+    {:noreply, socket}
   end
 
   def handle_event("fit_bounds", _params, socket) do
@@ -477,9 +506,22 @@ defmodule OctopusWeb.RadarLive do
     |> assign(:coords_frame, settings.coords_frame)
     |> assign(:visuals, settings.visuals)
     |> assign(:bounds_mode, settings.bounds_mode)
+    |> assign(:clutter_filter, settings.clutter_filter)
+    |> apply_clutter_filter_to_tracks_now(settings.clutter_filter)
     |> apply_bounds_for_mode()
     |> rebuild_view()
   end
+
+  defp apply_clutter_filter_to_tracks_now(socket, true) do
+    tracks_now =
+      Map.filter(socket.assigns.tracks_now, fn {{device_id, track_id}, _} ->
+        Radar.clutter_filter_track_qualified?(device_id, track_id)
+      end)
+
+    assign(socket, :tracks_now, tracks_now)
+  end
+
+  defp apply_clutter_filter_to_tracks_now(socket, _enabled), do: socket
 
   defp apply_mock_settings(socket, %{max_people: target, entropy: entropy, manual_tracking: manual_tracking}) do
     applying? = length(socket.assigns.world_objects) != target
@@ -501,6 +543,8 @@ defmodule OctopusWeb.RadarLive do
     devices = Radar.devices() |> Enum.filter(& &1.enabled)
     view_settings = Radar.view_settings()
 
+    Radar.reset_clutter_filter()
+
     {:noreply,
      socket
      |> assign(:source_mode, mode)
@@ -515,6 +559,7 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:detection_list_mode, view_settings.detection_list_mode)
      |> assign(:coords_frame, view_settings.coords_frame)
      |> assign(:visuals, view_settings.visuals)
+     |> assign(:clutter_filter, view_settings.clutter_filter)
      |> assign(:world_objects, [])
      |> assign(:sensor_statuses, build_sensor_statuses(devices))
      |> assign(:sensitivity_level, Radar.sensitivity_level())
@@ -577,7 +622,17 @@ defmodule OctopusWeb.RadarLive do
     tracks_now =
       tracks
       |> Enum.reduce(socket.assigns.tracks_now, fn %Track{} = t, acc ->
-        Map.put(acc, {device_id, t.id}, %{
+        key = {device_id, t.id}
+        prev = Map.get(acc, key)
+
+        position_last_changed =
+          if prev == nil or track_position_moved?(prev, t) do
+            now
+          else
+            prev.position_last_changed
+          end
+
+        Map.put(acc, key, %{
           device_id: device_id,
           id: t.id,
           x: t.x,
@@ -586,7 +641,9 @@ defmodule OctopusWeb.RadarLive do
           vx: t.vx,
           vy: t.vy,
           vz: t.vz,
-          last_seen: now
+          last_seen: now,
+          first_seen: if(prev, do: prev.first_seen, else: now),
+          position_last_changed: position_last_changed
         })
       end)
       |> Enum.reject(fn {_key, t} -> t.last_seen < fade_cutoff end)
@@ -982,6 +1039,15 @@ defmodule OctopusWeb.RadarLive do
                 phx-click="toggle_coords_frame"
               />
             </div>
+            <button
+              id="radar-dump-detections"
+              type="button"
+              class="btn btn-outline btn-sm w-full"
+              phx-click="dump_detections"
+              title="Write current detections, sensor poses, and layout context to the server log as JSON (RADAR-DETECTIONS-DUMP)"
+            >
+              Dump detections to log
+            </button>
           </div>
 
           <%= if @detection_list == [] do %>
@@ -1010,8 +1076,12 @@ defmodule OctopusWeb.RadarLive do
                   <ul class="flex flex-col gap-1">
                     <%= for item <- group.items do %>
                       <li
-                        class="text-xs font-mono rounded px-2 py-1.5 bg-base-200/80 border border-base-300/60"
+                        class="text-xs font-mono rounded px-2 py-1.5 bg-base-200/80 border border-base-300/60 cursor-pointer hover:bg-base-300/80"
                         style={"opacity: #{fmt_f(item.opacity)}"}
+                        phx-click="dump_track_history"
+                        phx-value-device_id={item.device_id}
+                        phx-value-track_id={item.id}
+                        title="Dump last 10s movement history to server log"
                       >
                         <div class="flex items-center justify-between gap-2">
                           <span class="flex items-center gap-1.5 min-w-0">
@@ -1244,7 +1314,13 @@ defmodule OctopusWeb.RadarLive do
                       <%!-- Detections --%>
                       <%= if @visuals.detections do %>
                         <%= for v <- @view_targets do %>
-                          <g opacity={fmt_f(v.opacity)}>
+                          <g
+                            opacity={fmt_f(v.opacity)}
+                            phx-click="dump_track_history"
+                            phx-value-device_id={v.device_id}
+                            phx-value-track_id={v.track_id}
+                            style="cursor: pointer"
+                          >
                             <%= if @visuals.trails do %>
                               <%= for seg <- v.trail do %>
                                 <line
@@ -1470,6 +1546,18 @@ defmodule OctopusWeb.RadarLive do
                         {@sensitivity_level}/9 ({Octopus.Radar.SensorType.sensitivity_level_label(@sensitivity_level)})
                       </span>
                     </div>
+                    <label
+                      id="radar-clutter-filter"
+                      class="flex items-center gap-2 cursor-pointer text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        class="checkbox checkbox-xs"
+                        checked={@clutter_filter}
+                        phx-click="toggle_clutter_filter"
+                      />
+                      <span>Hide static clutter</span>
+                    </label>
                   <% end %>
 
                   <%= if @radial_layout do %>
@@ -1595,6 +1683,8 @@ defmodule OctopusWeb.RadarLive do
         |> build_trail_segments(now, hue, min_x, max_x, min_y, max_y)
 
       %{
+        device_id: device_id,
+        track_id: id,
         label: track_label(device_id, id),
         cx: cx,
         cy: cy,
@@ -2023,6 +2113,131 @@ defmodule OctopusWeb.RadarLive do
   defp sensor_status_label(:stale), do: "No Data"
   defp sensor_status_label(:resetting), do: "Resetting"
   defp sensor_status_label(_), do: "Unknown"
+
+  ## Detection dump (coordinate debugging)
+
+  defp dump_track_history(device_id, track_id) do
+    label = track_label(device_id, track_id)
+
+    case Radar.clutter_filter_track_debug(device_id, track_id) do
+      nil ->
+        Logger.info(
+          "RADAR-TRACK-HISTORY-DUMP[#{label}] track not found in clutter-filter registry (device_id=#{device_id}, track_id=#{track_id})"
+        )
+
+      payload ->
+        dump_id = track_history_dump_id(label)
+        json = Jason.encode!(Map.put(payload, "dump_id", dump_id))
+        Logger.info("RADAR-TRACK-HISTORY-DUMP[#{dump_id}] #{json}")
+    end
+  end
+
+  defp track_history_dump_id(label) do
+    ts = Calendar.strftime(DateTime.utc_now(), "%Y%m%dT%H%M%SZ")
+    "history-#{label}-#{ts}"
+  end
+
+  defp dump_detections_id do
+    Calendar.strftime(DateTime.utc_now(), "detections-%Y%m%dT%H%M%SZ")
+  end
+
+  defp generate_detections_dump_json(assigns, dump_id) do
+    payload = %{
+      "captured_at" => DateTime.to_iso8601(DateTime.utc_now()),
+      "dump_id" => dump_id,
+      "layout" => detection_dump_layout(assigns),
+      "sensors" => detection_dump_sensors(assigns.layout_devices),
+      "detections" => detection_dump_entries(assigns.tracks_now, assigns.devices)
+    }
+
+    payload =
+      if mock_source?(assigns.source_mode) and assigns.world_objects != [] do
+        Map.put(payload, "ground_truth", Enum.map(assigns.world_objects, &ground_truth_dump_entry/1))
+      else
+        payload
+      end
+
+    Jason.encode!(payload)
+  end
+
+  defp detection_dump_layout(assigns) do
+    %{
+      "source_mode" => Atom.to_string(assigns.source_mode),
+      "layout_start_angle_deg" => assigns.layout_start_angle_deg,
+      "angle_offset_deg" => assigns.angle_offset_deg,
+      "north_panel" => assigns.north_panel,
+      "radial_layout" => assigns.radial_layout
+    }
+  end
+
+  defp detection_dump_sensors(layout_devices) do
+    Enum.map(layout_devices, fn d ->
+      {tx, ty} = sensor_position(d)
+
+      %{
+        "device_id" => d.device_id,
+        "letter" => device_letter(d.device_id),
+        "active" => Radar.sensor_active?(d.device_id),
+        "type" => Atom.to_string(d.type),
+        "angle_deg" => d.angle_deg,
+        "distance_cm" => d.distance_cm,
+        "rotation_deg" => d.rotation_deg,
+        "mount_x_m" => fmt_json_float(tx),
+        "mount_y_m" => fmt_json_float(ty)
+      }
+    end)
+  end
+
+  defp detection_dump_entries(tracks_now, devices) do
+    now = System.monotonic_time(:millisecond)
+    poses = sensor_pose_lookup(devices)
+
+    tracks_now
+    |> Enum.map(fn {{device_id, id}, t} ->
+      {lx, ly, lz} = local_coords(t, Map.get(poses, device_id))
+      vz = Map.get(t, :vz, 0.0)
+      speed = :math.sqrt(t.vx * t.vx + t.vy * t.vy + vz * vz)
+
+      %{
+        "device_id" => device_id,
+        "letter" => device_letter(device_id),
+        "track_id" => id,
+        "label" => track_label(device_id, id),
+        "global" => coords_map(t.x, t.y, t.z),
+        "local" => coords_map(lx, ly, lz),
+        "velocity" => coords_map(t.vx, t.vy, vz),
+        "speed_m_s" => fmt_json_float(speed),
+        "last_seen_ms_ago" => now - t.last_seen,
+        "first_seen_ms_ago" => now - t.first_seen,
+        "stationary_ms" => now - t.position_last_changed
+      }
+    end)
+    |> Enum.sort_by(&{&1["device_id"], &1["track_id"]})
+  end
+
+  defp ground_truth_dump_entry(o) do
+    %{
+      "id" => o.id,
+      "x_m" => fmt_json_float(o.x),
+      "y_m" => fmt_json_float(o.y),
+      "z_m" => fmt_json_float(o.z)
+    }
+  end
+
+  defp coords_map(x, y, z) do
+    %{"x_m" => fmt_json_float(x), "y_m" => fmt_json_float(y), "z_m" => fmt_json_float(z)}
+  end
+
+  defp fmt_json_float(v) when is_float(v), do: Float.round(v, 4)
+  defp fmt_json_float(v) when is_integer(v), do: v * 1.0
+
+  defp track_position_moved?(prev, %Track{} = t) do
+    dx = t.x - prev.x
+    dy = t.y - prev.y
+    dz = t.z - prev.z
+
+    :math.sqrt(dx * dx + dy * dy + dz * dz) > @position_stationary_threshold_m
+  end
 
   ## Formatting helpers
 

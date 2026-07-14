@@ -32,19 +32,28 @@ defmodule Octopus.Radar do
 
   ### Deployment (`config/radar.exs`)
 
-  Each host that has real sensors has an entry in the `deployments` map in
-  `config/radar.exs`, keyed by the machine's short hostname (selected
-  automatically at boot — no environment variable). The entry maps logical
-  sensor ids to serial ports and optional USB adapter metadata:
+  Physical bindings live in the `deployments` map in `config/radar.exs`,
+  keyed by host OS (`:linux`, `:macos`). The matching entry is selected at
+  boot via `Octopus.Radar.Deployment.host_target/0` — no hostname or env var.
+  Each entry declares `:target`, which drives USB behaviour:
 
-      "redlady" => [
-        defaults: [type: :ld6001a, baud: 115_200],
-        sensors: [
-          [id: :a, port: "/dev/serial/by-id/..."],
-          ...
+      deployments: %{
+        linux: [
+          target: :linux,
+          adapters: [[name: "65", serial: "BD6545ABCD"], ...],
+          sensors: [[id: :a, adapter: "65", port: :if00], ...]
         ],
-        adapters: [...]
-      ]
+        macos: [
+          target: :macos,
+          adapters: [[name: "dev", ports: [if00: "/dev/tty.usbserial-..."]]],
+          ...
+        ]
+      }
+
+  `:target :linux` discovers by-id port paths and sysfs `usb_path` at runtime
+  (production rigs such as redlady). `:target :macos` uses explicit `:ports`
+  only. Adapter metadata powers USB reset on the radar debug page (Linux
+  target only); sysfs path is resolved when reset is triggered.
 
   On a host with no matching entry (e.g. local dev on a Mac), Live mode is
   unavailable but Mock mode still works using synthetic ports.
@@ -92,12 +101,15 @@ defmodule Octopus.Radar do
   require Logger
 
   alias Octopus.Radar.{
+    ClutterFilter,
     LogFormat,
     Mock,
+    PanelActivity,
     PoseTweak,
     Runtime,
     Sensitivity,
     Sensor,
+    Deployment,
     SensorPlan,
     SensorType,
     SourceMode,
@@ -141,31 +153,13 @@ defmodule Octopus.Radar do
   using the plain `:ports` style).
   """
   @spec adapters() :: [
-          %{name: String.t(), usb_path: String.t(), device_ids: [pos_integer()]}
+          %{name: String.t(), usb_path: String.t() | nil, device_ids: [pos_integer()]}
         ]
   def adapters do
-    if not configured?() do
-      []
+    if configured?() do
+      Deployment.adapters(deployment_config(), Octopus.Installation.radar_config())
     else
-      deployment_config()
-      |> case do
-        nil -> []
-        deployment -> Keyword.get(deployment, :adapters, [])
-      end
-      |> Enum.reduce({[], 1}, fn adapter_opts, {acc, id_start} ->
-        ports = Keyword.fetch!(adapter_opts, :ports)
-        count = length(ports)
-        device_ids = Enum.to_list(id_start..(id_start + count - 1))
-
-        entry = %{
-          name: Keyword.fetch!(adapter_opts, :name),
-          usb_path: Keyword.fetch!(adapter_opts, :usb_path),
-          device_ids: device_ids
-        }
-
-        {acc ++ [entry], id_start + count}
-      end)
-      |> elem(0)
+      []
     end
   end
 
@@ -190,6 +184,14 @@ defmodule Octopus.Radar do
     case Enum.find(adapters(), fn a -> a.name == adapter_name end) do
       nil ->
         {:error, :not_found}
+
+      %{usb_path: nil} = adapter ->
+        Logger.warning(
+          "[radar] USB adapter #{adapter_name}: no sysfs path (device unplugged?)"
+        )
+
+        Enum.each(adapter.device_ids, &broadcast_status(&1, :unavailable))
+        {:error, :unavailable}
 
       adapter ->
         Enum.each(adapter.device_ids, &broadcast_status(&1, :resetting))
@@ -410,6 +412,40 @@ defmodule Octopus.Radar do
     ViewSettings.set_bounds_mode(mode)
     broadcast_view_settings_changed()
     :ok
+  end
+
+  @spec clutter_filter_enabled?() :: boolean()
+  def clutter_filter_enabled? do
+    view_settings().clutter_filter
+  end
+
+  @spec set_clutter_filter(boolean()) :: :ok
+  def set_clutter_filter(enabled) when is_boolean(enabled) do
+    ViewSettings.set_clutter_filter(enabled)
+    broadcast_view_settings_changed()
+    :ok
+  end
+
+  @spec toggle_clutter_filter() :: boolean()
+  def toggle_clutter_filter do
+    enabled = ViewSettings.toggle_clutter_filter()
+    broadcast_view_settings_changed()
+    enabled
+  end
+
+  @spec reset_clutter_filter() :: :ok
+  def reset_clutter_filter, do: ClutterFilter.reset()
+
+  @spec clutter_filter_track_qualified?(pos_integer(), non_neg_integer()) :: boolean()
+  def clutter_filter_track_qualified?(device_id, track_id)
+      when is_integer(track_id) and track_id >= 0 do
+    ClutterFilter.track_qualified?(device_id, track_id)
+  end
+
+  @doc false
+  @spec clutter_filter_track_debug(pos_integer(), non_neg_integer()) :: map() | nil
+  def clutter_filter_track_debug(device_id, track_id) when is_integer(track_id) and track_id >= 0 do
+    ClutterFilter.track_debug(device_id, track_id)
   end
 
   @doc """
@@ -708,6 +744,54 @@ defmodule Octopus.Radar do
   @spec reset_stats() :: :ok
   defdelegate reset_stats(), to: Octopus.Radar.Stats, as: :reset
 
+  @doc "PubSub topic for per-panel activity snapshots."
+  @spec panel_activity_topic() :: String.t()
+  def panel_activity_topic, do: PanelActivity.topic()
+
+  @doc "Subscribe to per-panel activity snapshots."
+  @spec subscribe_panel_activity() :: :ok | {:error, term()}
+  def subscribe_panel_activity do
+    Phoenix.PubSub.subscribe(Octopus.PubSub, panel_activity_topic())
+  end
+
+  @doc """
+  Return the latest per-panel activity snapshot.
+
+  Shape: `%{factors: %{panel => float}, raw: %{panel => float}, ref: float, at: ms}`
+  Panel keys are 1-based installation panel numbers.
+  """
+  @spec panel_activity() :: map()
+  def panel_activity do
+    if Process.whereis(PanelActivity), do: PanelActivity.snapshot(), else: empty_panel_activity()
+  end
+
+  @doc "Return normalised per-panel activity factors (1-based installation panels)."
+  @spec panel_factors() :: %{pos_integer() => float()}
+  def panel_factors do
+    case panel_activity() do
+      %{factors: factors} -> factors
+      _ -> %{}
+    end
+  end
+
+  @doc "Return current panel-activity tuning settings."
+  @spec panel_activity_config() :: PanelActivity.Settings.t()
+  def panel_activity_config do
+    if Process.whereis(PanelActivity.Settings),
+      do: PanelActivity.Settings.get(),
+      else: struct(PanelActivity.Settings, PanelActivity.Settings.defaults())
+  end
+
+  @doc "Update panel-activity tuning settings at runtime."
+  @spec set_panel_activity_config(keyword()) :: :ok
+  def set_panel_activity_config(opts) when is_list(opts) do
+    if Process.whereis(PanelActivity.Settings) do
+      PanelActivity.Settings.update(opts)
+    else
+      :ok
+    end
+  end
+
   @doc """
   Return `true` when the active radar setup uses a `:radial` layout block.
 
@@ -836,6 +920,9 @@ defmodule Octopus.Radar do
         {PoseTweak, []},
         {Sensitivity, []},
         {ViewSettings, []},
+        {ClutterFilter, []},
+        {PanelActivity.Settings, []},
+        Octopus.Radar.PanelActivity,
         Octopus.Radar.StatusHistory,
         Octopus.Radar.Stats,
         {Mock.World, [mode: mock_world_mode(boot)]}
@@ -1150,7 +1237,20 @@ defmodule Octopus.Radar do
       detection_list_mode: :by_sensor,
       coords_frame: :global,
       visuals: ViewSettings.default_visuals(),
-      bounds_mode: :static
+      bounds_mode: :static,
+      clutter_filter: true
+    }
+  end
+
+  defp empty_panel_activity do
+    num_panels = max(Octopus.Installation.num_panels(), 1)
+    empty = for p <- 1..num_panels, into: %{}, do: {p, 0.0}
+
+    %{
+      factors: empty,
+      raw: empty,
+      ref: Map.fetch!(PanelActivity.Settings.defaults(), :min_ref),
+      at: 0
     }
   end
 end

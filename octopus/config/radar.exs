@@ -11,79 +11,53 @@ import Config
 #     See `Octopus.Installation.Nation2026`.
 #
 #   * Deployment (physical) — the map below binds those logical sensor ids to
-#     the serial ports of a specific machine. The active entry is selected
-#     automatically by the machine's short hostname, so no environment variable
-#     is needed. Hosts without a matching entry (e.g. dev laptops) get no
-#     physical bindings: Live mode is unavailable and Mock mode uses synthetic
-#     ports.
+#     serial ports. The active entry is selected by host OS (`:linux` or
+#     `:macos`), not hostname. Hosts with no matching entry (e.g. Windows) get
+#     no physical bindings: Live mode is unavailable and Mock mode uses
+#     synthetic ports.
+#
+# Deployment format:
+#
+#   * `:target` — `:linux` or `:macos`; drives USB discovery behaviour for
+#     this entry. Must match the runtime OS for the entry to be selected.
+#
+#   * `:adapters` — USB quad-serial adapters. Each adapter has a display
+#     `:name` and a stable `:serial` (the id embedded in
+#     `/dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_<serial>-if*`).
+#     On `:target :linux`, Octopus discovers by-id port paths and sysfs
+#     `usb_path` at runtime. On `:target :macos`, supply explicit `:ports`
+#     (and optional `:usb_path`) instead.
+#
+#   * `:sensors` — maps each installation sensor id to an adapter port:
+#     `[id: :a, adapter: "65", port: :if00]`. Direct `[id: :a, port: "..."]`
+#     paths are still supported for simple setups without adapters.
 #
 # Boot source mode (`:off`|`:live`|`:exact`|`:fuzzy`) defaults to `:off` in dev
 # and `:live` in prod; override with RADAR_SOURCE_MODE when a host needs a
 # different mode at boot.
 
 deployments = %{
-  "redlady" => [
+  linux: [
+    target: :linux,
+    # Nation 2026 sensor rig — production Linux hosts (e.g. redlady).
     defaults: [type: :ld6001a, baud: 115_200],
-    sensors: [
-      [
-        id: :a,
-        port: "/dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BDFFDFABCD-if00"
-      ],
-      [
-        id: :b,
-        port: "/dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BDFFDFABCD-if02"
-      ],
-      [
-        id: :c,
-        port: "/dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BDFFDFABCD-if04"
-      ],
-      [
-        id: :d,
-        port: "/dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BD6545ABCD-if00"
-      ],
-      [
-        id: :e,
-        port: "/dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BD6545ABCD-if02"
-      ],
-      [
-        id: :f,
-        port: "/dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BD6545ABCD-if04"
-      ]
-    ],
     adapters: [
-      [
-        name: "FF",
-        usb_path: "1-1.3",
-        ports: [
-          "/dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BDFFDFABCD-if00",
-          "/dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BDFFDFABCD-if02",
-          "/dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BDFFDFABCD-if04"
-        ]
-      ],
-      [
-        name: "65",
-        usb_path: "1-1.4",
-        ports: [
-          "/dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BD6545ABCD-if00",
-          "/dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BD6545ABCD-if02",
-          "/dev/serial/by-id/usb-WCH.CN_USB_Quad_Serial_BD6545ABCD-if04"
-        ]
-      ]
+      [name: "65", serial: "BD6545ABCD"],
+      [name: "FF", serial: "BDFFDFABCD"]
+    ],
+    sensors: [
+      [id: :a, adapter: "65", port: :if00],
+      [id: :b, adapter: "65", port: :if02],
+      [id: :c, adapter: "65", port: :if04],
+      [id: :d, adapter: "FF", port: :if00],
+      [id: :e, adapter: "FF", port: :if02],
+      [id: :f, adapter: "FF", port: :if04]
     ]
   ]
 }
 
-{:ok, hostname_charlist} = :inet.gethostname()
-
-# Normalise to the short hostname so an FQDN still matches (e.g. under
-# network_mode: host the container inherits the host's name, "redlady").
-hostname =
-  hostname_charlist
-  |> List.to_string()
-  |> String.split(".")
-  |> hd()
-
-config :octopus, :radar_deployment, Map.get(deployments, hostname)
+config :octopus, :radar_deployment,
+       Map.get(deployments, Octopus.Radar.Deployment.host_target())
 
 default_boot_source_mode =
   case config_env() do

@@ -2,7 +2,7 @@ import Config
 
 # Radar: config/radar.exs holds the physical deployment bindings and boot
 # source mode. Logical layout comes from the installation module; the active
-# deployment is selected by the machine's hostname. runtime.exs cannot use
+# deployment is selected by host OS (:linux / :macos). runtime.exs cannot use
 # import_config/1, so we evaluate the file instead.
 Code.eval_file(Path.join(__DIR__, "radar.exs"))
 

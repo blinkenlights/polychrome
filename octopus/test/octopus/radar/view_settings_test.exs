@@ -15,6 +15,7 @@ defmodule Octopus.Radar.ViewSettingsTest do
     assert settings.detection_list_mode == :by_sensor
     assert settings.coords_frame == :global
     assert settings.bounds_mode == :static
+    assert settings.clutter_filter == true
     assert settings.visuals == ViewSettings.default_visuals()
   end
 
@@ -36,5 +37,12 @@ defmodule Octopus.Radar.ViewSettingsTest do
     assert :ok = ViewSettings.toggle_visual(:arrows)
     assert ViewSettings.visuals().arrows == true
     assert :error = ViewSettings.toggle_visual(:unknown_layer)
+  end
+
+  test "toggle_clutter_filter flips the default" do
+    assert ViewSettings.clutter_filter() == true
+    assert ViewSettings.toggle_clutter_filter() == false
+    assert ViewSettings.clutter_filter() == false
+    assert ViewSettings.toggle_clutter_filter() == true
   end
 end

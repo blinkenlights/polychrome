@@ -21,6 +21,7 @@ defmodule Octopus.Params.Sim3d do
   def lean_post_top_r, do: param(:lean_post_top_r, 0.1)
   def lean_post_height, do: param(:lean_post_height, 1.2)
   def render_radar_cones, do: param(:render_radar_cones, false)
+  def render_panel_sectors, do: param(:render_panel_sectors, false)
   def radar_cone_straight_down, do: param(:radar_cone_straight_down, true)
 
   @doc """
@@ -28,23 +29,6 @@ defmodule Octopus.Params.Sim3d do
   """
   def config_schema do
     [
-      diameter:
-        {"Durchmesser (m)", :float, %{default: 20.0, min: 10.0, max: 20.0, step: 0.1, group: "Panels"}},
-      radar_count: {"Anzahl Sensoren", :int, %{default: 6, min: 4, max: 12, step: 2, group: "Radar"}},
-      radar_height:
-        {"Höhe (m)", :float, %{default: 4.5, min: 0.5, max: 12.0, step: 0.05, group: "Radar"}},
-      radar_tilt_deg:
-        {"Neigung (°)", :float, %{default: 15.0, min: 0.0, max: 90.0, step: 1.0, group: "Radar"}},
-      radar_cone_straight_down:
-        {"Senkrecht n. unten", :boolean, %{default: true, group: "Radar"}},
-      radar_arm_length_m:
-        {"Latten-Länge (m)", :float, %{default: 3.0, min: 0.0, max: 8.0, step: 0.01, group: "Radar"}},
-      mast_diameter_m:
-        {"Mast-Ø (m)", :float, %{default: 0.35, min: 0.05, max: 0.5, step: 0.005, group: "Radar"}},
-      render_radar_cones: {"Licht-Kegel", :boolean, %{default: false, group: "Radar"}},
-      platform_radius_m:
-        {"Plattform-Radius (m)", :float,
-         %{default: 2.5, min: 0.5, max: 3.0, step: 0.05, group: "Plattform & Rückenlehne"}},
       lean_post_bottom_r:
         {"Lehne Ø unten (m)", :float,
          %{default: 0.5, min: 0.1, max: 2.5, step: 0.01, group: "Plattform & Rückenlehne"}},
@@ -53,7 +37,13 @@ defmodule Octopus.Params.Sim3d do
          %{default: 0.1, min: 0.02, max: 2.5, step: 0.01, group: "Plattform & Rückenlehne"}},
       lean_post_height:
         {"Lehne Höhe (m)", :float,
-         %{default: 1.2, min: 0.2, max: 3.0, step: 0.01, group: "Plattform & Rückenlehne"}}
+         %{default: 1.2, min: 0.2, max: 3.0, step: 0.01, group: "Plattform & Rückenlehne"}},
+      render_radar_cones:
+        {"Radar-Kegel (blau/gelb)", :boolean,
+         %{default: false, group: "Radar"}},
+      render_panel_sectors:
+        {"Panel-Sektoren (Tortenstücke)", :boolean,
+         %{default: false, group: "Radar"}}
     ]
   end
 
@@ -62,18 +52,11 @@ defmodule Octopus.Params.Sim3d do
   """
   def config do
     %{
-      diameter: diameter(),
-      radar_count: radar_count(),
-      radar_height: radar_height(),
-      radar_tilt_deg: radar_tilt_deg(),
-      radar_arm_length_m: radar_arm_length_m(),
-      mast_diameter_m: mast_diameter_m(),
-      platform_radius_m: platform_radius_m(),
       lean_post_bottom_r: lean_post_bottom_r(),
       lean_post_top_r: lean_post_top_r(),
       lean_post_height: lean_post_height(),
       render_radar_cones: render_radar_cones(),
-      radar_cone_straight_down: radar_cone_straight_down()
+      render_panel_sectors: render_panel_sectors()
     }
   end
 
@@ -158,6 +141,10 @@ defmodule Octopus.Params.Sim3d do
 
   def handle_param("render_radar_cones", [value]) do
     Phoenix.PubSub.broadcast(Octopus.PubSub, topic(), {:render_radar_cones, value})
+  end
+
+  def handle_param("render_panel_sectors", [value]) do
+    Phoenix.PubSub.broadcast(Octopus.PubSub, topic(), {:render_panel_sectors, value})
   end
 
   def handle_param("radar_cone_straight_down", [value]) do

@@ -19,6 +19,7 @@ defmodule Octopus.Apps.Collective do
   alias Octopus.Radar
   alias Octopus.Radar.Frame
   alias Octopus.Radar.Mock.World
+  alias Octopus.Radar.TrackMerge
   alias Octopus.Apps.Collective.Animations
 
   @fps 30
@@ -32,7 +33,8 @@ defmodule Octopus.Apps.Collective do
     dots: Animations.Dots,
     orbital: Animations.Orbital,
     lava_lamp: Animations.LavaLamp,
-    ring_noise: Animations.RingNoise
+    ring_noise: Animations.RingNoise,
+    presence: Animations.PresencePanels
   }
 
   def name, do: "Collective"
@@ -43,7 +45,8 @@ defmodule Octopus.Apps.Collective do
     dots: "Dots",
     orbital: "Orbital drift",
     lava_lamp: "Lava lamp",
-    ring_noise: "Ring noise"
+    ring_noise: "Ring noise",
+    presence: "Presence"
   }
 
   @mode_accents %{
@@ -52,7 +55,8 @@ defmodule Octopus.Apps.Collective do
     dots: "#F1C40F",
     orbital: "#9B59B6",
     lava_lamp: "#E67E22",
-    ring_noise: "#1ABC9C"
+    ring_noise: "#1ABC9C",
+    presence: "#2ECC71"
   }
 
   @mode_presets Module.concat(["Octopus", "AppModePresets"])
@@ -89,7 +93,7 @@ defmodule Octopus.Apps.Collective do
   def legacy_mode_config(slug) do
     case slug do
       "storm" ->
-        %{animation: :storm, background: :deep_dark, sensitivity: 1.0}
+        %{animation: :storm, background: :still_stars, sensitivity: 1.0, bleeding: 35.0}
 
       "breath" ->
         %{
@@ -101,7 +105,7 @@ defmodule Octopus.Apps.Collective do
         }
 
       "dots" ->
-        %{animation: :dots, dots_smoothing: 0.35}
+        %{animation: :dots, dots_smoothing: 0.35, dots_activity_bleed: 0.2}
 
       "orbital" ->
         %{animation: :orbital, orbital_liveliness: 0.35, orbital_sun_gain: 1.0}
@@ -113,7 +117,9 @@ defmodule Octopus.Apps.Collective do
           lava_speed: 1.0,
           lava_size_mul: 1.25,
           lava_thresh: 0.9,
-          lava_palette: :classic
+          lava_palette: :classic,
+          lava_reactivity: 0.6,
+          lava_warmth: 0.5
         }
 
       "ring_noise" ->
@@ -124,6 +130,13 @@ defmodule Octopus.Apps.Collective do
           ring_noise_pulse_amount: 0.65,
           ring_noise_counter_wave: true,
           ring_noise_palette: :lava
+        }
+
+      "presence" ->
+        %{
+          animation: :presence,
+          presence_floor: 0.0,
+          presence_bleed: 0.35
         }
 
       _ ->
@@ -146,7 +159,7 @@ defmodule Octopus.Apps.Collective do
         key: :background,
         label: "Background",
         type: :choice,
-        default: :deep_dark,
+        default: :still_stars,
         options: [{:deep_dark, "Deep dark"}, {:still_stars, "Still stars"}]
       }
     ]
@@ -196,6 +209,15 @@ defmodule Octopus.Apps.Collective do
         max: 1.0,
         step: 0.05,
         default: 0.35
+      },
+      %{
+        key: :dots_activity_bleed,
+        label: "Activity bleed",
+        type: :slider,
+        min: 0.0,
+        max: 0.5,
+        step: 0.05,
+        default: 0.2
       }
     ]
   end
@@ -226,13 +248,34 @@ defmodule Octopus.Apps.Collective do
   def mode_tweakables_for("lava_lamp") do
     [
       %{
+        key: :lava_reactivity,
+        label: "Crowd heat",
+        type: :slider,
+        min: 0.0,
+        max: 1.0,
+        step: 0.05,
+        default: 0.6,
+        runtime: true
+      },
+      %{
         key: :lava_speed,
         label: "Speed",
         type: :slider,
         min: 0.2,
         max: 3.0,
         step: 0.05,
-        default: 1.0
+        default: 1.0,
+        runtime: true
+      },
+      %{
+        key: :lava_warmth,
+        label: "Warmth",
+        type: :slider,
+        min: 0.0,
+        max: 1.0,
+        step: 0.05,
+        default: 0.5,
+        runtime: true
       },
       %{
         key: :lava_palette,
@@ -271,6 +314,29 @@ defmodule Octopus.Apps.Collective do
     ]
   end
 
+  def mode_tweakables_for("presence") do
+    [
+      %{
+        key: :presence_floor,
+        label: "Base glow",
+        type: :slider,
+        min: 0.0,
+        max: 0.4,
+        step: 0.02,
+        default: 0.0
+      },
+      %{
+        key: :presence_bleed,
+        label: "Neighbour bleed",
+        type: :slider,
+        min: 0.0,
+        max: 0.7,
+        step: 0.05,
+        default: 0.35
+      }
+    ]
+  end
+
   def mode_tweakables_for(_mode_id), do: []
 
   def apply_mode(app_id, mode_id) do
@@ -280,7 +346,12 @@ defmodule Octopus.Apps.Collective do
   def app_init(config) do
     # Instant panel updates — easing on the firmware side never completes when every
     # pixel changes every frame (Lava Lamp / Ring Noise) and can freeze the panel.
-    Octopus.App.configure_display(layout: :adjacent_panels, easing_interval: 0)
+    Octopus.App.configure_display(
+      layout: :adjacent_panels,
+      easing_interval: 0,
+      supports_grayscale: true,
+      merge_rgbw: true
+    )
     display_info = Octopus.App.get_display_info()
 
     Radar.subscribe()
@@ -292,6 +363,7 @@ defmodule Octopus.Apps.Collective do
     breath_hue_shift = Map.get(config, :breath_hue_shift, 0.0)
     breath_layout = Map.get(config, :breath_layout, :wave)
     dots_smoothing = Map.get(config, :dots_smoothing, 0.35)
+    dots_activity_bleed = Map.get(config, :dots_activity_bleed, 0.2)
     orbital_liveliness = Map.get(config, :orbital_liveliness, 0.35)
     orbital_sun_gain = Map.get(config, :orbital_sun_gain, 1.0)
     lava_blob_count = Map.get(config, :lava_blob_count, 7)
@@ -299,11 +371,15 @@ defmodule Octopus.Apps.Collective do
     lava_size_mul = Map.get(config, :lava_size_mul, 1.25)
     lava_thresh = Map.get(config, :lava_thresh, 0.9)
     lava_palette = Map.get(config, :lava_palette, :classic)
+    lava_reactivity = Map.get(config, :lava_reactivity, 0.6)
+    lava_warmth = Map.get(config, :lava_warmth, 0.5)
     ring_noise_speed = Map.get(config, :ring_noise_speed, 1.0)
     ring_noise_pulse_period = Map.get(config, :ring_noise_pulse_period, 24.0)
     ring_noise_pulse_amount = Map.get(config, :ring_noise_pulse_amount, 0.65)
     ring_noise_counter_wave = Map.get(config, :ring_noise_counter_wave, true)
     ring_noise_palette = Map.get(config, :ring_noise_palette, :lava)
+    presence_floor = Map.get(config, :presence_floor, 0.0)
+    presence_bleed = Map.get(config, :presence_bleed, 0.35)
     background = Map.get(config, :background, :deep_dark) |> coerce_atom(:deep_dark)
     animation = Map.get(config, :animation, :storm) |> coerce_atom(:storm)
     anim_mod = Map.fetch!(@animations, animation)
@@ -320,6 +396,7 @@ defmodule Octopus.Apps.Collective do
       breath_hue_shift: breath_hue_shift,
       breath_layout: breath_layout,
       dots_smoothing: dots_smoothing,
+      dots_activity_bleed: dots_activity_bleed,
       orbital_liveliness: orbital_liveliness,
       orbital_sun_gain: orbital_sun_gain,
       lava_blob_count: lava_blob_count,
@@ -327,11 +404,15 @@ defmodule Octopus.Apps.Collective do
       lava_size_mul: lava_size_mul,
       lava_thresh: lava_thresh,
       lava_palette: lava_palette,
+      lava_reactivity: lava_reactivity,
+      lava_warmth: lava_warmth,
       ring_noise_speed: ring_noise_speed,
       ring_noise_pulse_period: ring_noise_pulse_period,
       ring_noise_pulse_amount: ring_noise_pulse_amount,
       ring_noise_counter_wave: ring_noise_counter_wave,
       ring_noise_palette: ring_noise_palette,
+      presence_floor: presence_floor,
+      presence_bleed: presence_bleed,
       background: background,
       animation: animation,
       anim_mod: anim_mod,
@@ -383,6 +464,7 @@ defmodule Octopus.Apps.Collective do
       breath_hue_shift: state.breath_hue_shift,
       breath_layout: state.breath_layout,
       dots_smoothing: state.dots_smoothing,
+      dots_activity_bleed: state.dots_activity_bleed,
       orbital_liveliness: state.orbital_liveliness,
       orbital_sun_gain: state.orbital_sun_gain,
       lava_blob_count: state.lava_blob_count,
@@ -390,11 +472,15 @@ defmodule Octopus.Apps.Collective do
       lava_size_mul: state.lava_size_mul,
       lava_thresh: state.lava_thresh,
       lava_palette: state.lava_palette,
+      lava_reactivity: state.lava_reactivity,
+      lava_warmth: state.lava_warmth,
       ring_noise_speed: state.ring_noise_speed,
       ring_noise_pulse_period: state.ring_noise_pulse_period,
       ring_noise_pulse_amount: state.ring_noise_pulse_amount,
       ring_noise_counter_wave: state.ring_noise_counter_wave,
       ring_noise_palette: state.ring_noise_palette,
+      presence_floor: state.presence_floor,
+      presence_bleed: state.presence_bleed,
       background: state.background,
       display_info: state.display_info
     }
@@ -403,7 +489,8 @@ defmodule Octopus.Apps.Collective do
       Canvas.new(state.display_info.width, state.display_info.height)
       |> state.anim_mod.render(people, ctx, state.anim_state)
 
-    Octopus.App.update_display(canvas)
+    Octopus.App.update_display(canvas, :rgb)
+    Octopus.App.update_display(white_channel_canvas(state, ctx), :grayscale)
 
     elapsed = now_ms() - tick_start
     Process.send_after(self(), :tick, max(frame_ms() - elapsed, 1))
@@ -428,13 +515,14 @@ defmodule Octopus.Apps.Collective do
              {"Crowd Dots", :dots},
              {"Orbital", :orbital},
              {"Lava Lamp", :lava_lamp},
-             {"Ring Noise", :ring_noise}
+             {"Ring Noise", :ring_noise},
+             {"Presence", :presence}
            ]
          }},
       background:
         {"Background", :select,
          %{
-           default: 0,
+           default: 1,
            options: [{"Deep Dark", :deep_dark}, {"Still Stars", :still_stars}],
            visible_when: {:animation, [:storm]}
          }},
@@ -485,6 +573,15 @@ defmodule Octopus.Apps.Collective do
            min: 0.0,
            max: 1.0,
            default: 0.35,
+           step: 0.05,
+           visible_when: {:animation, [:dots]}
+         }},
+      dots_activity_bleed:
+        {"Activity Bleed", :float,
+         %{
+           min: 0.0,
+           max: 0.5,
+           default: 0.2,
            step: 0.05,
            visible_when: {:animation, [:dots]}
          }},
@@ -552,6 +649,24 @@ defmodule Octopus.Apps.Collective do
            ],
            visible_when: {:animation, [:lava_lamp]}
          }},
+      lava_reactivity:
+        {"Crowd Heat", :float,
+         %{
+           min: 0.0,
+           max: 1.0,
+           default: 0.6,
+           step: 0.05,
+           visible_when: {:animation, [:lava_lamp]}
+         }},
+      lava_warmth:
+        {"Warmth", :float,
+         %{
+           min: 0.0,
+           max: 1.0,
+           default: 0.5,
+           step: 0.05,
+           visible_when: {:animation, [:lava_lamp]}
+         }},
       ring_noise_speed:
         {"Noise Speed", :float,
          %{
@@ -580,8 +695,7 @@ defmodule Octopus.Apps.Collective do
            visible_when: {:animation, [:ring_noise]}
          }},
       ring_noise_counter_wave:
-        {"Counter Wave", :boolean,
-         %{default: true, visible_when: {:animation, [:ring_noise]}}},
+        {"Counter Wave", :boolean, %{default: true, visible_when: {:animation, [:ring_noise]}}},
       ring_noise_palette:
         {"Palette", :select,
          %{
@@ -592,6 +706,24 @@ defmodule Octopus.Apps.Collective do
              {"Aurora", :aurora}
            ],
            visible_when: {:animation, [:ring_noise]}
+         }},
+      presence_floor:
+        {"Base Glow", :float,
+         %{
+           min: 0.0,
+           max: 0.4,
+           default: 0.0,
+           step: 0.02,
+           visible_when: {:animation, [:presence]}
+         }},
+      presence_bleed:
+        {"Neighbour Bleed", :float,
+         %{
+           min: 0.0,
+           max: 0.7,
+           default: 0.35,
+           step: 0.05,
+           visible_when: {:animation, [:presence]}
          }}
     ]
   end
@@ -632,10 +764,14 @@ defmodule Octopus.Apps.Collective do
     """
     Crowd Dots — one pixel per person.
     X = angular position on the ring (dot wanders horizontally with the person).
-    Y = distance from centre: at the ring / near the panels → bottom row;
-    at the centre → top row. Stable colour per track id.
+    Y = distance from centre: at the ring / near the panels → top row;
+    at the centre → bottom row. Stable colour per track id.
+    Panel activity glows on the warm-white (W) channel from the shared
+    panel-activity service; RGB carries dots and pulses only.
+    Walking speed soft-blinks each dot (cosine fade, faster when moving faster).
     After 3 s without movement, a soft ring pulse expands over ~3–4 panels and fades.
     • Dot Smoothing — low = snappy, high = soft follow (EMA on position).
+    • Activity Bleed — how much activity spills into adjacent panels.
     """
   end
 
@@ -654,13 +790,14 @@ defmodule Octopus.Apps.Collective do
 
   def config_info(%{animation: :lava_lamp}) do
     """
-    Lava Lamp — cylindrical metaball blobs, no crowd input.
-    Blobs rise and fall on sinusoidal paths and merge when close.
-    • Blob Count — re-rolls blob layout when changed (3–12).
-    • Speed — animation time scale (not frame rate).
-    • Size — global blob radius multiplier.
-    • Threshold — sigmoid field cutoff (lower = more blob visible).
-    • Palette — Classic, Magenta, or Slime colour stops.
+    Lava Lamp — cylindrical metaball blobs driven by crowd heat.
+    Brightness and motion follow the shared radar panel-activity service: hot
+    zones lift and inflate blobs, speed up convection and warm the palette. Empty
+    room = slow cold lamp. Crowd Heat 0 = classic crowd-blind decorative lava.
+    • Crowd Heat — master crowd influence (0 = ignore the crowd).
+    • Speed — base animation time scale (not frame rate).
+    • Warmth — how much the palette cools when the room is empty.
+    • Palette — Classic, Magenta, or Slime (hot end of the temperature axis).
     """
   end
 
@@ -673,6 +810,17 @@ defmodule Octopus.Apps.Collective do
     • Pulse Amount — mix between flat brightness and pulsing waves.
     • Counter Wave — second wave running the opposite direction.
     • Palette — Lava, Ocean, or Aurora colour stops.
+    """
+  end
+
+  def config_info(%{animation: :presence}) do
+    """
+    Presence — each panel glows fully in a fixed random colour.
+    Brightness follows the shared radar panel-activity service (crowd
+    proximity, count, walking speed), with visual neighbour bleed and base
+    glow applied here.
+    • Base Glow — optional idle brightness (0 = black when inactive).
+    • Neighbour Bleed — how much activity spills into adjacent panels.
     """
   end
 
@@ -700,6 +848,7 @@ defmodule Octopus.Apps.Collective do
       breath_hue_shift: state.breath_hue_shift,
       breath_layout: state.breath_layout,
       dots_smoothing: state.dots_smoothing,
+      dots_activity_bleed: state.dots_activity_bleed,
       orbital_liveliness: state.orbital_liveliness,
       orbital_sun_gain: state.orbital_sun_gain,
       lava_blob_count: state.lava_blob_count,
@@ -707,11 +856,15 @@ defmodule Octopus.Apps.Collective do
       lava_size_mul: state.lava_size_mul,
       lava_thresh: state.lava_thresh,
       lava_palette: state.lava_palette,
+      lava_reactivity: state.lava_reactivity,
+      lava_warmth: state.lava_warmth,
       ring_noise_speed: state.ring_noise_speed,
       ring_noise_pulse_period: state.ring_noise_pulse_period,
       ring_noise_pulse_amount: state.ring_noise_pulse_amount,
       ring_noise_counter_wave: state.ring_noise_counter_wave,
-      ring_noise_palette: state.ring_noise_palette
+      ring_noise_palette: state.ring_noise_palette,
+      presence_floor: state.presence_floor,
+      presence_bleed: state.presence_bleed
     }
   end
 
@@ -741,6 +894,7 @@ defmodule Octopus.Apps.Collective do
          breath_hue_shift: Map.get(config, :breath_hue_shift, state.breath_hue_shift),
          breath_layout: Map.get(config, :breath_layout, state.breath_layout),
          dots_smoothing: Map.get(config, :dots_smoothing, state.dots_smoothing),
+         dots_activity_bleed: Map.get(config, :dots_activity_bleed, state.dots_activity_bleed),
          orbital_liveliness: Map.get(config, :orbital_liveliness, state.orbital_liveliness),
          orbital_sun_gain: Map.get(config, :orbital_sun_gain, state.orbital_sun_gain),
          lava_blob_count: Map.get(config, :lava_blob_count, state.lava_blob_count),
@@ -748,6 +902,8 @@ defmodule Octopus.Apps.Collective do
          lava_size_mul: Map.get(config, :lava_size_mul, state.lava_size_mul),
          lava_thresh: Map.get(config, :lava_thresh, state.lava_thresh),
          lava_palette: Map.get(config, :lava_palette, state.lava_palette),
+         lava_reactivity: Map.get(config, :lava_reactivity, state.lava_reactivity),
+         lava_warmth: Map.get(config, :lava_warmth, state.lava_warmth),
          ring_noise_speed: Map.get(config, :ring_noise_speed, state.ring_noise_speed),
          ring_noise_pulse_period:
            Map.get(config, :ring_noise_pulse_period, state.ring_noise_pulse_period),
@@ -755,13 +911,17 @@ defmodule Octopus.Apps.Collective do
            Map.get(config, :ring_noise_pulse_amount, state.ring_noise_pulse_amount),
          ring_noise_counter_wave:
            Map.get(config, :ring_noise_counter_wave, state.ring_noise_counter_wave),
-         ring_noise_palette: Map.get(config, :ring_noise_palette, state.ring_noise_palette)
+         ring_noise_palette: Map.get(config, :ring_noise_palette, state.ring_noise_palette),
+         presence_floor: Map.get(config, :presence_floor, state.presence_floor),
+         presence_bleed: Map.get(config, :presence_bleed, state.presence_bleed)
      }}
   end
 
   defp fetch_people(state, now) do
     registry_people =
-      active_people(Map.get(state, :track_registry, %{}), now, @track_stale_ms)
+      Map.get(state, :track_registry, %{})
+      |> active_people(now, @track_stale_ms)
+      |> TrackMerge.merge()
 
     case registry_people do
       [] -> mock_world_people()
@@ -841,4 +1001,12 @@ defmodule Octopus.Apps.Collective do
   end
 
   defp coerce_atom(_value, default), do: default
+
+  defp white_channel_canvas(%{animation: :dots, display_info: info}, ctx) do
+    Animations.Dots.activity_canvas(info, Map.get(ctx, :dots_activity_bleed, 0.2))
+  end
+
+  defp white_channel_canvas(%{display_info: info}, _ctx) do
+    Canvas.new(info.width, info.height, :grayscale)
+  end
 end

@@ -26,7 +26,8 @@ defmodule Octopus.Radar.ViewSettings do
     :detection_list_mode,
     :coords_frame,
     :visuals,
-    :bounds_mode
+    :bounds_mode,
+    :clutter_filter
   ]
 
   @type t :: %__MODULE__{
@@ -34,7 +35,8 @@ defmodule Octopus.Radar.ViewSettings do
           detection_list_mode: detection_list_mode(),
           coords_frame: coords_frame(),
           visuals: %{atom() => boolean()},
-          bounds_mode: bounds_mode()
+          bounds_mode: bounds_mode(),
+          clutter_filter: boolean()
         }
 
   def start_link(_opts) do
@@ -61,6 +63,9 @@ defmodule Octopus.Radar.ViewSettings do
 
   @spec bounds_mode() :: bounds_mode()
   def bounds_mode, do: Agent.get(__MODULE__, & &1.bounds_mode)
+
+  @spec clutter_filter() :: boolean()
+  def clutter_filter, do: Agent.get(__MODULE__, & &1.clutter_filter)
 
   @spec set_north_panel(pos_integer()) :: :ok
   def set_north_panel(panel) when is_integer(panel) and panel >= 1 do
@@ -105,13 +110,27 @@ defmodule Octopus.Radar.ViewSettings do
     Agent.update(__MODULE__, &%{&1 | bounds_mode: mode})
   end
 
+  @spec set_clutter_filter(boolean()) :: :ok
+  def set_clutter_filter(enabled) when is_boolean(enabled) do
+    Agent.update(__MODULE__, &%{&1 | clutter_filter: enabled})
+  end
+
+  @spec toggle_clutter_filter() :: boolean()
+  def toggle_clutter_filter do
+    Agent.get_and_update(__MODULE__, fn state ->
+      enabled = not state.clutter_filter
+      {enabled, %{state | clutter_filter: enabled}}
+    end)
+  end
+
   defp initial_state do
     %__MODULE__{
       north_panel: Octopus.Installation.north_panel(),
       detection_list_mode: :by_sensor,
       coords_frame: :global,
       visuals: @default_visuals,
-      bounds_mode: :static
+      bounds_mode: :static,
+      clutter_filter: true
     }
   end
 

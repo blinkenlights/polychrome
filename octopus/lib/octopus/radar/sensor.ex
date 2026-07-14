@@ -37,7 +37,7 @@ defmodule Octopus.Radar.Sensor do
   require Logger
 
   alias Octopus.Radar
-  alias Octopus.Radar.{Ack, Command, Frame, LogFormat, Protocol, Transform}
+  alias Octopus.Radar.{Ack, ClutterFilter, Command, Frame, LogFormat, Protocol, Transform}
 
   @reopen_interval :timer.seconds(5)
   @ack_timeout :timer.seconds(2)
@@ -770,7 +770,11 @@ defmodule Octopus.Radar.Sensor do
   end
 
   defp publish_frame(%Frame{} = frame, %State{device_id: device_id, config: config} = state) do
-    frame = Transform.transform_frame(frame, config)
+    frame =
+      frame
+      |> Transform.transform_frame(config)
+      |> then(&ClutterFilter.filter_frame(device_id, &1))
+
     envelope = {:radar_frame, device_id, frame}
     Phoenix.PubSub.broadcast(Octopus.PubSub, Radar.topic(), envelope)
     Phoenix.PubSub.broadcast(Octopus.PubSub, Radar.topic(device_id), envelope)

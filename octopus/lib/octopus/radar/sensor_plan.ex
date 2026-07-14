@@ -2,7 +2,7 @@ defmodule Octopus.Radar.SensorPlan do
   @moduledoc false
   # Merges installation logical sensor layout with deployment hardware bindings.
 
-  alias Octopus.Radar.{PoseTweak, SensorType}
+  alias Octopus.Radar.{Deployment, PoseTweak, SensorType}
 
   @global_defaults [
     type: :ld6001a,
@@ -91,10 +91,25 @@ defmodule Octopus.Radar.SensorPlan do
   defp bindings_by_id(nil), do: %{}
 
   defp bindings_by_id(deployment) do
+    registry = Deployment.port_registry(deployment)
+
     deployment
     |> Keyword.get(:sensors, [])
     |> Map.new(fn opts ->
-      {Keyword.fetch!(opts, :id), opts}
+      id = Keyword.fetch!(opts, :id)
+
+      resolved =
+        case Deployment.resolve_port(opts, registry) do
+          {:ok, port} ->
+            opts
+            |> Keyword.drop([:id])
+            |> Keyword.put(:port, port)
+
+          {:error, _} ->
+            Keyword.drop(opts, [:id])
+        end
+
+      {id, resolved}
     end)
   end
 
