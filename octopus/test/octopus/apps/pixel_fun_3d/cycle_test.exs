@@ -136,13 +136,13 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
           roll_angle: 0.8
         })
 
-      {:noreply, updated} = pixel_fun_handle_cast({:apply_mode, "builtin:swaytest"}, state)
+      {:noreply, updated} = pixel_fun_handle_cast({:apply_mode, "builtin:organic_swirl"}, state)
 
       assert updated.sway_auto == false
       assert_in_delta updated.tilt_scale, 0.0, 0.0001
       assert_in_delta updated.yaw_angle, 0.0, 0.0001
       assert_in_delta updated.roll_angle, 0.0, 0.0001
-      assert updated.source =~ "tanh"
+      assert updated.source =~ "sin"
     end
 
     test "loads wasserwaage sway from code builtin defs" do

@@ -8,7 +8,7 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
     test "returns presets with valid formulas and scene fields" do
       presets = ScenePresets.builtins()
 
-      assert length(presets) == 26
+      assert length(presets) == 25
 
       for preset <- presets do
         assert preset.builtin
