@@ -62,15 +62,19 @@ defmodule OctopusWeb.TopBarComponent do
     ~H"""
     <.link
       navigate={@path}
-      class={[
-        "px-2 py-1 rounded-md text-sm font-medium whitespace-nowrap transition-colors",
-        @active? && "bg-base-200 text-base-content",
-        !@active? && "text-base-content/70 hover:text-base-content hover:bg-base-200/60"
-      ]}
+      class={nav_link_class(@active?)}
     >
       {@label}
     </.link>
     """
+  end
+
+  defp nav_link_class(active?) do
+    [
+      "px-2 py-1 rounded-md text-sm font-medium whitespace-nowrap transition-colors",
+      active? && "bg-base-200 text-base-content",
+      !active? && "text-base-content/70 hover:text-base-content hover:bg-base-200/60"
+    ]
   end
 
   defp nav_active?(path, current_path) when is_binary(path) and is_binary(current_path) do
@@ -82,7 +86,6 @@ defmodule OctopusWeb.TopBarComponent do
   defp nav_links do
     [
       {"/", "Foyer"},
-      {"/sim3daframe", "Aframe"},
       {"/radar", "Radar"},
       {"/radar/debug", "Radar Debug"}
     ]
