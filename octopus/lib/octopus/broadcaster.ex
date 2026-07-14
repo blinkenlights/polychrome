@@ -393,13 +393,31 @@ defmodule Octopus.Broadcaster do
   defp resolve_address(address) when is_tuple(address), do: address
 
   defp resolve_hostname(hostname) when is_binary(hostname) do
-    case :inet.gethostbyname(String.to_charlist(hostname)) do
-      {:ok, {:hostent, _, _, :inet, 4, [ip | _]}} ->
+    # .local needs mDNS. Erlang's resolver and container NSS often miss it;
+    # mdns_lite already speaks multicast on the host network.
+    case resolve_via_mdns(hostname) || resolve_via_inet(hostname) do
+      {:ok, ip} ->
         ip
 
-      {:error, _} ->
+      :error ->
         Logger.warning("Could not resolve hostname: #{hostname}. Using localhost.")
         {127, 0, 0, 1}
+    end
+  end
+
+  defp resolve_via_mdns(hostname) do
+    if String.ends_with?(hostname, ".local") do
+      case MdnsLite.gethostbyname(hostname) do
+        {:ok, ip} -> {:ok, ip}
+        {:error, _} -> nil
+      end
+    end
+  end
+
+  defp resolve_via_inet(hostname) do
+    case :inet.gethostbyname(String.to_charlist(hostname)) do
+      {:ok, {:hostent, _, _, :inet, 4, [ip | _]}} -> {:ok, ip}
+      {:error, _} -> :error
     end
   end
 

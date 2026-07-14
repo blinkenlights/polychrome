@@ -113,8 +113,11 @@ FROM ${RUNNER_IMAGE}
 RUN sed -i 's|deb.debian.org|cdn.debian.net|g' /etc/apt/sources.list.d/debian.sources
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    apt-get update -y && apt-get install -y libstdc++6 openssl libncurses6 locales \
+    apt-get update -y && apt-get install -y libstdc++6 openssl libncurses6 locales libnss-mdns \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*
+
+# Resolve *.local via the host Avahi daemon (mount its socket in compose).
+RUN sed -i 's/^hosts:.*/hosts: files mdns4_minimal [NOTFOUND=return] dns/' /etc/nsswitch.conf
 
 # Set the locale
 RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && locale-gen

@@ -43,6 +43,8 @@ services:
       # Expose host sysfs so USB adapter authorized files can be written.
       - /sys/bus/usb:/sys/bus/usb
       - /sys/devices:/sys/devices
+      # Host Avahi for NSS *.local lookups (libnss-mdns in the image).
+      - /var/run/avahi-daemon/socket:/var/run/avahi-daemon/socket
     restart: unless-stopped
 
 volumes:

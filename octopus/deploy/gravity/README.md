@@ -99,6 +99,14 @@ a single 2×32 panel on Pixie port 2. This is set via `INSTALLATION_MODULE` in
 `.env` and passed as a Docker build arg by `deploy.sh`. Change it there and
 redeploy to use a different profile.
 
+## mDNS / `.local` hostnames
+
+Panel controllers are addressed as `blinkenleds-….local`. Resolution works two ways:
+
+1. **Octopus** queries mDNS via `mdns_lite` (multicast on the host network).
+2. **NSS** in the image uses `libnss-mdns` against the host Avahi socket mounted
+   at `/var/run/avahi-daemon/socket` (requires `avahi-daemon` on the Pi).
+
 ## Radar sensors
 
 The Woodstock installation does not define radar sensors. If you add radar to an
