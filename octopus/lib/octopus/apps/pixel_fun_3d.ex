@@ -102,6 +102,7 @@ defmodule Octopus.Apps.PixelFun3D do
                         :brightness_percent,
                         :color_interval,
                         :palette_auto,
+                        :bleeding,
                         :orbit_rate,
                         :roll_rate,
                         :roll_pivot,
@@ -136,123 +137,184 @@ defmodule Octopus.Apps.PixelFun3D do
       slug: "classic_ripple",
       name: "Classic ripple",
       formula: "sin(0.4*t-hypot(x,y))",
-      accent_color: "#E74C3C"
+      accent_color: "#E74C3C",
+      saturation_percent: 55,
+      brightness_percent: 85,
+      color_interval: 8.0,
+      trans_auto: true
     },
     %{
       slug: "cross_waves",
       name: "Cross waves",
       formula: "sin(x*0.7+t*0.4)*cos(y*0.7+t*0.26)",
-      accent_color: "#3498DB"
-    },
-    %{
-      slug: "xy_interference",
-      name: "XY interference",
-      formula: "sin(x*y*0.08)*cos(t*0.4)",
-      accent_color: "#9B59B6"
+      accent_color: "#3498DB",
+      saturation_percent: 60,
+      brightness_percent: 80,
+      color_interval: 6.0,
+      trans_auto: true,
+      rot_auto: true
     },
     %{
       slug: "nested_sincos",
       name: "Nested sin/cos",
       formula:
         "sin(x*0.4+sin(y*0.3+t*0.4)*3+t*0.4)*cos(y*0.4+cos(x*0.3+t*0.4)*3+t*0.4)",
-      accent_color: "#1ABC9C"
+      accent_color: "#1ABC9C",
+      saturation_percent: 48,
+      brightness_percent: 78,
+      color_interval: 9.0
     },
     %{
       slug: "layered_waves",
       name: "Layered waves",
       formula: "sin(x*0.5+t*0.4)*cos(y*0.5+t*0.4)+sin((x+y)*0.35+t*0.6)*0.5",
-      accent_color: "#F39C12"
+      accent_color: "#F39C12",
+      saturation_percent: 50,
+      brightness_percent: 78,
+      color_interval: 9.0,
+      trans_auto: true,
+      rot_auto: true,
+      sat_auto: true
     },
     %{
       slug: "ripple_rings",
       name: "Ripple rings",
       formula: "sin(hypot(x,y)*5-t*0.4)*sin(hypot(x+3,y+3)*5+t*0.27)",
-      accent_color: "#E91E63"
+      accent_color: "#E91E63",
+      saturation_percent: 82,
+      brightness_percent: 64,
+      color_interval: 16.0
     },
     %{
       slug: "organic_swirl",
       name: "Organic swirl",
       formula: "sin(x*y*0.06+sin(t*0.06)*x*0.2-t*0.12)*cos(hypot(x,y)*2+t*0.06)",
       accent_color: "#2ECC71",
-      saturation_percent: 50
+      saturation_percent: 50,
+      brightness_percent: 70,
+      color_interval: 10.0
     },
     %{
       slug: "swaytest",
       name: "Swaytest",
       formula: "tanh(y*4)",
-      accent_color: "#FF7043"
+      accent_color: "#FF7043",
+      saturation_percent: 40,
+      brightness_percent: 90,
+      color_interval: 7.0
     },
     %{
       slug: "kreiswelle",
       name: "Kreiswelle",
       formula: "sin(x*PI*6/156-t*0.4)*cos(y*0.7-t*0.26)",
-      accent_color: "#E74C3C"
+      accent_color: "#E74C3C",
+      saturation_percent: 65,
+      brightness_percent: 82,
+      color_interval: 7.0
     },
     %{
       slug: "chaser",
       name: "Chaser",
       formula: "pow(sin(x*PI/156-t*0.4),7)",
-      accent_color: "#3498DB"
+      accent_color: "#3498DB",
+      saturation_percent: 70,
+      brightness_percent: 95,
+      color_interval: 5.0
     },
     %{
       slug: "doppelhelix",
       name: "Doppelhelix",
       formula: "sin(x*PI*3/156-t*0.4+y*0.4)*sin(x*PI*3/156+t*0.27-y*0.4)",
-      accent_color: "#9B59B6"
+      accent_color: "#9B59B6",
+      saturation_percent: 25,
+      brightness_percent: 88,
+      color_interval: 14.0,
+      zoom_auto: true,
+      sway_auto: true
     },
     %{
       slug: "nordlicht",
       name: "Nordlicht",
       formula: "sin(y*0.6+sin(x*PI*5/156+t*0.4)*3)*(0.6+0.4*sin(x*PI*2/156-t*0.3))",
-      accent_color: "#1ABC9C"
+      accent_color: "#1ABC9C",
+      saturation_percent: 20,
+      brightness_percent: 60,
+      color_interval: 18.0
     },
     %{
       slug: "wolkenzug",
       name: "Wolkenzug",
       formula:
         "sin(x*PI*3/156+t*0.2)*0.5+sin(x*PI*7/156-t*0.13+y*0.4)*0.3+sin(x*PI*11/156+t*0.31+y*0.8)*0.25",
-      accent_color: "#F39C12"
+      accent_color: "#F39C12",
+      saturation_percent: 55,
+      brightness_percent: 72,
+      color_interval: 11.0
     },
     %{
       slug: "seegras",
       name: "Seegras",
-      formula: "sin(x*PI*30/156+sin(t*0.4+y*0.6)*(3.5-y)*0.35)",
-      accent_color: "#E91E63"
+      formula: "pow(sin(x*PI*30/156+sin(t*0.4+y*0.6)*(3.5-y)*0.35),3)",
+      accent_color: "#E91E63",
+      saturation_percent: 35,
+      brightness_percent: 65,
+      color_interval: 10.0,
+      trans_auto: true,
+      trans_auto_range_y: 4.0,
+      trans_auto_interval: 50.0
     },
     %{
       slug: "quallenpuls",
       name: "Quallen-Puls",
       formula:
         "exp(-hypot(sin((x+9)*PI/312)*14,y)*0.1)*sin(hypot(sin((x+9)*PI/312)*14,y)*1.5-t*0.4)",
-      accent_color: "#2ECC71"
+      accent_color: "#2ECC71",
+      saturation_percent: 80,
+      brightness_percent: 55,
+      color_interval: 6.0
     },
     %{
       slug: "weiche_blobs",
       name: "Weiche Blobs",
       formula: "sin(x*PI*6/156-t*0.4)*sin(y*0.75+sin(x*PI*2/156+t*0.23)*1.5)",
-      accent_color: "#FF7043"
+      accent_color: "#FF7043",
+      saturation_percent: 62,
+      brightness_percent: 78,
+      color_interval: 8.0
     },
+    # i-only twinkle — translate/rotate auto have no visible effect (panel-synced).
     %{
       slug: "leuchtplankton",
       name: "Leuchtplankton",
       formula: "pow(sin(i*13.7+t*0.24)*sin(i*5.3-t*0.16),5)",
-      accent_color: "#E74C3C"
+      accent_color: "#E74C3C",
+      saturation_percent: 30,
+      brightness_percent: 42,
+      color_interval: 4.0
     },
     %{
       slug: "wasserwaage",
       name: "Wasserwaage",
       formula: "tanh(y*1.8)",
       accent_color: "#3498DB",
+      saturation_percent: 25,
+      brightness_percent: 85,
+      color_interval: 15.0,
       tilt_scale: 2.5,
       tilt_speed: 0.4,
       tilt_mode: :wobble
     },
+    # i-only twinkle — translate/rotate auto have no visible effect.
     %{
       slug: "sternenhimmel",
       name: "Sternenhimmel",
       formula: "pow(sin(i*13.7+t*0.24)*sin(i*5.3-t*0.16),5)",
       accent_color: "#9B59B6",
-      orbit_rate: 2.0
+      saturation_percent: 28,
+      brightness_percent: 42,
+      color_interval: 22.0,
+      orbit_rate: 2.0,
+      bleeding: 100.0
     },
     %{
       slug: "nebeldrift",
@@ -260,6 +322,9 @@ defmodule Octopus.Apps.PixelFun3D do
       formula: "noise(nx*2,ny*2,nz*2+t*0.08)",
       accent_color: "#1ABC9C",
       color_mode: :random,
+      saturation_percent: 40,
+      brightness_percent: 68,
+      color_interval: 20.0,
       trans_auto: true,
       trans_auto_range_x: 80.0,
       trans_auto_range_y: 3.0,
@@ -270,6 +335,9 @@ defmodule Octopus.Apps.PixelFun3D do
       name: "Facetten-Strudel",
       formula: "sin(nx*8+t*0.4)*sin(ny*8-t*0.27)",
       accent_color: "#F39C12",
+      saturation_percent: 75,
+      brightness_percent: 88,
+      color_interval: 7.0,
       rot_auto: true,
       rot_auto_range: 60,
       rot_auto_interval: 60,
@@ -283,6 +351,9 @@ defmodule Octopus.Apps.PixelFun3D do
       formula: "sin(nx*6+noise(nx*2,ny*2,nz*2)*4+t*0.4)",
       accent_color: "#E91E63",
       color_mode: :white,
+      saturation_percent: 15,
+      brightness_percent: 90,
+      color_interval: 25.0,
       sway_auto: true,
       sway_auto_range: 1.5,
       sway_auto_interval: 35
@@ -291,13 +362,19 @@ defmodule Octopus.Apps.PixelFun3D do
       slug: "strudel",
       name: "Strudel",
       formula: "sin(3*atan2(nz,ny)+acos(nx)*6-t*0.4)",
-      accent_color: "#2ECC71"
+      accent_color: "#2ECC71",
+      saturation_percent: 68,
+      brightness_percent: 80,
+      color_interval: 9.0
     },
     %{
       slug: "spiralband",
       name: "Spiralband",
       formula: "sin(4*atan2(ny,nx)+nz*30-t*0.4)",
-      accent_color: "#FF7043"
+      accent_color: "#FF7043",
+      saturation_percent: 72,
+      brightness_percent: 85,
+      color_interval: 8.0
     },
     %{
       slug: "globus",
@@ -305,6 +382,9 @@ defmodule Octopus.Apps.PixelFun3D do
       formula:
         "exp(-pow(nz*5,2))*sin(4*atan2(ny,nx)+nz*20-t*0.4)+exp(-pow((nz-1)*4,2))*sin(3*atan2(ny,nx)+acos(nz)*10+t*0.3)+exp(-pow((nz+1)*4,2))*sin(3*atan2(ny,nx)-acos(-nz)*10-t*0.3)",
       accent_color: "#E74C3C",
+      saturation_percent: 60,
+      brightness_percent: 75,
+      color_interval: 12.0,
       # With roll_pivot 0 the panels near the pivot axis see less parade —
       # the full equator→pole cycle is most dramatic a quarter-ring away.
       roll_rate: 6.0,
@@ -316,6 +396,9 @@ defmodule Octopus.Apps.PixelFun3D do
       formula:
         "exp(-pow((nz-1)*3,2))*sin(2*atan2(ny,nx)+acos(nz)*8+t*0.4)+exp(-pow((nz+1)*3,2))*sin(2*atan2(ny,nx)+acos(-nz)*8-t*0.4)",
       accent_color: "#3498DB",
+      saturation_percent: 35,
+      brightness_percent: 58,
+      color_interval: 16.0,
       roll_rate: 4.0,
       roll_pivot: 6
     },
@@ -324,6 +407,9 @@ defmodule Octopus.Apps.PixelFun3D do
       name: "Kippende Bänder",
       formula: "sin(nx*10-t*0.13)",
       accent_color: "#9B59B6",
+      saturation_percent: 55,
+      brightness_percent: 82,
+      color_interval: 10.0,
       rot_auto: true,
       rot_auto_range: 45,
       rot_auto_interval: 60
@@ -342,7 +428,9 @@ defmodule Octopus.Apps.PixelFun3D do
       accent_color: "#2ECC71",
       color_mode: :random,
       palette_auto: false,
-      saturation_percent: 100
+      saturation_percent: 100,
+      brightness_percent: 100,
+      color_interval: 5.0
     }
   ]
 
@@ -436,7 +524,7 @@ defmodule Octopus.Apps.PixelFun3D do
       sat_auto_min: {"Saturation Min", :float, %{default: 20.0, min: 0, max: 100, step: 1}},
       sat_auto_max: {"Saturation Max", :float, %{default: 100.0, min: 0, max: 100, step: 1}},
       sat_auto_interval: {"Saturation Interval", :float, %{default: 30.0, min: 4, max: 60, step: 1}},
-      color_interval: {"Palette tempo (s)", :float, %{default: 5, min: 1, max: 20, step: 0.5}},
+      color_interval: {"Palette tempo (s)", :float, %{default: 5, min: 1, max: 120, step: 0.5}},
       palette_auto: {"Palette Auto", :boolean, %{default: true}},
       orbit_rate: {"Translate X (px/s)", :float, %{default: 0.0, min: -30, max: 30, step: 0.5}},
       elev_base: {"Translate Y (px)", :float, %{default: 0.0, min: -4, max: 4, step: 0.1}},
@@ -747,7 +835,7 @@ defmodule Octopus.Apps.PixelFun3D do
         label: "Tempo",
         type: :slider,
         min: 1.0,
-        max: 20.0,
+        max: 120.0,
         step: 0.5,
         unit: "s",
         default: 5.0,
@@ -1201,7 +1289,18 @@ defmodule Octopus.Apps.PixelFun3D do
         state
       end
 
+    apply_bleeding_from_config(config)
     apply_time_frozen(state, config)
+  end
+
+  defp apply_bleeding_from_config(config) do
+    case Map.get(config, :bleeding) do
+      value when is_number(value) ->
+        Process.put(:__octopus_app_bleeding__, Octopus.App.clamp_bleeding(value))
+
+      _ ->
+        :ok
+    end
   end
 
   # Colours are random now, so only a colour-mode switch forces a fresh pair.

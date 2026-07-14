@@ -189,6 +189,7 @@ defmodule OctopusWeb.PixelsLive do
           <canvas
             id={"#{@id_prefix}-#{@id}"}
             phx-hook="Pixels"
+            phx-update="ignore"
             class="max-h-full max-w-full w-full h-full bg-contain bg-no-repeat bg-center"
             style={"background-image: url(#{@pixel_layout.background_image});"}
           />
@@ -199,6 +200,7 @@ defmodule OctopusWeb.PixelsLive do
           <canvas
             id={"#{@id_prefix}-#{@id}"}
             phx-hook="Pixels"
+            phx-update="ignore"
             class="w-full h-full bg-contain bg-no-repeat bg-center"
             style={"background-image: url(#{@pixel_layout.background_image});"}
           />

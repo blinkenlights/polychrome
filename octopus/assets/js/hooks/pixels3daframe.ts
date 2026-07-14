@@ -5,7 +5,7 @@ import AFRAME from "aframe";
 // AFRAME → orbit-controls.
 import "aframe-orbit-controls";
 import { GUI } from "three/addons/libs/lil-gui.module.min.js";
-import { Frame, RGB, rgbPixelsFromFrame } from "./shared/frame";
+import { Frame, FrameBuffer, RGB, applyFrameToPixels } from "./shared/frame";
 import { getHumanWorld, registerHumanComponents } from "./humanComponents";
 import { radarGlobalToAframeXZ, type MockWorldObject, type RadarTrack } from "./humanWorld";
 
@@ -133,6 +133,7 @@ let panelDepthM = 0.3;
 let numPanels = 12;
 const panels: any[] = [];
 const pixels: RGB[] = Array(numPanels * 8 * 8).fill([0, 0, 0]);
+const frameBuffer = new FrameBuffer();
 let poleDiameter: number = 0.4;
 let poleHeight: number = 0.4;
 const textures: any[] = [];
@@ -721,12 +722,10 @@ class Pixels3dAframeHook extends Hook {
         setPanelActivityFactors(payload?.factors);
       },
     );
-    const events = ['frame:pixels-*', `frame:${id}`];
+    const events = [`frame:${id}`];
     events.forEach((event) => {
       this.handleEvent(event, ({ frame }: { frame: Frame }) => {
-        for (let [i, pixel] of rgbPixelsFromFrame(frame).entries()) {
-          pixels[i] = pixel;
-        }
+        applyFrameToPixels(frameBuffer, frame, pixels, numPanels * 8 * 8);
       });
     });
 
@@ -1626,6 +1625,7 @@ class Pixels3dAframeHook extends Hook {
   }
 
   handleInstallation(payload: InstallationPayload) {
+    frameBuffer.reset();
     this.applyInstallationState(payload);
     this.updatePanels();
     this.updateCentralCylinder();

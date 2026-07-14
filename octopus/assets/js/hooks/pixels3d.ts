@@ -2,7 +2,7 @@ import { Hook, makeHook } from "phoenix_typed_hook";
 
 type RGB = [number, number, number];
 
-import { Frame, rgbPixelsFromFrame } from "./shared/frame";
+import { Frame, FrameBuffer, RGB, applyFrameToPixels } from "./shared/frame";
 
 import * as THREE from "three";
 
@@ -141,6 +141,8 @@ class Pixels3dHook extends Hook {
     const buttonRings: THREE.Mesh[] = [];
     const buttonDomes: THREE.Mesh[] = [];
     const pixels: RGB[] = Array(numPanels * 8 * 8).fill([0, 0, 0]);
+    const buffer = new FrameBuffer();
+    const pixelCount = numPanels * 8 * 8;
     let diameter = 20.0;
     let height = 0.4;
     let footDiameter = 0.3;
@@ -760,12 +762,8 @@ class Pixels3dHook extends Hook {
       }
     });
 
-    [`frame:${id}`, "frame:pixels-*"].forEach((event) => {
-      this.handleEvent(event, ({ frame: frame }: { frame: Frame }) => {
-        for (let [i, pixel] of rgbPixelsFromFrame(frame).entries()) {
-          pixels[i] = pixel;
-        }
-      });
+    this.handleEvent(`frame:${id}`, ({ frame: frame }: { frame: Frame }) => {
+      applyFrameToPixels(buffer, frame, pixels, pixelCount);
     });
   }
 }

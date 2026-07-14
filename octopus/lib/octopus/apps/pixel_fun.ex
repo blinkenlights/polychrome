@@ -54,12 +54,6 @@ defmodule Octopus.Apps.PixelFun do
       accent_color: "#3498DB"
     },
     %{
-      slug: "xy_interference",
-      name: "XY interference",
-      formula: "sin(x*y*0.08)*cos(t*3)",
-      accent_color: "#9B59B6"
-    },
-    %{
       slug: "nested_sincos",
       name: "Nested sin/cos",
       formula: "sin(x*0.4+sin(y*0.3+t)*3+t)*cos(y*0.4+cos(x*0.3+t)*3+t)",
@@ -143,7 +137,7 @@ defmodule Octopus.Apps.PixelFun do
       color_mode: {"Colors", :atom, %{default: :random}},
       saturation_percent: {"Saturation", :int, %{default: 70, min: 0, max: 100}},
       color_interval:
-        {"Palette crossfade (s)", :float, %{default: 5, min: 1, max: 20, step: 0.5}},
+        {"Palette crossfade (s)", :float, %{default: 5, min: 1, max: 120, step: 0.5}},
       translate_scale: {"Drift strength", :float, %{default: 0.0, min: 0, max: 20, step: 0.1}},
       rotate_scale: {"Rotation speed", :float, %{default: 0.0, min: -4, max: 4, step: 0.01}},
       zoom_scale: {"Zoom pulse strength", :float, %{default: 1.0, min: 0, max: 10, step: 0.1}},
@@ -300,7 +294,7 @@ defmodule Octopus.Apps.PixelFun do
         label: "Palette crossfade",
         type: :slider,
         min: 1.0,
-        max: 20.0,
+        max: 120.0,
         step: 0.5,
         unit: "s",
         default: 5.0
