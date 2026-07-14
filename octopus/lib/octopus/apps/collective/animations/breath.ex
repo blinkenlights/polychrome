@@ -2,17 +2,25 @@ defmodule Octopus.Apps.Collective.Animations.Breath do
   @moduledoc """
   Crowd Breath — slow travelling wave with locally tinted colour.
 
-  Wave shape is global (density + activity); colour follows each person on the
-  strip with a soft falloff. Tuned for a calm, meditative feel — heavy temporal
-  smoothing and slow drift speeds.
+  Wave shape (density + activity) and ring colour come from
+  `Octopus.Radar.PanelActivity` via `Radar.panel_factors/0`. Canopy sky glow
+  still follows people in the 2 m center chill disk. Tuned for a calm, meditative
+  feel — heavy temporal smoothing and slow drift speeds.
   """
 
   @behaviour Octopus.Apps.Collective.Animation
 
-  @full_count 10
+  alias Octopus.Radar
+  alias Octopus.Radar.PanelMapping
 
   @panel_width 8
-  @color_radius 14
+  @activity_bleed 0.2
+
+  # PanelActivity mean dilutes across empty panels. Remap so ~3–8 ring walkers
+  # land in the same visual band the old length/10 density curve used.
+  @crowd_sum_reference 2.5
+  @activity_peak_reference 0.38
+  @presence_knee 0.42
 
   @cycles_swell 2
   @cycles_mid 3
@@ -59,16 +67,19 @@ defmodule Octopus.Apps.Collective.Animations.Breath do
     alpha = 1.0 - :math.exp(-dt / tau)
     heat_alpha = 1.0 - :math.exp(-dt / heat_tau)
 
-    density_target = (length(people) / @full_count) |> clamp01()
-    density = state.density + (density_target - state.density) * alpha
-
-    activity_target = (avg_speed(people) / full_speed) |> clamp01()
-    activity = state.activity + (activity_target - state.activity) * alpha
-
     t = state.t + dt
     width = ctx.display_info.width
+    num_panels = max(div(width, @panel_width), 1)
+    panel_levels = frame_panel_levels(num_panels)
+    display_levels = display_panel_levels(panel_levels)
 
-    target_heat = column_heat(width, people, full_speed)
+    density_target = crowd_density(panel_levels)
+    density = state.density + (density_target - state.density) * alpha
+
+    activity_target = crowd_activity(panel_levels)
+    activity = state.activity + (activity_target - state.activity) * alpha
+
+    target_heat = column_heat_from_panels(display_levels, num_panels)
     heat = smooth_heat(state.heat, target_heat, width, heat_alpha)
 
     palette = Map.get(ctx, :breath_palette, :ocean)
@@ -251,45 +262,65 @@ defmodule Octopus.Apps.Collective.Animations.Breath do
     max(0.0, 1.0 - d * d)
   end
 
-  defp column_heat(width, people, full_speed) do
-    base = for x <- 0..(width - 1), into: %{}, do: {x, 0.0}
-
-    ring =
-      Enum.filter(people, fn p ->
-        p.x * p.x + p.y * p.y >= @center_radius * @center_radius
-      end)
-
-    Enum.reduce(ring, base, fn p, acc ->
-      col = person_column(p, width)
-      intensity = (:math.sqrt(p.vx * p.vx + p.vy * p.vy) / full_speed) |> clamp01()
-      add_heat(acc, col, intensity, width)
-    end)
+  @doc false
+  def crowd_density(panel_levels) when is_map(panel_levels) do
+    panel_levels
+    |> Map.values()
+    |> Enum.sum()
+    |> crowd_level(@crowd_sum_reference)
   end
 
-  defp add_heat(acc, center, intensity, width) do
-    Enum.reduce(-@color_radius..@color_radius, acc, fn offset, acc ->
-      x = wrap_col(center + offset, width)
-      dist = abs(offset)
-      weight = max(0.0, :math.cos(dist / (@color_radius + 1) * :math.pi() / 2))
-      current = Map.fetch!(acc, x)
-      Map.put(acc, x, clamp01(current + intensity * weight))
-    end)
+  @doc false
+  def crowd_activity(panel_levels) when is_map(panel_levels) do
+    panel_levels
+    |> Map.values()
+    |> max_level()
+    |> crowd_level(@activity_peak_reference)
   end
 
-  defp wrap_col(x, width), do: rem(rem(x, width) + width, width)
+  @doc false
+  def display_panel_level(level) when is_number(level), do: display_level(level)
 
-  defp person_column(%{x: x, y: y}, width) do
-    angle = :math.atan2(x, y)
-    norm = :math.fmod(angle + 2.0 * :math.pi(), 2.0 * :math.pi()) / (2.0 * :math.pi())
-
-    num_panels = div(width, @panel_width)
-    total = norm * width
-    sim_panel = min(trunc(total / @panel_width), num_panels - 1)
-    within = total - sim_panel * @panel_width
-
-    frame_panel = num_panels - 1 - sim_panel
-    trunc(frame_panel * @panel_width + within) |> clamp(0, width - 1)
+  defp display_panel_levels(panel_levels) do
+    Map.new(panel_levels, fn {panel, level} -> {panel, display_level(level)} end)
   end
+
+  defp crowd_level(value, reference) when reference > 0.0, do: clamp01(value / reference)
+  defp crowd_level(_value, _reference), do: 0.0
+
+  defp display_level(level), do: clamp01(level / @presence_knee)
+
+  defp frame_panel_levels(num_panels) do
+    factors = Radar.panel_factors()
+    north = Radar.north_panel()
+
+    for frame_panel <- 0..(num_panels - 1), into: %{} do
+      install = PanelMapping.installation_panel_of_frame(frame_panel, num_panels, north)
+      base = Map.get(factors, install, 0.0)
+
+      left = Map.get(factors, wrap_install_panel(install - 1, num_panels), 0.0)
+      right = Map.get(factors, wrap_install_panel(install + 1, num_panels), 0.0)
+
+      level = clamp01(base + @activity_bleed * (left + right) / 2.0)
+      {frame_panel, level}
+    end
+  end
+
+  defp column_heat_from_panels(panel_levels, num_panels) do
+    for frame_panel <- 0..(num_panels - 1),
+        x <- 0..(@panel_width - 1),
+        into: %{} do
+      col = frame_panel * @panel_width + x
+      {col, Map.fetch!(panel_levels, frame_panel)}
+    end
+  end
+
+  defp wrap_install_panel(panel, num_panels) do
+    rem(rem(panel - 1, num_panels) + num_panels, num_panels) + 1
+  end
+
+  defp max_level([]), do: 0.0
+  defp max_level(values), do: Enum.max(values)
 
   defp coverage(rows_from_bottom, surface) do
     cond do
@@ -387,8 +418,6 @@ defmodule Octopus.Apps.Collective.Animations.Breath do
   defp scale({r, g, b}, f) do
     {clamp_byte(r * f), clamp_byte(g * f), clamp_byte(b * f)}
   end
-
-  defp clamp(v, lo, hi), do: v |> max(lo) |> min(hi)
 
   defp clamp_byte(v), do: v |> trunc() |> max(0) |> min(255)
 

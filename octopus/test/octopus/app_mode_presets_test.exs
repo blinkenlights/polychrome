@@ -13,7 +13,7 @@ defmodule Octopus.AppModePresetsTest do
   describe "sync_builtins/1" do
     test "is idempotent and seeds all apps" do
       assert length(preset_list(PixelFun)) == 8
-      assert length(preset_list(Collective)) == 6
+      assert length(preset_list(Collective)) == 7
       assert length(preset_list(Matrix)) == 1
       assert length(preset_list(Sand)) == 6
       assert length(preset_list(SparkleMist)) == 1
