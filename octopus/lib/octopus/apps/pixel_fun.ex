@@ -12,79 +12,7 @@ defmodule Octopus.Apps.PixelFun do
 
   @app_mode_presets "Elixir.Octopus.AppModePresets"
 
-  @default_scene %{
-    color_mode: :random,
-    saturation_percent: 70,
-    color_interval: 5.0,
-    translate_scale: 0.0,
-    rotate_scale: 0.0,
-    zoom_scale: 1.0,
-    sway_scale: 0.0,
-    sway_speed: 0.5,
-    sway_mode: :wobble,
-    time_direction: :forward
-  }
-
   @sway_defaults %{sway_scale: 0.0, sway_speed: 0.5, sway_mode: :wobble}
-
-  @builtin_scene_keys [
-    :color_mode,
-    :saturation_percent,
-    :color_interval,
-    :translate_scale,
-    :rotate_scale,
-    :zoom_scale,
-    :sway_scale,
-    :sway_speed,
-    :sway_mode,
-    :time_direction
-  ]
-
-  @builtin_defs [
-    %{
-      slug: "classic_ripple",
-      name: "Classic ripple",
-      formula: "sin(10*t-hypot(x,y))",
-      accent_color: "#E74C3C"
-    },
-    %{
-      slug: "cross_waves",
-      name: "Cross waves",
-      formula: "sin(x*0.7+t*2)*cos(y*0.7+t*1.3)",
-      accent_color: "#3498DB"
-    },
-    %{
-      slug: "nested_sincos",
-      name: "Nested sin/cos",
-      formula: "sin(x*0.4+sin(y*0.3+t)*3+t)*cos(y*0.4+cos(x*0.3+t)*3+t)",
-      accent_color: "#1ABC9C"
-    },
-    %{
-      slug: "layered_waves",
-      name: "Layered waves",
-      formula: "sin(x*0.5+t)*cos(y*0.5+t)+sin((x+y)*0.35+t*1.5)*0.5",
-      accent_color: "#F39C12"
-    },
-    %{
-      slug: "ripple_rings",
-      name: "Ripple rings",
-      formula: "sin(hypot(x,y)*5-t*3)*sin(hypot(x+3,y+3)*5+t*2)",
-      accent_color: "#E91E63"
-    },
-    %{
-      slug: "organic_swirl",
-      name: "Organic swirl",
-      formula: "sin(x*y*0.06+sin(t)*x*0.2-t*2)*cos(hypot(x,y)*2+t)",
-      accent_color: "#2ECC71"
-    },
-    %{
-      slug: "swaytest",
-      name: "Swaytest",
-      formula: "(tanh((y-0.3)*4)+tanh((y+0.3)*4))/2",
-      accent_color: "#FF7043",
-      zoom_scale: 0.0
-    }
-  ]
 
   @fps 30
   @frame_time_ms trunc(1000 / @fps)
@@ -211,24 +139,6 @@ defmodule Octopus.Apps.PixelFun do
 
   def mode_config(mode_id) do
     presets().config_for(__MODULE__, mode_id) || %{}
-  end
-
-  def builtin_presets do
-    Enum.map(@builtin_defs, fn def ->
-      %{
-        slug: def.slug,
-        name: def.name,
-        accent_color: def.accent_color,
-        config: builtin_config(def)
-      }
-    end)
-  end
-
-  def legacy_mode_config(slug) do
-    case Enum.find(@builtin_defs, &(&1.slug == slug)) do
-      nil -> %{}
-      def -> builtin_config(def)
-    end
   end
 
   def summary_for_preset(%{config: config}) do
@@ -689,12 +599,6 @@ defmodule Octopus.Apps.PixelFun do
   defp scene_presets, do: String.to_existing_atom("Elixir.Octopus.Apps.PixelFun.ScenePresets")
 
   defp presets, do: String.to_existing_atom(@app_mode_presets)
-
-  defp builtin_config(def) do
-    @default_scene
-    |> Map.put(:program, def.formula)
-    |> Map.merge(Map.take(def, @builtin_scene_keys))
-  end
 
   defp color_interval_s(%State{} = state), do: color_interval_ms(state.color_interval) / 1000.0
   defp color_interval_ms(interval) when is_number(interval), do: max(trunc(interval * 1000), 1)

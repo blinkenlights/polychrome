@@ -91,18 +91,6 @@ defmodule Octopus.InstallationTransport do
   def discard_now_playing_overrides,
     do: GenServer.call(__MODULE__, :discard_now_playing_overrides)
 
-  def save_now_playing_as_new(name) when is_binary(name),
-    do: GenServer.call(__MODULE__, {:save_now_playing_as_new, name})
-
-  def overwrite_now_playing_mode,
-    do: GenServer.call(__MODULE__, :overwrite_now_playing_mode)
-
-  def rename_now_playing_preset(name) when is_binary(name),
-    do: GenServer.call(__MODULE__, {:rename_now_playing, name})
-
-  def archive_now_playing_mode,
-    do: GenServer.call(__MODULE__, :archive_now_playing_mode)
-
   # -- Callbacks --------------------------------------------------------------
 
   @impl true
@@ -160,34 +148,6 @@ defmodule Octopus.InstallationTransport do
       |> broadcast()
 
     {:reply, :ok, state}
-  end
-
-  def handle_call({:save_now_playing_as_new, name}, _from, state) do
-    case save_now_playing_as_new(state, name) do
-      {:ok, new_state} -> {:reply, :ok, broadcast(new_state)}
-      {:error, reason} -> {:reply, {:error, reason}, state}
-    end
-  end
-
-  def handle_call(:overwrite_now_playing_mode, _from, state) do
-    case overwrite_now_playing_mode(state) do
-      {:ok, new_state} -> {:reply, :ok, broadcast(new_state)}
-      {:error, reason} -> {:reply, {:error, reason}, state}
-    end
-  end
-
-  def handle_call({:rename_now_playing, name}, _from, state) do
-    case rename_now_playing_preset(state, name) do
-      {:ok, new_state} -> {:reply, :ok, broadcast(new_state)}
-      {:error, reason} -> {:reply, {:error, reason}, state}
-    end
-  end
-
-  def handle_call(:archive_now_playing_mode, _from, state) do
-    case archive_now_playing_mode(state) do
-      {:ok, new_state} -> {:reply, :ok, broadcast(new_state)}
-      {:error, reason} -> {:reply, {:error, reason}, state}
-    end
   end
 
   def handle_call(:reset, _from, %State{} = state) do
@@ -659,72 +619,6 @@ defmodule Octopus.InstallationTransport do
     %State{state | now_playing_overrides: %{}}
   end
 
-  defp save_now_playing_as_new(%State{live_entry: nil}, _name), do: {:error, :nothing_playing}
-
-  defp save_now_playing_as_new(%State{live_entry: %{app: app}} = state, name) do
-    if preset_persistable?(app) do
-      %{app: app, mode_id: mode_id} = state.live_entry
-      effective = effective_config(state)
-      attrs = preset_attrs_from_effective(app, mode_id, effective)
-
-      case preset_create(app, name, attrs.config, accent_color: attrs[:accent_color]) do
-        {:ok, _preset} ->
-          {:ok, clear_now_playing_overrides(state)}
-
-        {:error, reason} ->
-          {:error, reason}
-      end
-    else
-      {:error, :unsupported}
-    end
-  end
-
-  defp overwrite_now_playing_mode(%State{live_entry: %{app: app, mode_id: mode_id}} = state) do
-    if preset_persistable?(app) do
-      effective = effective_config(state)
-      attrs = preset_attrs_from_effective(app, mode_id, effective)
-
-      case preset_update(app, mode_id, %{config: attrs.config}) do
-        {:ok, preset} ->
-          stored = preset.config
-          cleared = clear_now_playing_overrides(state)
-          new_state = %State{cleared | now_playing_stored_config: stored} |> apply_now_playing_config()
-          {:ok, new_state}
-
-        {:error, reason} ->
-          {:error, reason}
-      end
-    else
-      {:error, :unsupported}
-    end
-  end
-
-  defp rename_now_playing_preset(%State{live_entry: %{app: app, mode_id: mode_id}} = state, name) do
-    if preset_persistable?(app) do
-      case preset_rename(app, mode_id, name) do
-        {:ok, _preset} -> {:ok, state}
-        error -> error
-      end
-    else
-      {:error, :unsupported}
-    end
-  end
-
-  defp archive_now_playing_mode(%State{live_entry: %{app: app, mode_id: mode_id}} = state) do
-    if preset_persistable?(app) do
-      case preset_archive(app, mode_id) do
-        :ok ->
-          new_queue = preset_filter_queue(state.queue, app, mode_id)
-          {:ok, put_queue(state, new_queue)}
-
-        error ->
-          error
-      end
-    else
-      {:error, :unsupported}
-    end
-  end
-
   defp effective_config(%State{live_entry: %{app: app, mode_id: mode_id}} = state) do
     state.now_playing_stored_config
     |> Map.merge(state.now_playing_overrides)
@@ -808,10 +702,7 @@ defmodule Octopus.InstallationTransport do
       dirty: now_playing_dirty?(stored, overrides, tweakables),
       tweakables: tweakables,
       meta: app_now_playing_meta(app, effective),
-      persistable: preset_persistable?(app),
-      overwriteable: preset_persistable?(app) and not is_nil(preset),
-      deletable: preset_persistable?(app) and not is_nil(preset),
-      renamable: preset_persistable?(app) and not is_nil(preset),
+      has_presets: preset_persistable?(app),
       preset_label: preset_label(app)
     }
   end
@@ -1128,22 +1019,6 @@ defmodule Octopus.InstallationTransport do
   defp app_list_modes(app), do: apply(@app, :list_modes, [app])
 
   defp preset_persistable?(app), do: apply(@app_mode_presets, :persistable?, [app])
-  defp preset_attrs_from_effective(app, mode_id, effective),
-    do: apply(@app_mode_presets, :attrs_from_effective, [app, mode_id, effective])
-
-  defp preset_create(app, name, config, opts),
-    do: apply(@app_mode_presets, :create, [app, name, config, opts])
-
-  defp preset_update(app, mode_id, attrs),
-    do: apply(@app_mode_presets, :update, [app, mode_id, attrs])
-
-  defp preset_rename(app, mode_id, name),
-    do: apply(@app_mode_presets, :rename, [app, mode_id, name])
-
-  defp preset_archive(app, mode_id), do: apply(@app_mode_presets, :archive, [app, mode_id])
-
-  defp preset_filter_queue(queue, app, mode_id),
-    do: apply(@app_mode_presets, :filter_queue, [queue, app, mode_id])
 
   defp preset_get(app, mode_id), do: apply(@app_mode_presets, :get, [app, mode_id])
   defp preset_label(app), do: apply(@app_mode_presets, :preset_label, [app])

@@ -19,6 +19,6 @@ defmodule Octopus.ButtonServerTest do
     send(ButtonServer, {:app_manager, {:selected_app, "test-app"}})
     _ = :sys.get_state(ButtonServer)
 
-    assert Process.alive?(ButtonServer)
+    assert Process.alive?(Process.whereis(ButtonServer))
   end
 end

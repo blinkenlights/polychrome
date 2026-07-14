@@ -415,13 +415,9 @@ defmodule Octopus.Apps.Matrix do
   end
 
   def mode_config(mode_id) do
-    config =
-      apply(@mode_presets, :config_for, [__MODULE__, mode_id]) ||
-        legacy_mode_config(apply(@mode_presets, :mode_slug, [mode_id]))
-
-    case config do
-      %{} = empty when map_size(empty) == 0 -> %{}
-      value -> normalize_mode_config(value)
+    case apply(@mode_presets, :config_for, [__MODULE__, mode_id]) do
+      nil -> %{}
+      config -> normalize_mode_config(config)
     end
   end
 
@@ -449,30 +445,6 @@ defmodule Octopus.Apps.Matrix do
     |> Map.update(:density, 1, &trunc/1)
     |> Map.update(:max_particles, 24, &trunc/1)
   end
-
-  def builtin_presets do
-    [
-      %{
-        slug: "matrix",
-        name: "matrix",
-        accent_color: "#2ECC71",
-        config: legacy_mode_config("matrix")
-      }
-    ]
-  end
-
-  def legacy_mode_config("matrix") do
-    %{
-      speed: @default_speed,
-      bleeding: 10.0,
-      density: 1,
-      max_particles: 24,
-      trail_length: @default_trail_length,
-      afterglow: 60
-    }
-  end
-
-  def legacy_mode_config(_), do: %{}
 
   def mode_tweakables(mode_id) do
     mode_tweakables_for(apply(@mode_presets, :mode_slug, [mode_id]))

@@ -221,19 +221,21 @@ defmodule Octopus.Apps.PixelFun3D.TransformTest do
     end
 
     test "unit migrations: rad/s and log zoom to display units" do
-      migrated =
-        PixelFun3D.migrate_legacy_config(%{
-          program: "sin(x)",
-          orbit_rate: 0.5,
-          roll_rate: 1.0,
-          zoom_base: 0.5,
-          legacy_internal_units: true
-        })
+      with_installation(Octopus.Installation.Nation2026, fn ->
+        migrated =
+          PixelFun3D.migrate_legacy_config(%{
+            program: "sin(x)",
+            orbit_rate: 0.5,
+            roll_rate: 1.0,
+            zoom_base: 0.5,
+            legacy_internal_units: true
+          })
 
-      assert_in_delta migrated.orbit_rate, 0.5 * 312 / (:math.pi() * 2), 0.1
-      assert_in_delta migrated.roll_rate, 1.0 * 180 / :math.pi(), 0.1
-      assert_in_delta migrated.zoom_base, :math.exp(0.5), 0.1
-      assert migrated.pixel_fun_units == 2
+        assert_in_delta migrated.orbit_rate, 0.5 * 312 / (:math.pi() * 2), 0.1
+        assert_in_delta migrated.roll_rate, 1.0 * 180 / :math.pi(), 0.1
+        assert_in_delta migrated.zoom_base, :math.exp(0.5), 0.1
+        assert migrated.pixel_fun_units == 2
+      end)
     end
 
     test "config_matches? succeeds for legacy-unit stored preset vs migrated live" do

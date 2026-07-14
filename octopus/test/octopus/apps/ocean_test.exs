@@ -13,7 +13,6 @@ defmodule Octopus.Apps.OceanTest do
       Application.put_env(:octopus, :installation, original_installation)
     end)
 
-    preset_sync_all!()
     :ok
   end
 
@@ -121,7 +120,6 @@ defmodule Octopus.Apps.OceanTest do
     end)
   end
 
-  defp preset_sync_all!, do: apply(@presets, :sync_all!, [])
   defp ocean_list_modes, do: apply(@ocean, :list_modes, [])
   defp ocean_mode_config(mode_id), do: apply(@ocean, :mode_config, [mode_id])
   defp ocean_mode_tweakables(mode_id), do: apply(@ocean, :mode_tweakables, [mode_id])

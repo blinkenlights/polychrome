@@ -5,8 +5,6 @@ defmodule Octopus.InstallationTransportTest do
   alias Octopus.Apps.{Collective, Matrix, Ocean, PerlinNoise, PixelFun, PixelFun3D, PixieDebug, Sand, SparkleMist, Wood}
   alias Octopus.Apps.PixelFun.Program
 
-  @presets Module.concat(["Octopus", "AppModePresets"])
-
   @classic "pixelfun:classic_ripple"
   @cross "pixelfun:cross_waves"
   @matrix "matrix:matrix"
@@ -30,7 +28,6 @@ defmodule Octopus.InstallationTransportTest do
 
     InstallationTransport.reset!()
     InstallationTransport.set_interval(300)
-    preset_sync_all!()
 
     on_exit(fn ->
       for {_, app_id} <- AppSupervisor.running_apps(), do: AppSupervisor.stop_app(app_id)
@@ -41,6 +38,17 @@ defmodule Octopus.InstallationTransportTest do
   end
 
   defp state, do: InstallationTransport.get_state()
+
+  defp with_matrix_installation(fun) do
+    original = Application.get_env(:octopus, :installation)
+    Application.put_env(:octopus, :installation, Octopus.Installation.Nation2026)
+
+    try do
+      fun.()
+    after
+      Application.put_env(:octopus, :installation, original)
+    end
+  end
 
   describe "toggle_play" do
     test "pause freezes remaining time" do
@@ -222,72 +230,80 @@ defmodule Octopus.InstallationTransportTest do
     end
 
     test "off-queue play pauses rotation so it stays on the wall" do
-      InstallationTransport.set_queue([
-        %{app: PixelFun, mode_id: @classic},
-        %{app: PixelFun, mode_id: @cross}
-      ])
+      with_matrix_installation(fn ->
+        InstallationTransport.set_queue([
+          %{app: PixelFun, mode_id: @classic},
+          %{app: PixelFun, mode_id: @cross}
+        ])
 
-      InstallationTransport.play_now(Matrix, @matrix)
+        InstallationTransport.play_now(Matrix, @matrix)
 
-      s = state()
-      assert s.live.app == Matrix
-      assert s.live.mode_id == @matrix
-      assert s.rotation_paused
-      assert s.playing
-      assert s.takeover_app_id != nil
-      assert s.now_playing.effective[:speed] == 1.0
+        s = state()
+        assert s.live.app == Matrix
+        assert s.live.mode_id == @matrix
+        assert s.rotation_paused
+        assert s.playing
+        assert s.takeover_app_id != nil
+        assert s.now_playing.effective[:speed] == 8.0
+      end)
     end
 
     test "queue toggle starts first entry when nothing is live" do
-      assert InstallationTransport.get_state().live == nil
+      with_matrix_installation(fn ->
+        assert InstallationTransport.get_state().live == nil
 
-      InstallationTransport.queue_toggle(Matrix, @matrix)
+        InstallationTransport.queue_toggle(Matrix, @matrix)
 
-      s = state()
-      assert s.live.app == Matrix
-      assert s.live.mode_id == @matrix
-      assert length(s.queue) == 1
+        s = state()
+        assert s.live.app == Matrix
+        assert s.live.mode_id == @matrix
+        assert length(s.queue) == 1
+      end)
     end
 
     test "resume rotation snaps wall back to queue position after off-queue play" do
-      InstallationTransport.set_queue([
-        %{app: PixelFun, mode_id: @classic},
-        %{app: PixelFun, mode_id: @cross}
-      ])
+      with_matrix_installation(fn ->
+        InstallationTransport.set_queue([
+          %{app: PixelFun, mode_id: @classic},
+          %{app: PixelFun, mode_id: @cross}
+        ])
 
-      InstallationTransport.play_now(PixelFun, @classic)
-      InstallationTransport.play_now(Matrix, @matrix)
+        InstallationTransport.play_now(PixelFun, @classic)
+        InstallationTransport.play_now(Matrix, @matrix)
 
-      assert state().live.app == Matrix
-      assert state().rotation_paused
-      assert state().cycle_index == 0
+        assert state().live.app == Matrix
+        assert state().rotation_paused
+        assert state().cycle_index == 0
 
-      InstallationTransport.resume_rotation_after_takeover()
+        InstallationTransport.resume_rotation_after_takeover()
 
-      s = state()
-      assert s.rotation_paused == false
-      assert s.playing
-      assert s.live.app == PixelFun
-      assert s.live.mode_id == @classic
-      assert s.cycle_index == 0
+        s = state()
+        assert s.rotation_paused == false
+        assert s.playing
+        assert s.live.app == PixelFun
+        assert s.live.mode_id == @classic
+        assert s.cycle_index == 0
+      end)
     end
 
     test "resume rotation restores queue after manual play_now takeover" do
-      InstallationTransport.set_queue([
-        %{app: PixelFun, mode_id: @classic},
-        %{app: PixelFun, mode_id: @cross}
-      ])
+      with_matrix_installation(fn ->
+        InstallationTransport.set_queue([
+          %{app: PixelFun, mode_id: @classic},
+          %{app: PixelFun, mode_id: @cross}
+        ])
 
-      InstallationTransport.play_now(Matrix, @matrix)
-      assert state().rotation_paused
+        InstallationTransport.play_now(Matrix, @matrix)
+        assert state().rotation_paused
 
-      InstallationTransport.resume_rotation_after_takeover()
+        InstallationTransport.resume_rotation_after_takeover()
 
-      s = state()
-      assert s.rotation_paused == false
-      assert s.playing
-      assert s.live.app == PixelFun
-      assert s.live.mode_id == @classic
+        s = state()
+        assert s.rotation_paused == false
+        assert s.playing
+        assert s.live.app == PixelFun
+        assert s.live.mode_id == @classic
+      end)
     end
 
     test "resume rotation clears wall when queue is empty" do
@@ -472,7 +488,7 @@ defmodule Octopus.InstallationTransportTest do
       playing = state().now_playing
       assert playing.effective[:animation] == :storm
       assert playing.effective[:sensitivity] == 1.0
-      assert length(playing.tweakables) == 2
+      assert length(playing.tweakables) == 4
       assert playing.meta != []
 
       InstallationTransport.set_tweakable(:sensitivity, 2.0)
@@ -503,91 +519,53 @@ defmodule Octopus.InstallationTransportTest do
     end
 
     test "matrix tweak applies speed and density live" do
-      InstallationTransport.play_now(Matrix, @matrix)
+      with_matrix_installation(fn ->
+        InstallationTransport.play_now(Matrix, @matrix)
 
-      playing = state().now_playing
-      assert playing.effective[:speed] == 1.0
-      assert playing.effective[:density] == 3
-      assert playing.effective[:max_particles] == 200
-      assert length(playing.tweakables) == length(Matrix.mode_tweakables(@matrix))
-      assert "200 particles max" in playing.meta
-      assert "density 3" in playing.meta
+        playing = state().now_playing
+        assert playing.effective[:speed] == 8.0
+        assert playing.effective[:density] == 1
+        assert playing.effective[:max_particles] == 24
+        assert length(playing.tweakables) == length(Matrix.mode_tweakables(@matrix))
+        assert "24 particles max" in playing.meta
+        assert "density 1" in playing.meta
 
-      InstallationTransport.set_tweakable(:speed, 2.0)
-      InstallationTransport.set_tweakable(:density, 6)
+        InstallationTransport.set_tweakable(:speed, 2.0)
+        InstallationTransport.set_tweakable(:density, 6)
 
-      tweaked = state().now_playing
-      assert tweaked.dirty == true
-      assert tweaked.effective[:speed] == 2.0
-      assert tweaked.effective[:density] == 6
+        tweaked = state().now_playing
+        assert tweaked.dirty == true
+        assert tweaked.effective[:speed] == 2.0
+        assert tweaked.effective[:density] == 6
 
-      {:ok, app_id} = AppSupervisor.find_running_app(Matrix)
-      config = AppSupervisor.config(app_id)
-      assert config[:speed] == 2.0
-      assert config[:density] == 6
+        {:ok, app_id} = AppSupervisor.find_running_app(Matrix)
+        config = AppSupervisor.config(app_id)
+        assert config[:speed] == 2.0
+        assert config[:density] == 6
+      end)
     end
   end
 
-  describe "preset persistence" do
-    test "save, overwrite, rename, and archive collective preset" do
+  describe "live tweaks" do
+    test "collective tweak marks dirty without persisting preset" do
       InstallationTransport.play_now(Collective, "collective:storm")
       InstallationTransport.set_tweakable(:sensitivity, 2.5)
 
-      assert :ok = InstallationTransport.save_now_playing_as_new("Hot storm")
-      assert state().now_playing.dirty == false
-
-      user_modes =
-        preset_list(Collective)
-        |> Enum.filter(&(&1.origin == :user))
-
-      assert Enum.any?(user_modes, &(&1.name == "Hot storm"))
-
-      InstallationTransport.set_tweakable(:sensitivity, 3.0)
-      assert :ok = InstallationTransport.overwrite_now_playing_mode()
-      assert state().now_playing.effective[:sensitivity] == 3.0
-
-      assert :ok = InstallationTransport.rename_now_playing_preset("Stormier")
-
-      s = state()
-      assert s.now_playing.preset_name == "Stormier"
-      assert s.live.mode_name == "Stormier"
-
-      InstallationTransport.set_queue([
-        %{app: Collective, mode_id: "collective:storm"},
-        %{app: Collective, mode_id: "collective:breath"}
-      ])
-
-      assert :ok = InstallationTransport.archive_now_playing_mode()
-
-      queue = state().queue
-      assert length(queue) == 1
-      assert hd(queue).mode_id == "collective:breath"
+      assert state().now_playing.dirty == true
+      assert state().now_playing.effective[:sensitivity] == 2.5
+      assert state().now_playing.has_presets
     end
 
-    test "save and overwrite matrix builtin" do
-      InstallationTransport.play_now(Matrix, @matrix)
-      InstallationTransport.set_tweakable(:speed, 2.5)
+    test "matrix now playing exposes preset library flag" do
+      with_matrix_installation(fn ->
+        InstallationTransport.play_now(Matrix, @matrix)
 
-      np = state().now_playing
-      assert np.persistable
-      assert np.overwriteable
-      assert np.deletable
-      assert np.renamable
-
-      assert :ok = InstallationTransport.overwrite_now_playing_mode()
-      assert state().now_playing.effective[:speed] == 2.5
-      assert state().now_playing.dirty == false
-
-      preset = preset_get(Matrix, @matrix)
-      assert preset.config[:speed] == 2.5
-    end
-
-    test "pixel fun save as new clears dirty state" do
-      InstallationTransport.play_now(PixelFun, @classic)
-      InstallationTransport.set_tweakable(:translate_scale, 4.0)
-
-      assert :ok = InstallationTransport.save_now_playing_as_new("Drifty ripple")
-      assert state().now_playing.dirty == false
+        np = state().now_playing
+        assert np.has_presets
+        refute Map.has_key?(np, :overwriteable)
+        refute Map.has_key?(np, :deletable)
+        refute Map.has_key?(np, :renamable)
+      end)
     end
 
     test "pixel fun exposes formula tweakable" do
@@ -630,34 +608,6 @@ defmodule Octopus.InstallationTransportTest do
       assert program_ast == original_ast
     end
 
-    test "pixel fun save as new persists tweaked formula" do
-      InstallationTransport.play_now(PixelFun, @classic)
-      InstallationTransport.set_tweakable(:program, "sin(x+t)")
-
-      assert :ok = InstallationTransport.save_now_playing_as_new("Custom wave")
-      assert state().now_playing.dirty == false
-
-      preset =
-        apply(@presets, :list_presets, [PixelFun])
-        |> Enum.find(&(&1.name == "Custom wave"))
-
-      assert preset.config[:program] == "sin(x+t)"
-    end
-
-    test "pixel fun save as new fills missing program from running app" do
-      InstallationTransport.play_now(PixelFun, @classic)
-      InstallationTransport.set_tweakable(:translate_scale, 4.0)
-
-      :sys.replace_state(InstallationTransport, fn state ->
-        stored = Map.delete(state.now_playing_stored_config, :program)
-        %{state | now_playing_stored_config: stored}
-      end)
-
-      playing = state().now_playing
-      assert playing.effective[:program] == "sin(10*t-hypot(x,y))"
-      assert :ok = InstallationTransport.save_now_playing_as_new("Drifty ripple")
-    end
-
     test "tweak recovers when now_playing_app_id is stale" do
       InstallationTransport.play_now(PixelFun, @classic)
       stale_id = state().now_playing.app_id
@@ -675,13 +625,6 @@ defmodule Octopus.InstallationTransportTest do
       assert AppSupervisor.config(app_id)[:zoom_scale] == 3.5
     end
 
-    test "pixel fun rejects save when formula is invalid" do
-      InstallationTransport.play_now(PixelFun, @classic)
-      InstallationTransport.set_tweakable(:program, "sin(+")
-
-      assert {:error, :invalid_formula} = InstallationTransport.save_now_playing_as_new("Bad scene")
-    end
-
     test "perlin noise tweak applies scale and speed live" do
       InstallationTransport.play_now(PerlinNoise, @perlin)
 
@@ -692,8 +635,7 @@ defmodule Octopus.InstallationTransportTest do
       assert playing.effective[:seed] == 42
       assert playing.effective[:contrast] == 3.0
       assert length(playing.tweakables) == 4
-      assert playing.persistable
-      assert playing.renamable
+      assert playing.has_presets
 
       InstallationTransport.set_tweakable(:scale, 0.25)
       InstallationTransport.set_tweakable(:speed, 2.0)
@@ -712,18 +654,6 @@ defmodule Octopus.InstallationTransportTest do
       assert config[:contrast] == 5.0
     end
 
-    test "save and rename perlin preset" do
-      InstallationTransport.play_now(PerlinNoise, @perlin)
-      InstallationTransport.set_tweakable(:contrast, 5.0)
-
-      assert :ok = InstallationTransport.save_now_playing_as_new("Chunky clouds")
-      assert :ok = InstallationTransport.rename_now_playing_preset("Soft drift")
-
-      s = state()
-      assert s.now_playing.preset_name == "Soft drift"
-      assert s.live.mode_name == "Soft drift"
-    end
-
     test "ocean tweak applies wave_strength and water_level live" do
       InstallationTransport.play_now(Ocean, @ocean)
 
@@ -732,8 +662,7 @@ defmodule Octopus.InstallationTransportTest do
       assert playing.effective[:damping] == 0.95
       assert playing.effective[:water_level] == 0.6
       assert length(playing.tweakables) == 3
-      assert playing.persistable
-      assert playing.renamable
+      assert playing.has_presets
 
       InstallationTransport.set_tweakable(:wave_strength, 2.0)
       InstallationTransport.set_tweakable(:water_level, 0.75)
@@ -749,18 +678,6 @@ defmodule Octopus.InstallationTransportTest do
       assert config[:water_level] == 0.75
     end
 
-    test "save and rename ocean preset" do
-      InstallationTransport.play_now(Ocean, @ocean)
-      InstallationTransport.set_tweakable(:damping, 0.88)
-
-      assert :ok = InstallationTransport.save_now_playing_as_new("Calm sea")
-      assert :ok = InstallationTransport.rename_now_playing_preset("Glassy water")
-
-      s = state()
-      assert s.now_playing.preset_name == "Glassy water"
-      assert s.live.mode_name == "Glassy water"
-    end
-
     test "sand tweak applies spawn_rate and button_force live" do
       InstallationTransport.play_now(Sand, @sand)
 
@@ -769,9 +686,8 @@ defmodule Octopus.InstallationTransportTest do
       assert playing.effective[:button_force] == 40
       assert playing.effective[:auto_drain] == true
       assert playing.effective[:color_mode] == :rainbow
-      assert length(playing.tweakables) == 6
-      assert playing.persistable
-      assert playing.renamable
+      assert length(playing.tweakables) == length(Sand.mode_tweakables(@sand))
+      assert playing.has_presets
 
       InstallationTransport.set_tweakable(:spawn_rate, 0.5)
       InstallationTransport.set_tweakable(:color_mode, :warm)
@@ -787,24 +703,6 @@ defmodule Octopus.InstallationTransportTest do
       assert config[:color_mode] == :warm
     end
 
-    test "save and overwrite sand builtin" do
-      InstallationTransport.play_now(Sand, @sand)
-      InstallationTransport.set_tweakable(:button_force, 55)
-
-      np = state().now_playing
-      assert np.persistable
-      assert np.overwriteable
-      assert np.deletable
-      assert np.renamable
-
-      assert :ok = InstallationTransport.overwrite_now_playing_mode()
-      assert state().now_playing.effective[:button_force] == 55
-      assert state().now_playing.dirty == false
-
-      preset = preset_get(Sand, @sand)
-      assert preset.config[:button_force] == 55
-    end
-
     test "sparkle mist tweak applies foreground_hue and background_speed live" do
       InstallationTransport.play_now(SparkleMist, @sparkle_mist)
 
@@ -814,8 +712,7 @@ defmodule Octopus.InstallationTransportTest do
       assert playing.effective[:particle_speed_scale] == 1.0
       assert playing.effective[:background_hue_a] == 200
       assert length(playing.tweakables) == 4
-      assert playing.persistable
-      assert playing.renamable
+      assert playing.has_presets
 
       InstallationTransport.set_tweakable(:foreground_hue, 140)
       InstallationTransport.set_tweakable(:background_speed, 3.5)
@@ -830,27 +727,5 @@ defmodule Octopus.InstallationTransportTest do
       assert config[:foreground_hue] == 140
       assert config[:background_speed] == 3.5
     end
-
-    test "save and overwrite sparkle mist builtin" do
-      InstallationTransport.play_now(SparkleMist, @sparkle_mist)
-      InstallationTransport.set_tweakable(:particle_speed_scale, 2.5)
-
-      np = state().now_playing
-      assert np.persistable
-      assert np.overwriteable
-      assert np.deletable
-      assert np.renamable
-
-      assert :ok = InstallationTransport.overwrite_now_playing_mode()
-      assert state().now_playing.effective[:particle_speed_scale] == 2.5
-      assert state().now_playing.dirty == false
-
-      preset = preset_get(SparkleMist, @sparkle_mist)
-      assert preset.config[:particle_speed_scale] == 2.5
-    end
   end
-
-  defp preset_sync_all!, do: apply(@presets, :sync_all!, [])
-  defp preset_list(app), do: apply(@presets, :list_presets, [app])
-  defp preset_get(app, mode_id), do: apply(@presets, :get, [app, mode_id])
 end

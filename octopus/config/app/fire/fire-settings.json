@@ -1,0 +1,43 @@
+{
+  "presets": [
+    {
+      "accent_color": "#E67E22",
+      "config": {
+        "cooling": 55,
+        "ember_rate": 0.08,
+        "floor": 0,
+        "intensity": 1.0,
+        "sparking": 120,
+        "speed": 0.85
+      },
+      "name": "Campfire",
+      "slug": "campfire"
+    },
+    {
+      "accent_color": "#E74C3C",
+      "config": {
+        "cooling": 35,
+        "ember_rate": 0.12,
+        "floor": 0,
+        "intensity": 1.25,
+        "sparking": 190,
+        "speed": 1.0
+      },
+      "name": "Inferno",
+      "slug": "inferno"
+    },
+    {
+      "accent_color": "#C0392B",
+      "config": {
+        "cooling": 80,
+        "ember_rate": 0.35,
+        "floor": 0,
+        "intensity": 0.7,
+        "sparking": 70,
+        "speed": 0.65
+      },
+      "name": "Embers",
+      "slug": "embers"
+    }
+  ]
+}

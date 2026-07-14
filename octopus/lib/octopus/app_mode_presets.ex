@@ -1,34 +1,21 @@
 defmodule Octopus.AppModePresets do
   @moduledoc """
-  DB-backed mode presets for foyer apps (Pixel Fun, Pixel Fun 3D, Collective, Matrix,
-  Perlin Noise, Ocean, Sand, Sparkle Mist, Wood, Fire).
+  Compile-time JSON mode presets for foyer apps (Pixel Fun, Pixel Fun 3D, Collective,
+  Matrix, Perlin Noise, Ocean, Sand, Sparkle Mist, Wood, Fire).
+
+  Presets live under `config/app/{app_key}/{app_key}-settings.json` and are embedded
+  at compile time via `Octopus.AppModePresets.Loader`.
 
   Mode ids use `app_key:slug`, e.g. `pixelfun:classic_ripple`, `pixelfun3d:classic_ripple`,
   `collective:storm`. Legacy Pixel Fun ids (`builtin:…`, `user:…`) and bare Collective
   slugs are accepted via `normalize_mode_id/2`.
   """
 
-  import Ecto.Query, only: [order_by: 2, where: 3]
-
-  alias Octopus.Repo
+  alias Octopus.AppModePresets.Loader
 
   @installation_transport Module.concat(["Octopus", "InstallationTransport"])
-  @pixel_fun_program Module.concat(["Octopus", "Apps", "PixelFun", "Program"])
-  @preset_schema Module.concat(["Octopus", "AppModePreset"])
 
-  # String module names avoid compile-time deps on app modules that call back into this module.
-  @app_keys %{
-    "Elixir.Octopus.Apps.PixelFun" => "pixelfun",
-    "Elixir.Octopus.Apps.PixelFun3D" => "pixelfun3d",
-    "Elixir.Octopus.Apps.Collective" => "collective",
-    "Elixir.Octopus.Apps.Matrix" => "matrix",
-    "Elixir.Octopus.Apps.PerlinNoise" => "perlinnoise",
-    "Elixir.Octopus.Apps.Ocean" => "ocean",
-    "Elixir.Octopus.Apps.Sand" => "sand",
-    "Elixir.Octopus.Apps.SparkleMist" => "sparklemist",
-    "Elixir.Octopus.Apps.Wood" => "wood",
-    "Elixir.Octopus.Apps.Fire" => "fire"
-  }
+  @app_keys Loader.app_modules()
 
   @formula_app_keys ~w(pixelfun pixelfun3d)
 
@@ -180,166 +167,6 @@ defmodule Octopus.AppModePresets do
   end
 
   @doc false
-  def create(app, name, config, opts \\ []) when is_atom(app) and is_binary(name) do
-    config = normalize_config(config)
-    accent_color = Keyword.get(opts, :accent_color, random_accent_color())
-
-    with :ok <- validate_config(app, config) do
-      slug = unique_slug(app, slugify(name))
-
-      struct(@preset_schema)
-      |> preset_changeset(%{
-        app: module_name(app),
-        slug: slug,
-        name: String.trim(name),
-        config: config,
-        accent_color: accent_color,
-        origin: "user"
-      })
-      |> Repo.insert()
-      |> case do
-        {:ok, record} -> {:ok, to_preset(app, record)}
-        error -> error
-      end
-    end
-  end
-
-  @doc false
-  def update(app, mode_id, attrs) when is_atom(app) and is_binary(mode_id) do
-    mode_id = normalize_mode_id(app, mode_id)
-
-    with %{__struct__: @preset_schema} = record <- fetch_record(app, mode_id) do
-      attrs = normalize_update_attrs(app, attrs)
-
-      config =
-        record.config
-        |> normalize_config()
-        |> Map.merge(Map.get(attrs, :config, %{}))
-
-      attrs = Map.put(attrs, :config, config)
-
-      with :ok <- validate_config(app, config) do
-        record
-        |> preset_changeset(attrs)
-        |> Repo.update()
-        |> case do
-          {:ok, updated} -> {:ok, to_preset(app, updated)}
-          error -> error
-        end
-      end
-    else
-      nil -> {:error, :not_found}
-    end
-  end
-
-  @doc false
-  def rename(app, mode_id, name) when is_atom(app) and is_binary(mode_id) and is_binary(name) do
-    update(app, mode_id, %{name: String.trim(name)})
-  end
-
-  @doc false
-  def archive(app, mode_id) when is_atom(app) and is_binary(mode_id) do
-    mode_id = normalize_mode_id(app, mode_id)
-
-    case fetch_record(app, mode_id) do
-      nil ->
-        {:error, :not_found}
-
-      record ->
-        record
-        |> preset_changeset(%{archived_at: DateTime.utc_now() |> DateTime.truncate(:second)})
-        |> Repo.update()
-        |> case do
-          {:ok, _} -> :ok
-          {:error, _} -> {:error, :failed}
-        end
-    end
-  end
-
-  @doc false
-  def sync_builtins(app) when is_atom(app) do
-    builtins = builtin_presets(app)
-    current_slugs = builtins |> Enum.map(& &1.slug) |> MapSet.new()
-
-    app
-    |> list_records()
-    |> Enum.filter(fn
-      %{origin: "builtin", slug: slug} -> not MapSet.member?(current_slugs, slug)
-      _ -> false
-    end)
-    |> Enum.each(fn record -> archive(app, mode_id(app, record.slug)) end)
-
-    Enum.each(builtins, fn builtin ->
-      slug = builtin.slug
-
-      attrs = %{
-        app: module_name(app),
-        slug: slug,
-        name: builtin.name,
-        config: normalize_config(builtin.config),
-        accent_color: builtin.accent_color,
-        origin: "builtin"
-      }
-
-      case fetch_record_by_slug(app, slug) do
-        nil ->
-          struct(@preset_schema)
-          |> preset_changeset(attrs)
-          |> Repo.insert()
-
-        # Keep builtin presets in sync with the code defaults; leave user presets alone.
-        %{origin: "builtin"} = record ->
-          record
-          |> preset_changeset(attrs)
-          |> Repo.update()
-
-        _record ->
-          :ok
-      end
-    end)
-
-    :ok
-  end
-
-  @doc false
-  def sync_all! do
-    persistable_apps() |> Enum.each(&sync_builtins/1)
-    :ok
-  end
-
-  @doc false
-  def attrs_from_effective(app, mode_id, effective) when is_atom(app) do
-    effective = normalize_config(effective)
-    mode_id = normalize_mode_id(app, mode_id)
-    slug = mode_slug(mode_id)
-
-    base =
-      app
-      |> legacy_mode_config(slug)
-      |> Map.merge(apply(app, :mode_config, [mode_id]))
-
-    keys =
-      (Map.keys(base) ++ tweakable_keys(app, mode_id))
-      |> Enum.uniq()
-      |> Enum.reject(&(&1 in runtime_tweakable_keys(app, mode_id)))
-
-    config =
-      base
-      |> Map.merge(Map.take(effective, keys))
-
-    if formula_app?(app) do
-      %{
-        config: config,
-        name: nil,
-        accent_color: random_accent_color(),
-        formula: config[:program]
-      }
-    else
-      %{config: config, name: nil, accent_color: random_accent_color()}
-    end
-  end
-
-  @doc false
   def summary(app, preset) when is_atom(app) do
     case app_key(app) do
       key when key in @formula_app_keys ->
@@ -367,12 +194,6 @@ defmodule Octopus.AppModePresets do
   end
 
   @doc false
-  def random_accent_color do
-    <<r, g, b>> = :crypto.strong_rand_bytes(3)
-    "#" <> Base.encode16(<<r, g, b>>, case: :upper)
-  end
-
-  @doc false
   def slugify(name) when is_binary(name) do
     name
     |> String.downcase()
@@ -384,21 +205,14 @@ defmodule Octopus.AppModePresets do
     end
   end
 
-  defp list_records(app) do
-    @preset_schema
-    |> where([p], p.app == ^module_name(app) and is_nil(p.archived_at))
-    |> order_by(asc: :name)
-    |> Repo.all()
-  end
+  defp list_records(app), do: Loader.presets(app)
 
   defp fetch_record(app, mode_id) do
     fetch_record_by_slug(app, mode_slug(mode_id))
   end
 
   defp fetch_record_by_slug(app, slug) do
-    @preset_schema
-    |> where([p], p.app == ^module_name(app) and p.slug == ^slug and is_nil(p.archived_at))
-    |> Repo.one()
+    Enum.find(list_records(app), &(&1.slug == slug))
   end
 
   defp to_mode_tile(app, record) do
@@ -409,10 +223,10 @@ defmodule Octopus.AppModePresets do
       name: preset.name,
       accent_color: preset.accent_color,
       summary: summary(app, preset),
-      builtin: preset.origin == :builtin,
-      origin: preset.origin,
-      deletable: true,
-      renamable: true
+      builtin: true,
+      origin: :builtin,
+      deletable: false,
+      renamable: false
     }
 
     if formula_app?(app) do
@@ -422,104 +236,16 @@ defmodule Octopus.AppModePresets do
     end
   end
 
-  defp to_preset(app, %{__struct__: @preset_schema} = record) do
+  defp to_preset(app, record) do
     %{
       id: mode_id(app, record.slug),
       slug: record.slug,
       name: record.name,
-      config: atomize_config(record.config),
+      config: normalize_config(record.config),
       accent_color: record.accent_color,
-      origin: String.to_existing_atom(record.origin),
-      builtin: record.origin == "builtin",
-      db_id: record.id
+      origin: :builtin,
+      builtin: true
     }
-  end
-
-  defp normalize_update_attrs(app, attrs) do
-    attrs =
-      if Map.has_key?(attrs, :config) do
-        Map.put(attrs, :config, normalize_config(attrs.config))
-      else
-        attrs
-      end
-
-    if formula_app?(app) do
-      config = Map.get(attrs, :config, %{})
-
-      attrs
-      |> Map.put(:config, maybe_put_program_from_formula(config, attrs))
-      |> Map.drop([:formula, :program])
-    else
-      Map.drop(attrs, [:formula, :program])
-    end
-  end
-
-  defp maybe_put_program_from_formula(config, attrs) do
-    formula = Map.get(attrs, :formula) || Map.get(attrs, :program)
-
-    if is_binary(formula) do
-      Map.put(config, :program, formula)
-    else
-      config
-    end
-  end
-
-  defp unique_slug(app, base) do
-    if fetch_record_by_slug(app, base), do: next_slug(app, base, 2), else: base
-  end
-
-  defp next_slug(app, base, n) do
-    slug = "#{base}_#{n}"
-    if fetch_record_by_slug(app, slug), do: next_slug(app, base, n + 1), else: slug
-  end
-
-  defp validate_config(app, config) do
-    if formula_app?(app) do
-      case validate_formula(Map.get(config, :program, "")) do
-        :ok -> :ok
-        :error -> {:error, :invalid_formula}
-      end
-    else
-      :ok
-    end
-  end
-
-  defp validate_formula(formula) when is_binary(formula) do
-    case apply(@pixel_fun_program, :parse, [formula]) do
-      {:ok, _} -> :ok
-      _ -> :error
-    end
-  end
-
-  defp tweakable_keys(app, mode_id) do
-    app
-    |> apply(:mode_tweakables, [mode_id])
-    |> Enum.map(& &1.key)
-  end
-
-  defp runtime_tweakable_keys(app, mode_id) do
-    app
-    |> apply(:mode_tweakables, [mode_id])
-    |> Enum.filter(&Map.get(&1, :runtime))
-    |> Enum.map(& &1.key)
-  end
-
-  defp module_name(app), do: Atom.to_string(app)
-
-  defp preset_changeset(record, attrs) do
-    apply(@preset_schema, :changeset, [record, attrs])
-  end
-
-  defp builtin_presets(app) do
-    apply(app, :builtin_presets, [])
-  end
-
-  defp legacy_mode_config(app, slug) do
-    if function_exported?(app, :legacy_mode_config, 1) do
-      apply(app, :legacy_mode_config, [slug])
-    else
-      %{}
-    end
   end
 
   defp normalize_config(config) when is_map(config) do

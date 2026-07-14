@@ -1,0 +1,113 @@
+{
+  "presets": [
+    {
+      "accent_color": "#F1C40F",
+      "config": {
+        "animation": "dots",
+        "dots_activity_bleed": 0.2,
+        "dots_smoothing": 0.35
+      },
+      "name": "Dots",
+      "slug": "dots"
+    },
+    {
+      "accent_color": "#E74C3C",
+      "config": {
+        "animation": "storm",
+        "background": "still_stars",
+        "bleeding": 35.0,
+        "sensitivity": 1.0,
+        "storm_activity_bleed": 0.2,
+        "storm_reactivity": 0.5
+      },
+      "name": "Storm",
+      "slug": "storm"
+    },
+    {
+      "accent_color": "#3498DB",
+      "config": {
+        "animation": "breath",
+        "breath_hue_shift": 0.0,
+        "breath_layout": "wave",
+        "breath_liveliness": 0.25,
+        "breath_palette": "ocean"
+      },
+      "name": "Breath",
+      "slug": "breath"
+    },
+    {
+      "accent_color": "#E67E22",
+      "config": {
+        "animation": "lava_lamp",
+        "lava_blob_count": 7,
+        "lava_palette": "classic",
+        "lava_reactivity": 0.6,
+        "lava_size_mul": 1.25,
+        "lava_speed": 1.0,
+        "lava_thresh": 0.9,
+        "lava_warmth": 0.5
+      },
+      "name": "Lava lamp",
+      "slug": "lava_lamp"
+    },
+    {
+      "accent_color": "#2ECC71",
+      "config": {
+        "animation": "presence",
+        "presence_bleed": 0.35,
+        "presence_floor": 0.0
+      },
+      "name": "Presence",
+      "slug": "presence"
+    },
+    {
+      "accent_color": "#1ABC9C",
+      "config": {
+        "animation": "ring_noise",
+        "ring_noise_counter_wave": "true",
+        "ring_noise_crowd_mode": "off",
+        "ring_noise_palette": "lava",
+        "ring_noise_pulse_amount": 0.65,
+        "ring_noise_pulse_period": 24.0,
+        "ring_noise_reactivity": 0.0,
+        "ring_noise_speed": 1.0
+      },
+      "name": "Ring noise",
+      "slug": "ring_noise"
+    },
+    {
+      "accent_color": "#5DADE2",
+      "config": {
+        "animation": "ring_noise",
+        "ring_noise_activity_bleed": 0.3,
+        "ring_noise_counter_wave": "true",
+        "ring_noise_crowd_gain": 1.15,
+        "ring_noise_crowd_mode": "brightness",
+        "ring_noise_palette": "ocean",
+        "ring_noise_pulse_amount": 0.55,
+        "ring_noise_pulse_period": 28.0,
+        "ring_noise_reactivity": 1.0,
+        "ring_noise_speed": 0.85
+      },
+      "name": "Ring noise · Brightness",
+      "slug": "ring_noise_brightness"
+    },
+    {
+      "accent_color": "#AF7AC5",
+      "config": {
+        "animation": "ring_noise",
+        "ring_noise_activity_bleed": 0.35,
+        "ring_noise_counter_wave": "true",
+        "ring_noise_crowd_mode": "saturation",
+        "ring_noise_palette": "aurora",
+        "ring_noise_pulse_amount": 0.5,
+        "ring_noise_pulse_period": 24.0,
+        "ring_noise_reactivity": 1.0,
+        "ring_noise_sat_idle": 0.2,
+        "ring_noise_speed": 1.0
+      },
+      "name": "Ring noise · Saturation",
+      "slug": "ring_noise_saturation"
+    }
+  ]
+}

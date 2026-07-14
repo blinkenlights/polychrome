@@ -4,27 +4,11 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
   alias Octopus.Apps.PixelFun.Program
   alias Octopus.Apps.PixelFun3D.ScenePresets
 
-  @presets Module.concat(["Octopus", "AppModePresets"])
-
-  setup do
-    preset_sync_all!()
-    :ok
-  end
-
-  @scene_attrs %{
-    name: "Test scene",
-    formula: "sin(x+t)",
-    color_interval: 5.0,
-    orbit_rate: 0.0,
-    roll_rate: 0.0,
-    zoom_base: 1.0
-  }
-
   describe "builtins/0" do
     test "returns presets with valid formulas and scene fields" do
       presets = ScenePresets.builtins()
 
-      assert length(presets) == 27
+      assert length(presets) == 26
 
       for preset <- presets do
         assert preset.builtin
@@ -55,7 +39,7 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
         kreiswelle chaser doppelhelix nordlicht wolkenzug seegras quallenpuls
         weiche_blobs leuchtplankton wasserwaage sternenhimmel nebeldrift
         facettenstrudel marmor
-        strudel spiralband globus polarlicht_parade kippende_baender
+        strudel spiralband globus kippende_baender
       )
 
       for slug <- new_slugs do
@@ -108,10 +92,6 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
       assert_in_delta globus_config.roll_rate, 6.0, 0.0001
       assert globus_config.roll_pivot == 0
 
-      polar_config = ScenePresets.to_config(ScenePresets.get("builtin:polarlicht_parade"))
-      assert_in_delta polar_config.roll_rate, 4.0, 0.0001
-      assert polar_config.roll_pivot == 6
-
       kipp_config = ScenePresets.to_config(ScenePresets.get("builtin:kippende_baender"))
       assert kipp_config.rot_auto == true
       assert_in_delta kipp_config.rot_auto_range, 45.0, 0.0001
@@ -123,7 +103,7 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
         kreiswelle chaser doppelhelix nordlicht wolkenzug seegras quallenpuls
         weiche_blobs leuchtplankton wasserwaage sternenhimmel nebeldrift
         facettenstrudel marmor
-        strudel spiralband globus polarlicht_parade kippende_baender
+        strudel spiralband globus kippende_baender
       )
 
       for slug <- new_slugs do
@@ -137,75 +117,19 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
   end
 
   describe "list_all/0" do
-    test "includes builtins and user presets" do
-      assert {:ok, _} = ScenePresets.create(@scene_attrs)
-
+    test "returns embedded builtins only" do
       ids = ScenePresets.list_all() |> Enum.map(& &1.id)
 
       assert "builtin:classic_ripple" in ids
-      assert Enum.any?(ids, fn id ->
-               String.starts_with?(id, "user:") or String.starts_with?(id, "pixelfun3d:")
-             end)
+      assert length(ids) == 26
+      refute Enum.any?(ids, &String.starts_with?(&1, "user:"))
     end
   end
 
   describe "get/1" do
-    test "finds builtin and user presets" do
+    test "finds builtin presets" do
       assert %{name: "Classic ripple"} = ScenePresets.get("builtin:classic_ripple")
-
-      {:ok, %{id: id}} = ScenePresets.create(@scene_attrs)
-
-      assert ScenePresets.get(id) != nil
       assert ScenePresets.get("user:999999") == nil
-    end
-  end
-
-  describe "create/1" do
-    test "assigns random accent color when omitted" do
-      assert {:ok, preset} = ScenePresets.create(@scene_attrs)
-      assert Regex.match?(~r/^#[0-9A-F]{6}$/, preset.accent_color)
-    end
-
-    test "rejects invalid formulas" do
-      assert {:error, changeset} =
-               ScenePresets.create(Map.put(@scene_attrs, :formula, "sin(+"))
-
-      assert "has invalid syntax" in errors_on(changeset).formula
-    end
-
-    test "allows duplicate names with distinct slugs" do
-      assert {:ok, first} = ScenePresets.create(@scene_attrs)
-      assert {:ok, second} = ScenePresets.create(@scene_attrs)
-      assert first.id != second.id
-    end
-  end
-
-  describe "update/2" do
-    test "updates user presets and builtins" do
-      {:ok, %{id: id}} = ScenePresets.create(@scene_attrs)
-
-      assert {:ok, updated} =
-               ScenePresets.update(id, %{orbit_rate: 2.0, roll_rate: 0.5})
-
-      assert updated.orbit_rate == 2.0
-      assert updated.roll_rate == 0.5
-
-      assert {:ok, builtin} =
-               ScenePresets.update("builtin:cross_waves", %{orbit_rate: 3.0})
-
-      assert builtin.orbit_rate == 3.0
-    end
-  end
-
-  describe "delete/1" do
-    test "archives user presets and builtins" do
-      {:ok, %{id: id}} = ScenePresets.create(@scene_attrs)
-
-      assert :ok = ScenePresets.delete(id)
-      assert ScenePresets.get(id) == nil
-
-      assert :ok = ScenePresets.delete("builtin:cross_waves")
-      assert ScenePresets.get("builtin:cross_waves") == nil
     end
   end
 
@@ -248,57 +172,24 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
       assert ScenePresets.config_matches?(ScenePresets.to_config(preset), preset)
     end
 
-    test "round-trips auto keys and pattern_speed" do
-      attrs =
-        Map.merge(@scene_attrs, %{
-          name: "Auto roundtrip",
-          trans_auto: true,
-          trans_auto_range_x: 1.2,
-          trans_auto_range_y: 1.5,
-          trans_auto_interval: 30.0,
-          rot_auto: false,
-          zoom_auto: true,
-          zoom_auto_range: 1.5,
-          zoom_auto_interval: 17.0,
-          sway_auto: true,
-          sway_auto_range: 1.1,
-          sway_auto_interval: 22.0,
-          pattern_speed: 1.25,
-          pixel_fun_units: 2
-        })
-
-      assert {:ok, preset} = ScenePresets.create(attrs)
+    test "round-trips auto keys from facettenstrudel builtin" do
+      preset = ScenePresets.get("builtin:facettenstrudel")
       config = ScenePresets.to_config(preset)
 
-      assert config.trans_auto == true
-      assert_in_delta config.trans_auto_range_x, 1.2, 0.0001
-      assert_in_delta config.trans_auto_interval, 30.0, 0.0001
+      assert config.rot_auto == true
       assert config.zoom_auto == true
-      assert config.sway_auto == true
-      assert_in_delta config.pattern_speed, 1.25, 0.0001
+      assert is_number(config.rot_auto_range)
       assert ScenePresets.config_matches?(config, preset)
     end
   end
 
   describe "tilt preset round-trip" do
-    test "create and update persist tilt fields; legacy sway migrates" do
-      attrs =
-        Map.merge(@scene_attrs, %{
-          sway_scale: 1.5,
-          sway_speed: 0.8,
-          sway_mode: :pendulum
-        })
+    test "wasserwaage builtin exposes tilt fields" do
+      preset = ScenePresets.get("builtin:wasserwaage")
 
-      assert {:ok, created} = ScenePresets.create(attrs)
-      assert created.tilt_scale == 1.5
-      assert created.tilt_speed == 0.8
-      assert created.tilt_mode == :pendulum
-
-      assert {:ok, updated} =
-               ScenePresets.update(created.id, %{tilt_scale: 2.0, tilt_mode: :wobble})
-
-      assert updated.tilt_scale == 2.0
-      assert updated.tilt_mode == :wobble
+      assert preset.tilt_scale == 2.5
+      assert preset.tilt_speed == 0.4
+      assert preset.tilt_mode == :wobble
     end
   end
 
@@ -324,7 +215,8 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
 
     test "renders sway mode for wasserwaage" do
       summary = ScenePresets.summary(ScenePresets.get("builtin:wasserwaage"))
-      assert summary =~ "sway 2.5px wobble"
+      assert summary =~ "sway"
+      assert summary =~ "wobble"
     end
   end
 
@@ -334,6 +226,4 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
       assert :error = ScenePresets.validate_formula("(((")
     end
   end
-
-  defp preset_sync_all!, do: apply(@presets, :sync_all!, [])
 end

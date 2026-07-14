@@ -1,0 +1,17 @@
+{
+  "presets": [
+    {
+      "accent_color": "#95A5A6",
+      "config": {
+        "contrast": 3.0,
+        "octaves": 4,
+        "persistence": 0.5,
+        "scale": 0.3125,
+        "seed": 42,
+        "speed": 1.0
+      },
+      "name": "Perlin noise",
+      "slug": "perlin"
+    }
+  ]
+}

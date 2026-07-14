@@ -1,0 +1,19 @@
+{
+  "presets": [
+    {
+      "accent_color": "#9B59B6",
+      "config": {
+        "background_hue_a": 200,
+        "background_hue_b": 170,
+        "background_sat_a": 100,
+        "background_sat_b": 85,
+        "background_speed": 5.0,
+        "expr": "noise(sin(x/26-t+y/40),x*0.01,y*0.01)",
+        "foreground_hue": 25,
+        "particle_speed_scale": 1.0
+      },
+      "name": "Sparkle Mist",
+      "slug": "mist"
+    }
+  ]
+}

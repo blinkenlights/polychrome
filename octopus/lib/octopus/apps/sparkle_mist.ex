@@ -27,38 +27,15 @@ defmodule Octopus.Apps.SparkleMist do
   end
 
   def mode_config(mode_id) do
-    (apply(@mode_presets, :config_for, [__MODULE__, mode_id]) ||
-       legacy_mode_config(apply(@mode_presets, :mode_slug, [mode_id])))
+    (apply(@mode_presets, :config_for, [__MODULE__, mode_id]) || %{})
     |> normalize_mode_config()
   end
 
   def normalize_mode_config(config), do: coerce_config_atoms(config)
 
-  def builtin_presets do
-    [
-      %{
-        slug: "mist",
-        name: "Sparkle Mist",
-        accent_color: "#9B59B6",
-        config: legacy_mode_config("mist")
-      }
-    ]
+  defp default_config do
+    apply(@mode_presets, :config_for, [__MODULE__, "sparklemist:mist"]) || %{}
   end
-
-  def legacy_mode_config("mist") do
-    %{
-      foreground_hue: 25,
-      background_hue_a: 200,
-      background_hue_b: 170,
-      background_sat_a: 100,
-      background_sat_b: 85,
-      expr: "noise(sin(x/26-t+y/40),x*0.01,y*0.01)",
-      particle_speed_scale: 1.0,
-      background_speed: 5.0
-    }
-  end
-
-  def legacy_mode_config(_), do: %{}
 
   def mode_tweakables(mode_id) do
     mode_tweakables_for(apply(@mode_presets, :mode_slug, [mode_id]))
@@ -194,7 +171,7 @@ defmodule Octopus.Apps.SparkleMist do
     panel_width = Installation.panel_width()
     panel_height = Installation.panel_height()
 
-    merged = Map.merge(legacy_mode_config("mist"), Map.new(config))
+    merged = Map.merge(default_config(), Map.new(config))
     foreground_hue = Map.get(merged, :foreground_hue, 25)
 
     particles =
@@ -432,7 +409,7 @@ defmodule Octopus.Apps.SparkleMist do
 
   defp apply_config(%State{} = state, config) do
     config = coerce_config_atoms(config)
-    defaults = legacy_mode_config("mist")
+    defaults = default_config()
 
     foreground_hue =
       Map.get(config, :foreground_hue, Map.get(state, :foreground_hue) || defaults.foreground_hue)

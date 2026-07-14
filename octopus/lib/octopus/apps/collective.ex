@@ -38,24 +38,6 @@ defmodule Octopus.Apps.Collective do
 
   def name, do: "Collective"
 
-  @mode_labels %{
-    storm: "Storm",
-    breath: "Breath",
-    dots: "Dots",
-    lava_lamp: "Lava lamp",
-    ring_noise: "Ring noise",
-    presence: "Presence"
-  }
-
-  @mode_accents %{
-    storm: "#E74C3C",
-    breath: "#3498DB",
-    dots: "#F1C40F",
-    lava_lamp: "#E67E22",
-    ring_noise: "#1ABC9C",
-    presence: "#2ECC71"
-  }
-
   @mode_presets Module.concat(["Octopus", "AppModePresets"])
 
   def list_modes do
@@ -63,8 +45,7 @@ defmodule Octopus.Apps.Collective do
   end
 
   def mode_config(mode_id) do
-    (apply(@mode_presets, :config_for, [__MODULE__, mode_id]) ||
-       legacy_mode_config(apply(@mode_presets, :mode_slug, [mode_id])))
+    (apply(@mode_presets, :config_for, [__MODULE__, mode_id]) || %{})
     |> normalize_mode_config()
   end
 
@@ -72,124 +53,6 @@ defmodule Octopus.Apps.Collective do
 
   def mode_tweakables(mode_id) do
     mode_tweakables_for(apply(@mode_presets, :mode_slug, [mode_id]))
-  end
-
-  def builtin_presets do
-    base =
-      Enum.map(@animations, fn {key, _mod} ->
-        slug = Atom.to_string(key)
-
-        %{
-          slug: slug,
-          name: Map.fetch!(@mode_labels, key),
-          accent_color: Map.fetch!(@mode_accents, key),
-          config: legacy_mode_config(slug)
-        }
-      end)
-
-    base ++
-      [
-        %{
-          slug: "ring_noise_brightness",
-          name: "Ring noise · Brightness",
-          accent_color: "#5DADE2",
-          config: legacy_mode_config("ring_noise_brightness")
-        },
-        %{
-          slug: "ring_noise_saturation",
-          name: "Ring noise · Saturation",
-          accent_color: "#AF7AC5",
-          config: legacy_mode_config("ring_noise_saturation")
-        }
-      ]
-  end
-
-  def legacy_mode_config(slug) do
-    case slug do
-      "storm" ->
-        %{
-          animation: :storm,
-          background: :still_stars,
-          sensitivity: 1.0,
-          storm_activity_bleed: 0.2,
-          storm_reactivity: 0.5,
-          bleeding: 35.0
-        }
-
-      "breath" ->
-        %{
-          animation: :breath,
-          breath_liveliness: 0.25,
-          breath_layout: :wave,
-          breath_palette: :ocean,
-          breath_hue_shift: 0.0
-        }
-
-      "dots" ->
-        %{animation: :dots, dots_smoothing: 0.35, dots_activity_bleed: 0.2}
-
-      "lava_lamp" ->
-        %{
-          animation: :lava_lamp,
-          lava_blob_count: 7,
-          lava_speed: 1.0,
-          lava_size_mul: 1.25,
-          lava_thresh: 0.9,
-          lava_palette: :classic,
-          lava_reactivity: 0.6,
-          lava_warmth: 0.5
-        }
-
-      "ring_noise" ->
-        %{
-          animation: :ring_noise,
-          ring_noise_crowd_mode: :off,
-          ring_noise_reactivity: 0.0,
-          ring_noise_speed: 1.0,
-          ring_noise_pulse_period: 24.0,
-          ring_noise_pulse_amount: 0.65,
-          ring_noise_counter_wave: true,
-          ring_noise_palette: :lava
-        }
-
-      "ring_noise_brightness" ->
-        %{
-          animation: :ring_noise,
-          ring_noise_crowd_mode: :brightness,
-          ring_noise_reactivity: 1.0,
-          ring_noise_crowd_gain: 1.15,
-          ring_noise_activity_bleed: 0.3,
-          ring_noise_speed: 0.85,
-          ring_noise_pulse_period: 28.0,
-          ring_noise_pulse_amount: 0.55,
-          ring_noise_counter_wave: true,
-          ring_noise_palette: :ocean
-        }
-
-      "ring_noise_saturation" ->
-        %{
-          animation: :ring_noise,
-          ring_noise_crowd_mode: :saturation,
-          ring_noise_reactivity: 1.0,
-          ring_noise_sat_idle: 0.20,
-          ring_noise_activity_bleed: 0.35,
-          ring_noise_speed: 1.0,
-          ring_noise_pulse_period: 24.0,
-          ring_noise_pulse_amount: 0.50,
-          ring_noise_counter_wave: true,
-          ring_noise_palette: :aurora
-        }
-
-      "presence" ->
-        %{
-          animation: :presence,
-          presence_floor: 0.0,
-          presence_bleed: 0.35
-        }
-
-      _ ->
-        %{}
-    end
   end
 
   def mode_tweakables_for("storm") do

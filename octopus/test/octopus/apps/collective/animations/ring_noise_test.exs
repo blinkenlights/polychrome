@@ -159,10 +159,12 @@ defmodule Octopus.Apps.Collective.Animations.RingNoiseTest do
     end
   end
 
+  alias Octopus.AppModePresets
+
   describe "builtin presets" do
     test "includes three ring noise slugs" do
       slugs =
-        Collective.builtin_presets()
+        AppModePresets.list_presets(Collective)
         |> Enum.filter(&(String.starts_with?(&1.slug, "ring_noise")))
         |> Enum.map(& &1.slug)
         |> Enum.sort()
@@ -171,9 +173,9 @@ defmodule Octopus.Apps.Collective.Animations.RingNoiseTest do
     end
 
     test "brightness and saturation presets enable crowd modes" do
-      brightness = Collective.legacy_mode_config("ring_noise_brightness")
-      saturation = Collective.legacy_mode_config("ring_noise_saturation")
-      deco = Collective.legacy_mode_config("ring_noise")
+      brightness = Collective.mode_config("ring_noise_brightness")
+      saturation = Collective.mode_config("ring_noise_saturation")
+      deco = Collective.mode_config("ring_noise")
 
       assert Map.get(brightness, :ring_noise_crowd_mode) == :brightness
       assert Map.get(brightness, :ring_noise_reactivity) == 1.0

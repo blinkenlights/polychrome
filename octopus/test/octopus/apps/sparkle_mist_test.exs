@@ -4,12 +4,6 @@ defmodule Octopus.Apps.SparkleMistTest do
   alias Octopus.Apps.SparkleMist.State
 
   @sparkle_mist Module.concat(["Octopus", "Apps", "SparkleMist"])
-  @presets Module.concat(["Octopus", "AppModePresets"])
-
-  setup do
-    preset_sync_all!()
-    :ok
-  end
 
   defp base_state(overrides) do
     state = %State{
@@ -21,7 +15,7 @@ defmodule Octopus.Apps.SparkleMistTest do
     }
 
     {:noreply, configured} =
-      sparkle_mist_handle_config(sparkle_mist_legacy_mode_config("mist"), state)
+      sparkle_mist_handle_config(sparkle_mist_mode_config("mist"), state)
 
     struct!(configured, Map.new(overrides))
   end
@@ -33,7 +27,7 @@ defmodule Octopus.Apps.SparkleMistTest do
   end
 
   test "mode_config/1 returns defaults" do
-    defaults = sparkle_mist_legacy_mode_config("mist")
+    defaults = sparkle_mist_mode_config("mist")
 
     assert sparkle_mist_mode_config("sparklemist:mist") == defaults
     assert sparkle_mist_mode_config("mist") == defaults
@@ -51,7 +45,7 @@ defmodule Octopus.Apps.SparkleMistTest do
   test "handle_config/2 applies partial updates without clearing particles" do
     state = base_state(particles: %{0 => :panel})
 
-    defaults = sparkle_mist_legacy_mode_config("mist")
+    defaults = sparkle_mist_mode_config("mist")
 
     {:noreply, updated} =
       sparkle_mist_handle_config(Map.put(defaults, :foreground_hue, 120), state)
@@ -84,7 +78,7 @@ defmodule Octopus.Apps.SparkleMistTest do
   end
 
   test "now_playing_meta/1 summarizes settings and interaction hint" do
-    assert sparkle_mist_now_playing_meta(sparkle_mist_legacy_mode_config("mist")) == [
+    assert sparkle_mist_now_playing_meta(sparkle_mist_mode_config("mist")) == [
              "spark hue 25",
              "mist speed 5.0",
              "intensity 1.0",
@@ -97,13 +91,11 @@ defmodule Octopus.Apps.SparkleMistTest do
     assert sparkle_mist_compatible?()
   end
 
-  defp preset_sync_all!, do: apply(@presets, :sync_all!, [])
-  defp sparkle_mist_list_modes, do: apply(@sparkle_mist, :list_modes, [])
   defp sparkle_mist_mode_config(mode_id), do: apply(@sparkle_mist, :mode_config, [mode_id])
   defp sparkle_mist_mode_tweakables(mode_id), do: apply(@sparkle_mist, :mode_tweakables, [mode_id])
   defp sparkle_mist_handle_config(config, state), do: apply(@sparkle_mist, :handle_config, [config, state])
   defp sparkle_mist_get_config(state), do: apply(@sparkle_mist, :get_config, [state])
   defp sparkle_mist_now_playing_meta(config), do: apply(@sparkle_mist, :now_playing_meta, [config])
   defp sparkle_mist_compatible?, do: apply(@sparkle_mist, :compatible?, [])
-  defp sparkle_mist_legacy_mode_config(slug), do: apply(@sparkle_mist, :legacy_mode_config, [slug])
+  defp sparkle_mist_list_modes, do: apply(@sparkle_mist, :list_modes, [])
 end

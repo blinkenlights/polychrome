@@ -83,8 +83,8 @@ defmodule Octopus.AppSupervisorTest do
     assert app_id1 != app_id2
 
     running = AppSupervisor.running_apps()
-    assert Enum.any?(running, fn {module, ^app_id2} -> module == Octopus.Apps.CanvasTest end)
-    refute Enum.any?(running, fn {_, ^app_id1} -> true end)
+    assert Enum.any?(running, fn {module, id} -> module == Octopus.Apps.CanvasTest and id == app_id2 end)
+    refute Enum.any?(running, fn {_, id} -> id == app_id1 end)
 
     AppSupervisor.stop_app(app_id2)
   end

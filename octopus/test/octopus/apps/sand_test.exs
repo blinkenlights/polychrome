@@ -5,15 +5,9 @@ defmodule Octopus.Apps.SandTest do
   alias Octopus.Apps.Sand.State
 
   @sand Sand
-  @presets Module.concat(["Octopus", "AppModePresets"])
-
-  setup do
-    preset_sync_all!()
-    :ok
-  end
 
   defp base_state(overrides) do
-    defaults = Sand.legacy_mode_config("sand")
+    defaults = Sand.mode_config("sand")
 
     struct!(State, Map.merge(defaults, Map.new(overrides)))
   end
@@ -32,7 +26,7 @@ defmodule Octopus.Apps.SandTest do
   end
 
   test "mode_config/1 returns defaults for classic sand" do
-    defaults = Sand.legacy_mode_config("sand")
+    defaults = Sand.mode_config("sand")
 
     assert sand_mode_config("sand:sand") == defaults
     assert sand_mode_config("sand") == defaults
@@ -173,7 +167,6 @@ defmodule Octopus.Apps.SandTest do
     end
   end
 
-  defp preset_sync_all!, do: apply(@presets, :sync_all!, [])
   defp sand_list_modes, do: apply(@sand, :list_modes, [])
   defp sand_mode_config(mode_id), do: apply(@sand, :mode_config, [mode_id])
   defp sand_mode_tweakables(mode_id), do: apply(@sand, :mode_tweakables, [mode_id])

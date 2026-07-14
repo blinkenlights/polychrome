@@ -17,11 +17,6 @@ defmodule OctopusWeb.PixelFunConfigComponent do
      assign(socket,
        presets: [],
        selected_preset_id: nil,
-       preset_message: nil,
-       show_save_preset_modal: false,
-       preset_save_name: "",
-       show_delete_modal: false,
-       delete_target_id: nil,
        config_info: nil,
        config: %{},
        queue_position: nil
@@ -92,16 +87,13 @@ defmodule OctopusWeb.PixelFunConfigComponent do
               value={preset.id}
               selected={preset.id == @selected_preset_id}
             >
-              {preset.name}{if preset.builtin, do: "", else: " (yours)"}
+              {preset.name}
             </option>
           </select>
         </div>
       </div>
 
       <.scene_editor {assigns} />
-
-      <.save_modal :if={@show_save_preset_modal} {assigns} />
-      <.delete_modal :if={@show_delete_modal} {assigns} />
     </div>
     """
   end
@@ -161,83 +153,11 @@ defmodule OctopusWeb.PixelFunConfigComponent do
         </div>
 
         <div class="flex flex-wrap gap-2 items-center">
-          <button
-            class="btn btn-primary bg-[#6d7cff] border-[#6d7cff]"
-            phx-click="open_save_preset_modal"
-            phx-target={@myself}
-            disabled={!@formula_valid}
-          >
-            Save as new scene…
-          </button>
-          <button
-            :if={@editor_preset}
-            class="btn"
-            phx-click="overwrite_preset"
-            phx-target={@myself}
-            disabled={!@formula_valid or !@dirty}
-          >
-            Overwrite "{@editor_preset.name}"
-          </button>
           <button :if={@dirty} class="btn btn-ghost" phx-click="discard_changes" phx-target={@myself}>
             Discard edits
           </button>
-          <button
-            :if={@editor_preset}
-            class="btn btn-ghost text-[#ff6266] ml-auto"
-            phx-click="request_delete"
-            phx-value-id={@editor_preset.id}
-            phx-target={@myself}
-          >
-            Delete
-          </button>
-        </div>
-
-        <p :if={@preset_message} class={[
-          "text-xs",
-          match?({:ok, _}, @preset_message) && "text-[#00d390]",
-          match?({:error, _}, @preset_message) && "text-[#ff6266]"
-        ]}>
-          {preset_message_text(@preset_message)}
-        </p>
-      </div>
-    </div>
-    """
-  end
-
-  defp save_modal(assigns) do
-    ~H"""
-    <div class="modal modal-open" role="dialog">
-      <div class="modal-box bg-base-200">
-        <h3 class="font-bold text-lg">Save as new scene</h3>
-        <form phx-submit="save_preset" phx-target={@myself} class="space-y-4 mt-2">
-          <input type="text" name="preset_save_name" value={@preset_save_name} placeholder="Scene name" class="input input-bordered w-full" />
-          <div class="modal-action mt-0">
-            <button type="button" class="btn btn-ghost" phx-click="close_save_preset_modal" phx-target={@myself}>Cancel</button>
-            <button type="submit" class="btn btn-primary bg-[#6d7cff] border-[#6d7cff]" disabled={!@formula_valid}>Save</button>
-          </div>
-        </form>
-      </div>
-      <button type="button" class="modal-backdrop" phx-click="close_save_preset_modal" phx-target={@myself} />
-    </div>
-    """
-  end
-
-  defp delete_modal(assigns) do
-    assigns = assign(assigns, :target, Enum.find(assigns.presets, &(&1.id == assigns.delete_target_id)))
-
-    ~H"""
-    <div class="modal modal-open" role="dialog">
-      <div class="modal-box bg-base-200">
-        <h3 class="font-bold text-lg">Delete scene</h3>
-        <p class="py-2 text-sm opacity-80">
-          Delete '{@target && @target.name}'? It's removed from the installation queue too.
-        </p>
-        <div class="modal-action">
-          <button class="btn btn-ghost" phx-click="cancel_delete" phx-target={@myself}>Cancel</button>
-          <button class="btn text-[#ff6266]" phx-click="confirm_delete" phx-target={@myself}>Delete</button>
         </div>
       </div>
-      <button type="button" class="modal-backdrop" phx-click="cancel_delete" phx-target={@myself} />
     </div>
     """
   end
@@ -360,48 +280,6 @@ defmodule OctopusWeb.PixelFunConfigComponent do
     end
   end
 
-  def handle_event("open_save_preset_modal", _params, socket),
-    do: {:noreply, assign(socket, show_save_preset_modal: true)}
-
-  def handle_event("close_save_preset_modal", _params, socket),
-    do: {:noreply, assign(socket, show_save_preset_modal: false, preset_save_name: "")}
-
-  def handle_event("save_preset", params, socket) do
-    name = params["preset_save_name"] || socket.assigns.preset_save_name
-
-    case ScenePresets.create(preset_attrs(socket.assigns.config, name)) do
-      {:ok, preset} ->
-        {:noreply,
-         socket
-         |> assign(
-           presets: ScenePresets.list_all(),
-           selected_preset_id: preset.id,
-           show_save_preset_modal: false,
-           preset_save_name: "",
-           preset_message: {:ok, "Scene saved"}
-         )
-         |> assign_editor_view()}
-
-      {:error, changeset} ->
-        {:noreply, assign(socket, preset_message: {:error, preset_error_message(changeset)})}
-    end
-  end
-
-  def handle_event("overwrite_preset", _params, socket) do
-    preset = socket.assigns.editor_preset
-
-    case ScenePresets.update(preset.id, preset_attrs(socket.assigns.config, preset.name)) do
-      {:ok, _} ->
-        {:noreply,
-         socket
-         |> assign(presets: ScenePresets.list_all(), preset_message: {:ok, "Scene updated"})
-         |> assign_editor_view()}
-
-      {:error, changeset} ->
-        {:noreply, assign(socket, preset_message: {:error, preset_error_message(changeset)})}
-    end
-  end
-
   def handle_event("discard_changes", _params, socket) do
     preset = socket.assigns.editor_preset
 
@@ -418,33 +296,6 @@ defmodule OctopusWeb.PixelFunConfigComponent do
      socket
      |> assign(config: AppSupervisor.config(socket.assigns.app_id))
      |> assign_editor_view()}
-  end
-
-  def handle_event("request_delete", %{"id" => id}, socket),
-    do: {:noreply, assign(socket, show_delete_modal: true, delete_target_id: id)}
-
-  def handle_event("cancel_delete", _params, socket),
-    do: {:noreply, assign(socket, show_delete_modal: false, delete_target_id: nil)}
-
-  def handle_event("confirm_delete", _params, socket) do
-    id = socket.assigns.delete_target_id
-
-    socket =
-      case ScenePresets.delete(id) do
-        :ok ->
-          remove_from_installation_queue(id)
-
-          assign(socket,
-            presets: ScenePresets.list_all(),
-            preset_message: {:ok, "Scene deleted"},
-            selected_preset_id: nil
-          )
-
-        {:error, _} ->
-          assign(socket, preset_message: {:error, "Could not delete scene"})
-      end
-
-    {:noreply, assign(socket, show_delete_modal: false, delete_target_id: nil) |> assign_editor_view()}
   end
 
   defp assign_editor_view(socket) do
@@ -490,34 +341,6 @@ defmodule OctopusWeb.PixelFunConfigComponent do
   end
 
   defp queue_position_for(_), do: nil
-
-  defp remove_from_installation_queue(scene_id) do
-    transport = InstallationTransport.get_state()
-
-    new_queue =
-      Enum.reject(transport.queue, fn entry ->
-        entry.app == PixelFun and entry.mode_id == scene_id
-      end)
-
-    InstallationTransport.set_queue(
-      Enum.map(new_queue, fn e -> %{app: e.app, mode_id: e.mode_id} end)
-    )
-  end
-
-  defp preset_attrs(config, name) do
-    %{
-      name: name,
-      formula: config[:program],
-      color_interval: config[:color_interval],
-      translate_scale: config[:translate_scale],
-      rotate_scale: config[:rotate_scale],
-      zoom_scale: config[:zoom_scale],
-      sway_scale: config[:sway_scale],
-      sway_speed: config[:sway_speed],
-      sway_mode: config[:sway_mode],
-      time_direction: config[:time_direction]
-    }
-  end
 
   defp route_tweakables_to_transport?(socket, keys) do
     tweakable_keys =
@@ -577,15 +400,4 @@ defmodule OctopusWeb.PixelFunConfigComponent do
         |> Kernel.||("?")
     end
   end
-
-  defp preset_error_message(changeset) do
-    case changeset.errors do
-      [{:name, {msg, _}} | _] -> "Name #{msg}"
-      [{:formula, {msg, _}} | _] -> "Formula #{msg}"
-      _ -> "Could not save scene"
-    end
-  end
-
-  defp preset_message_text({:ok, message}), do: message
-  defp preset_message_text({:error, message}), do: message
 end

@@ -12,7 +12,6 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
   @cross "builtin:cross_waves"
 
   setup do
-    preset_sync_all!()
     {:ok, _} = Registry.register(Octopus.AppRegistry, "test-#{System.unique_integer([:positive])}", @pixel_fun)
     :ok
   end
@@ -625,31 +624,38 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
     end
 
     test "rot_auto rerolls the pivot on each new sweep" do
-      :rand.seed(:exsss, {5, 5, 5})
+      original_installation = Application.get_env(:octopus, :installation)
+      Application.put_env(:octopus, :installation, Octopus.Installation.Nation2026)
 
-      state =
-        base_state(%{
-          rot_auto: true,
-          # Keep palette from consuming the seeded RNG so rot drives it alone.
-          palette_auto: false,
-          roll_angle: 0.0,
-          rot_auto_range: 60.0,
-          rot_auto_interval: 0.3,
-          seconds: 1.0,
-          auto_wanderers: %{}
-        })
+      try do
+        :rand.seed(:exsss, {5, 5, 5})
 
-      {_final, pivots} =
-        Enum.reduce(1..400, {state, MapSet.new()}, fn _, {s, seen} ->
-          {:noreply, next} = pixel_fun_handle_info(:tick, s)
-          {next, MapSet.put(seen, next.rot_auto_pivot)}
-        end)
+        state =
+          base_state(%{
+            rot_auto: true,
+            # Keep palette from consuming the seeded RNG so rot drives it alone.
+            palette_auto: false,
+            roll_angle: 0.0,
+            rot_auto_range: 60.0,
+            rot_auto_interval: 0.3,
+            seconds: 1.0,
+            auto_wanderers: %{}
+          })
 
-      assert MapSet.size(pivots) >= 2
+        {_final, pivots} =
+          Enum.reduce(1..400, {state, MapSet.new()}, fn _, {s, seen} ->
+            {:noreply, next} = pixel_fun_handle_info(:tick, s)
+            {next, MapSet.put(seen, next.rot_auto_pivot)}
+          end)
 
-      assert Enum.all?(pivots, fn p ->
-               p >= 0.0 and p <= Octopus.Installation.num_panels() - 1
-             end)
+        assert MapSet.size(pivots) >= 2
+
+        assert Enum.all?(pivots, fn p ->
+                 p >= 0.0 and p <= Octopus.Installation.num_panels() - 1
+               end)
+      after
+        Application.put_env(:octopus, :installation, original_installation)
+      end
     end
 
     test "rot_auto out-and-back returns to baseline without drift and stays in range" do
@@ -748,7 +754,6 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
     end
   end
 
-  defp preset_sync_all!, do: apply(@presets, :sync_all!, [])
   defp pixel_fun_config_schema, do: apply(@pixel_fun, :config_schema, [])
   defp pixel_fun_get_config(state), do: apply(@pixel_fun, :get_config, [state])
   defp pixel_fun_mode_config(mode_id), do: apply(@pixel_fun, :mode_config, [mode_id])

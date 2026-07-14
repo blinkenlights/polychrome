@@ -188,10 +188,10 @@ defmodule Octopus.Apps.WoodTest do
 
       assert :mode in keys
       assert :position in keys
-      assert :fullcolor in apply(@wood, :mode_tweakables, ["experiment"])
-             |> Enum.find(&(&1.key == :mode))
-             |> Map.fetch!(:options)
-             |> Enum.map(&elem(&1, 0))
+      assert :fullcolor in (apply(@wood, :mode_tweakables, ["experiment"])
+                             |> Enum.find(&(&1.key == :mode))
+                             |> Map.fetch!(:options)
+                             |> Enum.map(&elem(&1, 0)))
 
       position = apply(@wood, :mode_tweakables, ["experiment"]) |> Enum.find(&(&1.key == :position))
       assert position.max == 31

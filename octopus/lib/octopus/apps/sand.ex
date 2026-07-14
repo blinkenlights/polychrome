@@ -71,134 +71,32 @@ defmodule Octopus.Apps.Sand do
   end
 
   def mode_config(mode_id) do
-    slug = apply(@mode_presets, :mode_slug, [mode_id])
-    defaults = legacy_mode_config(slug)
+    case apply(@mode_presets, :config_for, [__MODULE__, mode_id]) do
+      nil ->
+        %{}
 
-    stored = apply(@mode_presets, :config_for, [__MODULE__, mode_id]) || %{}
-
-    defaults
-    |> Map.merge(stored)
-    |> normalize_mode_config()
+      config ->
+        config
+        |> apply_installation_overrides()
+        |> normalize_mode_config()
+    end
   end
 
   def normalize_mode_config(config), do: coerce_config_atoms(config)
 
-  def builtin_presets do
-    [
-      %{slug: "sand", name: "Sand", accent_color: "#E8A838", config: legacy_mode_config("sand")},
-      %{slug: "dunes", name: "Dunes", accent_color: "#D4A574", config: legacy_mode_config("dunes")},
-      %{
-        slug: "hourglass",
-        name: "Hourglass",
-        accent_color: "#C9B896",
-        config: legacy_mode_config("hourglass")
-      },
-      %{slug: "cascade", name: "Cascade", accent_color: "#6BB5C9", config: legacy_mode_config("cascade")},
-      %{slug: "aurora", name: "Aurora", accent_color: "#9B6DFF", config: legacy_mode_config("aurora")},
-      %{slug: "storm", name: "Storm", accent_color: "#5C7CFA", config: legacy_mode_config("storm")}
-    ]
-  end
-
-  def legacy_mode_config("sand"), do: base_config()
-
-  def legacy_mode_config("dunes") do
-    base_config()
-    |> Map.merge(%{
-      spawn_rate: 0.2,
-      wind_strength: 0.8,
-      color_mix: 0.6,
-      color_random_panels: 3
-    })
-  end
-
-  def legacy_mode_config("hourglass") do
-    base_config()
-    |> Map.merge(%{
-      spawn_rate: 0.08,
-      spawn_shape: :fountain,
-      collapse_sensitivity: 0.4,
-      collapse_cooldown: 8.0,
-      plug_drain: true,
-      plug_drain_interval: 14.0,
-      abyss_fate: :respawn
-    })
-  end
-
-  def legacy_mode_config("cascade") do
-    base_config()
-    |> Map.merge(%{
-      spawn_rate: 0.12,
-      spawn_shape: :arc,
-      overflow_mode: :waterfall,
-      collapse_sensitivity: 0.25,
-      collapse_cooldown: 4.0,
-      plug_drain: true,
-      plug_drain_interval: 10.0
-    })
-  end
-
-  def legacy_mode_config("aurora") do
+  defp apply_installation_overrides(config) when is_map(config) do
     num = max(Installation.num_panels(), 1)
+    s = Map.get(config, :supersample, @default_supersample)
 
-    base_config()
-    |> Map.merge(%{
-      color_mode: :rainbow,
-      color_mix: 0.8,
-      color_random_panels: num,
-      bleeding: 60.0
-    })
+    config
+    |> Map.put(:color_random_panels, num)
+    |> Map.put(:gravity, Sim.default_gravity(s))
+    |> Map.put(:jet_to_panel, min(1, num - 1))
   end
 
-  def legacy_mode_config("storm") do
-    base_config()
-    |> Map.merge(%{
-      spawn_shape: :arc,
-      wind_auto: true,
-      wind_auto_range: 2.0,
-      wind_auto_interval: 25.0,
-      overflow_auto: true,
-      overflow_auto_interval: 20.0,
-      plug_drain: true,
-      plug_drain_interval: 8.0,
-      auto_drain: false
-    })
-  end
-
-  def legacy_mode_config(_), do: %{}
-
-  defp base_config do
-    s = @default_supersample
-    num = max(Installation.num_panels(), 1)
-
-    %{
-      spawn_rate: 0.25,
-      spawn_shape: :rain,
-      button_force: 40,
-      auto_drain: true,
-      color_mode: :rainbow,
-      color_random_panels: num,
-      color_mix: 0.0,
-      bleeding: 30.0,
-      supersample: s,
-      gravity: Sim.default_gravity(s),
-      wind_strength: 0.0,
-      wind_auto: false,
-      wind_auto_range: 1.5,
-      wind_auto_interval: 30.0,
-      overflow_mode: :block,
-      overflow_auto: false,
-      overflow_auto_interval: 30.0,
-      abyss_fate: :particles,
-      collapse_sensitivity: 0.0,
-      collapse_cooldown: 8.0,
-      plug_drain: false,
-      plug_drain_interval: 12.0,
-      plug_drain_width: 2,
-      plug_drain_duration: 1.5,
-      show_advanced: false,
-      jet_from_panel: 0,
-      jet_to_panel: min(1, num - 1)
-    }
+  defp default_runtime_config do
+    (apply(@mode_presets, :config_for, [__MODULE__, "sand:sand"]) || %{})
+    |> apply_installation_overrides()
   end
 
   def mode_tweakables(mode_id) do
@@ -1056,7 +954,7 @@ defmodule Octopus.Apps.Sand do
 
   defp apply_config(%State{} = state, config) do
     config = coerce_config_atoms(config)
-    defaults = base_config()
+    defaults = default_runtime_config()
 
     pick = fn key, default ->
       Map.get(config, key, Map.get(state, key) || default)
