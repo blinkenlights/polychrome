@@ -95,7 +95,12 @@ COPY --from=assets /app/assets assets
 
 # Tailwind scans lib/octopus_web from assets/tailwind.config.js — lib must be
 # present here, not in the assets stage, or utility classes won't be generated.
+# assets.deploy also triggers mix compile (Rustler/cargo), so remount the
+# rustup/cargo caches that live outside the image layer.
 RUN --mount=type=cache,target=/root/.npm \
+    --mount=type=cache,target=/root/.rustup,sharing=locked \
+    --mount=type=cache,target=/root/.cargo,sharing=locked \
+    --mount=type=cache,target=/app/native/octopus_webp/target \
     mix tailwind.install --if-missing && \
     mix esbuild.install --if-missing && \
     mix assets.deploy
