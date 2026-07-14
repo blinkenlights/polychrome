@@ -89,7 +89,7 @@ defmodule Octopus.AppModePresets do
         mode_id(app, "matrix")
 
       key == "matrix" and mode_id == "matrix-ring" ->
-        mode_id(app, "matrix-ring")
+        mode_id(app, "matrix")
 
       key == "perlinnoise" and mode_id in ["perlin", "default"] ->
         mode_id(app, "perlin")
@@ -254,9 +254,18 @@ defmodule Octopus.AppModePresets do
 
   @doc false
   def sync_builtins(app) when is_atom(app) do
+    builtins = builtin_presets(app)
+    current_slugs = builtins |> Enum.map(& &1.slug) |> MapSet.new()
+
     app
-    |> builtin_presets()
-    |> Enum.each(fn builtin ->
+    |> list_records()
+    |> Enum.filter(fn
+      %{origin: "builtin", slug: slug} -> not MapSet.member?(current_slugs, slug)
+      _ -> false
+    end)
+    |> Enum.each(fn record -> archive(app, mode_id(app, record.slug)) end)
+
+    Enum.each(builtins, fn builtin ->
       slug = builtin.slug
 
       attrs = %{

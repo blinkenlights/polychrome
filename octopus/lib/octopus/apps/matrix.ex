@@ -4,43 +4,36 @@ defmodule Octopus.Apps.Matrix do
   @mode_presets Module.concat(["Octopus", "AppModePresets"])
 
   @shimmer_chance 0.03
+  @default_trail_length 135
+  @default_speed 8.0
+  @heads_per_panel_target 3
+  @column_min_gap 3
+  @fade_below 4
 
   defmodule Particle do
-    defstruct [:x, :y, :z, :speed, :sign, :age, :fade_age, :tail, :column, :columns_left, :trail_length]
+    defstruct [:x, :y, :z, :speed, :age, :fade_age, :column, :columns_left, :trail_length]
   end
 
   defmodule State do
     alias Octopus.Apps.Matrix, as: Matrix
     alias Octopus.Canvas
-    alias Octopus.Sway
 
     @head_color {160, 255, 160}
     @tail_base {40, 255, 70}
-    @tail_brightness_base 0.75
-    @tail_decay 0.62
-    @fade_duration 0.5
-    @classic_speed 1.0
     @trail_brightness 0.55
     @trail_gap_chance 0.35
-    # Trail length is measured in cells behind the head (not time): each drop keeps
-    # its most recent N deposited cells lit, N random in this range.
-    @trail_length_min 100
-    @trail_length_max 270
-    # Extra factor on how long residue lingers before it is pruned.
     @trail_hold 3.0
-    # Random per-cell brightness range for the green trail (varied, not uniform).
     @residue_bright_min 0.4
     @residue_bright_max 1.0
-    # Very short ease-in of the white head as it enters each new cell.
     @head_ease_frac 0.25
+    @fade_duration 0.5
+    @classic_speed 1.0
     @spawn_stagger_min 2.0
     @spawn_stagger_max 10.0
     @column_cooldown_min 0.8
     @column_cooldown_span 4.0
-    # A single drop snakes down this many columns (left→right) before it dies.
     @snake_columns_min 1
     @snake_columns_max 5
-    # Tiny per-drop variance on the head fall speed (±fraction of @classic_speed).
     @classic_speed_jitter 0.08
 
     defstruct [
@@ -51,16 +44,12 @@ defmodule Octopus.Apps.Matrix do
       :height,
       :pitch,
       :panel_width,
+      :panel_count,
       :global_speed,
       :speed,
       :density,
       :max_particles,
-      :direction,
-      :tail_length,
-      :counterflow,
-      :sway_scale,
-      :sway_speed,
-      :sway_mode,
+      :trail_length,
       :afterglow,
       :seconds,
       :occupied_columns,
@@ -79,17 +68,10 @@ defmodule Octopus.Apps.Matrix do
          when count >= max,
          do: state
 
-    defp spawn_one(%State{direction: :classic} = state) do
+    defp spawn_one(%State{} = state) do
       case pick_classic_column(state) do
         nil -> state
         column -> insert_particle(state, new_classic_particle(state, column))
-      end
-    end
-
-    defp spawn_one(%State{direction: :ring} = state) do
-      case pick_ring_spawn(state) do
-        nil -> state
-        {x, lane, sign} -> insert_particle(state, new_ring_particle(state, x, lane, sign))
       end
     end
 
@@ -101,19 +83,15 @@ defmodule Octopus.Apps.Matrix do
         Enum.reduce(
           state.particles,
           {[], state.occupied_columns, state.column_cooldowns, state.residue || %{}},
-          fn
-            particle, {acc, occupied, cooldowns, residue} ->
-              {updated, occupied, cooldowns, residue} =
-                case state.direction do
-                  :classic -> step_classic(particle, state, dt, seconds, occupied, cooldowns, residue, now)
-                  :ring -> {advance_particle(particle, state, dt), occupied, cooldowns, residue}
-                end
+          fn particle, {acc, occupied, cooldowns, residue} ->
+            {updated, occupied, cooldowns, residue} =
+              step_classic(particle, state, dt, seconds, occupied, cooldowns, residue, now)
 
-              if alive?(updated, state) do
-                {[updated | acc], occupied, cooldowns, residue}
-              else
-                {acc, occupied, cooldowns, residue}
-              end
+            if alive?(updated, state) do
+              {[updated | acc], occupied, cooldowns, residue}
+            else
+              {acc, occupied, cooldowns, residue}
+            end
           end
         )
 
@@ -129,22 +107,11 @@ defmodule Octopus.Apps.Matrix do
       }
     end
 
-    # Head fall speed in cells per second (drops all share the classic pace).
     defp cells_per_sec(%State{speed: speed, global_speed: global_speed}) do
       @classic_speed * speed * (global_speed || 1.0)
     end
 
-    def shimmer(%State{particles: particles} = state) do
-      particles =
-        Enum.map(particles, fn %Particle{tail: tail} = particle ->
-          tail =
-            Enum.map(tail, fn flicker ->
-              if :rand.uniform() < Matrix.shimmer_chance(), do: random_flicker(), else: flicker
-            end)
-
-          %Particle{particle | tail: tail}
-        end)
-
+    def shimmer(%State{} = state) do
       residue =
         Map.new(state.residue || %{}, fn {key, {_flicker, born, trail_length}} = entry ->
           if :rand.uniform() < Matrix.shimmer_chance() do
@@ -154,36 +121,20 @@ defmodule Octopus.Apps.Matrix do
           end
         end)
 
-      %State{state | particles: particles, residue: residue}
+      %State{state | residue: residue}
     end
 
     def render(%State{} = state) do
-      canvas = Canvas.new(state.width, state.height)
-      ctx = render_ctx(state)
-      canvas = draw_residue(canvas, state)
-
       canvas =
-        state.particles
-        |> Enum.sort_by(fn %Particle{z: z} -> z end)
-        |> Enum.reduce(canvas, &draw_particle(&2, &1, state, ctx))
+        state
+        |> draw_residue()
+        |> then(fn canvas ->
+          state.particles
+          |> Enum.sort_by(fn %Particle{z: z} -> z end)
+          |> Enum.reduce(canvas, &draw_particle(&2, &1, state))
+        end)
 
       %State{state | canvas: canvas}
-    end
-
-    defp render_ctx(%{direction: :ring, sway_scale: scale}) when scale == 0.0, do: %{sway: false}
-
-    defp render_ctx(%{direction: :ring} = state) do
-      {amplitude, phase} =
-        Sway.params(state.sway_scale, state.sway_speed, state.sway_mode, state.seconds || 0.0)
-
-      %{sway: true, amplitude: amplitude, phase: phase}
-    end
-
-    defp render_ctx(_), do: %{sway: false}
-
-    @doc false
-    def tail_segment_brightness(segment_index) do
-      @tail_brightness_base * :math.pow(@tail_decay, segment_index)
     end
 
     @doc false
@@ -193,21 +144,7 @@ defmodule Octopus.Apps.Matrix do
       {1.0 - frac, frac, low}
     end
 
-    @doc false
-    def bilinear_weights(fx, fy) do
-      {(1.0 - fx) * (1.0 - fy), fx * (1.0 - fy), (1.0 - fx) * fy, fx * fy}
-    end
-
-    @doc false
-    def segment_y_drawn(lane, seg_x, width, amplitude, phase, sway_scale) do
-      lane_eff = lane_effective(lane, sway_scale)
-      lane_eff + Sway.offset(seg_x, width, amplitude, phase)
-    end
-
-    # Classic rain: the head is a single, instantly full-bright pixel that
-    # snaps from cell to cell. No soft fade-in, no z-dimming, no moving tail —
-    # the trail it leaves behind is the deposited residue.
-    defp draw_particle(canvas, %Particle{} = particle, %State{direction: :classic} = state, _ctx) do
+    defp draw_particle(canvas, %Particle{} = particle, %State{} = state) do
       y = trunc(particle.y)
 
       if y >= 0 and y < state.height do
@@ -219,119 +156,6 @@ defmodule Octopus.Apps.Matrix do
       end
     end
 
-    defp draw_particle(canvas, %Particle{} = particle, state, %{sway: true} = ctx) do
-      fade = fade_multiplier(particle, state)
-
-      canvas =
-        particle.tail
-        |> Enum.with_index()
-        |> Enum.reduce(canvas, fn {flicker, index}, acc ->
-          brightness = tail_segment_brightness(index)
-          color = Matrix.scale_color(@tail_base, particle.z * flicker * brightness * fade)
-          {seg_x, lane} = ring_segment(particle, index)
-          y_drawn = segment_y_drawn(lane, seg_x, state.width, ctx.amplitude, ctx.phase, state.sway_scale)
-          put_pixel_bilinear(acc, seg_x, y_drawn, color, state.width, state.height)
-        end)
-
-      head_color = Matrix.scale_color(@head_color, particle.z * fade)
-      y_drawn = segment_y_drawn(particle.y, particle.x, state.width, ctx.amplitude, ctx.phase, state.sway_scale)
-      put_pixel_bilinear(canvas, particle.x, y_drawn, head_color, state.width, state.height)
-    end
-
-    defp draw_particle(canvas, %Particle{} = particle, state, %{sway: false}) do
-      fade = fade_multiplier(particle, state)
-
-      canvas =
-        particle.tail
-        |> Enum.with_index()
-        |> Enum.reduce(canvas, fn {flicker, index}, acc ->
-          brightness = tail_segment_brightness(index)
-          color = Matrix.scale_color(@tail_base, particle.z * flicker * brightness * fade)
-          tail_pos = tail_position(particle, index, state.direction)
-          put_pixel_soft(acc, state, tail_pos, color)
-        end)
-
-      head_color = Matrix.scale_color(@head_color, particle.z * fade)
-      put_pixel_soft(canvas, state, {particle.x, particle.y}, head_color)
-    end
-
-    defp ring_segment(%Particle{x: x, y: y, sign: sign}, index) do
-      offset = (index + 1) * -sign
-      {x + offset, y}
-    end
-
-    # Compress outer lanes when sway amplitude is large so crests stay visible.
-    defp lane_effective(lane, sway_scale) when sway_scale > 1.5 do
-      3.5 + (lane - 3.5) * max(0.4, 1 - (sway_scale - 1.5) / 4)
-    end
-
-    defp lane_effective(lane, _sway_scale), do: lane
-
-    defp put_pixel_bilinear(canvas, x_float, y_float, color, width, height) do
-      {_wx0, wx1, x_low} = soft_weights(x_float)
-      {_wy0, wy1, y_low} = soft_weights(y_float)
-      {w00, w10, w01, w11} = bilinear_weights(wx1, wy1)
-
-      x0 = Integer.mod(x_low, width)
-      x1 = Integer.mod(x_low + 1, width)
-
-      [
-        {x0, y_low, w00},
-        {x1, y_low, w10},
-        {x0, y_low + 1, w01},
-        {x1, y_low + 1, w11}
-      ]
-      |> Enum.reduce(canvas, fn {x, y, weight}, acc ->
-        if y >= 0 and y < height do
-          Matrix.add_pixel(acc, {x, y}, Matrix.scale_color(color, weight))
-        else
-          acc
-        end
-      end)
-    end
-
-    defp tail_position(%Particle{x: x, y: y}, index, :classic) do
-      {x, y - index - 1}
-    end
-
-    defp tail_position(%Particle{x: x, y: y, sign: sign}, index, :ring) do
-      offset = (index + 1) * -sign
-      {x + offset, y}
-    end
-
-    defp put_pixel_soft(canvas, state, {x_float, y_float}, color) do
-      case state.direction do
-        :classic ->
-          put_pixel_soft_axis(canvas, :y, {x_float, y_float}, color, state.width)
-
-        :ring ->
-          put_pixel_soft_axis(canvas, :x, {x_float, y_float}, color, state.width)
-      end
-    end
-
-    defp put_pixel_soft_axis(canvas, :y, {x_float, y_float}, color, _width) do
-      {w0, w1, low} = soft_weights(y_float)
-      x = trunc(x_float)
-
-      canvas
-      |> Matrix.add_pixel({x, low}, Matrix.scale_color(color, w0))
-      |> Matrix.add_pixel({x, low + 1}, Matrix.scale_color(color, w1))
-    end
-
-    defp put_pixel_soft_axis(canvas, :x, {x_float, y_float}, color, width) do
-      {w0, w1, low} = soft_weights(x_float)
-      y = trunc(y_float)
-      x0 = Integer.mod(low, width)
-      x1 = Integer.mod(low + 1, width)
-
-      canvas
-      |> Matrix.add_pixel({x0, y}, Matrix.scale_color(color, w0))
-      |> Matrix.add_pixel({x1, y}, Matrix.scale_color(color, w1))
-    end
-
-    # Classic snake rain: the drop slides down one column, then hops to the top
-    # of the next visible column to the right, leaving a static residue trail in
-    # every cell it crosses. After @snake_columns_* hops it runs out and dies.
     defp step_classic(%Particle{} = particle, state, dt, seconds, occupied, cooldowns, residue, now) do
       fade_age =
         if fading?(particle, state), do: particle.fade_age + dt, else: particle.fade_age
@@ -364,7 +188,6 @@ defmodule Octopus.Apps.Matrix do
           {updated, occupied, Map.put(cooldowns, particle.column, column_cooldown(now)), residue}
 
         particle.y < state.height ->
-          # Last column done: fill it to the bottom, then keep falling so it dies.
           residue =
             deposit_residue(residue, seconds, particle, %Particle{particle | y: state.height * 1.0}, state)
 
@@ -384,9 +207,6 @@ defmodule Octopus.Apps.Matrix do
       @classic_speed * (1.0 + (:rand.uniform() * 2.0 - 1.0) * @classic_speed_jitter)
     end
 
-    # Next free (unoccupied) visible column to the right, wrapping at the edge.
-    # Returns nil when every other column already has a head, so the drop dies
-    # instead of colliding with another white head.
     defp next_free_column(col, occupied, state) do
       cols = visible_columns(state)
       n = length(cols)
@@ -399,23 +219,18 @@ defmodule Octopus.Apps.Matrix do
 
       Enum.reduce_while(0..(n - 1), nil, fn off, _acc ->
         cand = Enum.at(cols, rem(start + off, n))
-        if MapSet.member?(occupied, cand), do: {:cont, nil}, else: {:halt, cand}
+
+        if MapSet.member?(occupied, cand) or not column_clear?(cand, occupied) do
+          {:cont, nil}
+        else
+          {:halt, cand}
+        end
       end)
     end
 
-    # Ring mode: orbit horizontally around the wall (classic uses step_classic).
-    defp advance_particle(%Particle{} = particle, state, dt) do
-      effective = particle.speed * particle.z * dt
-
-      %Particle{
-        particle
-        | x: Matrix.wrap_x(particle.x + particle.sign * effective, state.width),
-          age: particle.age + dt,
-          fade_age: particle.fade_age
-      }
+    defp column_clear?(col, occupied, min_gap \\ Matrix.column_min_gap()) do
+      Enum.all?(occupied, fn other -> abs(col - other) >= min_gap end)
     end
-
-    defp alive?(%Particle{} = _particle, %{direction: :ring}), do: true
 
     defp alive?(%Particle{fade_age: fade_age} = particle, state) do
       if fading?(particle, state) do
@@ -425,29 +240,13 @@ defmodule Octopus.Apps.Matrix do
       end
     end
 
-    defp fading?(%Particle{} = particle, %{direction: :classic, tail_length: tail_length, height: height}) do
-      particle.y - tail_length > height
-    end
+    defp fading?(%Particle{y: y}, %{height: height}), do: y > height + Matrix.fade_below()
 
-    defp fading?(_, _), do: false
-
-    defp fade_multiplier(%Particle{} = particle, state) do
-      if fading?(particle, state) and particle.fade_age > 0 do
-        max(0.0, 1.0 - particle.fade_age / @fade_duration)
-      else
-        1.0
-      end
-    end
-
-    # The head writes a static trail into the cells it crosses: green glyphs at
-    # random brightness, sometimes a black gap. Each cell stores when it was laid
-    # down plus the drop's trail length (in cells), so it stays lit only while the
-    # head is within `trail_length` cells past it (see prune_residue/3).
     defp deposit_residue(residue, seconds, %Particle{} = old, %Particle{} = updated, state) do
       col = trunc(updated.x)
       from = max(trunc(old.y) + 1, 0)
       to = min(trunc(updated.y), state.height - 1)
-      trail_length = old.trail_length || @trail_length_max
+      trail_length = old.trail_length || state.trail_length || Matrix.default_trail_length()
 
       Enum.reduce(from..to//1, residue, fn row, acc ->
         if :rand.uniform() < @trail_gap_chance do
@@ -458,9 +257,6 @@ defmodule Octopus.Apps.Matrix do
       end)
     end
 
-    # Length-based, but measured in wall time so it's independent of how many drops
-    # are depositing: a cell lives until the head has moved trail_length cells past
-    # it, i.e. (age × cells_per_sec) ≥ trail_length.
     defp prune_residue(residue, _seconds, cells_per_sec) when cells_per_sec <= 0, do: residue
 
     defp prune_residue(residue, seconds, cells_per_sec) do
@@ -475,15 +271,16 @@ defmodule Octopus.Apps.Matrix do
 
     defp smoothstep(t), do: t * t * (3.0 - 2.0 * t)
 
-    defp draw_residue(canvas, %State{direction: :classic, residue: residue})
-         when is_map(residue) do
+    defp draw_residue(%State{residue: residue} = state) when is_map(residue) do
+      canvas = Canvas.new(state.width, state.height)
+
       Enum.reduce(residue, canvas, fn {{x, y}, {flicker, _born, _trail_length}}, acc ->
         value = flicker * @trail_brightness
         Matrix.add_pixel(acc, {x, y}, Matrix.scale_color(@tail_base, value))
       end)
     end
 
-    defp draw_residue(canvas, _state), do: canvas
+    defp draw_residue(%State{} = state), do: Canvas.new(state.width, state.height)
 
     defp pick_classic_column(state) do
       now = state.now || monotonic_now()
@@ -496,45 +293,62 @@ defmodule Octopus.Apps.Matrix do
 
       occupied = state.occupied_columns || MapSet.new()
 
-      state
-      |> visible_columns()
-      |> Enum.reject(fn col -> MapSet.member?(occupied, col) or MapSet.member?(cooling, col) end)
-      |> case do
+      free =
+        state
+        |> visible_columns()
+        |> Enum.reject(fn col ->
+          MapSet.member?(occupied, col) or
+            MapSet.member?(cooling, col) or
+            not column_clear?(col, occupied)
+        end)
+
+      case free do
         [] -> nil
-        free -> Enum.random(free)
+        columns -> pick_balanced_column(columns, occupied, state)
       end
     end
 
-    defp pick_ring_spawn(state) do
-      min_dist = state.tail_length * 3
-      sign = if :rand.uniform() < state.counterflow, do: -1, else: 1
+    defp pick_balanced_column(free, occupied, state) do
+      pitch = state.pitch
 
-      Enum.reduce_while(1..32, nil, fn _attempt, _acc ->
-        lane = :rand.uniform(state.height) - 1
-        x = :rand.uniform() * state.width
+      by_panel = Enum.group_by(free, &div(&1, pitch))
 
-        if lane_clear?(state, lane, x, sign, min_dist) do
-          {:halt, {x, lane, sign}}
-        else
-          {:cont, nil}
+      panel_counts =
+        occupied
+        |> MapSet.to_list()
+        |> Enum.group_by(&div(&1, pitch))
+        |> Map.new(fn {panel, cols} -> {panel, length(cols)} end)
+
+      target = Matrix.heads_per_panel_target()
+
+      panel_id =
+        by_panel
+        |> Map.keys()
+        |> Enum.filter(fn panel -> Map.get(panel_counts, panel, 0) < target end)
+        |> case do
+          [] ->
+            by_panel
+            |> Map.keys()
+            |> Enum.min_by(&Map.get(panel_counts, &1, 0))
+
+          candidates ->
+            Enum.min_by(candidates, &Map.get(panel_counts, &1, 0))
         end
-      end)
+
+      by_panel
+      |> Map.fetch!(panel_id)
+      |> pick_spread_column(occupied)
     end
 
-    defp lane_clear?(state, lane, spawn_x, spawn_sign, min_dist) do
-      Enum.all?(state.particles, fn %Particle{y: y, x: head_x, sign: head_sign} ->
-        trunc(y) != lane or
-          head_sign != spawn_sign or
-          ring_distance_behind(spawn_x, head_x, state.width, spawn_sign) >= min_dist
-      end)
+    defp pick_spread_column(cols, occupied) do
+      Enum.max_by(cols, &min_column_distance(&1, occupied))
     end
 
-    defp ring_distance_behind(spawn_x, head_x, width, 1) do
-      Matrix.wrap_x(spawn_x - head_x, width)
-    end
-
-    defp ring_distance_behind(spawn_x, head_x, width, -1) do
-      Matrix.wrap_x(head_x - spawn_x, width)
+    defp min_column_distance(col, occupied) do
+      case MapSet.to_list(occupied) do
+        [] -> 999
+        others -> others |> Enum.map(fn other -> abs(col - other) end) |> Enum.min()
+      end
     end
 
     defp new_classic_particle(state, column) do
@@ -543,61 +357,22 @@ defmodule Octopus.Apps.Matrix do
         y: classic_spawn_y(state),
         z: :rand.uniform() * 0.5 + 0.5,
         speed: classic_head_speed(),
-        sign: 1,
         age: 0.0,
         fade_age: 0.0,
-        tail: new_tail(state.tail_length),
         column: column,
         columns_left: @snake_columns_min + :rand.uniform(@snake_columns_max - @snake_columns_min + 1) - 1,
-        trail_length: @trail_length_min + :rand.uniform(@trail_length_max - @trail_length_min + 1) - 1
+        trail_length: state.trail_length || Matrix.default_trail_length()
       }
     end
 
-    defp new_ring_particle(state, x, lane, sign) do
-      %Particle{
-        x: x,
-        y: lane * 1.0,
-        z: :rand.uniform() * 0.5 + 0.5,
-        speed: random_particle_speed(),
-        sign: sign,
-        age: 0.0,
-        fade_age: 0.0,
-        tail: new_tail(state.tail_length),
-        column: lane
-      }
-    end
-
-    # Stagger entry times by spawning drops at random heights above the screen.
     defp classic_spawn_y(%State{speed: speed, global_speed: global_speed}) do
       rate = @classic_speed * speed * (global_speed || 1.0)
       stagger = @spawn_stagger_min + :rand.uniform() * (@spawn_stagger_max - @spawn_stagger_min)
       -:rand.uniform() * rate * stagger
     end
 
-    defp new_tail(length) do
-      Enum.map(1..length, fn _ -> random_flicker() end)
-    end
-
-    defp random_flicker, do: :rand.uniform() * 0.25 + 0.75
-
-    # Ring mode only: per-drop variance for the orbiting streaks.
-    # Classic rain uses the fixed @classic_speed instead.
-    defp random_particle_speed do
-      case :rand.uniform() do
-        r when r < 0.2 -> 2.5 + :rand.uniform() * 2.5
-        r when r < 0.85 -> 5.0 + :rand.uniform() * 9.0
-        _ -> 14.0 + :rand.uniform() * 14.0
-      end
-    end
-
     defp insert_particle(%State{} = state, particle) do
-      occupied =
-        if state.direction == :classic do
-          MapSet.put(state.occupied_columns || MapSet.new(), particle.column)
-        else
-          state.occupied_columns || MapSet.new()
-        end
-
+      occupied = MapSet.put(state.occupied_columns || MapSet.new(), particle.column)
       particles = [particle | state.particles]
 
       %State{
@@ -622,6 +397,10 @@ defmodule Octopus.Apps.Matrix do
   alias Octopus.Canvas
 
   def shimmer_chance, do: @shimmer_chance
+  def default_trail_length, do: @default_trail_length
+  def column_min_gap, do: @column_min_gap
+  def heads_per_panel_target, do: @heads_per_panel_target
+  def fade_below, do: @fade_below
 
   def name(), do: "Matrix"
 
@@ -647,18 +426,28 @@ defmodule Octopus.Apps.Matrix do
   end
 
   def normalize_mode_config(config) do
+    config = coerce_config_atoms(config)
+
+    trail_length =
+      cond do
+        Map.has_key?(config, :trail_length) ->
+          trunc(config.trail_length)
+
+        Map.has_key?(config, :tail_length) ->
+          val = trunc(config.tail_length)
+          if val < 10, do: @default_trail_length, else: val
+
+        true ->
+          @default_trail_length
+      end
+
     config
-    |> coerce_config_atoms()
-    |> Map.update(:direction, :classic, &coerce_direction/1)
-    |> Map.update(:tail_length, 4, &trunc/1)
-    |> Map.update(:counterflow, 0.0, &coerce_float/1)
-    |> Map.update(:speed, 6.0, &coerce_float/1)
+    |> Map.drop([:direction, :tail_length, :counterflow, :sway_scale, :sway_speed, :sway_mode])
+    |> Map.put(:trail_length, trail_length)
+    |> Map.update(:speed, @default_speed, &coerce_float/1)
     |> Map.update(:afterglow, 60, &trunc/1)
     |> Map.update(:density, 1, &trunc/1)
-    |> Map.update(:max_particles, 36, &trunc/1)
-    |> Map.update(:sway_scale, 0.0, &coerce_float/1)
-    |> Map.update(:sway_speed, 0.5, &coerce_float/1)
-    |> Map.update(:sway_mode, :wobble, &coerce_sway_mode/1)
+    |> Map.update(:max_particles, 24, &trunc/1)
   end
 
   def builtin_presets do
@@ -668,45 +457,18 @@ defmodule Octopus.Apps.Matrix do
         name: "matrix",
         accent_color: "#2ECC71",
         config: legacy_mode_config("matrix")
-      },
-      %{
-        slug: "matrix-ring",
-        name: "matrix ring",
-        accent_color: "#2ECC71",
-        config: legacy_mode_config("matrix-ring")
       }
     ]
   end
 
   def legacy_mode_config("matrix") do
     %{
-      direction: :classic,
-      speed: 6.0,
+      speed: @default_speed,
       bleeding: 10.0,
       density: 1,
-      max_particles: 36,
-      tail_length: 4,
-      counterflow: 0.0,
-      sway_scale: 0.0,
-      sway_speed: 0.5,
-      sway_mode: :wobble,
+      max_particles: 24,
+      trail_length: @default_trail_length,
       afterglow: 60
-    }
-  end
-
-  def legacy_mode_config("matrix-ring") do
-    %{
-      direction: :ring,
-      speed: 0.15,
-      bleeding: 10.0,
-      density: 1,
-      max_particles: 12,
-      tail_length: 8,
-      counterflow: 0.0,
-      sway_scale: 0.0,
-      sway_speed: 0.5,
-      sway_mode: :wobble,
-      afterglow: 0
     }
   end
 
@@ -716,17 +478,8 @@ defmodule Octopus.Apps.Matrix do
     mode_tweakables_for(apply(@mode_presets, :mode_slug, [mode_id]))
   end
 
-  def mode_tweakables_for("matrix-ring"), do: mode_tweakables_for("matrix")
-
   def mode_tweakables_for("matrix") do
     [
-      %{
-        key: :direction,
-        label: "Direction",
-        type: :choice,
-        default: :classic,
-        options: [{:classic, "Vertical"}, {:ring, "Ring"}]
-      },
       %{
         key: :speed,
         label: "Speed",
@@ -734,7 +487,7 @@ defmodule Octopus.Apps.Matrix do
         min: 0.1,
         max: 10.0,
         step: 0.05,
-        default: 6.0
+        default: @default_speed
       },
       %{
         key: :afterglow,
@@ -774,54 +527,16 @@ defmodule Octopus.Apps.Matrix do
         min: 1,
         max: 400,
         step: 1,
-        default: 36
+        default: 24
       },
       %{
-        key: :tail_length,
-        label: "Tail length",
+        key: :trail_length,
+        label: "Trail length",
         type: :slider,
-        min: 2,
-        max: 10,
+        min: 10,
+        max: 200,
         step: 1,
-        default: 4
-      },
-      %{
-        key: :counterflow,
-        label: "Counterflow",
-        type: :slider,
-        min: 0.0,
-        max: 1.0,
-        step: 0.05,
-        default: 0.0,
-        visible_when: {:direction, [:ring]}
-      },
-      %{
-        key: :sway_scale,
-        label: "Sway strength",
-        type: :slider,
-        min: 0.0,
-        max: 3.0,
-        step: 0.1,
-        default: 0.0,
-        visible_when: {:direction, [:ring]}
-      },
-      %{
-        key: :sway_speed,
-        label: "Sway speed",
-        type: :slider,
-        min: 0.0,
-        max: 3.0,
-        step: 0.05,
-        default: 0.5,
-        visible_when: {:direction, [:ring]}
-      },
-      %{
-        key: :sway_mode,
-        label: "Sway mode",
-        type: :select,
-        options: [{"Wobble", :wobble}, {"Pendulum", :pendulum}],
-        default: :wobble,
-        visible_when: {:direction, [:ring]}
+        default: @default_trail_length
       }
     ]
   end
@@ -837,27 +552,33 @@ defmodule Octopus.Apps.Matrix do
 
   def get_config(%State{} = state) do
     %{
-      direction: state.direction,
       speed: state.speed,
       density: state.density,
       max_particles: state.max_particles,
-      tail_length: state.tail_length,
-      counterflow: state.counterflow,
-      sway_scale: state.sway_scale,
-      sway_speed: state.sway_speed,
-      sway_mode: state.sway_mode,
+      trail_length: state.trail_length,
       afterglow: state.afterglow
     }
   end
 
   def handle_config(config, %State{} = state) do
-    config = config |> coerce_config_atoms() |> normalize_mode_config()
-    direction_changed = Map.has_key?(config, :direction) && coerce_direction(config.direction) != state.direction
+    raw = coerce_config_atoms(config)
+
+    apply_keys =
+      Map.keys(raw)
+      |> Enum.map(fn
+        :tail_length -> :trail_length
+        key -> key
+      end)
+
+    normalized =
+      state
+      |> get_config()
+      |> Map.merge(raw)
+      |> normalize_mode_config()
 
     state =
       state
-      |> apply_config(config)
-      |> then(fn s -> if direction_changed, do: reset_particles(s), else: s end)
+      |> apply_config(Map.take(normalized, apply_keys))
       |> enforce_particle_cap()
 
     {:noreply, state}
@@ -865,34 +586,20 @@ defmodule Octopus.Apps.Matrix do
 
   def now_playing_meta(config) do
     config = normalize_mode_config(config)
-    direction = Map.get(config, :direction, :classic)
-    max = Map.get(config, :max_particles, 36)
+    max = Map.get(config, :max_particles, 24)
     density = Map.get(config, :density, 1)
-    tail = Map.get(config, :tail_length, 4)
-    sway_scale = Map.get(config, :sway_scale, 0.0)
+    trail = Map.get(config, :trail_length, @default_trail_length)
 
-    direction_label =
-      case direction do
-        :ring -> "ring"
-        _ -> "vertical"
-      end
-
-    meta = [
-      direction_label,
-      "tail #{tail}",
+    [
+      "trail #{trail}",
       "#{max} particles max",
       "density #{density}"
     ]
-
-    if direction == :ring and sway_scale > 0 do
-      meta ++ ["sway #{format_num(sway_scale)}"]
-    else
-      meta
-    end
   end
 
-  defp format_num(n) when is_float(n), do: :erlang.float_to_binary(n, decimals: 1)
-  defp format_num(n), do: to_string(n)
+  def default_max_particles(panel_count) when is_integer(panel_count) and panel_count > 0 do
+    max(12, 3 * panel_count)
+  end
 
   def app_init(config) do
     Octopus.App.configure_display(layout: :gapped_panels)
@@ -905,6 +612,7 @@ defmodule Octopus.Apps.Matrix do
     width = trunc(display_info.width)
     height = trunc(display_info.height)
     pitch = installation.panel_width + installation.panel_gap
+    panel_count = installation.panel_count
 
     canvas = Canvas.new(width, height)
     :timer.send_interval(trunc(1000 / 60), :tick)
@@ -920,15 +628,12 @@ defmodule Octopus.Apps.Matrix do
         height: height,
         pitch: pitch,
         panel_width: installation.panel_width,
+        panel_count: panel_count,
         global_speed: global_speed,
-        speed: 6.0,
+        speed: @default_speed,
         density: 1,
-        direction: :classic,
-        tail_length: 4,
-        counterflow: 0.0,
-        sway_scale: 0.0,
-        sway_speed: 0.5,
-        sway_mode: :wobble,
+        max_particles: default_max_particles(panel_count),
+        trail_length: @default_trail_length,
         afterglow: 60,
         seconds: 0.0,
         occupied_columns: MapSet.new(),
@@ -987,7 +692,6 @@ defmodule Octopus.Apps.Matrix do
   end
 
   defp spawn_tick_chance(%State{density: density}) do
-    # Default density 1 spawns on roughly every other tick.
     min(1.0, density / 2.0)
   end
 
@@ -1012,18 +716,7 @@ defmodule Octopus.Apps.Matrix do
     Canvas.put_pixel(canvas, {x, y}, {min(255, er + r), min(255, eg + g), min(255, eb + b)})
   end
 
-  @config_keys [
-    :direction,
-    :speed,
-    :density,
-    :max_particles,
-    :tail_length,
-    :counterflow,
-    :sway_scale,
-    :sway_speed,
-    :sway_mode,
-    :afterglow
-  ]
+  @config_keys [:speed, :density, :max_particles, :trail_length, :afterglow]
 
   defp apply_config(%State{} = state, config) do
     config
@@ -1033,18 +726,11 @@ defmodule Octopus.Apps.Matrix do
     end)
   end
 
-  defp coerce_config_value(:direction, value), do: coerce_direction(value)
-  defp coerce_config_value(:tail_length, value), do: trunc(value)
+  defp coerce_config_value(:trail_length, value), do: trunc(value)
   defp coerce_config_value(:density, value), do: trunc(value)
   defp coerce_config_value(:max_particles, value), do: trunc(value)
   defp coerce_config_value(:speed, value), do: coerce_float(value)
-  defp coerce_config_value(:counterflow, value), do: coerce_float(value)
-  defp coerce_config_value(:sway_scale, value), do: coerce_float(value)
-  defp coerce_config_value(:sway_speed, value), do: coerce_float(value)
-  defp coerce_config_value(:sway_mode, value), do: coerce_sway_mode(value)
   defp coerce_config_value(:afterglow, value), do: trunc(value)
-
-  defp coerce_sway_mode(mode), do: Octopus.Sway.normalize_mode(mode)
 
   defp reset_particles(%State{} = state) do
     %{
@@ -1057,7 +743,6 @@ defmodule Octopus.Apps.Matrix do
     }
   end
 
-  # Drop extras when max_particles was lowered (e.g. preset override → debug cap).
   defp enforce_particle_cap(%State{particle_count: count, max_particles: max} = state)
        when count > max,
        do: reset_particles(state)
@@ -1078,12 +763,6 @@ defmodule Octopus.Apps.Matrix do
   defp coerce_key("true"), do: true
   defp coerce_key("false"), do: false
   defp coerce_key(k) when is_binary(k), do: String.to_atom(k)
-
-  defp coerce_direction(:classic), do: :classic
-  defp coerce_direction(:ring), do: :ring
-  defp coerce_direction("classic"), do: :classic
-  defp coerce_direction("ring"), do: :ring
-  defp coerce_direction(_), do: :classic
 
   defp coerce_float(v) when is_integer(v), do: v * 1.0
   defp coerce_float(v) when is_float(v), do: v
