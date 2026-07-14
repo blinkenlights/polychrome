@@ -19,7 +19,9 @@ defmodule Octopus.Apps.Fire do
   @frame_time_ms trunc(1000 / @fps)
   @max_embers 16
   @flicker_amp 0.08
-  @min_flame_height 8
+  # Keep at least this many rows for the flame; remainder can be raised via floor.
+  # Must be < typical panel heights (e.g. Pixie 8) so max_floor is not stuck at 0.
+  @min_flame_height 3
 
   defmodule State do
     @moduledoc false
@@ -604,8 +606,8 @@ defmodule Octopus.Apps.Fire do
     max_floor(Installation.panel_height())
   end
 
-  defp max_floor(height) when is_integer(height) and height > @min_flame_height do
-    height - @min_flame_height
+  defp max_floor(height) when is_integer(height) and height > 1 do
+    max(height - @min_flame_height, 0)
   end
 
   defp max_floor(_), do: 0

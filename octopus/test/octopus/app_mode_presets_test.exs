@@ -1,7 +1,7 @@
 defmodule Octopus.AppModePresetsTest do
   use Octopus.DataCase, async: true
 
-  alias Octopus.Apps.{Collective, Matrix, PixelFun, Sand, SparkleMist, Wood}
+  alias Octopus.Apps.{Collective, Fire, Matrix, PixelFun, Sand, SparkleMist, Wood}
 
   @presets Module.concat(["Octopus", "AppModePresets"])
 
@@ -18,10 +18,12 @@ defmodule Octopus.AppModePresetsTest do
       assert length(preset_list(Sand)) == 6
       assert length(preset_list(SparkleMist)) == 1
       assert length(preset_list(Wood)) == 2
+      assert length(preset_list(Fire)) == 3
 
       preset_sync_all!()
 
       assert length(preset_list(PixelFun)) == 8
+      assert length(preset_list(Fire)) == 3
     end
 
     test "does not overwrite existing rows" do

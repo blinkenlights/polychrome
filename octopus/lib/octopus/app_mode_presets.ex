@@ -1,7 +1,7 @@
 defmodule Octopus.AppModePresets do
   @moduledoc """
   DB-backed mode presets for foyer apps (Pixel Fun, Pixel Fun 3D, Collective, Matrix,
-  Perlin Noise, Ocean, Sand, Sparkle Mist, Wood).
+  Perlin Noise, Ocean, Sand, Sparkle Mist, Wood, Fire).
 
   Mode ids use `app_key:slug`, e.g. `pixelfun:classic_ripple`, `pixelfun3d:classic_ripple`,
   `collective:storm`. Legacy Pixel Fun ids (`builtin:…`, `user:…`) and bare Collective
@@ -26,7 +26,8 @@ defmodule Octopus.AppModePresets do
     "Elixir.Octopus.Apps.Ocean" => "ocean",
     "Elixir.Octopus.Apps.Sand" => "sand",
     "Elixir.Octopus.Apps.SparkleMist" => "sparklemist",
-    "Elixir.Octopus.Apps.Wood" => "wood"
+    "Elixir.Octopus.Apps.Wood" => "wood",
+    "Elixir.Octopus.Apps.Fire" => "fire"
   }
 
   @formula_app_keys ~w(pixelfun pixelfun3d)
@@ -105,6 +106,9 @@ defmodule Octopus.AppModePresets do
 
       key == "wood" and mode_id in ["experiment", "default"] ->
         mode_id(app, "experiment")
+
+      key == "fire" and mode_id in ["campfire", "default"] ->
+        mode_id(app, "campfire")
 
       true ->
         mode_id
