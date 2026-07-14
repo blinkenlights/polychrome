@@ -16,13 +16,22 @@ defmodule Octopus.Radar do
   The active installation defines how many sensors exist, their logical ids,
   and how they are arranged (e.g. radial layout, distance). In a radial layout
   each sensor's local +X points outward automatically, so `rotation_deg` is
-  only needed as a small per-sensor correction (default `0`):
+  only needed as a small per-sensor correction (default `0`).
+
+  Per-sensor pose overrides belong in `layout.sensors` — each entry is either
+  an id atom or a keyword list with `:id` plus optional `:rotation_deg`,
+  `:angle_deg`, `:distance_cm`, etc. Deployment (`config/radar.exs`) binds
+  serial ports only and must not carry geographic pose keys.
 
       radar: [
         defaults: [sensitivity: :normal, height_cm: 500, range_cm: 500, ...],
         layout: [
           type: :radial,
-          sensors: [:a, :b, :c, :d, :e, :f],
+          sensors: [
+            :a,
+            [id: :b, rotation_deg: 5],
+            [id: :c, rotation_deg: -3, distance_cm: 310]
+          ],
           start_angle_deg: 120,
           distance_cm: 300
         ]
@@ -827,6 +836,24 @@ defmodule Octopus.Radar do
   end
 
   @doc """
+  Per-sensor installation angle corrections (degrees), keyed by device id.
+
+  Each value is added to that sensor's `:rotation_deg`, rotating its local
+  coordinate frame at the computed mount position. Not persisted across restarts.
+  """
+  @spec sensor_installation_angles() :: %{pos_integer() => float()}
+  def sensor_installation_angles do
+    if Process.whereis(PoseTweak), do: PoseTweak.sensor_installation_angles(), else: %{}
+  end
+
+  @spec sensor_installation_angle_deg(pos_integer()) :: number()
+  def sensor_installation_angle_deg(device_id) when is_integer(device_id) and device_id > 0 do
+    if Process.whereis(PoseTweak),
+      do: PoseTweak.sensor_installation_angle_deg(device_id),
+      else: 0
+  end
+
+  @doc """
   Set the radial layout's starting angle (which port sits at which bearing).
 
   Not persisted across restarts. Updates live sensor pose configs immediately.
@@ -840,7 +867,7 @@ defmodule Octopus.Radar do
   end
 
   @doc """
-  Set a global offset applied to every sensor's `:angle_deg`.
+  Set a global offset applied to every sensor's `:rotation_deg`.
 
   Not persisted across restarts. Updates live sensor pose configs immediately.
   """
@@ -853,7 +880,22 @@ defmodule Octopus.Radar do
   end
 
   @doc """
-  Enable a sensor at runtime, starting its process if not already running.
+  Set the per-sensor installation angle correction for one device.
+
+  The value is added to that sensor's `:rotation_deg`, rotating its local
+  coordinate frame at the computed mount position. Not persisted across restarts.
+  """
+  @spec set_sensor_installation_angle_deg(pos_integer(), number()) :: :ok
+  def set_sensor_installation_angle_deg(device_id, deg)
+      when is_integer(device_id) and device_id > 0 and is_number(deg) do
+    PoseTweak.set_sensor_installation_angle_deg(device_id, deg)
+    apply_pose_tweaks()
+    broadcast_pose_tweak_changed()
+    :ok
+  end
+
+  @doc """
+  Set the radial layout's starting angle (which port sits at which bearing).
 
   This overrides an `enabled: false` config entry for the current runtime
   session. The change is not persisted across restarts.
@@ -1147,6 +1189,7 @@ defmodule Octopus.Radar do
         radar
         |> Keyword.fetch!(:layout)
         |> Keyword.fetch!(:sensors)
+        |> Octopus.Radar.SensorPlan.sensor_ids()
         |> Enum.with_index(1)
         |> Enum.map(fn {_, device_id} -> device_id end)
     end
@@ -1194,7 +1237,8 @@ defmodule Octopus.Radar do
       {:pose_tweak_changed,
        %{
          layout_start_angle_deg: layout_start_angle_deg(),
-         angle_offset_deg: angle_offset_deg()
+         angle_offset_deg: angle_offset_deg(),
+         sensor_installation_angles: sensor_installation_angles()
        }}
     )
   end

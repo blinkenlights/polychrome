@@ -49,11 +49,13 @@ defmodule OctopusWeb do
     end
   end
 
-  def live_view do
+  def live_view(opts \\ []) do
     quote do
       use Phoenix.LiveView,
-        layout: {OctopusWeb.Layouts, :app},
-        container: {:div, class: "contents"}
+        Keyword.merge(
+          [layout: {OctopusWeb.Layouts, :app}, container: {:div, class: "contents"}],
+          unquote(opts)
+        )
 
       unquote(html_helpers())
     end
@@ -110,5 +112,9 @@ defmodule OctopusWeb do
   """
   defmacro __using__(which) when is_atom(which) do
     apply(__MODULE__, which, [])
+  end
+
+  defmacro __using__({which, opts}) when is_atom(which) and is_list(opts) do
+    apply(__MODULE__, which, [opts])
   end
 end

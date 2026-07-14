@@ -732,10 +732,7 @@ defmodule Octopus.Installation do
           raise ArgumentError, "radar layout :type must be :radial, got #{inspect(type)}"
         end
 
-        unless is_list(sensors) and sensors != [] and Enum.all?(sensors, &is_atom/1) do
-          raise ArgumentError,
-                "radar layout :sensors must be a non-empty list of atoms, got #{inspect(sensors)}"
-        end
+        Octopus.Radar.SensorPlan.validate_sensor_entries!(sensors)
 
         opts
     end

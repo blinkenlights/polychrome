@@ -83,5 +83,66 @@ defmodule Octopus.Radar.SensorPlanTest do
       assert {1, cfg} = hd(configs)
       assert cfg[:port] == "/dev/tty.unbound-1"
     end
+
+    test "per-sensor installation entries override pose without deployment pose keys" do
+      radar =
+        Keyword.update!(@installation_radar, :layout, fn layout ->
+          layout
+          |> Keyword.put(:sensors, [
+            :a,
+            [id: :b, rotation_deg: 187],
+            [id: :c, angle_deg: 123, distance_cm: 310]
+          ])
+          |> Keyword.put(:rotation_deg, 180)
+        end)
+
+      deployment =
+        Keyword.update!(@deployment, :sensors, fn sensors ->
+          Enum.map(sensors, fn
+            [id: :b, port: port] -> [id: :b, port: port, rotation_deg: 999]
+            other -> other
+          end)
+        end)
+
+      configs = SensorPlan.build(radar, deployment, :live)
+
+      assert {1, cfg1} = Enum.at(configs, 0)
+      assert {2, cfg2} = Enum.at(configs, 1)
+      assert {3, cfg3} = Enum.at(configs, 2)
+
+      assert cfg1[:angle_deg] == 0.0
+      assert cfg1[:rotation_deg] == 180
+      assert cfg1[:distance_cm] == 300
+
+      assert cfg2[:angle_deg] == 240.0
+      assert cfg2[:rotation_deg] == 187
+      assert cfg2[:distance_cm] == 300
+
+      assert cfg3[:angle_deg] == 123.0
+      assert cfg3[:rotation_deg] == 180
+      assert cfg3[:distance_cm] == 310
+    end
+  end
+
+  describe "validate_sensor_entries!/1" do
+    test "accepts atom ids and keyword entries" do
+      assert :ok =
+               SensorPlan.validate_sensor_entries!([
+                 :a,
+                 [id: :b, rotation_deg: 5]
+               ])
+    end
+
+    test "rejects unknown per-sensor keys" do
+      assert_raise ArgumentError, ~r/unsupported keys/, fn ->
+        SensorPlan.validate_sensor_entries!([[id: :a, port: "/dev/ttyUSB0"]])
+      end
+    end
+
+    test "rejects duplicate ids" do
+      assert_raise ArgumentError, ~r/duplicate ids/, fn ->
+        SensorPlan.validate_sensor_entries!([:a, [id: :a, rotation_deg: 1]])
+      end
+    end
   end
 end

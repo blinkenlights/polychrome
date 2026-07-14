@@ -15,7 +15,7 @@ defmodule OctopusWeb.RadarLive do
   per-frame attribute updates over WebSocket.
   """
 
-  use OctopusWeb, :live_view
+  use OctopusWeb, {:live_view, log: false}
 
   require Logger
 
@@ -144,8 +144,10 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:layout_devices, layout_devices)
      |> assign(:devices, devices)
      |> assign(:radial_layout, Radar.radial_layout?())
-     |> assign(:layout_start_angle_deg, round(Radar.layout_start_angle_deg()))
      |> assign(:angle_offset_deg, round(Radar.angle_offset_deg()))
+     |> assign(:rotation_target, "global")
+     |> assign(:rotation_slider_seq, 0)
+     |> assign(:sensor_installation_angles, Radar.sensor_installation_angles())
      |> assign(:north_panel, view_settings.north_panel)
      |> assign(:sensor_statuses, build_sensor_statuses(devices))
      |> assign(:sensitivity_level, Radar.sensitivity_level())
@@ -286,33 +288,45 @@ defmodule OctopusWeb.RadarLive do
     {:noreply, socket}
   end
 
-  def handle_event("set_layout_start_angle", %{"layout_start_angle_deg" => v}, socket) do
-    case parse_degree(v) do
-      {:ok, deg} -> Radar.set_layout_start_angle_deg(deg)
-      :error -> :ok
-    end
+  def handle_event("set_sensor_rotation", params, socket) do
+    target =
+      if rotation_target_changed?(params) do
+        Map.get(params, "rotation_target", socket.assigns.rotation_target)
+      else
+        socket.assigns.rotation_target
+      end
+      |> normalize_rotation_target()
 
-    {:noreply, socket}
-  end
+    socket = assign(socket, :rotation_target, target)
 
-  def handle_event("set_angle_offset", %{"angle_offset_deg" => v}, socket) do
-    case parse_degree(v) do
-      {:ok, deg} -> Radar.set_angle_offset_deg(deg)
-      :error -> :ok
-    end
+    stale_slider? =
+      case parse_rotation_seq(params["rotation_seq"]) do
+        {:ok, seq} -> seq < socket.assigns.rotation_slider_seq
+        :error -> false
+      end
 
-    {:noreply, socket}
-  end
+    socket =
+      cond do
+        rotation_target_changed?(params) ->
+          socket
 
-  def handle_event("set_north_panel", %{"north_panel" => v}, socket) do
-    case Integer.parse(v) do
-      {n, _} ->
-        Radar.set_north_panel(n)
-        {:noreply, socket}
+        not rotation_deg_changed?(params) ->
+          socket
 
-      _ ->
-        {:noreply, socket}
-    end
+        stale_slider? ->
+          socket
+
+        true ->
+          socket =
+            case parse_rotation_seq(params["rotation_seq"]) do
+              {:ok, seq} -> assign(socket, :rotation_slider_seq, seq)
+              :error -> socket
+            end
+
+          apply_rotation_deg(socket, target, params["rotation_deg"])
+      end
+
+    {:noreply, maybe_push_rotation_slider_sync(socket, params)}
   end
 
   def handle_event("set_detection_list_mode", %{"mode" => mode}, socket) do
@@ -449,17 +463,15 @@ defmodule OctopusWeb.RadarLive do
     {:noreply, apply_mock_settings(socket, settings)}
   end
 
-  def handle_info({:pose_tweak_changed, %{layout_start_angle_deg: start, angle_offset_deg: offset}}, socket) do
+  def handle_info({:pose_tweak_changed, tweak}, socket) do
     devices = Radar.devices() |> Enum.filter(& &1.enabled)
 
-    # Recompute sensor geometry in place (keep existing detections/samples so
-    # dragging the layout sliders doesn't wipe the tracks every step).
     {:noreply,
      socket
      |> assign(:layout_devices, Radar.planned_devices())
      |> assign(:devices, devices)
-     |> assign(:layout_start_angle_deg, round(start))
-     |> assign(:angle_offset_deg, round(offset))
+     |> assign(:angle_offset_deg, round(Map.get(tweak, :angle_offset_deg, 0)))
+     |> assign(:sensor_installation_angles, Map.get(tweak, :sensor_installation_angles, %{}))
      |> rebuild_view()}
   end
 
@@ -1376,7 +1388,7 @@ defmodule OctopusWeb.RadarLive do
           </div>
         </div>
 
-        <div class="w-72 shrink-0 h-full overflow-y-auto flex flex-col gap-4 p-3 border-l border-base-300 bg-base-100">
+        <div class="w-80 shrink-0 h-full overflow-y-auto flex flex-col gap-4 p-3 border-l border-base-300 bg-base-100">
           <div class="flex flex-col gap-3">
             <p class="text-xs font-semibold opacity-70">Source</p>
                     <div class="flex flex-wrap gap-1 w-full" id="radar-source-mode">
@@ -1401,7 +1413,7 @@ defmodule OctopusWeb.RadarLive do
 
                   <div class="flex flex-col gap-2">
                     <p class="text-xs font-semibold opacity-70">Sensors</p>
-                    <div class="flex flex-wrap gap-1">
+                    <div class="flex flex-nowrap gap-1">
                       <%= for d <- @devices do %>
                         <button
                           type="button"
@@ -1409,7 +1421,7 @@ defmodule OctopusWeb.RadarLive do
                           phx-value-device_id={d.device_id}
                           title={sensor_tooltip(d, @sensor_statuses[d.device_id])}
                           class={[
-                            "btn btn-sm font-mono min-w-[2.5rem]",
+                            "btn btn-sm font-mono flex-1 min-w-0 px-1",
                             sensor_status_class(@sensor_statuses[d.device_id])
                           ]}
                         >
@@ -1561,59 +1573,101 @@ defmodule OctopusWeb.RadarLive do
                   <% end %>
 
                   <%= if @radial_layout do %>
-                    <form phx-change="set_layout_start_angle" class="flex flex-col gap-1">
-                      <label for="radar-layout-start-angle" class="text-xs font-semibold opacity-70">
-                        Layout start
-                      </label>
-                      <input
-                        id="radar-layout-start-angle"
-                        name="layout_start_angle_deg"
-                        type="range"
-                        min="0"
-                        max="359"
-                        step="1"
-                        value={@layout_start_angle_deg}
-                        phx-throttle="60"
-                        class="range range-sm w-full"
-                      />
-                      <span class="text-sm font-mono text-right">{@layout_start_angle_deg}°</span>
-                    </form>
-                    <form phx-change="set_angle_offset" class="flex flex-col gap-1">
-                      <label for="radar-angle-offset" class="text-xs font-semibold opacity-70">
+                    <form
+                      id="radar-sensor-rotation-form"
+                      phx-change="set_sensor_rotation"
+                      class="flex flex-col gap-1"
+                    >
+                      <label for="radar-rotation-target" class="text-xs font-semibold opacity-70">
                         Sensor rotation
                       </label>
-                      <input
-                        id="radar-angle-offset"
-                        name="angle_offset_deg"
-                        type="range"
-                        min="0"
-                        max="359"
-                        step="1"
-                        value={@angle_offset_deg}
-                        phx-throttle="60"
-                        class="range range-sm w-full"
-                      />
-                      <span class="text-sm font-mono text-right">{@angle_offset_deg}°</span>
-                    </form>
-                  <% end %>
+                      <select
+                        id="radar-rotation-target"
+                        name="rotation_target"
+                        class="select select-bordered w-full h-10 text-sm leading-normal font-mono"
+                      >
+                        <option value="global" selected={@rotation_target == "global"}>
+                          Alle Sensoren
+                        </option>
+                        <%= for d <- @layout_devices do %>
+                          <option
+                            value={Integer.to_string(d.device_id)}
+                            selected={@rotation_target == Integer.to_string(d.device_id)}
+                          >
+                            Sensor {device_letter(d.device_id)}{sensor_rotation_modified_marker(d.device_id, @sensor_installation_angles)}
+                          </option>
+                        <% end %>
+                      </select>
+                      <input type="hidden" name="rotation_seq" value="0" />
+                      <div
+                        id="radar-sensor-rotation-input"
+                        phx-hook=".RadarRotationSlider"
+                        data-value={rotation_slider_value(@rotation_target, @angle_offset_deg, @sensor_installation_angles)}
+                      >
+                        <input
+                          id="radar-sensor-rotation"
+                          name="rotation_deg"
+                          type="range"
+                          min="0"
+                          max="359"
+                          step="1"
+                          value={rotation_slider_value(@rotation_target, @angle_offset_deg, @sensor_installation_angles)}
+                          class="range range-sm w-full"
+                        />
+                        <script :type={Phoenix.LiveView.ColocatedHook} name=".RadarRotationSlider">
+                          export default {
+                            mounted() {
+                              this.range = this.el.querySelector('input[type="range"]')
+                              this.seqInput = this.el.closest('form')?.querySelector('input[name="rotation_seq"]')
+                              this.label = this.el.closest('form')?.querySelector('[data-rotation-label]')
 
-                  <%= if @ring_layout.enabled do %>
-                    <form phx-change="set_north_panel" class="flex flex-col gap-1">
-                      <label for="radar-north-panel" class="text-xs font-semibold opacity-70">
-                        North panel
-                      </label>
-                      <input
-                        id="radar-north-panel"
-                        name="north_panel"
-                        type="range"
-                        min="1"
-                        max={@ring_layout.count}
-                        step="1"
-                        value={@north_panel}
-                        phx-throttle="60"
-                        class="range range-sm w-full"
-                      />
-                      <span class="text-sm font-mono text-right">{@north_panel}</span>
+                              this.syncSlider = (value) => {
+                                if (!this.range || document.activeElement === this.range) return
+                                if (value == null) return
+                                this.range.value = String(value)
+                              }
+
+                              this.handleEvent("sync_rotation_slider", ({ value }) => {
+                                this.syncSlider(value)
+                              })
+
+                              this.updateLabel = () => {
+                                if (this.label && this.range) {
+                                  this.label.textContent = `${this.range.value}°`
+                                }
+                              }
+
+                              this.onInput = () => {
+                                if (this.seqInput) {
+                                  this.seqInput.value = String(Number(this.seqInput.value || 0) + 1)
+                                }
+                                this.updateLabel()
+                              }
+
+                              this.onRelease = () => {
+                                if (this.seqInput) {
+                                  this.seqInput.value = String(Number(this.seqInput.value || 0) + 1)
+                                }
+                                this.el.closest('form')?.requestSubmit()
+                              }
+
+                              this.range?.addEventListener("input", this.onInput, { capture: true })
+                              this.range?.addEventListener("change", this.onRelease)
+                            },
+                            destroyed() {
+                              this.range?.removeEventListener("input", this.onInput, { capture: true })
+                              this.range?.removeEventListener("change", this.onRelease)
+                            },
+                            updated() {
+                              this.range = this.el.querySelector('input[type="range"]')
+                              this.syncSlider(this.el.dataset.value)
+                            }
+                          }
+                        </script>
+                      </div>
+                      <span data-rotation-label class="text-sm font-mono text-right">
+                        {rotation_slider_value(@rotation_target, @angle_offset_deg, @sensor_installation_angles)}°
+                      </span>
                     </form>
                   <% end %>
 
@@ -2046,6 +2100,94 @@ defmodule OctopusWeb.RadarLive do
   defp parse_source_mode("off"), do: :off
   defp parse_source_mode(_), do: :off
 
+  defp rotation_deg_changed?(%{"_target" => ["rotation_deg"]}), do: true
+  defp rotation_deg_changed?(%{"rotation_deg" => v}) when is_binary(v) and v != "", do: true
+  defp rotation_deg_changed?(_), do: false
+
+  defp maybe_push_rotation_slider_sync(socket, params) do
+    if rotation_target_changed?(params) do
+      push_event(socket, "sync_rotation_slider", %{
+        "value" =>
+          rotation_slider_value(
+            socket.assigns.rotation_target,
+            socket.assigns.angle_offset_deg,
+            socket.assigns.sensor_installation_angles
+          )
+      })
+    else
+      socket
+    end
+  end
+
+  defp rotation_target_changed?(%{"_target" => ["rotation_target"]}), do: true
+  defp rotation_target_changed?(_), do: false
+
+  defp apply_rotation_deg(socket, target, v) do
+    case parse_degree(v) do
+      {:ok, deg} ->
+        case parse_rotation_target(target) do
+          :global ->
+            Radar.set_angle_offset_deg(deg)
+            assign(socket, :angle_offset_deg, round(deg))
+
+          {:sensor, device_id} ->
+            Radar.set_sensor_installation_angle_deg(device_id, deg)
+
+            assign(
+              socket,
+              :sensor_installation_angles,
+              Map.put(socket.assigns.sensor_installation_angles, device_id, deg * 1.0)
+            )
+        end
+
+      :error ->
+        socket
+    end
+  end
+
+  defp rotation_slider_value("global", angle_offset_deg, _angles), do: round(angle_offset_deg)
+
+  defp rotation_slider_value(target, _angle_offset_deg, angles) when is_binary(target) do
+    case parse_rotation_target(target) do
+      {:sensor, device_id} -> angles |> Map.get(device_id, 0.0) |> round()
+      :global -> 0
+    end
+  end
+
+  defp sensor_rotation_modified_marker(device_id, angles) do
+    if sensor_rotation_modified?(device_id, angles), do: " ·", else: ""
+  end
+
+  defp sensor_rotation_modified?(device_id, angles) do
+    angles |> Map.get(device_id, 0.0) |> round() != 0
+  end
+
+  defp normalize_rotation_target("global"), do: "global"
+
+  defp normalize_rotation_target(target) when is_binary(target), do: target
+
+  defp normalize_rotation_target(target) when is_integer(target), do: Integer.to_string(target)
+
+  defp normalize_rotation_target(_), do: "global"
+
+  defp parse_rotation_target("global"), do: :global
+
+  defp parse_rotation_target(target) when is_binary(target) do
+    case Integer.parse(target) do
+      {device_id, _} when device_id > 0 -> {:sensor, device_id}
+      _ -> :global
+    end
+  end
+
+  defp parse_rotation_seq(v) when is_binary(v) do
+    case Integer.parse(v) do
+      {seq, _} when seq >= 0 -> {:ok, seq}
+      _ -> :error
+    end
+  end
+
+  defp parse_rotation_seq(_), do: :error
+
   defp parse_degree(v) when is_binary(v) do
     case Float.parse(v) do
       {deg, _} -> {:ok, deg}
@@ -2163,8 +2305,9 @@ defmodule OctopusWeb.RadarLive do
   defp detection_dump_layout(assigns) do
     %{
       "source_mode" => Atom.to_string(assigns.source_mode),
-      "layout_start_angle_deg" => assigns.layout_start_angle_deg,
+      "layout_start_angle_deg" => round(Radar.layout_start_angle_deg()),
       "angle_offset_deg" => assigns.angle_offset_deg,
+      "sensor_installation_angles" => assigns.sensor_installation_angles,
       "north_panel" => assigns.north_panel,
       "radial_layout" => assigns.radial_layout
     }

@@ -29,8 +29,9 @@ import Config
 #     (and optional `:usb_path`) instead.
 #
 #   * `:sensors` — maps each installation sensor id to an adapter port:
-#     `[id: :a, adapter: "65", port: :if00]`. Direct `[id: :a, port: "..."]`
-#     paths are still supported for simple setups without adapters.
+#     `[id: :a, adapter: "65", port: :if00]`. Geographic pose keys
+#     (`:rotation_deg`, `:angle_deg`, …) belong in the installation module,
+#     not here. Direct `[id: :a, port: "..."]` paths are still supported.
 #
 # Boot source mode (`:off`|`:live`|`:exact`|`:fuzzy`) defaults to `:off` in dev
 # and `:live` in prod; override with RADAR_SOURCE_MODE when a host needs a
