@@ -432,15 +432,46 @@ function applyCameraAttributes() {
 }
 
 /**
- * Ground footprint of a straight-down radar cone: a circle whose radius is
- * limited by both the ±60° opening angle at the sensor height and the
- * configured detection range (`AT+RANGE`).
+ * Shared straight-down cone geometry: apex at the chip underside, ground circle
+ * radius = min(range, yApex·tan(60°)). When range-limited the viz uses a
+ * smaller effective half-angle so the blue cone rim meets the yellow footprint.
  */
-function sensorGroundRadiusM(pose: SensorPose): number {
-  const h = pose.heightCm / 100;
+function sensorConeParams(pose: SensorPose): {
+  yApex: number;
+  groundRadiusM: number;
+  slantLengthM: number;
+  halfAngleDeg: number;
+} {
+  const heightM = pose.heightCm / 100;
+  const yApex = heightM - RADAR_CHIP_H_M;
   const rangeM = pose.rangeCm / 100;
-  const coneR = h * Math.tan((RADAR_SPOT_HALF_ANGLE_DEG * Math.PI) / 180);
-  return Math.max(0, Math.min(rangeM, coneR));
+  const halfAngleRad = (RADAR_SPOT_HALF_ANGLE_DEG * Math.PI) / 180;
+  const geomRadiusM = yApex * Math.tan(halfAngleRad);
+  const groundRadiusM = Math.max(0, Math.min(rangeM, geomRadiusM));
+
+  if (groundRadiusM <= 0 || yApex <= 0) {
+    return {
+      yApex,
+      groundRadiusM: 0,
+      slantLengthM: 0,
+      halfAngleDeg: RADAR_SPOT_HALF_ANGLE_DEG,
+    };
+  }
+
+  const rangeLimited = rangeM + 1e-6 < geomRadiusM;
+  const slantLengthM = rangeLimited
+    ? Math.hypot(yApex, groundRadiusM)
+    : yApex / Math.cos(halfAngleRad);
+  const halfAngleDeg = rangeLimited
+    ? (Math.atan(groundRadiusM / yApex) * 180) / Math.PI
+    : RADAR_SPOT_HALF_ANGLE_DEG;
+
+  return { yApex, groundRadiusM, slantLengthM, halfAngleDeg };
+}
+
+/** Ground footprint radius (m) — see `sensorConeParams/1`. */
+function sensorGroundRadiusM(pose: SensorPose): number {
+  return sensorConeParams(pose).groundRadiusM;
 }
 
 /**
@@ -1094,22 +1125,18 @@ class Pixels3dAframeHook extends Hook {
       root.appendChild(chip);
 
       if (renderRadarCones) {
-        // Cone apex at the chip underside, opening straight down (−Y). Yaw only
-        // (angle + rotation) orients the spherical cap / local +X like radar_live.
-        const half = (RADAR_SPOT_HALF_ANGLE_DEG * Math.PI) / 180;
-        const slant = height / Math.cos(half);
-        const yawDeg = pose.angleDeg + pose.rotationDeg;
-        const coneHost = document.createElement('a-entity');
-        coneHost.setAttribute(
-          'position',
-          `${x} ${height - RADAR_CHIP_H_M} ${z}`
-        );
-        coneHost.setAttribute('rotation', `0 ${yawDeg} 0`);
-        coneHost.setAttribute(
-          'radar-cone-viz',
-          `length: ${slant}; halfAngleDeg: ${RADAR_SPOT_HALF_ANGLE_DEG}`
-        );
-        root.appendChild(coneHost);
+        const cone = sensorConeParams(pose);
+        if (cone.slantLengthM > 0) {
+          const yawDeg = pose.angleDeg + pose.rotationDeg;
+          const coneHost = document.createElement('a-entity');
+          coneHost.setAttribute('position', `${x} ${cone.yApex} ${z}`);
+          coneHost.setAttribute('rotation', `0 ${yawDeg} 0`);
+          coneHost.setAttribute(
+            'radar-cone-viz',
+            `length: ${cone.slantLengthM}; halfAngleDeg: ${cone.halfAngleDeg}`,
+          );
+          root.appendChild(coneHost);
+        }
       }
 
       const radial = Math.hypot(x, z) || 1;
