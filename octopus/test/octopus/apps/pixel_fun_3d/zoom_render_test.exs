@@ -43,7 +43,6 @@ defmodule Octopus.Apps.PixelFun3D.ZoomRenderTest do
       source: source,
       colors: {Chameleon.HSV.new(0, 70, 100), Chameleon.HSV.new(180, 70, 100)},
       display_info: %{width: w, height: h},
-      panel_proximities: Map.new(0..(Installation.num_panels() - 1), fn i -> {i, 0.0} end),
       panel_interaction_factors: Map.new(0..(Installation.num_panels() - 1), fn i -> {i, 0.0} end),
       seconds: 0.0,
       formula_seconds: 0.0,

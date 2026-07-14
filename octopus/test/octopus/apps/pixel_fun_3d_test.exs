@@ -81,12 +81,11 @@ defmodule Octopus.Apps.PixelFun3DTest do
         program: program,
         display_info: %{width: Installation.width(), height: Installation.height()},
         colors: {Chameleon.HSV.new(0, 70, 100), Chameleon.HSV.new(180, 70, 100)},
-        panel_proximities: %{0 => 0.0},
-        panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
         zoom_base: 1.0,
+        panel_interaction_factors: %{},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -108,12 +107,11 @@ defmodule Octopus.Apps.PixelFun3DTest do
         program: program,
         display_info: %{width: Installation.width(), height: Installation.height()},
         colors: {Chameleon.HSV.new(0, 70, 100), Chameleon.HSV.new(180, 70, 100)},
-        panel_proximities: %{0 => 0.0, 1 => 0.0},
-        panel_interaction_factors: %{0 => 0.0, 1 => 0.0},
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
         zoom_base: 1.0,
+        panel_interaction_factors: %{},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -136,12 +134,11 @@ defmodule Octopus.Apps.PixelFun3DTest do
         display_info: %{width: Installation.width(), height: Installation.height()},
         colors: {Chameleon.HSV.new(0, 70, 100), Chameleon.HSV.new(180, 70, 100)},
         color_mode: :random,
-        panel_proximities: %{0 => 0.0},
-        panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
         zoom_base: 1.0,
+        panel_interaction_factors: %{},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -163,12 +160,11 @@ defmodule Octopus.Apps.PixelFun3DTest do
         program: program,
         display_info: %{width: Installation.width(), height: Installation.height()},
         color_mode: :rainbow,
-        panel_proximities: %{0 => 0.0},
-        panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
         zoom_base: 1.0,
+        panel_interaction_factors: %{},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -188,12 +184,11 @@ defmodule Octopus.Apps.PixelFun3DTest do
         program: program,
         display_info: %{width: Installation.width(), height: Installation.height()},
         color_mode: :rainbow,
-        panel_proximities: %{0 => 0.0},
-        panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
         zoom_base: 1.0,
+        panel_interaction_factors: %{},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -214,12 +209,11 @@ defmodule Octopus.Apps.PixelFun3DTest do
         display_info: %{width: Installation.width(), height: Installation.height()},
         color_mode: :white,
         colors: white_levels(100, 50),
-        panel_proximities: %{0 => 0.0},
-        panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
         zoom_base: 1.0,
+        panel_interaction_factors: %{},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -243,12 +237,11 @@ defmodule Octopus.Apps.PixelFun3DTest do
         display_info: %{width: Installation.width(), height: Installation.height()},
         color_mode: :white,
         colors: white_levels(100, 50),
-        panel_proximities: %{0 => 0.0},
-        panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
         zoom_base: 1.0,
+        panel_interaction_factors: %{},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -269,12 +262,11 @@ defmodule Octopus.Apps.PixelFun3DTest do
         display_info: %{width: Installation.width(), height: Installation.height()},
         color_mode: :white,
         colors: white_levels(100, 50),
-        panel_proximities: %{0 => 0.0},
-        panel_interaction_factors: %{0 => 0.0},
         seconds: 5.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
         zoom_base: 1.0,
+        panel_interaction_factors: %{},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -302,12 +294,11 @@ defmodule Octopus.Apps.PixelFun3DTest do
         display_info: %{width: Installation.width(), height: Installation.height()},
         color_mode: :white,
         colors: white_levels(100, 40),
-        panel_proximities: %{0 => 0.0},
-        panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
         zoom_base: 1.0,
+        panel_interaction_factors: %{},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -407,12 +398,11 @@ defmodule Octopus.Apps.PixelFun3DTest do
         display_info: %{width: Installation.width(), height: Installation.height()},
         color_mode: :random,
         colors: {Chameleon.HSV.new(0, 70, 100), Chameleon.HSV.new(180, 70, 100)},
-        panel_proximities: %{0 => 0.0},
-        panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
         zoom_base: 1.0,
+        panel_interaction_factors: %{},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -450,14 +440,13 @@ defmodule Octopus.Apps.PixelFun3DTest do
         display_info: %{width: Installation.width(), height: Installation.height()},
         colors: {Chameleon.HSV.new(0, 70, 100), Chameleon.HSV.new(180, 70, 100)},
         color_mode: :random,
-        panel_proximities: Map.new(0..(Installation.num_panels() - 1), &{&1, 0.0}),
-        panel_interaction_factors: Map.new(0..(Installation.num_panels() - 1), &{&1, 0.0}),
         seconds: 0.0,
         orbit_rate: 0.0,
         roll_rate: 0.0,
         tilt_scale: 0.0,
         elev_base: 0.0,
         zoom_base: 1.0,
+        panel_interaction_factors: %{},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 

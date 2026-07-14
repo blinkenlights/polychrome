@@ -7,7 +7,6 @@ defmodule Octopus.Apps.PixelFun3D do
   alias Octopus.Canvas
   alias Octopus.Events.Event.Audio, as: AudioEvent
   alias Octopus.Events.Event.Input, as: InputEvent
-  alias Octopus.Events.Event.Proximity, as: ProximityEvent
   alias Octopus.AppSupervisor
   alias Octopus.Apps.PixelFun.Program
   alias Octopus.Apps.PixelFun3D.Zoom
@@ -168,7 +167,6 @@ defmodule Octopus.Apps.PixelFun3D do
       :seconds,
       :buttons,
       :panel_interaction_factors,
-      :panel_proximities,
       :speed,
       :display_info,
       :pixel_dirs,
@@ -815,7 +813,6 @@ defmodule Octopus.Apps.PixelFun3D do
       formula_seconds: seconds,
       buttons: %{},
       panel_interaction_factors: panel_interaction_factors,
-      panel_proximities: Map.new(0..(Installation.num_panels() - 1), fn i -> {i, 0.0} end),
       speed: Octopus.Params.Global.speed(),
       display_info: display_info,
       pixel_dirs: pixel_dirs,
@@ -1831,21 +1828,6 @@ defmodule Octopus.Apps.PixelFun3D do
     {:noreply, %State{state | buttons: Map.put(state.buttons, event.button - 1, pressed)}}
   end
 
-  def handle_event(%ProximityEvent{panel: panel} = event, %State{} = state) do
-    distance = event.distance_combined
-    distance_normalized = 1.0 - max(min(distance / 2500.0, 1.0), 0.0)
-
-    panel_proximities =
-      Map.update(
-        state.panel_proximities,
-        panel - 1,
-        distance_normalized,
-        &lerp(&1, distance_normalized, 0.5)
-      )
-
-    {:noreply, %State{state | panel_proximities: panel_proximities}}
-  end
-
   def handle_event(_event, %State{} = state) do
     {:noreply, state}
   end
@@ -1878,8 +1860,6 @@ defmodule Octopus.Apps.PixelFun3D do
     panels
     |> Enum.with_index()
     |> Enum.reduce(canvas, fn {panel, index}, canvas ->
-      proximity = Map.get(state.panel_proximities, index, 0.0)
-      hue_shift = proximity * 180 * 5
       interaction_factor = Map.get(state.panel_interaction_factors, index, 0.0)
 
       # pattern_speed scales formula time; interaction kick unscaled.
@@ -1899,7 +1879,6 @@ defmodule Octopus.Apps.PixelFun3D do
             y,
             i,
             pixel_time,
-            hue_shift,
             saturation_percent,
             gain,
             audio,
@@ -2024,7 +2003,6 @@ defmodule Octopus.Apps.PixelFun3D do
          y,
          i,
          pixel_time,
-         hue_shift,
          saturation_percent,
          gain,
          audio,
@@ -2036,18 +2014,18 @@ defmodule Octopus.Apps.PixelFun3D do
       {:steady, n} ->
         sample_ctx
         |> sample_zoom_branch(n)
-        |> colorize_sample(state, i, pixel_time, hue_shift, saturation_percent, gain, audio, lerp_fn)
+        |> colorize_sample(state, i, pixel_time, saturation_percent, gain, audio, lerp_fn)
 
       {:fade, from_n, to_n, u} ->
         c_from =
           sample_ctx
           |> sample_zoom_branch(from_n)
-          |> colorize_sample(state, i, pixel_time, hue_shift, saturation_percent, gain, audio, lerp_fn)
+          |> colorize_sample(state, i, pixel_time, saturation_percent, gain, audio, lerp_fn)
 
         c_to =
           sample_ctx
           |> sample_zoom_branch(to_n)
-          |> colorize_sample(state, i, pixel_time, hue_shift, saturation_percent, gain, audio, lerp_fn)
+          |> colorize_sample(state, i, pixel_time, saturation_percent, gain, audio, lerp_fn)
 
         blend_pixels(c_from, c_to, u)
     end
@@ -2065,7 +2043,7 @@ defmodule Octopus.Apps.PixelFun3D do
     end
   end
 
-  defp colorize_sample({x_scaled, y_scaled, {nx, ny, nz}}, state, i, pixel_time, hue_shift, sat, gain, audio, lerp_fn) do
+  defp colorize_sample({x_scaled, y_scaled, {nx, ny, nz}}, state, i, pixel_time, sat, gain, audio, lerp_fn) do
     case state.color_mode do
       :white ->
         {color_a, color_b} = state.colors
@@ -2101,15 +2079,10 @@ defmodule Octopus.Apps.PixelFun3D do
             audio.high
           )
 
-        rainbow_pixel_color(x_scaled, y_scaled, value, hue_shift, sat, gain)
+        rainbow_pixel_color(x_scaled, y_scaled, value, sat, gain)
 
       _ ->
         {color_a, color_b} = state.colors
-
-        colors = {
-          %Chameleon.HSV{(%Chameleon.HSV{} = color_a) | h: rem(trunc(color_a.h + hue_shift), 360)},
-          %Chameleon.HSV{(%Chameleon.HSV{} = color_b) | h: rem(trunc(color_b.h + hue_shift), 360)}
-        }
 
         pixels(
           state.program,
@@ -2123,7 +2096,7 @@ defmodule Octopus.Apps.PixelFun3D do
           audio.low,
           audio.mid,
           audio.high,
-          colors,
+          {color_a, color_b},
           lerp_fn
         )
     end
@@ -2534,11 +2507,11 @@ defmodule Octopus.Apps.PixelFun3D do
     |> min(255)
   end
 
-  defp rainbow_pixel_color(_x, _y, value, _hue_shift, _saturation_percent, _gain) when value == 0.0,
+  defp rainbow_pixel_color(_x, _y, value, _saturation_percent, _gain) when value == 0.0,
     do: {0, 0, 0}
 
-  defp rainbow_pixel_color(x, y, value, hue_shift, saturation_percent, gain) do
-    hue = rainbow_hue(x, y, hue_shift)
+  defp rainbow_pixel_color(x, y, value, saturation_percent, gain) do
+    hue = rainbow_hue(x, y)
 
     saturation = saturation_percent |> max(0) |> min(100)
     brightness = trunc(gain * abs(value)) |> max(0) |> min(100)
@@ -2551,14 +2524,14 @@ defmodule Octopus.Apps.PixelFun3D do
 
   # Spread hue evenly across pattern space (both axes). Pure atan2 clusters
   # two colours on flat/circular layouts where one axis barely varies.
-  defp rainbow_hue(x, y, hue_shift) do
+  defp rainbow_hue(x, y) do
     w = max(Installation.width(), 1) * 1.0
     h = max(Installation.height(), 1) * 1.0
 
     x_frac = (x + w / 2) / w
     y_frac = (y + h / 2) / h
 
-    hue = x_frac * 240.0 + y_frac * 120.0 + hue_shift
+    hue = x_frac * 240.0 + y_frac * 120.0
     hue = :math.fmod(hue, 360.0)
     hue = if hue < 0, do: hue + 360.0, else: hue
 

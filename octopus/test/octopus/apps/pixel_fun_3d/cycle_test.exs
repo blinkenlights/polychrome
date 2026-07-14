@@ -64,7 +64,6 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
           seconds: 0.0,
           buttons: %{},
           panel_interaction_factors: %{},
-          panel_proximities: %{},
           speed: 1.0,
           display_info: %{width: 8, height: 8},
           pixel_dirs: nil,
