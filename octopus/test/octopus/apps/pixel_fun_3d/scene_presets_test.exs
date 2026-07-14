@@ -8,7 +8,7 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
     test "returns presets with valid formulas and scene fields" do
       presets = ScenePresets.builtins()
 
-      assert length(presets) == 25
+      assert length(presets) == 24
 
       for preset <- presets do
         assert preset.builtin
@@ -36,7 +36,7 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
       ]
 
       new_slugs = ~w(
-        kreiswelle chaser doppelhelix nordlicht wolkenzug seegras quallenpuls
+        kreiswelle chaser doppelhelix nordlicht wolkenzug seegras
         weiche_blobs leuchtplankton wasserwaage sternenhimmel nebeldrift
         facettenstrudel marmor
         strudel spiralband globus kippende_baender
@@ -100,7 +100,7 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
 
     test "config_matches? identifies each new builtin against its own config" do
       new_slugs = ~w(
-        kreiswelle chaser doppelhelix nordlicht wolkenzug seegras quallenpuls
+        kreiswelle chaser doppelhelix nordlicht wolkenzug seegras
         weiche_blobs leuchtplankton wasserwaage sternenhimmel nebeldrift
         facettenstrudel marmor
         strudel spiralband globus kippende_baender
@@ -121,7 +121,7 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
       ids = ScenePresets.list_all() |> Enum.map(& &1.id)
 
       assert "builtin:classic_ripple" in ids
-      assert length(ids) == 26
+      assert length(ids) == 25
       refute Enum.any?(ids, &String.starts_with?(&1, "user:"))
     end
   end
