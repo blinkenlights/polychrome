@@ -114,6 +114,7 @@ defmodule Octopus.Radar do
     LogFormat,
     Mock,
     PanelActivity,
+    PanelGravity,
     PoseTweak,
     Runtime,
     Sensitivity,
@@ -195,9 +196,7 @@ defmodule Octopus.Radar do
         {:error, :not_found}
 
       %{usb_path: nil} = adapter ->
-        Logger.warning(
-          "[radar] USB adapter #{adapter_name}: no sysfs path (device unplugged?)"
-        )
+        Logger.warning("[radar] USB adapter #{adapter_name}: no sysfs path (device unplugged?)")
 
         Enum.each(adapter.device_ids, &broadcast_status(&1, :unavailable))
         {:error, :unavailable}
@@ -380,7 +379,9 @@ defmodule Octopus.Radar do
   @doc "Runtime north-panel index for circular ring rendering."
   @spec north_panel() :: pos_integer()
   def north_panel do
-    if Process.whereis(ViewSettings), do: ViewSettings.north_panel(), else: Octopus.Installation.north_panel()
+    if Process.whereis(ViewSettings),
+      do: ViewSettings.north_panel(),
+      else: Octopus.Installation.north_panel()
   end
 
   @spec set_north_panel(pos_integer()) :: :ok
@@ -453,7 +454,8 @@ defmodule Octopus.Radar do
 
   @doc false
   @spec clutter_filter_track_debug(pos_integer(), non_neg_integer()) :: map() | nil
-  def clutter_filter_track_debug(device_id, track_id) when is_integer(track_id) and track_id >= 0 do
+  def clutter_filter_track_debug(device_id, track_id)
+      when is_integer(track_id) and track_id >= 0 do
     ClutterFilter.track_debug(device_id, track_id)
   end
 
@@ -707,8 +709,12 @@ defmodule Octopus.Radar do
           :inactive | :unavailable | :probing | :initializing | :working | :stale
   def sensor_status(device_id) do
     cond do
-      not configured?() -> :inactive
-      not Runtime.enabled?(device_id) -> :inactive
+      not configured?() ->
+        :inactive
+
+      not Runtime.enabled?(device_id) ->
+        :inactive
+
       true ->
         case Sensor.get_ui_status(device_id) do
           {:ok, status} -> status
@@ -796,6 +802,54 @@ defmodule Octopus.Radar do
   def set_panel_activity_config(opts) when is_list(opts) do
     if Process.whereis(PanelActivity.Settings) do
       PanelActivity.Settings.update(opts)
+    else
+      :ok
+    end
+  end
+
+  @doc "PubSub topic for per-panel gravity snapshots."
+  @spec panel_gravity_topic() :: String.t()
+  def panel_gravity_topic, do: PanelGravity.topic()
+
+  @doc "Subscribe to per-panel gravity snapshots."
+  @spec subscribe_panel_gravity() :: :ok | {:error, term()}
+  def subscribe_panel_gravity do
+    Phoenix.PubSub.subscribe(Octopus.PubSub, panel_gravity_topic())
+  end
+
+  @doc """
+  Return the latest per-panel gravity snapshot.
+
+  Shape: `%{gravity: %{panel => float}, raw: %{panel => float}, ref: float, at: ms}`
+  Panel keys are 1-based installation panel numbers.
+  """
+  @spec panel_gravity() :: map()
+  def panel_gravity do
+    if Process.whereis(PanelGravity), do: PanelGravity.snapshot(), else: empty_panel_gravity()
+  end
+
+  @doc "Return normalised per-panel gravity factors (1-based installation panels)."
+  @spec panel_factors_gravity() :: %{pos_integer() => float()}
+  def panel_factors_gravity do
+    case panel_gravity() do
+      %{gravity: gravity} -> gravity
+      _ -> %{}
+    end
+  end
+
+  @doc "Return current panel-gravity tuning settings."
+  @spec panel_gravity_config() :: PanelGravity.Settings.t()
+  def panel_gravity_config do
+    if Process.whereis(PanelGravity.Settings),
+      do: PanelGravity.Settings.get(),
+      else: struct(PanelGravity.Settings, PanelGravity.Settings.defaults())
+  end
+
+  @doc "Update panel-gravity tuning settings at runtime."
+  @spec set_panel_gravity_config(keyword()) :: :ok
+  def set_panel_gravity_config(opts) when is_list(opts) do
+    if Process.whereis(PanelGravity.Settings) do
+      PanelGravity.Settings.update(opts)
     else
       :ok
     end
@@ -965,6 +1019,8 @@ defmodule Octopus.Radar do
         {ClutterFilter, []},
         {PanelActivity.Settings, []},
         Octopus.Radar.PanelActivity,
+        {PanelGravity.Settings, []},
+        Octopus.Radar.PanelGravity,
         Octopus.Radar.StatusHistory,
         Octopus.Radar.Stats,
         {Mock.World, [mode: mock_world_mode(boot)]}
@@ -995,9 +1051,7 @@ defmodule Octopus.Radar do
       end
 
     if missing_at_boot != [] do
-      Logger.info(
-        "[radar] #{length(missing_at_boot)} sensor(s) waiting for serial port at boot"
-      )
+      Logger.info("[radar] #{length(missing_at_boot)} sensor(s) waiting for serial port at boot")
     end
 
     sensor_configs_for(boot)
@@ -1098,10 +1152,19 @@ defmodule Octopus.Radar do
     device_child_specs(device_id, config, mode)
     |> Enum.each(fn spec ->
       case Supervisor.start_child(__MODULE__, spec) do
-        {:ok, _} -> :ok
-        {:error, {:already_started, _}} -> :ok
-        {:error, :already_present} -> :ok
-        error -> Logger.warning("#{LogFormat.device_letter(device_id)} start_child failed: #{inspect(error)}")
+        {:ok, _} ->
+          :ok
+
+        {:error, {:already_started, _}} ->
+          :ok
+
+        {:error, :already_present} ->
+          :ok
+
+        error ->
+          Logger.warning(
+            "#{LogFormat.device_letter(device_id)} start_child failed: #{inspect(error)}"
+          )
       end
     end)
   end
@@ -1294,6 +1357,18 @@ defmodule Octopus.Radar do
       factors: empty,
       raw: empty,
       ref: Map.fetch!(PanelActivity.Settings.defaults(), :min_ref),
+      at: 0
+    }
+  end
+
+  defp empty_panel_gravity do
+    num_panels = max(Octopus.Installation.num_panels(), 1)
+    empty = for p <- 1..num_panels, into: %{}, do: {p, 0.0}
+
+    %{
+      gravity: empty,
+      raw: empty,
+      ref: Map.fetch!(PanelGravity.Settings.defaults(), :min_ref),
       at: 0
     }
   end

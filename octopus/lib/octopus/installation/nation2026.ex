@@ -57,6 +57,13 @@ defmodule Octopus.Installation.Nation2026 do
         sensitivity: 1.0,
         adaptive: true,
         release_tau: 5.0
+      ],
+      panel_gravity: [
+        exponent: 3.0,
+        softening_m: 0.25,
+        sensitivity: 1.0,
+        contrast: 3.0,
+        adaptive: true
       ]
     ],
     network_config: [

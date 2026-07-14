@@ -406,10 +406,12 @@ defmodule Octopus.Installation do
     global_speed = Keyword.fetch!(opts, :global_speed)
     location = Keyword.fetch!(opts, :location)
     auto_brightness = Keyword.fetch!(opts, :auto_brightness)
+
     radar_config =
       opts
       |> Keyword.get(:radar)
       |> normalize_literals()
+
     network_config = Keyword.fetch!(opts, :network_config)
 
     width =
@@ -817,6 +819,69 @@ defmodule Octopus.Installation do
       installation().ring_radius_m()
     else
       raise ArgumentError, "ring_radius_m is only defined for circular installations"
+    end
+  end
+
+  @doc """
+  Returns world-space panel center positions in meters for circular installations.
+
+  Coordinates match the radar ground plane: `x` = left/right, `y` = front/back
+  (+Y = north). Panel fronts face inward; the center sits on the ring at
+  `ring_radius_m + panel_depth_m / 2`, using the same geometry as the radar
+  and 3D sim views.
+
+  Returns `[]` for non-circular arrangements.
+  """
+  @spec panel_world_positions_m() :: [%{panel: pos_integer(), x: float(), y: float()}]
+  def panel_world_positions_m do
+    panel_world_positions_m(:body_center)
+  end
+
+  @doc """
+  Returns world-space panel positions in meters for proximity calculations.
+
+  `:body_center` matches the 3D/radar ring layout (body center on the ring).
+  `:inner_face` uses the inward-facing LED surface, which better matches
+  operator cursor placement on the radar map and walking distance to panels.
+  """
+  @spec panel_world_gravity_positions_m() :: [%{panel: pos_integer(), x: float(), y: float()}]
+  def panel_world_gravity_positions_m, do: panel_world_positions_m(:inner_face)
+
+  defp panel_world_positions_m(reference) when reference in [:body_center, :inner_face] do
+    if arrangement() == :circular do
+      ring_radius_m = ring_radius_m()
+      num_panels = num_panels()
+      north_panel = north_panel()
+
+      radius_m =
+        case reference do
+          :inner_face ->
+            ring_radius_m
+
+          :body_center ->
+            panel_depth_m =
+              case panel_outer_dimensions_cm() do
+                {_w, _h, d} -> d / 100.0
+                _ -> 0.0
+              end
+
+            ring_radius_m + panel_depth_m / 2.0
+        end
+
+      step_deg = 360.0 / num_panels
+
+      for n <- 1..num_panels do
+        offset = Integer.mod(n - north_panel, num_panels)
+        theta_rad = offset * step_deg * :math.pi() / 180.0
+
+        %{
+          panel: n,
+          x: radius_m * :math.sin(theta_rad),
+          y: radius_m * :math.cos(theta_rad)
+        }
+      end
+    else
+      []
     end
   end
 
