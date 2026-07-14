@@ -25,13 +25,21 @@ FROM ${BUILDER_IMAGE} AS base
 # cdn.debian.net is Debian's geo CDN (cdn.debian.org does not exist).
 RUN sed -i 's|deb.debian.org|cdn.debian.net|g' /etc/apt/sources.list.d/debian.sources
 
+# Keep apt package files so BuildKit cache mounts can reuse them across builds.
+RUN rm -f /etc/apt/apt.conf.d/docker-clean \
+    && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update -y && apt-get install -y build-essential git curl npm \
-    && apt-get clean && rm -f /var/lib/apt/lists/*_* \
     && git config --global --add url."https://github.com/".insteadOf ssh://git@github.com/ \
     && git config --global --add url."https://github.com/".insteadOf git@github.com:
 
-RUN curl https://sh.rustup.rs -sSf | sh -s -- --no-modify-path -y --default-toolchain stable
+# Toolchain lives in BuildKit caches (not the image layer). Remount the same
+# paths on every RUN that needs rustc/cargo (deps.compile, compile, release).
+RUN --mount=type=cache,target=/root/.rustup,sharing=locked \
+    --mount=type=cache,target=/root/.cargo,sharing=locked \
+    curl https://sh.rustup.rs -sSf | sh -s -- --no-modify-path -y --default-toolchain stable
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 WORKDIR /app
@@ -64,8 +72,8 @@ FROM deps AS deps_compile
 
 RUN mkdir -p config
 COPY config/config.exs config/${MIX_ENV}.exs config/
-RUN --mount=type=cache,target=/root/.cargo/registry \
-    --mount=type=cache,target=/root/.cargo/git \
+RUN --mount=type=cache,target=/root/.rustup,sharing=locked \
+    --mount=type=cache,target=/root/.cargo,sharing=locked \
     --mount=type=cache,target=/app/native/octopus_webp/target \
     mix deps.compile
 
@@ -92,19 +100,18 @@ RUN --mount=type=cache,target=/root/.npm \
     mix esbuild.install --if-missing && \
     mix assets.deploy
 
-# Changes to config/runtime.exs / radar.exs don't require recompiling the code.
-# radar.exs holds the physical sensor bindings and selects the active
-# deployment by hostname at runtime.
-COPY config/runtime.exs config/radar.exs config/
-
-COPY rel rel
-RUN --mount=type=cache,target=/root/.cargo/registry \
-    --mount=type=cache,target=/root/.cargo/git \
+RUN --mount=type=cache,target=/root/.rustup,sharing=locked \
+    --mount=type=cache,target=/root/.cargo,sharing=locked \
     --mount=type=cache,target=/app/native/octopus_webp/target \
     mix compile
 
-RUN --mount=type=cache,target=/root/.cargo/registry \
-    --mount=type=cache,target=/root/.cargo/git \
+# runtime.exs / radar.exs / rel are only needed for the release, not compilation.
+# Keeping them after mix compile means edits won't bust the compile layer.
+COPY config/runtime.exs config/radar.exs config/
+COPY rel rel
+
+RUN --mount=type=cache,target=/root/.rustup,sharing=locked \
+    --mount=type=cache,target=/root/.cargo,sharing=locked \
     --mount=type=cache,target=/app/native/octopus_webp/target \
     mix release
 
@@ -112,9 +119,12 @@ FROM ${RUNNER_IMAGE}
 
 RUN sed -i 's|deb.debian.org|cdn.debian.net|g' /etc/apt/sources.list.d/debian.sources
 
+RUN rm -f /etc/apt/apt.conf.d/docker-clean \
+    && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    apt-get update -y && apt-get install -y libstdc++6 openssl libncurses6 locales libnss-mdns \
-    && apt-get clean && rm -f /var/lib/apt/lists/*_*
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update -y && apt-get install -y libstdc++6 openssl libncurses6 locales libnss-mdns
 
 # Resolve *.local via the host Avahi daemon (mount its socket in compose).
 RUN sed -i 's/^hosts:.*/hosts: files mdns4_minimal [NOTFOUND=return] dns/' /etc/nsswitch.conf

@@ -14,7 +14,8 @@ defmodule Octopus.Apps.Fire do
   alias Octopus.Canvas
   alias Octopus.Installation
 
-  @fps 45
+  # Heat steps land around ~18/s at speed 1.0 — calmer than full LED refresh rates.
+  @fps 18
   @frame_time_ms trunc(1000 / @fps)
   @max_embers 16
   @flicker_amp 0.08
@@ -34,7 +35,8 @@ defmodule Octopus.Apps.Fire do
       :speed,
       :floor,
       :global_speed,
-      :flicker
+      :flicker,
+      :sim_accum
     ]
   end
 
@@ -65,7 +67,7 @@ defmodule Octopus.Apps.Fire do
       sparking: Map.get(config, :sparking, 120) |> clamp_int(40, 255),
       intensity: Map.get(config, :intensity, 1.0) |> clamp_float(0.3, 1.5),
       ember_rate: Map.get(config, :ember_rate, 0.08) |> clamp_float(0.0, 1.0),
-      speed: Map.get(config, :speed, 1.0) |> clamp_float(0.25, 2.5),
+      speed: Map.get(config, :speed, 0.85) |> clamp_float(0.25, 2.5),
       floor: Map.get(config, :floor, 0) |> clamp_int(0, max_floor())
     }
   end
@@ -99,7 +101,7 @@ defmodule Octopus.Apps.Fire do
       sparking: 120,
       intensity: 1.0,
       ember_rate: 0.08,
-      speed: 1.0,
+      speed: 0.85,
       floor: 0
     }
   end
@@ -110,7 +112,7 @@ defmodule Octopus.Apps.Fire do
       sparking: 190,
       intensity: 1.25,
       ember_rate: 0.12,
-      speed: 1.2,
+      speed: 1.0,
       floor: 0
     }
   end
@@ -121,7 +123,7 @@ defmodule Octopus.Apps.Fire do
       sparking: 70,
       intensity: 0.7,
       ember_rate: 0.35,
-      speed: 0.85,
+      speed: 0.65,
       floor: 0
     }
   end
@@ -186,7 +188,7 @@ defmodule Octopus.Apps.Fire do
         min: 0.25,
         max: 2.5,
         step: 0.05,
-        default: 1.0
+        default: 0.85
       }
     ]
   end
@@ -212,7 +214,7 @@ defmodule Octopus.Apps.Fire do
       sparking: {"Sparking", :int, %{min: 40, max: 255, default: 120}},
       intensity: {"Intensity", :float, %{min: 0.3, max: 1.5, default: 1.0}},
       ember_rate: {"Embers", :float, %{min: 0.0, max: 1.0, default: 0.08}},
-      speed: {"Speed", :float, %{min: 0.25, max: 2.5, default: 1.0}}
+      speed: {"Speed", :float, %{min: 0.25, max: 2.5, default: 0.85}}
     }
   end
 
@@ -268,7 +270,8 @@ defmodule Octopus.Apps.Fire do
        speed: cfg.speed,
        floor: floor,
        global_speed: Octopus.Params.Global.speed(),
-       flicker: List.duplicate(1.0, width)
+       flicker: List.duplicate(1.0, width),
+       sim_accum: 0.0
      }}
   end
 
@@ -281,25 +284,31 @@ defmodule Octopus.Apps.Fire do
   def handle_info(:tick, %State{} = state) do
     tick_start = System.monotonic_time(:millisecond)
 
+    # speed 1.0 ≈ one heat step per tick; lower speeds skip ticks via accumulator.
     speed_factor = state.speed * (0.85 + 0.15 * state.global_speed)
-    steps = max(1, round(speed_factor))
+    accum = state.sim_accum + speed_factor
+    steps = trunc(accum)
 
     state =
-      Enum.reduce(1..steps, state, fn _, s ->
-        s
-        |> step_heat()
-        |> update_flicker()
-        |> maybe_spawn_embers()
-        |> update_embers(1.0 / @fps)
-      end)
+      if steps > 0 do
+        Enum.reduce(1..steps, %{state | sim_accum: accum - steps}, fn _, s ->
+          s
+          |> step_heat()
+          |> update_flicker()
+          |> maybe_spawn_embers()
+        end)
+      else
+        %{state | sim_accum: accum}
+      end
+
+    # Embers keep a steady dt so sparks still drift smoothly between heat steps.
+    state = update_embers(state, 1.0 / @fps)
 
     canvas = render(state)
     Octopus.App.update_display(canvas)
 
     elapsed = System.monotonic_time(:millisecond) - tick_start
-    # Faster speed shortens the wait between ticks slightly.
-    interval = trunc(@frame_time_ms / max(speed_factor, 0.5))
-    Process.send_after(self(), :tick, max(interval - elapsed, 1))
+    Process.send_after(self(), :tick, max(@frame_time_ms - elapsed, 1))
 
     {:noreply, state}
   end
