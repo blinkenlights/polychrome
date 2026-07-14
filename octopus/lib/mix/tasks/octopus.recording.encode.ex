@@ -6,6 +6,9 @@ defmodule Mix.Tasks.Octopus.Recording.Encode do
 
       mix octopus.recording.encode RECORDING.octorec [options]
 
+  Gzip-compressed recordings (`.octorec.gz`) are accepted and decompressed
+  automatically.
+
   By default this writes one video per panel plus a single mixed video (all
   panels laid out side by side) into a directory named after the recording.
 
@@ -75,6 +78,9 @@ defmodule Mix.Tasks.Octopus.Recording.Encode do
 
       {:error, :invalid_header} ->
         Mix.raise("Not a valid .octorec recording: #{input}")
+
+      {:error, {:gunzip_failed, _}} ->
+        Mix.raise("Could not decompress #{input} (truncated or not a gzip file?)")
 
       {:error, reason} ->
         Mix.raise("Failed to encode recording: #{inspect(reason)}")

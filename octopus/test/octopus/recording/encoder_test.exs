@@ -83,4 +83,35 @@ defmodule Octopus.Recording.EncoderTest do
       end
     end
   end
+
+  @tag :ffmpeg
+  test "encode/2 transparently reads a gzip-compressed .octorec.gz" do
+    unless Encoder.ffmpeg_available?() do
+      IO.puts("skipping: ffmpeg not available")
+    else
+      num_panels = 3
+      pw = 2
+      ph = 2
+      frame_bytes = Format.frame_bytes(num_panels, pw, ph)
+
+      binary =
+        Format.header(num_panels, pw, ph, 0) <>
+          Format.record(0, :binary.copy(<<10>>, frame_bytes)) <>
+          Format.record(100, :binary.copy(<<200>>, frame_bytes))
+
+      base = Path.join(System.tmp_dir!(), "octorec-gz-#{System.unique_integer([:positive])}")
+      input = base <> ".octorec.gz"
+      out_dir = base <> "_out"
+      File.write!(input, :zlib.gzip(binary))
+
+      on_exit(fn ->
+        File.rm(input)
+        File.rm_rf(out_dir)
+      end)
+
+      assert {:ok, outputs} = Encoder.encode(input, out: out_dir, fps: 10, scale: 4)
+      assert length(outputs) == num_panels + 1
+      assert Enum.all?(outputs, &(File.regular?(&1) and File.stat!(&1).size > 0))
+    end
+  end
 end

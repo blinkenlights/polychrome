@@ -95,6 +95,34 @@ defmodule Octopus.Recording.PanelRecorderTest do
     assert {:error, :already_recording} = Recording.start(dir: dir)
   end
 
+  test "compress: true writes a gzip file that decompresses to a valid recording" do
+    dir = Path.join(System.tmp_dir!(), "octorec-#{System.unique_integer([:positive])}")
+    on_exit(fn -> File.rm_rf(dir) end)
+
+    num_panels = Installation.num_panels()
+    rgb_size = num_panels * Installation.panel_width() * Installation.panel_height() * 3
+    frame_a = %RGBFrame{data: :binary.copy(<<91>>, rgb_size)}
+    frame_b = %RGBFrame{data: :binary.copy(<<200>>, rgb_size)}
+
+    assert {:ok, "gzip+file:" <> path} = Recording.start(dir: dir, compress: true)
+    assert String.ends_with?(path, ".octorec.gz")
+
+    broadcast(frame_a)
+    broadcast(frame_b)
+    assert :ok = Recording.stop()
+
+    raw = path |> File.read!() |> :zlib.gunzip()
+    assert {:ok, header, records} = Format.parse(raw)
+    assert header.num_panels == num_panels
+
+    distinctive =
+      records
+      |> Enum.map(fn {_o, d} -> d end)
+      |> Enum.filter(&(&1 in [frame_a.data, frame_b.data]))
+
+    assert distinctive == [frame_a.data, frame_b.data]
+  end
+
   test "streams the recording to a remote TCP server" do
     {:ok, listen} =
       :gen_tcp.listen(0, [:binary, packet: :raw, active: false, reuseaddr: true])

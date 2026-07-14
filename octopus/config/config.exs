@@ -46,7 +46,12 @@ config :octopus, Octopus.Recording,
   # Where an auto-started/default recording is written:
   #   {:file, []}                              -> local file (default)
   #   {:remote, host: "10.0.0.5", port: 7000}  -> stream to a TCP server
-  sink: {:file, []}
+  sink: {:file, []},
+  # gzip the recording stream (built-in :zlib, no native deps). File targets
+  # gain a .gz suffix; encoders read .gz transparently. Lower gzip_level is
+  # cheaper on constrained CPUs (e.g. Raspberry Pi).
+  compress: false,
+  gzip_level: 6
 
 # Network addresses are now configured in Installation modules
 # See lib/octopus/installation/*.ex files

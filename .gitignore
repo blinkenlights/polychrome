@@ -11,3 +11,4 @@ erl_crash.dump
 .DS_Store
 rickroll.wav
 .lexical
+octopus/recordings/*

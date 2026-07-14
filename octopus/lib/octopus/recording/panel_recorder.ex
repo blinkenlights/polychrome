@@ -221,8 +221,15 @@ defmodule Octopus.Recording.PanelRecorder do
 
   # Resolve which sink to use and the options to open it with. An explicit
   # `:sink_mod` in the start options wins; otherwise the configured `:sink`
-  # spec is used (defaulting to a file sink).
+  # spec is used (defaulting to a file sink). The result is wrapped in gzip when
+  # compression is requested.
   defp resolve_sink(opts, started_at_ms) do
+    {mod, sink_opts} = base_sink(opts, started_at_ms)
+    compress? = Keyword.get(opts, :compress, Recording.compress?())
+    Sink.Gzip.wrap(mod, sink_opts, compress?, Recording.gzip_level())
+  end
+
+  defp base_sink(opts, started_at_ms) do
     case Keyword.fetch(opts, :sink_mod) do
       {:ok, Sink.File} ->
         {Sink.File, file_open_opts(opts, [], started_at_ms)}

@@ -56,7 +56,7 @@ defmodule Octopus.Recording.Encoder do
     out_dir = Keyword.get(opts, :out) || default_out_dir(input_path)
 
     with :ok <- ensure_ffmpeg(ffmpeg),
-         {:ok, binary} <- File.read(input_path),
+         {:ok, binary} <- read_recording(input_path),
          {:ok, header, records} <- Format.parse(binary),
          :ok <- ensure_records(records) do
       geom = {header.num_panels, header.panel_width, header.panel_height}
@@ -83,6 +83,21 @@ defmodule Octopus.Recording.Encoder do
   @spec ffmpeg_available?(String.t()) :: boolean()
   def ffmpeg_available?(ffmpeg \\ "ffmpeg") do
     System.find_executable(ffmpeg) != nil
+  end
+
+  # Read a recording, transparently decompressing a .gz file.
+  defp read_recording(path) do
+    with {:ok, bin} <- File.read(path) do
+      if String.ends_with?(path, ".gz") do
+        try do
+          {:ok, :zlib.gunzip(bin)}
+        rescue
+          error -> {:error, {:gunzip_failed, error}}
+        end
+      else
+        {:ok, bin}
+      end
+    end
   end
 
   ## Pure pixel / timing helpers (testable without ffmpeg)

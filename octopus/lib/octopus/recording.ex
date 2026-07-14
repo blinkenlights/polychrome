@@ -13,7 +13,9 @@ defmodule Octopus.Recording do
         enabled: false,          # auto-start a recording on boot
         output_dir: "recordings",# where generated recording files are written
         max_queue: 600,          # mailbox backlog before frames are dropped
-        sink: {:file, []}        # default sink; see below
+        sink: {:file, []},       # default sink; see below
+        compress: false,         # gzip the recording stream (see below)
+        gzip_level: 6            # zlib level 0..9 when compress: true
 
     The `:sink` spec selects where an auto-started (or default) recording is
   written:
@@ -22,6 +24,11 @@ defmodule Octopus.Recording do
       fixed `:path`). This is the default.
     * `{:remote, opts}` - stream to a TCP server; `opts` requires `:host` and
       `:port` (see `Octopus.Recording.Sink.Remote`).
+
+  When `:compress` is true the stream is gzip-compressed (via built-in `:zlib`,
+  no native deps) before hitting the sink; file targets gain a `.gz` suffix. The
+  encoders read `.gz` recordings transparently. Lower `:gzip_level` values are
+  cheaper on constrained CPUs (e.g. a Raspberry Pi).
 
   ## Runtime control
 
@@ -60,6 +67,14 @@ defmodule Octopus.Recording do
   """
   @spec sink_spec() :: {:file, keyword()} | {:remote, keyword()}
   def sink_spec, do: config()[:sink] || {:file, []}
+
+  @doc "Whether recordings should be gzip-compressed. Defaults to false."
+  @spec compress?() :: boolean()
+  def compress?, do: config()[:compress] == true
+
+  @doc "zlib compression level (0..9) used when `compress?/0` is true. Defaults to 6."
+  @spec gzip_level() :: 0..9
+  def gzip_level, do: config()[:gzip_level] || 6
 
   @doc """
   Start recording. See `Octopus.Recording.PanelRecorder.start_recording/1` for
