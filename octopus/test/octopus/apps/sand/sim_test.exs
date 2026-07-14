@@ -123,7 +123,7 @@ defmodule Octopus.Apps.Sand.SimTest do
       assert Sim.get_cell(sim, {4, 2}) == Sim.sand(@white, 1.0, 0.0)
 
       sim = step(sim)
-      assert {:sand, @white, 1.5, 0.0} = Sim.get_cell(sim, {4, 3})
+      assert {:sand, @white, 1.5, +0.0} = Sim.get_cell(sim, {4, 3})
     end
 
     test "caps velocity at v_max" do
@@ -230,9 +230,9 @@ defmodule Octopus.Apps.Sand.SimTest do
 
       sim = Sim.trigger_collapse(sim, [4])
 
-      {:sand, @white, vy, 0.0} = Sim.get_cell(sim, {4, 6})
+      {:sand, @white, vy, +0.0} = Sim.get_cell(sim, {4, 6})
       assert vy == sim.v_max
-      assert {:sand, @red, 0.0, 0.0} = Sim.get_cell(sim, {5, 7})
+      assert {:sand, @red, +0.0, +0.0} = Sim.get_cell(sim, {5, 7})
     end
   end
 

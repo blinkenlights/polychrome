@@ -14,8 +14,6 @@ defmodule Octopus.AppModePresets do
   alias Octopus.AppModePresets.Loader
 
   @installation_transport Module.concat(["Octopus", "InstallationTransport"])
-  @pixel_fun_program Module.concat(["Octopus", "Apps", "PixelFun", "Program"])
-  @preset_schema Module.concat(["Octopus", "AppModePreset"])
 
   # String module names avoid compile-time deps on app modules that call back into this module.
   @app_keys %{

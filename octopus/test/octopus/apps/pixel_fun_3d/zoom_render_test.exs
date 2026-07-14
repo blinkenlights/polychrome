@@ -24,7 +24,7 @@ defmodule Octopus.Apps.PixelFun3D.ZoomRenderTest do
     fun.()
   end
 
-  defp base_state(overrides \\ %{}) do
+  defp base_state(overrides) do
     w = Installation.width()
     h = Installation.height()
     source = Map.get(overrides, :source, "sin(x*6/156-t)")

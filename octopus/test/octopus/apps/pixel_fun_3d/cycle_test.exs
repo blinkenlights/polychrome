@@ -5,7 +5,6 @@ defmodule Octopus.Apps.PixelFun3D.CycleTest do
   alias Octopus.Apps.PixelFun3D.State
 
   @pixel_fun Module.concat(["Octopus", "Apps", "PixelFun3D"])
-  @presets Module.concat(["Octopus", "AppModePresets"])
   @app Module.concat(["Octopus", "App"])
 
   @classic "builtin:classic_ripple"

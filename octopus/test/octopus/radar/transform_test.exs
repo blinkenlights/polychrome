@@ -9,7 +9,7 @@ defmodule Octopus.Radar.TransformTest do
     rotation_deg: 0
   ]
 
-  defp track(overrides \\ []) do
+  defp track(overrides) do
     struct(
       %Track{
         id: 1,

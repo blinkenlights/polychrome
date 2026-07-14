@@ -6,7 +6,6 @@ defmodule Octopus.Apps.PerlinNoiseTest do
   alias Octopus.Installation
 
   @perlin_noise PerlinNoise
-  @presets Module.concat(["Octopus", "AppModePresets"])
 
   setup do
     original_installation = Application.get_env(:octopus, :installation)
