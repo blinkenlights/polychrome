@@ -121,7 +121,7 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
       ids = ScenePresets.list_all() |> Enum.map(& &1.id)
 
       assert "builtin:classic_ripple" in ids
-      assert length(ids) == 25
+      assert length(ids) == 24
       refute Enum.any?(ids, &String.starts_with?(&1, "user:"))
     end
   end

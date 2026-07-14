@@ -987,6 +987,7 @@ defmodule Octopus.InstallationTransport do
       paused_remaining_ms: state.paused_remaining_ms,
       next_change_at_ms: state.next_change_at_ms,
       live: live,
+      pending_entry: state.pending_entry,
       rotation_paused: state.rotation_paused,
       takeover_app_id: state.takeover_app_id,
       takeover_app_name: takeover_name(state.takeover_app_id),

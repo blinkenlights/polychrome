@@ -83,7 +83,9 @@ defmodule Octopus.Apps.Collective.Animations.RingNoiseTest do
     test "crowd mode off matches zero reactivity even with panel activity" do
       info = display_info()
       canvas = Canvas.new(info.width, info.height)
-      state = RingNoise.init(info)
+      base_state = RingNoise.init(info)
+      frozen_ms = :erlang.monotonic_time(:millisecond)
+      state = %{base_state | start_ms: frozen_ms}
 
       off_ctx = base_ctx(%{ring_noise_crowd_mode: :off, ring_noise_reactivity: 0.0})
       blind_ctx = base_ctx(%{ring_noise_crowd_mode: :brightness, ring_noise_reactivity: 0.0})

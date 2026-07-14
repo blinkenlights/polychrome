@@ -164,13 +164,15 @@ defmodule Octopus.MixerTest do
 
   test "run_transition with zero duration runs callback immediately" do
     ref = make_ref()
+    test_pid = self()
 
-    assert :ok = Mixer.run_transition(0, fn -> send(self(), {:callback, ref}) end)
+    assert :ok = Mixer.run_transition(0, fn -> send(test_pid, {:callback, ref}) end)
     assert_receive {:callback, ^ref}
   end
 
   test "run_transition invokes callback at black and completes fade in" do
     ref = make_ref()
+    test_pid = self()
 
     :sys.replace_state(Mixer, fn state ->
       %{state | rendered_app: "fadeapp", transition: nil, max_luminance: 255}
@@ -178,7 +180,7 @@ defmodule Octopus.MixerTest do
 
     assert :ok =
              Mixer.run_transition(120, fn ->
-               send(self(), {:callback, ref})
+               send(test_pid, {:callback, ref})
              end)
 
     # Drive fade-out to black

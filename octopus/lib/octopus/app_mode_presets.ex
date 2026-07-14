@@ -25,7 +25,8 @@ defmodule Octopus.AppModePresets do
     "Elixir.Octopus.Apps.Ocean" => "ocean",
     "Elixir.Octopus.Apps.Sand" => "sand",
     "Elixir.Octopus.Apps.SparkleMist" => "sparklemist",
-    "Elixir.Octopus.Apps.Wood" => "wood"
+    "Elixir.Octopus.Apps.Wood" => "wood",
+    "Elixir.Octopus.Apps.Fire" => "fire"
   }
 
   @formula_app_keys ~w(pixelfun pixelfun3d)

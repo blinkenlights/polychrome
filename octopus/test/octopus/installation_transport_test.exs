@@ -239,15 +239,17 @@ defmodule Octopus.InstallationTransportTest do
     end
 
     test "appends without changing live when queue already has entries" do
-      InstallationTransport.set_queue([%{app: Matrix, mode_id: @matrix}])
-      InstallationTransport.play_now(Matrix, @matrix)
+      with_matrix_installation(fn ->
+        InstallationTransport.set_queue([%{app: Matrix, mode_id: @matrix}])
+        InstallationTransport.play_now(Matrix, @matrix)
 
-      InstallationTransport.queue_add_all(PixelFun)
+        InstallationTransport.queue_add_all(PixelFun)
 
-      s = state()
-      assert s.live.mode_id == @matrix
-      assert length(s.queue) == 1 + pixel_fun_mode_count()
-      assert Enum.at(s.queue, 0).mode_id == @matrix
+        s = state()
+        assert s.live.mode_id == @matrix
+        assert length(s.queue) == 1 + pixel_fun_mode_count()
+        assert Enum.at(s.queue, 0).mode_id == @matrix
+      end)
     end
   end
 
