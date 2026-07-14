@@ -14,7 +14,7 @@ defmodule Octopus.InstallationTransportTest do
   @ocean "ocean:ocean"
   @sand "sand:sand"
   @sparkle_mist "sparklemist:mist"
-  @orbital "collective:orbital"
+  @dots "collective:dots"
   @classic_3d "pixelfun3d:classic_ripple"
   @marmor "pixelfun3d:marmor"
 
@@ -107,7 +107,7 @@ defmodule Octopus.InstallationTransportTest do
     test "next advances mixed queue" do
       InstallationTransport.set_queue([
         %{app: PixelFun, mode_id: @classic},
-        %{app: Collective, mode_id: @orbital}
+        %{app: Collective, mode_id: @dots}
       ])
 
       InstallationTransport.play_now(PixelFun, @classic)
@@ -115,7 +115,7 @@ defmodule Octopus.InstallationTransportTest do
 
       s = state()
       assert s.cycle_index == 1
-      assert s.live.mode_id == @orbital
+      assert s.live.mode_id == @dots
       assert s.live.app == Collective
     end
 

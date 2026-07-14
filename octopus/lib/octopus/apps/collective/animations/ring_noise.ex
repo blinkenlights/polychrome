@@ -1,15 +1,27 @@
 defmodule Octopus.Apps.Collective.Animations.RingNoise do
   @moduledoc """
   Ring Noise — seamless cylindrical noise with palette colours and counter-rotating
-  brightness waves. No crowd input; the ring panels read as one wrapped surface.
+  brightness waves.
+
+  Optional crowd input from `Octopus.Radar.PanelActivity` via `Radar.panel_factors/0`:
+
+    * `:brightness` — hot panels brighten on top of the synthetic waves (idle unchanged).
+    * `:saturation` — idle is desaturated; crowd restores full palette colour locally.
+    * `:off` — crowd-blind decorative mode (default).
+
+  `Crowd Heat` (`:ring_noise_reactivity`) is the master gain; at 0 the animation ignores
+  panel activity even when a crowd mode is selected.
   """
 
   @behaviour Octopus.Apps.Collective.Animation
 
   alias Octopus.Canvas
   alias Octopus.Installation
+  alias Octopus.Radar
+  alias Octopus.Radar.PanelMapping
 
   @two_pi 2.0 * :math.pi()
+  @panel_width 8
 
   # Deterministic octave coefficients (seed {42, 1337, 9001}, one-time generation).
   @octaves [
@@ -44,15 +56,42 @@ defmodule Octopus.Apps.Collective.Animations.RingNoise do
     pulse_amount = Map.get(ctx, :ring_noise_pulse_amount, 0.65) |> clamp01()
     counter_wave = Map.get(ctx, :ring_noise_counter_wave, true)
     palette = palette_stops(Map.get(ctx, :ring_noise_palette, :lava))
+    crowd_mode = Map.get(ctx, :ring_noise_crowd_mode, :off)
+    reactivity = Map.get(ctx, :ring_noise_reactivity, 0.0) |> clamp01()
+    crowd_gain = Map.get(ctx, :ring_noise_crowd_gain, 1.0)
+    sat_idle = Map.get(ctx, :ring_noise_sat_idle, 0.22) |> clamp01()
+    bleed = Map.get(ctx, :ring_noise_activity_bleed, 0.3) |> clamp01()
 
     brightness_scale = panel_brightness_scale(width, height)
+    num_panels = max(div(width, @panel_width), 1)
+
+    levels =
+      if crowd_active?(crowd_mode, reactivity) do
+        frame_activity_levels(num_panels, bleed)
+      else
+        %{}
+      end
 
     pixels =
       for x <- 0..(width - 1), y <- 0..(height - 1), into: %{} do
         theta = x / max(width, 1) * @two_pi
-        br = brightness(theta, t, pulse_period, pulse_amount, counter_wave)
+        br_synth = brightness(theta, t, pulse_period, pulse_amount, counter_wave)
         v = noise(theta, y * 0.9, t * noise_speed)
         {r, g, b} = palette_color(palette, v)
+
+        {r, g, b, br} =
+          apply_crowd(
+            {r, g, b},
+            br_synth,
+            theta,
+            levels,
+            num_panels,
+            crowd_mode,
+            reactivity,
+            crowd_gain,
+            sat_idle
+          )
+
         {{x, y}, scale_rgb({round(r * br), round(g * br), round(b * br)}, brightness_scale)}
       end
 
@@ -107,6 +146,67 @@ defmodule Octopus.Apps.Collective.Animations.RingNoise do
       [r, g, b]
     end
     |> IO.iodata_to_binary()
+  end
+
+  defp crowd_active?(:off, _reactivity), do: false
+  defp crowd_active?(_mode, reactivity), do: reactivity > 0.0
+
+  defp apply_crowd(rgb, br_synth, _theta, _levels, _num_panels, :off, _reactivity, _gain, _sat_idle) do
+    {elem(rgb, 0), elem(rgb, 1), elem(rgb, 2), br_synth}
+  end
+
+  defp apply_crowd({r, g, b}, br_synth, theta, levels, num_panels, :brightness, reactivity, gain, _sat_idle) do
+    activity = heat_at(theta, levels, num_panels)
+    boost = reactivity * :math.pow(activity, 0.65) * gain
+    br = min(1.0, br_synth * (1.0 + boost))
+    {r, g, b, br}
+  end
+
+  defp apply_crowd({r, g, b}, br_synth, theta, levels, num_panels, :saturation, reactivity, _gain, sat_idle) do
+    activity = heat_at(theta, levels, num_panels)
+    gray = (r + g + b) / 3.0
+    sat = sat_idle + reactivity * activity * (1.0 - sat_idle)
+    {lerp(gray, r, sat), lerp(gray, g, sat), lerp(gray, b, sat), br_synth}
+  end
+
+  defp apply_crowd(rgb, br_synth, _theta, _levels, _num_panels, _mode, _reactivity, _gain, _sat_idle) do
+    {elem(rgb, 0), elem(rgb, 1), elem(rgb, 2), br_synth}
+  end
+
+  defp frame_activity_levels(num_panels, bleed) do
+    factors = Radar.panel_factors()
+    north = Radar.north_panel()
+
+    for frame_panel <- 0..(num_panels - 1), into: %{} do
+      install = PanelMapping.installation_panel_of_frame(frame_panel, num_panels, north)
+      base = Map.get(factors, install, 0.0)
+
+      left = Map.get(factors, wrap_install_panel(install - 1, num_panels), 0.0)
+      right = Map.get(factors, wrap_install_panel(install + 1, num_panels), 0.0)
+
+      level = clamp01(base + bleed * (left + right) / 2.0)
+      {frame_panel, level}
+    end
+  end
+
+  defp heat_at(_theta, levels, _num_panels) when map_size(levels) == 0, do: 0.0
+
+  defp heat_at(theta, levels, num_panels) do
+    pos = norm_theta(theta) / @two_pi * num_panels
+    i = trunc(pos)
+    frac = pos - i
+    p0 = rem(i, num_panels)
+    p1 = rem(p0 + 1, num_panels)
+    lerp(Map.get(levels, p0, 0.0), Map.get(levels, p1, 0.0), frac)
+  end
+
+  defp wrap_install_panel(panel, num_panels) do
+    rem(rem(panel - 1, num_panels) + num_panels, num_panels) + 1
+  end
+
+  defp norm_theta(theta) do
+    m = :math.fmod(theta, @two_pi)
+    if m < 0.0, do: m + @two_pi, else: m
   end
 
   defp elapsed_seconds(%{start_ms: start_ms}) do

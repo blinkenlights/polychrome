@@ -15,6 +15,8 @@ defmodule Octopus.Apps.Collective.Animations.Storm do
   @behaviour Octopus.Apps.Collective.Animation
 
   alias Octopus.Canvas
+  alias Octopus.Radar
+  alias Octopus.Radar.PanelMapping
 
   @ref_speed 1.0
   @max_bolt_rate 4.0
@@ -45,8 +47,27 @@ defmodule Octopus.Apps.Collective.Animations.Storm do
 
   @panel_width 8
 
+  @activity_floor 0.08
+  @activity_gain 0.90
+  @activity_cap 0.55
+  @bolt_panel_floor 0.25
+
   @impl true
   def name, do: "Tempest"
+
+  @doc """
+  Builds the W-channel canvas: per-panel grayscale from panel activity.
+  """
+  @spec activity_canvas(map(), float()) :: Canvas.t()
+  def activity_canvas(display_info, bleed \\ 0.2) do
+    width = display_info.width
+    height = display_info.height
+    num_panels = max(div(width, @panel_width), 1)
+    bleed = bleed |> clamp01()
+
+    Canvas.new(width, height, :grayscale)
+    |> draw_activity_white(num_panels, height, bleed)
+  end
 
   @impl true
   def init(_display_info) do
@@ -95,7 +116,11 @@ defmodule Octopus.Apps.Collective.Animations.Storm do
       |> step_meteors(dt, height)
       |> Enum.reject(fn m -> m.age >= @meteor_ttl end)
 
-    new_bolts = spawn_bolts(people, ctx.sensitivity, dt, width, height)
+    bleed = Map.get(ctx, :storm_activity_bleed, 0.2) |> clamp01()
+    reactivity = Map.get(ctx, :storm_reactivity, 0.5) |> clamp01()
+
+    new_bolts =
+      spawn_bolts(people, ctx.sensitivity, dt, width, height, bleed, reactivity)
 
     bolts =
       (state.bolts ++ new_bolts)
@@ -380,9 +405,54 @@ defmodule Octopus.Apps.Collective.Animations.Storm do
     end
   end
 
+  # --- panel activity (W channel + bolt crowd weight) ----------------------
+
+  defp draw_activity_white(canvas, num_panels, height, bleed) do
+    levels = frame_activity_levels(num_panels, bleed)
+
+    Enum.reduce(0..(num_panels - 1), canvas, fn p, c ->
+      gray = activity_gray(Map.get(levels, p, 0.0))
+      x0 = p * @panel_width
+      x1 = x0 + @panel_width - 1
+      Canvas.fill_rect(c, {x0, 0}, {x1, height - 1}, gray)
+    end)
+  end
+
+  defp activity_gray(level) when level <= 0.0, do: 0
+
+  defp activity_gray(level) do
+    brightness =
+      @activity_floor + (@activity_cap - @activity_floor) * clamp01(level * @activity_gain)
+
+    trunc(brightness * 255)
+  end
+
+  defp frame_activity_levels(num_panels, bleed) do
+    factors = Radar.panel_factors()
+    north = Radar.north_panel()
+
+    for frame_panel <- 0..(num_panels - 1), into: %{} do
+      install = PanelMapping.installation_panel_of_frame(frame_panel, num_panels, north)
+      base = Map.get(factors, install, 0.0)
+
+      left = Map.get(factors, wrap_install_panel(install - 1, num_panels), 0.0)
+      right = Map.get(factors, wrap_install_panel(install + 1, num_panels), 0.0)
+
+      level = clamp01(base + bleed * (left + right) / 2.0)
+      {frame_panel, level}
+    end
+  end
+
+  defp wrap_install_panel(panel, num_panels) do
+    rem(rem(panel - 1, num_panels) + num_panels, num_panels) + 1
+  end
+
   # --- lightning -----------------------------------------------------------
 
-  defp spawn_bolts(people, sensitivity, dt, width, height) do
+  defp spawn_bolts(people, sensitivity, dt, width, height, bleed, reactivity) do
+    num_panels = max(div(width, @panel_width), 1)
+    levels = frame_activity_levels(num_panels, bleed)
+
     Enum.flat_map(people, fn p ->
       radius = :math.sqrt(p.x * p.x + p.y * p.y)
       speed = :math.sqrt(p.vx * p.vx + p.vy * p.vy)
@@ -391,13 +461,27 @@ defmodule Octopus.Apps.Collective.Animations.Storm do
         radius < @center_dead_zone ->
           []
 
-        :rand.uniform() < spawn_prob(speed, sensitivity, dt) ->
+        :rand.uniform() < bolt_spawn_prob(speed, sensitivity, dt, p, width, levels, reactivity) ->
           [build_bolt(person_bolt_column(p, width), height)]
 
         true ->
           []
       end
     end)
+  end
+
+  defp bolt_spawn_prob(speed, sensitivity, dt, person, width, levels, reactivity) do
+    base = spawn_prob(speed, sensitivity, dt)
+    panel_level = person_panel_level(person, width, levels)
+    target = max(panel_level, @bolt_panel_floor)
+    crowd_mult = lerp(1.0, target, reactivity)
+    base * crowd_mult
+  end
+
+  defp person_panel_level(person, width, levels) do
+    num_panels = div(width, @panel_width)
+    frame_panel = frame_panel_of_3d(entry_panel_3d(person, num_panels), num_panels)
+    Map.get(levels, frame_panel, 0.0)
   end
 
   defp spawn_prob(speed, sensitivity, dt) do
