@@ -28,6 +28,7 @@ defmodule Octopus.InstallationTransportTest do
 
     InstallationTransport.reset!()
     InstallationTransport.set_interval(300)
+    InstallationTransport.set_transition_duration(0)
 
     on_exit(fn ->
       for {_, app_id} <- AppSupervisor.running_apps(), do: AppSupervisor.stop_app(app_id)
@@ -38,6 +39,8 @@ defmodule Octopus.InstallationTransportTest do
   end
 
   defp state, do: InstallationTransport.get_state()
+
+  defp pixel_fun_mode_count, do: length(Octopus.App.list_modes(PixelFun))
 
   defp with_matrix_installation(fun) do
     original = Application.get_env(:octopus, :installation)
@@ -111,6 +114,33 @@ defmodule Octopus.InstallationTransportTest do
     end
   end
 
+  describe "set_transition_duration" do
+    test "stores duration in public state" do
+      InstallationTransport.set_transition_duration(2)
+      assert state().transition_duration_seconds == 2.0
+    end
+
+    test "play_now with fade defers commit until black" do
+      InstallationTransport.set_transition_duration(1)
+
+      assert :ok = InstallationTransport.play_now(PixelFun3D, @classic_3d)
+
+      s = state()
+      assert s.pending_entry == %{app: PixelFun3D, mode_id: @classic_3d}
+      assert s.live == nil or s.live.mode_id != @classic_3d
+    end
+
+    test "play_now with fade off commits immediately" do
+      InstallationTransport.set_transition_duration(0)
+
+      assert :ok = InstallationTransport.play_now(PixelFun3D, @classic_3d)
+
+      s = state()
+      assert s.pending_entry == nil
+      assert s.live.mode_id == @classic_3d
+    end
+  end
+
   describe "next / prev" do
     test "next advances mixed queue" do
       InstallationTransport.set_queue([
@@ -169,6 +199,55 @@ defmodule Octopus.InstallationTransportTest do
 
       InstallationTransport.queue_toggle(PixelFun, @classic)
       assert state().queue == []
+    end
+  end
+
+  describe "queue_add_all" do
+    test "adds all presets for an app" do
+      InstallationTransport.queue_add_all(PixelFun)
+
+      s = state()
+      assert length(s.queue) == pixel_fun_mode_count()
+      assert Enum.all?(s.queue, &(&1.app == PixelFun))
+    end
+
+    test "skips presets already in the queue" do
+      InstallationTransport.queue_toggle(PixelFun, @classic)
+      InstallationTransport.queue_add_all(PixelFun)
+
+      s = state()
+      assert length(s.queue) == pixel_fun_mode_count()
+      assert Enum.at(s.queue, 0).mode_id == @classic
+    end
+
+    test "no-op when all presets are already queued" do
+      InstallationTransport.queue_add_all(PixelFun)
+      count = length(state().queue)
+
+      InstallationTransport.queue_add_all(PixelFun)
+
+      assert length(state().queue) == count
+    end
+
+    test "starts first preset when queue was empty" do
+      InstallationTransport.queue_add_all(PixelFun)
+
+      s = state()
+      assert s.live != nil
+      assert s.live.mode_id == hd(Octopus.App.list_modes(PixelFun)).id
+      assert s.cycle_index == 0
+    end
+
+    test "appends without changing live when queue already has entries" do
+      InstallationTransport.set_queue([%{app: Matrix, mode_id: @matrix}])
+      InstallationTransport.play_now(Matrix, @matrix)
+
+      InstallationTransport.queue_add_all(PixelFun)
+
+      s = state()
+      assert s.live.mode_id == @matrix
+      assert length(s.queue) == 1 + pixel_fun_mode_count()
+      assert Enum.at(s.queue, 0).mode_id == @matrix
     end
   end
 

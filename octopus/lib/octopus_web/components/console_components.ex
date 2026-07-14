@@ -18,7 +18,15 @@ defmodule OctopusWeb.ConsoleComponents do
     {"1 h", 3600}
   ]
 
+  @transition_presets [
+    {"Off", 0},
+    {"0.5 s", 0.5},
+    {"1 s", 1},
+    {"2 s", 2}
+  ]
+
   def interval_presets, do: @interval_presets
+  def transition_presets, do: @transition_presets
 
   attr :playing, :boolean, required: true
   attr :rotating?, :boolean, required: true
@@ -31,6 +39,8 @@ defmodule OctopusWeb.ConsoleComponents do
   attr :countdown_label, :string, required: true
   attr :interval_seconds, :integer, required: true
   attr :interval_custom?, :boolean, required: true
+  attr :transition_seconds, :float, required: true
+  attr :transition_custom?, :boolean, required: true
   attr :target, :any, default: nil
 
   def transport_bar(assigns) do
@@ -57,15 +67,27 @@ defmodule OctopusWeb.ConsoleComponents do
           />
         </div>
 
-        <div>
-          <.interval_picker
-            interval_seconds={@interval_seconds}
-            interval_custom?={@interval_custom?}
-            target={@target}
-          />
-          <p class="text-xs opacity-60 mt-1">
-            Applies at the next change — the running countdown isn't reset.
-          </p>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <.interval_picker
+              interval_seconds={@interval_seconds}
+              interval_custom?={@interval_custom?}
+              target={@target}
+            />
+            <p class="text-xs opacity-60 mt-1">
+              Applies at the next change — the running countdown isn't reset.
+            </p>
+          </div>
+          <div>
+            <.transition_picker
+              transition_seconds={@transition_seconds}
+              transition_custom?={@transition_custom?}
+              target={@target}
+            />
+            <p class="text-xs opacity-60 mt-1">
+              Fade applies on the next switch — total duration, split out/in.
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -264,9 +286,46 @@ defmodule OctopusWeb.ConsoleComponents do
     """
   end
 
+  attr :transition_seconds, :float, required: true
+  attr :transition_custom?, :boolean, required: true
+  attr :target, :any, default: nil
+
+  def transition_picker(assigns) do
+    ~H"""
+    <div>
+      <div class="text-[11px] uppercase tracking-wide opacity-60 mb-1">Fade through black</div>
+      <div class="join">
+        <button
+          :for={{label, seconds} <- transition_presets()}
+          class={[
+            "btn btn-sm join-item min-h-11",
+            @transition_seconds == seconds && "btn-primary bg-[#6d7cff] border-[#6d7cff]"
+          ]}
+          phx-click="set_transition_duration"
+          phx-value-seconds={seconds}
+          phx-target={@target}
+        >
+          {label}
+        </button>
+        <button
+          class={[
+            "btn btn-sm join-item min-h-11",
+            @transition_custom? && "btn-primary bg-[#6d7cff] border-[#6d7cff]"
+          ]}
+          phx-click="open_custom_transition"
+          phx-target={@target}
+        >
+          …
+        </button>
+      </div>
+    </div>
+    """
+  end
+
   attr :queue, :list, required: true
   attr :count, :integer, required: true
   attr :interval_label, :string, required: true
+  attr :transition_label, :string, default: ""
   attr :live_index, :integer, default: nil
   attr :up_next_index, :integer, default: nil
   attr :elapsed_percent, :integer, required: true
@@ -285,6 +344,7 @@ defmodule OctopusWeb.ConsoleComponents do
               empty
             <% else %>
               {@count} {ngettext("mode", "modes", @count)} · every {@interval_label}
+              <span :if={@transition_label != ""}> · {@transition_label} fade</span>
             <% end %>
           </span>
         </div>
@@ -1104,6 +1164,39 @@ defmodule OctopusWeb.ConsoleComponents do
     """
   end
 
+  attr :show, :boolean, required: true
+  attr :target, :any, default: nil
+
+  def custom_transition_modal(assigns) do
+    ~H"""
+    <div :if={@show} class="modal modal-open" role="dialog">
+      <div class="modal-box bg-base-200">
+        <h3 class="font-bold text-lg">Custom fade</h3>
+        <form phx-submit="save_custom_transition" phx-target={@target} class="space-y-4 mt-2">
+          <div class="flex gap-2 items-center">
+            <input
+              type="number"
+              name="value"
+              min="0"
+              step="0.1"
+              value="1"
+              class="input input-bordered flex-1"
+            />
+            <span class="text-sm opacity-70 shrink-0">seconds total</span>
+          </div>
+          <div class="modal-action mt-0">
+            <button type="button" class="btn btn-ghost" phx-click="close_custom_transition" phx-target={@target}>
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary bg-[#6d7cff] border-[#6d7cff]">Set</button>
+          </div>
+        </form>
+      </div>
+      <button type="button" class="modal-backdrop" phx-click="close_custom_transition" phx-target={@target} />
+    </div>
+    """
+  end
+
   def format_mmss(nil), do: "--:--"
 
   def format_mmss(ms) when is_integer(ms) do
@@ -1119,6 +1212,25 @@ defmodule OctopusWeb.ConsoleComponents do
       nil -> humanize_interval(seconds)
     end
   end
+
+  def transition_label(seconds) when seconds <= 0, do: ""
+
+  def transition_label(seconds) do
+    case Enum.find(transition_presets(), fn {_l, s} -> s == seconds end) do
+      {label, _} -> label
+      nil -> humanize_transition(seconds)
+    end
+  end
+
+  def humanize_transition(seconds) when is_float(seconds) do
+    if seconds == trunc(seconds) do
+      "#{trunc(seconds)} s"
+    else
+      "#{seconds} s"
+    end
+  end
+
+  def humanize_transition(seconds) when is_integer(seconds), do: humanize_transition(seconds * 1.0)
 
   def humanize_interval(seconds) do
     cond do

@@ -10,7 +10,7 @@ defmodule Octopus.InstallationTransport do
   use GenServer
   require Logger
 
-  alias Octopus.{AppManager, AppSupervisor}
+  alias Octopus.{AppManager, AppSupervisor, Mixer}
 
   # Runtime module refs avoid compile-time cycles with AppModePresets and app modules.
   @app Module.concat(["Octopus", "App"])
@@ -18,18 +18,21 @@ defmodule Octopus.InstallationTransport do
 
   @topic "installation_transport"
   @default_interval_seconds 300.0
+  @default_transition_duration_seconds 1.0
 
   defmodule State do
     @moduledoc false
     defstruct [
       :queue,
       :cycle_interval_seconds,
+      :transition_duration_seconds,
       :cycle_index,
       :cycle_timer_ref,
       :playing,
       :paused_remaining_ms,
       :next_change_at_ms,
       :live_entry,
+      :pending_entry,
       :rotation_paused,
       :takeover_app_id,
       :now_playing_stored_config,
@@ -59,6 +62,9 @@ defmodule Octopus.InstallationTransport do
     GenServer.cast(__MODULE__, {:queue_toggle, normalize_app(app), to_string(mode_id)})
   end
 
+  def queue_add_all(app) when is_atom(app),
+    do: GenServer.cast(__MODULE__, {:queue_add_all, normalize_app(app)})
+
   def queue_remove(index) when is_integer(index),
     do: GenServer.call(__MODULE__, {:queue_remove, index})
 
@@ -70,6 +76,9 @@ defmodule Octopus.InstallationTransport do
 
   def set_interval(seconds) when is_number(seconds),
     do: GenServer.cast(__MODULE__, {:set_interval, seconds})
+
+  def set_transition_duration(seconds) when is_number(seconds),
+    do: GenServer.cast(__MODULE__, {:set_transition_duration, seconds})
 
   def pause_rotation_for_takeover(app_id) when is_binary(app_id),
     do: GenServer.cast(__MODULE__, {:pause_rotation_for_takeover, app_id})
@@ -98,12 +107,14 @@ defmodule Octopus.InstallationTransport do
     state = %State{
       queue: [],
       cycle_interval_seconds: @default_interval_seconds,
+      transition_duration_seconds: @default_transition_duration_seconds,
       cycle_index: 0,
       cycle_timer_ref: nil,
       playing: true,
       paused_remaining_ms: nil,
       next_change_at_ms: nil,
       live_entry: nil,
+      pending_entry: nil,
       rotation_paused: false,
       takeover_app_id: nil,
       now_playing_stored_config: %{},
@@ -164,7 +175,8 @@ defmodule Octopus.InstallationTransport do
           takeover_app_id: nil,
           now_playing_stored_config: %{},
           now_playing_overrides: %{},
-          now_playing_app_id: nil
+          now_playing_app_id: nil,
+          pending_entry: nil
       }
       |> cancel_timer()
 
@@ -176,20 +188,24 @@ defmodule Octopus.InstallationTransport do
 
     result =
       if apply(app, :compatible?, []) do
-        case apply_entry(state, entry) do
-          {:error, reason, state} ->
-            {:error, reason, state}
+        state =
+          state
+          |> apply_entry_or_keep(entry)
+          |> maybe_jump_queue_index(entry)
+          |> maybe_takeover_off_queue_play(entry)
+          |> restart_countdown()
 
-          {:ok, state} ->
-            state =
-              state
-              |> maybe_jump_queue_index(entry)
-              |> maybe_takeover_off_queue_play(entry)
-              |> restart_countdown()
+        cond do
+          state.pending_entry == entry ->
+            {:ok, state}
 
+          true ->
             case state.live_entry do
-              %{app: ^app, mode_id: id} when id == entry.mode_id -> {:ok, state}
-              _ -> {:error, :failed, state}
+              %{app: ^app, mode_id: live_mode} when live_mode == entry.mode_id ->
+                {:ok, state}
+
+              _ ->
+                {:error, :failed, state}
             end
         end
       else
@@ -256,12 +272,53 @@ defmodule Octopus.InstallationTransport do
     {:noreply, broadcast(state)}
   end
 
+  def handle_cast({:queue_add_all, app}, state) do
+    entries =
+      @app.list_modes(app)
+      |> Enum.map(&normalize_entry(%{app: app, mode_id: &1.id}))
+
+    new_entries = Enum.reject(entries, &entry_in_queue?(state.queue, &1))
+
+    if new_entries == [] do
+      {:noreply, state}
+    else
+      empty_queue? = state.queue == []
+      new_queue = state.queue ++ new_entries
+      state = state |> put_queue(new_queue)
+      first_entry = hd(new_entries)
+
+      state =
+        if empty_queue? and is_nil(state.live_entry) do
+          idx = Enum.find_index(new_queue, &(&1 == first_entry)) || 0
+
+          state
+          |> Map.put(:cycle_index, idx)
+          |> apply_entry_or_keep(first_entry)
+          |> clear_manual_takeover()
+        else
+          state
+        end
+
+      {:noreply, broadcast(state)}
+    end
+  end
+
   def handle_cast({:set_queue, entries}, state) do
     {:noreply, state |> put_queue(entries) |> broadcast()}
   end
 
   def handle_cast({:set_interval, seconds}, %State{} = state) do
     {:noreply, %State{state | cycle_interval_seconds: normalize_interval(seconds)} |> broadcast()}
+  end
+
+  def handle_cast({:set_transition_duration, seconds}, %State{} = state) do
+    {:noreply,
+     %State{state | transition_duration_seconds: normalize_transition_duration(seconds)}
+     |> broadcast()}
+  end
+
+  def handle_cast(:commit_pending_entry, %State{} = state) do
+    {:noreply, state |> commit_pending_entry() |> broadcast()}
   end
 
   def handle_cast({:pause_rotation_for_takeover, app_id}, %State{} = state) do
@@ -442,6 +499,26 @@ defmodule Octopus.InstallationTransport do
   end
 
   defp apply_entry_or_keep(%State{} = state, entry) do
+    state = %State{state | pending_entry: entry}
+    duration_ms = transition_duration_ms(state)
+
+    if duration_ms > 0 do
+      Mixer.run_transition(duration_ms, fn ->
+        GenServer.cast(__MODULE__, :commit_pending_entry)
+      end)
+
+      state
+    else
+      commit_pending_entry(state)
+    end
+  end
+
+  defp commit_pending_entry(%State{pending_entry: nil} = state), do: state
+
+  defp commit_pending_entry(%State{} = state) do
+    entry = state.pending_entry
+    state = %State{state | pending_entry: nil}
+
     case apply_entry(state, entry) do
       {:ok, state} ->
         state
@@ -904,6 +981,7 @@ defmodule Octopus.InstallationTransport do
     %{
       queue: Enum.map(state.queue, &enrich_entry/1),
       cycle_interval_seconds: state.cycle_interval_seconds,
+      transition_duration_seconds: state.transition_duration_seconds,
       cycle_index: state.cycle_index,
       playing: state.playing,
       paused_remaining_ms: state.paused_remaining_ms,
@@ -1000,6 +1078,15 @@ defmodule Octopus.InstallationTransport do
 
   defp normalize_interval(seconds) when is_number(seconds), do: seconds * 1.0 |> max(1.0)
   defp normalize_interval(_), do: @default_interval_seconds
+
+  defp normalize_transition_duration(seconds) when is_number(seconds) and seconds >= 0,
+    do: seconds * 1.0
+
+  defp normalize_transition_duration(_), do: @default_transition_duration_seconds
+
+  defp transition_duration_ms(%State{transition_duration_seconds: seconds}) do
+    seconds |> normalize_transition_duration() |> Kernel.*(1000) |> trunc() |> max(0)
+  end
 
   defp interval_ms(%State{cycle_interval_seconds: seconds}) do
     seconds |> normalize_interval() |> Kernel.*(1000) |> trunc() |> max(1)

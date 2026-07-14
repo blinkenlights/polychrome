@@ -19,6 +19,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
        now_ms: System.os_time(:millisecond),
        active_tab: "queue",
        show_custom_interval: false,
+       show_custom_transition: false,
        show_all_apps: false,
        show_running_now: false,
        running_apps: [],
@@ -141,6 +142,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       <.console_footer />
 
       <.custom_interval_modal show={@show_custom_interval} target={@myself} />
+      <.custom_transition_modal show={@show_custom_transition} target={@myself} />
 
       <.pf3d_drawer
         :if={@editing_pf3d}
@@ -261,16 +263,29 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         <div class="card-body p-4 gap-3">
           <div class="flex items-center justify-between gap-2">
             <h2 class="text-base font-semibold">{section.title}</h2>
-            <button
-              :if={section.app}
-              type="button"
-              class="text-sm link link-primary"
-              phx-click="configure_app"
-              phx-value-module={Atom.to_string(section.app)}
-              phx-target={@target}
-            >
-              Configure {section.title} →
-            </button>
+            <div :if={section.app} class="flex items-center gap-3">
+              <button
+                :if={section.tiles != []}
+                type="button"
+                class="text-sm link link-primary disabled:opacity-40 disabled:no-underline disabled:pointer-events-none"
+                phx-click="queue_add_all"
+                phx-value-app={Atom.to_string(section.app)}
+                phx-target={@target}
+                disabled={section.all_queued?}
+                title={if section.all_queued?, do: "All in playlist", else: "Add all to playlist"}
+              >
+                {if section.all_queued?, do: "✓ All in playlist", else: "＋ All to playlist"}
+              </button>
+              <button
+                type="button"
+                class="text-sm link link-primary"
+                phx-click="configure_app"
+                phx-value-module={Atom.to_string(section.app)}
+                phx-target={@target}
+              >
+                Configure {section.title} →
+              </button>
+            </div>
           </div>
 
           <div class={[
@@ -536,6 +551,15 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     end
   end
 
+  def handle_event("queue_add_all", %{"app" => app}, socket) do
+    if blocking_new_scene?(socket) do
+      {:noreply, assign(socket, show_discard_new_modal: true)}
+    else
+      InstallationTransport.queue_add_all(parse_app_module(app))
+      {:noreply, refresh_transport(socket)}
+    end
+  end
+
   def handle_event("queue_remove", %{"index" => index}, socket) do
     InstallationTransport.queue_remove(String.to_integer(index))
     {:noreply, refresh_transport(socket)}
@@ -574,6 +598,23 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     if seconds, do: InstallationTransport.set_interval(seconds)
 
     {:noreply, socket |> assign(show_custom_interval: false) |> refresh_transport()}
+  end
+
+  def handle_event("set_transition_duration", %{"seconds" => seconds}, socket) do
+    InstallationTransport.set_transition_duration(parse_number(seconds) || 0)
+    {:noreply, refresh_transport(socket)}
+  end
+
+  def handle_event("open_custom_transition", _params, socket),
+    do: {:noreply, assign(socket, show_custom_transition: true)}
+
+  def handle_event("close_custom_transition", _params, socket),
+    do: {:noreply, assign(socket, show_custom_transition: false)}
+
+  def handle_event("save_custom_transition", %{"value" => value}, socket) do
+    if seconds = parse_number(value), do: InstallationTransport.set_transition_duration(max(seconds, 0))
+
+    {:noreply, socket |> assign(show_custom_transition: false) |> refresh_transport()}
   end
 
   def handle_event("toggle_all_apps", _params, socket),
@@ -748,6 +789,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     rotating? = count >= 2 and not transport.rotation_paused
     playing = transport.playing and not transport.rotation_paused
     interval_seconds = trunc(transport.cycle_interval_seconds || 300)
+    transition_seconds = transport.transition_duration_seconds || 1.0
 
     remaining_ms =
       cond do
@@ -839,6 +881,10 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       interval_seconds: interval_seconds,
       interval_label: interval_label(interval_seconds),
       interval_custom?: not Enum.any?(interval_presets(), fn {_l, s} -> s == interval_seconds end),
+      transition_seconds: transition_seconds * 1.0,
+      transition_label: transition_label(transition_seconds),
+      transition_custom?:
+        not Enum.any?(transition_presets(), fn {_l, s} -> s == transition_seconds * 1.0 end),
       queue_count: count,
       live_index: live_index,
       up_next_index: up_next_index,
@@ -869,7 +915,8 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     sections =
       Enum.map(sections, fn section ->
         modes = Enum.map(section.tiles, & &1.mode)
-        %{section | tiles: tile_list(section.app, modes, transport)}
+        tiles = tile_list(section.app, modes, transport)
+        %{section | tiles: tiles, all_queued?: section_all_queued?(tiles)}
       end)
 
     assign(socket, library_sections: sections)
@@ -880,27 +927,30 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   defp assign_library(socket) do
     transport = socket.assigns.transport
 
-    pixel_section = %{
-      title: "Pixel Fun 3D",
-      app: PixelFun3D,
-      new_scene?: true,
-      soon: [],
-      tiles: tile_list(PixelFun3D, app_list_modes(PixelFun3D), transport)
-    }
+    pixel_section = library_section(PixelFun3D, "Pixel Fun 3D", transport, new_scene?: true)
 
     more_sections =
       for app <- persistable_apps(), app != PixelFun3D do
-        %{
-          title: app_name(app),
-          app: app,
-          new_scene?: false,
-          soon: [],
-          tiles: tile_list(app, app_list_modes(app), transport)
-        }
+        library_section(app, app_name(app), transport)
       end
 
     assign(socket, library_sections: [pixel_section | more_sections])
   end
+
+  defp library_section(app, title, transport, opts \\ []) do
+    tiles = tile_list(app, app_list_modes(app), transport)
+
+    %{
+      title: title,
+      app: app,
+      new_scene?: Keyword.get(opts, :new_scene?, false),
+      soon: [],
+      tiles: tiles,
+      all_queued?: section_all_queued?(tiles)
+    }
+  end
+
+  defp section_all_queued?(tiles), do: tiles != [] and Enum.all?(tiles, & &1.queued_pos)
 
   defp tile_list(app, modes, transport, opts \\ []) do
     queueable? = Keyword.get(opts, :queueable?, true)
@@ -984,7 +1034,9 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       :countdown_percent,
       :countdown_label,
       :interval_seconds,
-      :interval_custom?
+      :interval_custom?,
+      :transition_seconds,
+      :transition_custom?
     ])
   end
 
@@ -1069,6 +1121,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       queue: assigns.transport.queue,
       count: assigns.queue_count,
       interval_label: assigns.interval_label,
+      transition_label: assigns.transition_label,
       live_index: assigns.live_index,
       up_next_index: assigns.up_next_index,
       elapsed_percent: assigns.elapsed_percent,
