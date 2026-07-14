@@ -112,6 +112,16 @@ defmodule Octopus.Mixer do
     Phoenix.PubSub.subscribe(Octopus.PubSub, @pubsub_topic)
   end
 
+  @doc """
+  Runs a black-point transition with `on_black` invoked at full black.
+
+  `duration_ms` is the total fade time (half out, half in). When `duration_ms` is 0
+  or transitions are disabled, `on_black` runs immediately.
+  """
+  def run_transition(duration_ms, on_black) when is_integer(duration_ms) and duration_ms >= 0 and is_function(on_black, 0) do
+    GenServer.cast(__MODULE__, {:run_transition, duration_ms, on_black})
+  end
+
   def init(:ok) do
     # Subscribe to app events
     AppManager.subscribe()
@@ -262,6 +272,31 @@ defmodule Octopus.Mixer do
     {:noreply, state}
   end
 
+  def handle_cast({:run_transition, duration_ms, on_black}, %State{} = state) do
+    transitions_enabled = Application.get_env(:octopus, :enable_transitions, true)
+
+    if duration_ms <= 0 or not transitions_enabled do
+      on_black.()
+      {:noreply, state}
+    else
+      half = div(duration_ms, 2)
+      callback = {:callback, on_black, half}
+
+      state =
+        case state.transition do
+          {:out, time, {:callback, _, _half}} ->
+            %State{state | transition: {:out, time, callback}}
+
+          _ ->
+            %State{state | transition: {:out, half, callback}}
+        end
+
+      Broadcaster.set_luminance(state.max_luminance)
+      schedule_transition()
+      {:noreply, state}
+    end
+  end
+
   # Handle app selection changes from AppManager
   def handle_info({:app_manager, {:selected_app, selected_app}}, %State{} = state) do
     transitions_enabled = Application.get_env(:octopus, :enable_transitions, true)
@@ -270,6 +305,9 @@ defmodule Octopus.Mixer do
       cond do
         not transitions_enabled ->
           {%State{state | rendered_app: selected_app, transition: nil}, :noop}
+
+        callback_transition?(state.transition) ->
+          {%State{state | rendered_app: selected_app}, :noop}
 
         state.rendered_app == selected_app and state.transition == nil ->
           {state, :noop}
@@ -364,6 +402,32 @@ defmodule Octopus.Mixer do
     {:noreply, state}
   end
 
+  def handle_info(:transition, %State{transition: {:out, time, {:callback, on_black, half}}} = state)
+      when time <= 0 do
+    on_black.()
+
+    state = %State{state | transition: {:in, half, half}}
+    Broadcaster.set_luminance(0)
+    schedule_transition()
+
+    {:noreply, state}
+  end
+
+  def handle_info(:transition, %State{transition: {:out, time, {:callback, on_black, half}}} = state) do
+    state = %State{
+      state
+      | transition: {:out, time - @transition_frame_time, {:callback, on_black, half}}
+    }
+
+    (Easing.cubic_in(time / half) * state.max_luminance)
+    |> round()
+    |> Broadcaster.set_luminance()
+
+    schedule_transition()
+
+    {:noreply, state}
+  end
+
   def handle_info(:transition, %State{transition: {:out, time, target_app}} = state)
       when time <= 0 do
     # Fade out complete, switch to target app and start fade in
@@ -388,6 +452,28 @@ defmodule Octopus.Mixer do
     }
 
     (Easing.cubic_in(time / @transition_duration) * state.max_luminance)
+    |> round()
+    |> Broadcaster.set_luminance()
+
+    schedule_transition()
+
+    {:noreply, state}
+  end
+
+  def handle_info(:transition, %State{transition: {:in, time, _half}} = state) when time <= 0 do
+    state = %State{state | transition: nil}
+    Broadcaster.set_luminance(state.max_luminance)
+
+    {:noreply, state}
+  end
+
+  def handle_info(:transition, %State{transition: {:in, time, half}} = state) do
+    state = %State{
+      state
+      | transition: {:in, time - @transition_frame_time, half}
+    }
+
+    ((1 - Easing.cubic_out(time / half)) * state.max_luminance)
     |> round()
     |> Broadcaster.set_luminance()
 
@@ -433,6 +519,10 @@ defmodule Octopus.Mixer do
   defp schedule_transition() do
     Process.send_after(self(), :transition, @transition_frame_time)
   end
+
+  defp callback_transition?({:out, _, {:callback, _, _}}), do: true
+  defp callback_transition?({:in, _, _}), do: true
+  defp callback_transition?(_), do: false
 
   defp handle_new_canvas(%State{} = state, %Canvas{} = canvas, offset) do
     buffer_canvas =

@@ -161,4 +161,61 @@ defmodule Octopus.MixerTest do
     assert state.rendered_app == new_app
     assert match?({:in, _}, state.transition)
   end
+
+  test "run_transition with zero duration runs callback immediately" do
+    ref = make_ref()
+
+    assert :ok = Mixer.run_transition(0, fn -> send(self(), {:callback, ref}) end)
+    assert_receive {:callback, ^ref}
+  end
+
+  test "run_transition invokes callback at black and completes fade in" do
+    ref = make_ref()
+
+    :sys.replace_state(Mixer, fn state ->
+      %{state | rendered_app: "fadeapp", transition: nil, max_luminance: 255}
+    end)
+
+    assert :ok =
+             Mixer.run_transition(120, fn ->
+               send(self(), {:callback, ref})
+             end)
+
+    # Drive fade-out to black
+    :sys.replace_state(Mixer, fn state ->
+      {:out, _time, {:callback, on_black, half}} = state.transition
+      %{state | transition: {:out, 0, {:callback, on_black, half}}}
+    end)
+
+    send(Mixer, :transition)
+    assert_receive {:callback, ^ref}
+
+    state = :sys.get_state(Mixer)
+    assert match?({:in, _, _}, state.transition)
+
+    # Complete fade-in
+    :sys.replace_state(Mixer, fn state ->
+      {:in, _time, half} = state.transition
+      %{state | transition: {:in, 0, half}}
+    end)
+
+    send(Mixer, :transition)
+
+    state = :sys.get_state(Mixer)
+    assert state.transition == nil
+  end
+
+  test "app manager select during callback transition does not start a second fade" do
+    on_black = fn -> :ok end
+
+    :sys.replace_state(Mixer, fn state ->
+      %{state | rendered_app: "oldapp", transition: {:out, 200, {:callback, on_black, 100}}}
+    end)
+
+    send(Mixer, {:app_manager, {:selected_app, "newapp"}})
+
+    state = :sys.get_state(Mixer)
+    assert state.rendered_app == "newapp"
+    assert state.transition == {:out, 200, {:callback, on_black, 100}}
+  end
 end
