@@ -92,7 +92,7 @@ defmodule Octopus.Apps.Collective do
   def legacy_mode_config(slug) do
     case slug do
       "storm" ->
-        %{animation: :storm, background: :deep_dark, sensitivity: 1.0}
+        %{animation: :storm, background: :still_stars, sensitivity: 1.0, bleeding: 35.0}
 
       "breath" ->
         %{
@@ -158,7 +158,7 @@ defmodule Octopus.Apps.Collective do
         key: :background,
         label: "Background",
         type: :choice,
-        default: :deep_dark,
+        default: :still_stars,
         options: [{:deep_dark, "Deep dark"}, {:still_stars, "Still stars"}]
       }
     ]
@@ -503,7 +503,7 @@ defmodule Octopus.Apps.Collective do
       background:
         {"Background", :select,
          %{
-           default: 0,
+           default: 1,
            options: [{"Deep Dark", :deep_dark}, {"Still Stars", :still_stars}],
            visible_when: {:animation, [:storm]}
          }},
