@@ -87,6 +87,12 @@ COPY assets assets
 
 FROM deps_compile AS builder
 
+# Install tailwind/esbuild CLIs before copying app sources. Binaries land in
+# _build/ (see config.exs versions). This layer stays cached until deps or
+# config change — lib/priv edits won't re-download ~70 MB from GitHub/npm.
+RUN mix tailwind.install --if-missing && \
+    mix esbuild.install --if-missing
+
 COPY priv priv
 COPY lib lib
 COPY src src
@@ -101,8 +107,6 @@ RUN --mount=type=cache,target=/root/.npm \
     --mount=type=cache,target=/root/.rustup,sharing=locked \
     --mount=type=cache,target=/root/.cargo,sharing=locked \
     --mount=type=cache,target=/app/native/octopus_webp/target \
-    mix tailwind.install --if-missing && \
-    mix esbuild.install --if-missing && \
     mix assets.deploy
 
 RUN --mount=type=cache,target=/root/.rustup,sharing=locked \
