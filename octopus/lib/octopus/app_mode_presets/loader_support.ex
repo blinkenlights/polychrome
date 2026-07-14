@@ -53,7 +53,7 @@ defmodule Octopus.AppModePresets.LoaderSupport do
 
       _ ->
         raise ArgumentError,
-              "invalid formula in config/app/#{app_key}/#{app_key}-settings.json preset #{slug}: #{inspect(formula)}"
+              "invalid formula in priv/app_mode_presets/#{app_key}/#{app_key}-settings.json preset #{slug}: #{inspect(formula)}"
     end
   end
 

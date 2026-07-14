@@ -3,7 +3,7 @@ defmodule Octopus.AppModePresets.Loader do
 
   alias Octopus.AppModePresets.LoaderSupport
 
-  @config_root Path.expand("../../../config/app", __DIR__)
+  @config_root Application.app_dir(:octopus, "priv/app_mode_presets")
 
   @app_modules %{
     "Elixir.Octopus.Apps.PixelFun" => "pixelfun",

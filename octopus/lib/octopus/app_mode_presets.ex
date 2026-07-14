@@ -3,8 +3,8 @@ defmodule Octopus.AppModePresets do
   Compile-time JSON mode presets for foyer apps (Pixel Fun, Pixel Fun 3D, Collective,
   Matrix, Perlin Noise, Ocean, Sand, Sparkle Mist, Wood, Fire).
 
-  Presets live under `config/app/{app_key}/{app_key}-settings.json` and are embedded
-  at compile time via `Octopus.AppModePresets.Loader`.
+  Presets live under `priv/app_mode_presets/{app_key}/{app_key}-settings.json` and are
+  embedded at compile time via `Octopus.AppModePresets.Loader`.
 
   Mode ids use `app_key:slug`, e.g. `pixelfun:classic_ripple`, `pixelfun3d:classic_ripple`,
   `collective:storm`. Legacy Pixel Fun ids (`builtin:…`, `user:…`) and bare Collective
@@ -14,8 +14,21 @@ defmodule Octopus.AppModePresets do
   alias Octopus.AppModePresets.Loader
 
   @installation_transport Module.concat(["Octopus", "InstallationTransport"])
+  @pixel_fun_program Module.concat(["Octopus", "Apps", "PixelFun", "Program"])
+  @preset_schema Module.concat(["Octopus", "AppModePreset"])
 
-  @app_keys Loader.app_modules()
+  # String module names avoid compile-time deps on app modules that call back into this module.
+  @app_keys %{
+    "Elixir.Octopus.Apps.PixelFun" => "pixelfun",
+    "Elixir.Octopus.Apps.PixelFun3D" => "pixelfun3d",
+    "Elixir.Octopus.Apps.Collective" => "collective",
+    "Elixir.Octopus.Apps.Matrix" => "matrix",
+    "Elixir.Octopus.Apps.PerlinNoise" => "perlinnoise",
+    "Elixir.Octopus.Apps.Ocean" => "ocean",
+    "Elixir.Octopus.Apps.Sand" => "sand",
+    "Elixir.Octopus.Apps.SparkleMist" => "sparklemist",
+    "Elixir.Octopus.Apps.Wood" => "wood"
+  }
 
   @formula_app_keys ~w(pixelfun pixelfun3d)
 
