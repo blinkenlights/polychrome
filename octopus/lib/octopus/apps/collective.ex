@@ -749,10 +749,9 @@ defmodule Octopus.Apps.Collective do
     Reads POSITION and VELOCITY. Fast movement → bolts at that column. Someone
     crossing inward into the 20 m-diameter ring (10 m radius, = aframe panel ring)
     → a pale yellow shooting star on the opposite panel. Not on new track IDs /
-    spawns already inside. Panel activity from the shared radar service glows on
-    the warm-white (W) channel and scales bolt probability per panel.
+    spawns already inside. Panel activity scales bolt probability per panel.
     • Storm Sensitivity — scales bolt probability for a given speed (higher = more).
-    • Activity Bleed — how much activity spills into adjacent panels (W glow + bolts).
+    • Activity Bleed — how much activity spills into adjacent panels for bolt weighting.
     • Crowd Heat — master panel-activity influence on bolt rate (0 = speed only).
     • Background — Deep Dark (black) or Still Stars (starfield + wandering moon
       that cycles new→full→new, plus 1–2 blinking satellites).
@@ -821,7 +820,7 @@ defmodule Octopus.Apps.Collective do
     Presence — each panel glows fully in a fixed random colour.
     Brightness follows the shared radar panel-activity service (crowd
     proximity, count, walking speed), with visual neighbour bleed and base
-    glow applied here.
+    glow applied here. Activity also glows on the warm-white (W) channel.
     • Base Glow — optional idle brightness (0 = black when inactive).
     • Neighbour Bleed — how much activity spills into adjacent panels.
     """
@@ -1024,8 +1023,8 @@ defmodule Octopus.Apps.Collective do
     Animations.Dots.activity_canvas(info, Map.get(ctx, :dots_activity_bleed, 0.2))
   end
 
-  defp white_channel_canvas(%{animation: :storm, display_info: info}, ctx) do
-    Animations.Storm.activity_canvas(info, Map.get(ctx, :storm_activity_bleed, 0.2))
+  defp white_channel_canvas(%{animation: :presence, display_info: info}, ctx) do
+    Animations.PresencePanels.activity_canvas(info, Map.get(ctx, :presence_bleed, 0.35))
   end
 
   defp white_channel_canvas(%{display_info: info}, _ctx) do
