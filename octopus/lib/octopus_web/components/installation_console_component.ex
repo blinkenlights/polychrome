@@ -18,7 +18,6 @@ defmodule OctopusWeb.InstallationConsoleComponent do
      assign(socket,
        transport: InstallationTransport.get_state(),
        now_ms: System.os_time(:millisecond),
-       active_tab: "queue",
        show_custom_interval: false,
        show_custom_transition: false,
        show_transport_settings: false,
@@ -67,89 +66,39 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
   def render(assigns) do
     ~H"""
-    <div class="console-root space-y-6">
+    <div id="installation-console" class="console-root space-y-6" phx-hook=".ConsoleScroll">
       <.console_header />
 
-      <%!-- Main console (wide) --%>
-      <div class="hidden min-[700px]:grid min-[700px]:grid-cols-1 min-[900px]:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-6 items-start pb-8">
-        <div class="space-y-6 min-w-0">
-          <.transport_bar
-            {transport_bar_assigns(assigns)}
-            show_settings={@show_transport_settings}
-            show_now_playing={@show_now_playing_panel}
-            now_playing_available={now_playing_panel_available?(assigns)}
-            now_playing_dirty={now_playing_panel_dirty?(assigns)}
-            target={@myself}
-          />
-          <.mode_library sections={@library_sections || []} target={@myself} transport={@transport} />
-        </div>
-        <div class="space-y-6 min-w-0">
-          <.queue_card {queue_assigns(assigns)} target={@myself} />
-          <.global_params_card />
-        </div>
-      </div>
+      <.player_block
+        {player_assigns(assigns)}
+        show_settings={@show_transport_settings}
+        show_now_playing={@show_now_playing_panel}
+        now_playing_available={now_playing_panel_available?(assigns)}
+        now_playing_dirty={now_playing_panel_dirty?(assigns)}
+        target={@myself}
+      >
+        <:global_params>
+          <.live_component id="global-params" module={OctopusWeb.GlobalParamsComponent} layout={:inline} />
+        </:global_params>
+      </.player_block>
 
-      <%!-- Mobile --%>
-      <div class="min-[700px]:hidden space-y-4">
-        <.mini_transport
-          {mini_transport_assigns(assigns)}
-          show_settings={@show_transport_settings}
-          show_now_playing={@show_now_playing_panel}
-          now_playing_available={now_playing_panel_available?(assigns)}
-          now_playing_dirty={now_playing_panel_dirty?(assigns)}
-          target={@myself}
-        />
-        <.global_params_card mobile />
+      <section id="mode-library" class="space-y-6 pb-8 scroll-mt-4">
+        <.mode_library sections={@library_sections || []} target={@myself} transport={@transport} />
+      </section>
 
-        <div role="tablist" class="tabs tabs-boxed">
-          <button
-            :for={{id, label} <- [{"queue", "Playlist"}, {"library", "Library"}]}
-            role="tab"
-            class={["tab min-h-11", @active_tab == id && "tab-active"]}
-            phx-click="select_tab"
-            phx-value-tab={id}
-            phx-target={@myself}
-          >
-            {label}
-          </button>
-        </div>
-
-        <div class={@active_tab != "queue" && "hidden"}>
-          <.queue_card {queue_assigns(assigns)} target={@myself} />
-          <.running_now_panel
-            running_apps={@running_apps}
-            expanded={@show_running_now}
-            target={@myself}
-            class="mt-4"
-          />
-        </div>
-        <div class={@active_tab != "library" && "hidden"}>
-          <.mode_library sections={@library_sections || []} target={@myself} transport={@transport} compact />
-          <.browse_apps
-            apps={@browse_apps}
-            count={@browse_app_count}
-            expanded={@show_all_apps}
-            target={@myself}
-            class="mt-4"
-          />
-        </div>
-      </div>
-
-      <div class="hidden min-[700px]:block space-y-4">
-        <.running_now_panel
-          running_apps={@running_apps}
-          expanded={@show_running_now}
-          target={@myself}
-          dom_id="running-now-desktop"
-        />
-        <.browse_apps
-          apps={@browse_apps}
-          count={@browse_app_count}
-          expanded={@show_all_apps}
-          target={@myself}
-          dom_id="all-apps-desktop"
-        />
-      </div>
+      <.running_now_panel
+        running_apps={@running_apps}
+        expanded={@show_running_now}
+        target={@myself}
+        dom_id="running-now"
+      />
+      <.browse_apps
+        apps={@browse_apps}
+        count={@browse_app_count}
+        expanded={@show_all_apps}
+        target={@myself}
+        dom_id="all-apps"
+      />
 
       <.console_footer />
 
@@ -169,6 +118,16 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         target={@myself}
       />
       <.discard_new_scene_modal show={@show_discard_new_modal} target={@myself} />
+
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".ConsoleScroll">
+      export default {
+        mounted() {
+          this.handleEvent("scroll_to", ({id}) => {
+            document.getElementById(id)?.scrollIntoView({behavior: "smooth", block: "start"})
+          })
+        }
+      }
+      </script>
     </div>
     """
   end
@@ -271,21 +230,6 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     """
   end
 
-  attr :mobile, :boolean, default: false
-
-  defp global_params_card(assigns) do
-    ~H"""
-    <div class="card bg-base-200 border border-base-300 shadow-sm">
-      <div class="card-body p-4">
-        <.live_component
-          id={if(@mobile, do: "global-params-mobile", else: "global-params-desktop")}
-          module={OctopusWeb.GlobalParamsComponent}
-        />
-      </div>
-    </div>
-    """
-  end
-
   defp console_header(assigns) do
     ~H"""
     <div class="flex flex-wrap items-center justify-end gap-3">
@@ -299,16 +243,17 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   attr :sections, :list, required: true
   attr :transport, :map, required: true
   attr :target, :any, required: true
-  attr :compact, :boolean, default: false
 
   defp mode_library(assigns) do
     ~H"""
-    <div class={if(@compact, do: "space-y-6", else: "grid gap-6 grid-cols-1 min-[700px]:grid-cols-2")}>
+    <div class="grid gap-6 grid-cols-1 min-[700px]:grid-cols-2 min-[1100px]:grid-cols-3 justify-items-start">
       <div
         :for={section <- @sections}
         class={[
-          "card bg-base-200 border border-base-300 min-w-0",
-          !@compact && !section_compact?(section) && "min-[700px]:col-span-2"
+          "card bg-base-200 border border-base-300 min-w-0 w-full",
+          section_compact?(section) && "max-w-full",
+          !section_compact?(section) && "max-w-[65%]",
+          !section_compact?(section) && "min-[700px]:col-span-2 min-[1100px]:col-span-3"
         ]}
       >
         <div class="card-body p-4 gap-3">
@@ -346,7 +291,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
             </div>
           </div>
 
-          <div class={["grid gap-3", section_tiles_grid_class(section, @compact)]}>
+          <div class={["grid gap-3", section_tiles_grid_class(section)]}>
             <.mode_tile
               :for={tile <- section.tiles}
               mode={tile.mode}
@@ -372,7 +317,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         </div>
       </div>
 
-      <p class={["text-xs opacity-60 px-1", !@compact && "min-[700px]:col-span-2"]}>
+      <p class="text-xs opacity-60 px-1 min-[700px]:col-span-2 min-[1100px]:col-span-3">
         Games & test apps launch full-screen and don't join the rotation.
         <button class="link link-primary" phx-click="open_all_apps" phx-target={@target}>
           Show all apps →
@@ -392,11 +337,8 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       if(section.new_scene?, do: 1, else: 0)
   end
 
-  defp section_tiles_grid_class(section, compact?) do
+  defp section_tiles_grid_class(section) do
     cond do
-      compact? ->
-        "grid-cols-1"
-
       section_compact?(section) ->
         if section_tile_count(section) == 1, do: "grid-cols-1", else: "grid-cols-2"
 
@@ -574,8 +516,6 @@ defmodule OctopusWeb.InstallationConsoleComponent do
      |> refresh_transport(refresh_library: true)}
   end
 
-  def handle_event("select_tab", %{"tab" => tab}, socket), do: {:noreply, assign(socket, active_tab: tab)}
-
   def handle_event("toggle_play", _params, socket) do
     InstallationTransport.toggle_play()
     {:noreply, refresh_transport(socket)}
@@ -718,7 +658,10 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     do: {:noreply, assign(socket, show_running_now: !socket.assigns.show_running_now)}
 
   def handle_event("open_all_apps", _params, socket) do
-    {:noreply, assign(socket, show_all_apps: true, active_tab: "library")}
+    {:noreply,
+     socket
+     |> assign(show_all_apps: true)
+     |> push_event("scroll_to", %{id: "mode-library"})}
   end
 
   def handle_event("now_playing_change", params, socket) do
@@ -1118,44 +1061,27 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   defp category_order(:test), do: 3
   defp category_order(_), do: 4
 
-  defp transport_bar_assigns(assigns) do
-    Map.take(assigns, [
-      :playing,
-      :rotating?,
-      :takeover?,
-      :transport_mode,
-      :live_label,
-      :live?,
-      :subtitle,
-      :countdown_percent,
-      :countdown_label,
-      :interval_seconds,
-      :interval_custom?,
-      :interval_label,
-      :transition_seconds,
-      :transition_custom?,
-      :transition_label
-    ])
-  end
-
-  defp mini_transport_assigns(assigns) do
-    Map.take(assigns, [
-      :playing,
-      :rotating?,
-      :takeover?,
-      :transport_mode,
-      :live_label,
-      :live?,
-      :subtitle,
-      :countdown_percent,
-      :countdown_label,
-      :interval_seconds,
-      :interval_custom?,
-      :interval_label,
-      :transition_seconds,
-      :transition_custom?,
-      :transition_label
-    ])
+  defp player_assigns(assigns) do
+    Map.merge(
+      Map.take(assigns, [
+        :playing,
+        :rotating?,
+        :takeover?,
+        :transport_mode,
+        :live_label,
+        :live?,
+        :subtitle,
+        :countdown_percent,
+        :countdown_label,
+        :interval_seconds,
+        :interval_custom?,
+        :interval_label,
+        :transition_seconds,
+        :transition_custom?,
+        :transition_label
+      ]),
+      queue_assigns(assigns)
+    )
   end
 
   defp now_playing_panel_available?(assigns) do

@@ -53,20 +53,120 @@ defmodule OctopusWeb.ConsoleComponents do
     ~H"""
     <div class="card bg-base-200 border border-base-300 shadow-sm">
       <div class="card-body p-4">
-        <div class="flex items-center gap-4 flex-wrap">
-          <.transport_controls rotating?={@rotating?} takeover?={@takeover?} target={@target} playing={@playing} />
+        <.transport_status_row {assigns} />
+      </div>
+    </div>
+    """
+  end
 
-          <div class="flex-1 min-w-[12rem]">
-            <div class="text-[11px] uppercase tracking-wide opacity-60">Now on the wall</div>
-            <div class="flex items-center gap-2 flex-wrap">
-              <span class="text-lg font-semibold">{@live_label}</span>
-              <.transport_mode_badge mode={@transport_mode} />
-            </div>
-            <div class="text-sm opacity-70">{@subtitle}</div>
+  attr :playing, :boolean, required: true
+  attr :rotating?, :boolean, required: true
+  attr :takeover?, :boolean, default: false
+  attr :live_label, :string, required: true
+  attr :live?, :boolean, default: false
+  attr :transport_mode, :atom, required: true
+  attr :subtitle, :string, required: true
+  attr :countdown_percent, :integer, required: true
+  attr :countdown_label, :string, required: true
+  attr :interval_seconds, :integer, required: true
+  attr :interval_custom?, :boolean, required: true
+  attr :interval_label, :string, required: true
+  attr :transition_seconds, :float, required: true
+  attr :transition_custom?, :boolean, required: true
+  attr :transition_label, :string, default: ""
+  attr :show_settings, :boolean, default: false
+  attr :show_now_playing, :boolean, default: false
+  attr :now_playing_available, :boolean, default: false
+  attr :now_playing_dirty, :boolean, default: false
+  attr :queue, :list, required: true
+  attr :count, :integer, required: true
+  attr :live_index, :integer, default: nil
+  attr :up_next_index, :integer, default: nil
+  attr :elapsed_percent, :integer, required: true
+  attr :holding_label, :string, required: true
+  attr :target, :any, default: nil
+
+  slot :global_params, required: true
+
+  def player_block(assigns) do
+    ~H"""
+    <div id="installation-player" class="card bg-base-200 border border-base-300 shadow-sm">
+      <div class="sticky top-0 z-20 bg-base-200 border-b border-base-300 shadow-sm">
+        <div class="p-3 min-[700px]:p-4 space-y-3">
+          <.transport_status_row {assigns} />
+          <div class="border-t border-base-300/60 pt-3">
+            {render_slot(@global_params)}
           </div>
-
-          <.transport_panel_buttons {assigns} />
         </div>
+      </div>
+      <div class="px-3 pb-2 pt-1 min-[700px]:px-4 min-[700px]:pb-3">
+        <.queue_card
+          queue={@queue}
+          count={@count}
+          interval_label={@interval_label}
+          transition_label={@transition_label}
+          live_index={@live_index}
+          up_next_index={@up_next_index}
+          elapsed_percent={@elapsed_percent}
+          countdown_label={@countdown_label}
+          holding_label={@holding_label}
+          target={@target}
+          embedded
+        />
+      </div>
+    </div>
+    """
+  end
+
+  attr :playing, :boolean, required: true
+  attr :rotating?, :boolean, required: true
+  attr :takeover?, :boolean, default: false
+  attr :live_label, :string, required: true
+  attr :live?, :boolean, default: false
+  attr :transport_mode, :atom, required: true
+  attr :subtitle, :string, required: true
+  attr :countdown_percent, :integer, required: true
+  attr :countdown_label, :string, required: true
+  attr :interval_seconds, :integer, default: 300
+  attr :interval_custom?, :boolean, default: false
+  attr :interval_label, :string, default: "5 min"
+  attr :transition_seconds, :float, default: 1.0
+  attr :transition_custom?, :boolean, default: false
+  attr :transition_label, :string, default: ""
+  attr :show_settings, :boolean, default: false
+  attr :show_now_playing, :boolean, default: false
+  attr :now_playing_available, :boolean, default: false
+  attr :now_playing_dirty, :boolean, default: false
+  attr :target, :any, default: nil
+
+  defp transport_status_row(assigns) do
+    ~H"""
+    <div class="flex items-center gap-3 min-[700px]:gap-4 flex-wrap">
+      <div class="max-[699px]:hidden">
+        <.transport_controls rotating?={@rotating?} takeover?={@takeover?} target={@target} playing={@playing} />
+      </div>
+      <div class="min-[700px]:hidden">
+        <.transport_controls
+          rotating?={@rotating?}
+          takeover?={@takeover?}
+          target={@target}
+          playing={@playing}
+          compact
+        />
+      </div>
+      <div class="flex-1 min-w-[8rem]">
+        <div class="text-[11px] uppercase tracking-wide opacity-60 max-[699px]:hidden">Now on the wall</div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-base min-[700px]:text-lg font-semibold truncate">{@live_label}</span>
+          <.transport_mode_badge mode={@transport_mode} />
+        </div>
+        <div class="text-xs min-[700px]:text-sm opacity-70 truncate">{@subtitle}</div>
+      </div>
+      <div class="max-[699px]:hidden">
+        <.transport_panel_buttons {assigns} />
+      </div>
+      <div class="min-[700px]:hidden">
+        <.transport_panel_buttons {assigns} compact />
       </div>
     </div>
     """
@@ -410,13 +510,14 @@ defmodule OctopusWeb.ConsoleComponents do
   attr :elapsed_percent, :integer, required: true
   attr :countdown_label, :string, required: true
   attr :holding_label, :string, required: true
+  attr :embedded, :boolean, default: false
   attr :target, :any, default: nil
 
   def queue_card(assigns) do
     ~H"""
-    <div class="card bg-base-200 border border-base-300">
-      <div class="card-body p-4 gap-3">
-        <div class="flex items-center justify-between">
+    <div class={[!@embedded && "card bg-base-200 border border-base-300"]}>
+      <div class={[!@embedded && "card-body p-4 gap-3", @embedded && "space-y-1"]}>
+        <div :if={!@embedded} class="flex items-center justify-between">
           <h2 class="text-base font-semibold">Playlist</h2>
           <span class="text-xs opacity-60">
             <%= if @count == 0 do %>
@@ -428,15 +529,26 @@ defmodule OctopusWeb.ConsoleComponents do
           </span>
         </div>
 
+        <div :if={@embedded} class="flex items-center justify-between gap-2 pb-0.5">
+          <h2 class="text-sm font-semibold leading-none">Playlist</h2>
+          <span :if={@count > 0} class="text-xs opacity-60 shrink-0">
+            {@count} {ngettext("mode", "modes", @count)}
+          </span>
+        </div>
+
         <div
           :if={@count == 0}
-          class="border-2 border-dashed border-base-content/20 rounded-lg p-6 text-center text-sm opacity-70"
+          class={[
+            "border-2 border-dashed border-base-content/20 rounded-lg text-center text-sm opacity-70",
+            @embedded && "p-3",
+            !@embedded && "p-6"
+          ]}
         >
           <div class="font-semibold mb-1">Nothing in playlist</div>
           The wall keeps showing {@holding_label}. Add modes with ＋ Playlist.
         </div>
 
-        <div :if={@count > 0} class="flex flex-col gap-2 max-h-[min(65dvh,42rem)] overflow-y-auto overscroll-y-contain py-0.5">
+        <div :if={@count > 0} class="flex flex-col gap-0.5">
           <.queue_row
             :for={{entry, idx} <- Enum.with_index(@queue)}
             entry={entry}
@@ -450,11 +562,8 @@ defmodule OctopusWeb.ConsoleComponents do
           />
         </div>
 
-        <p :if={@count == 1} class="text-xs opacity-60">
+        <p :if={@count == 1} class="text-xs opacity-60 pt-0.5 leading-tight">
           One mode holds steady — add another to start rotating.
-        </p>
-        <p :if={@count > 1} class="text-xs opacity-60">
-          Reorder with the arrows — the wall follows this order, top to bottom, then repeats.
         </p>
       </div>
     </div>
@@ -473,27 +582,33 @@ defmodule OctopusWeb.ConsoleComponents do
   def queue_row(assigns) do
     ~H"""
     <div class={[
-      "relative flex items-center gap-2 rounded-lg border px-2 py-2.5 min-h-[2.75rem]",
+      "group relative flex items-center gap-1 rounded-md border px-2 py-1 min-h-[1.75rem]",
       @live? && "border-[#00d390] bg-[#00d390]/10",
       !@live? && "border-base-300 bg-base-100"
     ]}>
-      <span class="w-5 text-center text-xs opacity-60 shrink-0 leading-none">{@idx + 1}</span>
-      <span class="w-1 self-stretch min-h-[1.75rem] rounded shrink-0" style={"background-color: #{@entry.accent_color}"} />
+      <span class="w-4 text-center text-[11px] opacity-60 shrink-0 leading-none">{@idx + 1}</span>
+      <span class="w-1 self-stretch min-h-[1rem] rounded shrink-0" style={"background-color: #{@entry.accent_color}"} />
       <div
-        class="flex-1 min-w-0 font-semibold text-sm truncate leading-normal"
+        class="flex-1 min-w-0 font-semibold text-sm truncate leading-tight"
         title={"#{@entry.app_name} · #{@entry.mode_name}"}
       >
         {@entry.mode_name}
       </div>
 
       <.live_badge :if={@live?} />
-      <span :if={@up_next? and not @live?} class="badge badge-outline badge-sm whitespace-nowrap">
+      <span :if={@up_next? and not @live?} class="text-xs opacity-70 whitespace-nowrap shrink-0">
         up next · {@countdown_label}
       </span>
 
-      <div class="flex items-center gap-1 shrink-0">
+      <div class={[
+        "flex items-center gap-0.5 shrink-0",
+        "max-[699px]:opacity-100 max-[699px]:pointer-events-auto",
+        "opacity-0 pointer-events-none",
+        "group-hover:opacity-100 group-hover:pointer-events-auto",
+        "group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
+      ]}>
         <button
-          class="btn btn-ghost btn-sm btn-square min-h-9 min-w-9"
+          class="btn btn-ghost btn-xs btn-square min-h-8 min-w-8"
           phx-click="queue_move"
           phx-value-index={@idx}
           phx-value-dir="up"
@@ -501,10 +616,10 @@ defmodule OctopusWeb.ConsoleComponents do
           disabled={@idx == 0}
           aria-label="Move up"
         >
-          <.console_icon_chevron_up class="w-4 h-4" />
+          <.console_icon_chevron_up class="w-3.5 h-3.5" />
         </button>
         <button
-          class="btn btn-ghost btn-sm btn-square min-h-9 min-w-9"
+          class="btn btn-ghost btn-xs btn-square min-h-8 min-w-8"
           phx-click="queue_move"
           phx-value-index={@idx}
           phx-value-dir="down"
@@ -512,22 +627,22 @@ defmodule OctopusWeb.ConsoleComponents do
           disabled={@idx == @count - 1}
           aria-label="Move down"
         >
-          <.console_icon_chevron_down class="w-4 h-4" />
+          <.console_icon_chevron_down class="w-3.5 h-3.5" />
         </button>
         <button
-          class="btn btn-ghost btn-sm btn-square min-h-9 min-w-9"
+          class="btn btn-ghost btn-xs btn-square min-h-8 min-w-8"
           phx-click="queue_remove"
           phx-value-index={@idx}
           phx-target={@target}
           aria-label="Remove from playlist"
         >
-          <.console_icon_x class="w-4 h-4" />
+          <.console_icon_x class="w-3.5 h-3.5" />
         </button>
       </div>
 
       <div
         :if={@live?}
-        class="absolute bottom-0 left-0 h-[3px] bg-[#00d390] rounded-bl-lg"
+        class="absolute bottom-0 left-0 h-[2px] bg-[#00d390] rounded-bl-md"
         style={"width: #{@elapsed_percent}%"}
       />
     </div>

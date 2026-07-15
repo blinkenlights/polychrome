@@ -15,7 +15,8 @@ defmodule OctopusWeb.GlobalParamsComponent do
           current_config(socket)
       end
 
-    assigns = Map.drop(assigns, [:param_key, :param_value])
+    layout = Map.get(assigns, :layout, :stack)
+    assigns = assigns |> Map.drop([:param_key, :param_value]) |> Map.put(:layout, layout)
 
     {:ok, socket |> assign(assigns) |> assign(config_schema: config_schema, config: config)}
   end
@@ -24,15 +25,26 @@ defmodule OctopusWeb.GlobalParamsComponent do
   defp current_config(_), do: Global.config()
 
   def render(assigns) do
+    assigns = assign_new(assigns, :layout, fn -> :stack end)
+
     ~H"""
     <div id="global-params-root">
-      <form id="global-params-form" class="space-y-1.5" phx-change="change" phx-target={@myself}>
+      <form
+        id="global-params-form"
+        class={[
+          @layout == :inline && "flex flex-wrap items-center gap-x-6 gap-y-2",
+          @layout == :stack && "space-y-1.5"
+        ]}
+        phx-change="change"
+        phx-target={@myself}
+      >
         <.compact_slider
           key={:speed}
           label="Speed"
           type={elem(@config_schema[:speed], 1)}
           opts={elem(@config_schema[:speed], 2)}
           value={@config[:speed]}
+          inline={@layout == :inline}
         />
         <.compact_slider
           key={:brightness}
@@ -42,8 +54,12 @@ defmodule OctopusWeb.GlobalParamsComponent do
           value={@config[:brightness]}
           disabled={@config[:auto_brightness]}
           hint={@config[:auto_brightness] && "auto"}
+          inline={@layout == :inline}
         />
-        <label class="flex items-center gap-1.5 cursor-pointer w-fit">
+        <label class={[
+          "flex items-center gap-1.5 cursor-pointer w-fit shrink-0",
+          @layout == :inline && "min-w-[7rem]"
+        ]}>
           <input
             type="checkbox"
             name="auto_brightness"
@@ -133,6 +149,7 @@ defmodule OctopusWeb.GlobalParamsComponent do
   attr :value, :any, required: true
   attr :disabled, :boolean, default: false
   attr :hint, :string, default: nil
+  attr :inline, :boolean, default: false
 
   defp compact_slider(assigns) do
     ~H"""
@@ -143,7 +160,11 @@ defmodule OctopusWeb.GlobalParamsComponent do
       data-speed-min={Global.speed_min()}
       data-speed-max={Global.speed_max()}
       data-speed-steps={Global.speed_slider_steps()}
-      class={["flex items-center gap-2", @disabled && "opacity-50"]}
+      class={[
+        "flex items-center gap-2",
+        @disabled && "opacity-50",
+        @inline && "min-w-[10rem] flex-1 max-w-xs"
+      ]}
     >
       <label class="text-[11px] uppercase tracking-wide opacity-60 w-11 shrink-0" for={"global-#{@key}"}>
         {@label}
