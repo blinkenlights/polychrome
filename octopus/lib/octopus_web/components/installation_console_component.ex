@@ -69,23 +69,20 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
       <%!-- Main console (wide) --%>
       <div class="hidden min-[700px]:block space-y-6 pb-8">
-        <div class="grid gap-6 min-[900px]:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] min-[900px]:items-start">
-          <.transport_bar {transport_bar_assigns(assigns)} target={@myself} />
-          <.queue_card {queue_assigns(assigns)} target={@myself} />
-        </div>
+        <.transport_bar {transport_bar_assigns(assigns)} target={@myself} />
+        <.now_playing_card {now_playing_assigns(assigns)} id_suffix="desktop" target={@myself} />
+        <.queue_card {queue_assigns(assigns)} target={@myself} />
 
         <div class="grid gap-6 min-[900px]:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] min-[900px]:items-start">
           <.mode_library sections={@library_sections || []} target={@myself} transport={@transport} />
-          <div class="space-y-6">
-            <.global_params_card />
-            <.now_playing_card {now_playing_assigns(assigns)} id_suffix="desktop" target={@myself} />
-          </div>
+          <.global_params_card />
         </div>
       </div>
 
       <%!-- Mobile --%>
       <div class="min-[700px]:hidden space-y-4">
         <.mini_transport {mini_transport_assigns(assigns)} target={@myself} />
+        <.now_playing_card {now_playing_assigns(assigns)} id_suffix="mobile" target={@myself} />
         <.global_params_card mobile />
 
         <div role="tablist" class="tabs tabs-boxed">
@@ -103,7 +100,6 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
         <div class={@active_tab != "queue" && "hidden"}>
           <.queue_card {queue_assigns(assigns)} target={@myself} />
-          <.now_playing_card {now_playing_assigns(assigns)} id_suffix="mobile" target={@myself} />
           <.running_now_panel
             running_apps={@running_apps}
             expanded={@show_running_now}

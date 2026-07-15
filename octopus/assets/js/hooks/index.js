@@ -242,6 +242,117 @@ const NowPlayingSlider = {
   },
 };
 
+// Drag handle for resizing the embedded simulator preview panel.
+//
+// Two instances are used:
+//   data-direction="vertical"   — horizontal bar below #sim-preview (top layout)
+//   data-direction="horizontal" — vertical strip on right edge of #sim-preview (left layout)
+//
+// CSS (in manager_live.ex) shows/hides each handle based on the current layout.
+// #sim-preview carries phx-update="ignore" so LiveView never resets its inline
+// style, which means the JS-set dimensions persist across server re-renders.
+const SimResize = {
+  mounted() {
+    const simPreview = document.getElementById("sim-preview");
+    const consolePage = document.getElementById("console-page");
+    if (!simPreview || !consolePage) return;
+
+    const dir = this.el.dataset.direction || "vertical";
+    const STORAGE_KEY =
+      dir === "vertical" ? "sim-preview-height" : "sim-preview-width";
+    const MIN_PX = dir === "vertical" ? 80 : 120;
+
+    const isLeftLayout = () => consolePage.dataset.simLayout === "left";
+
+    const restoreSize = () => {
+      const saved = Number(localStorage.getItem(STORAGE_KEY));
+      if (saved > MIN_PX) {
+        if (dir === "vertical") {
+          simPreview.style.height = saved + "px";
+        } else {
+          simPreview.style.width = saved + "px";
+        }
+      }
+    };
+
+    // On mount, apply saved size only when this handle's direction is active.
+    if (
+      (dir === "vertical" && !isLeftLayout()) ||
+      (dir === "horizontal" && isLeftLayout())
+    ) {
+      restoreSize();
+    }
+
+    // When the layout toggles, clear the stale dimension and restore the
+    // correct one for the new layout. Both hook instances receive this event;
+    // each clears the dimension it previously managed.
+    this.handleEvent("store-console-sim-layout", ({ layout }) => {
+      const nowLeft = layout === "left";
+      if (dir === "vertical") {
+        simPreview.style.height = "";
+        if (!nowLeft) restoreSize();
+      } else {
+        simPreview.style.width = "";
+        if (nowLeft) restoreSize();
+      }
+    });
+
+    this._onPointerDown = (e) => {
+      // Each handle only acts when its layout direction is active.
+      if (dir === "vertical" && isLeftLayout()) return;
+      if (dir === "horizontal" && !isLeftLayout()) return;
+
+      e.preventDefault();
+
+      if (dir === "vertical") {
+        const consoleTop = consolePage.getBoundingClientRect().top;
+        const maxPx = window.innerHeight - consoleTop - 80;
+
+        const onMove = (ev) => {
+          const h = Math.max(MIN_PX, Math.min(maxPx, ev.clientY - consoleTop));
+          simPreview.style.height = h + "px";
+        };
+
+        const onUp = () => {
+          document.removeEventListener("pointermove", onMove);
+          document.removeEventListener("pointerup", onUp);
+          const h = parseInt(simPreview.style.height, 10);
+          if (h > 0) localStorage.setItem(STORAGE_KEY, String(h));
+        };
+
+        document.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerup", onUp);
+      } else {
+        // Horizontal: drag left/right to change the width of #sim-preview.
+        const startX = e.clientX;
+        const startW = simPreview.getBoundingClientRect().width;
+        const maxW = Math.min(window.innerWidth * 0.65, 700);
+
+        const onMove = (ev) => {
+          const w = Math.max(MIN_PX, Math.min(maxW, startW + (ev.clientX - startX)));
+          simPreview.style.width = w + "px";
+        };
+
+        const onUp = () => {
+          document.removeEventListener("pointermove", onMove);
+          document.removeEventListener("pointerup", onUp);
+          const w = parseInt(simPreview.style.width, 10);
+          if (w > 0) localStorage.setItem(STORAGE_KEY, String(w));
+        };
+
+        document.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerup", onUp);
+      }
+    };
+
+    this.el.addEventListener("pointerdown", this._onPointerDown);
+  },
+
+  destroyed() {
+    this.el.removeEventListener("pointerdown", this._onPointerDown);
+  },
+};
+
 export const Hooks = {
   Pixels: PixelsHook,
   ProximityChart: ProximityChartHook,
@@ -250,5 +361,6 @@ export const Hooks = {
   ConsoleTheme: ConsoleTheme,
   NowPlayingSlider: NowPlayingSlider,
   RadarManualPointer: RadarManualPointer,
+  SimResize: SimResize,
   TopBar,
 };

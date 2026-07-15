@@ -34,7 +34,11 @@ defmodule OctopusWeb.RadarDebugLive do
 
   The Copy Dump button generates a compact JSON payload covering the full
   stored history (up to one hour) for all sensors, logs it with a
-  `RADAR-DUMP[<id>]` tag, and also copies it to the clipboard.
+  `RADAR-DUMP[<id>]` tag, and also copies it to the clipboard. The payload
+  backing the main (non-snapshot) button is refreshed on its own slow
+  interval (`@dump_tick_ms`), independent of the 1s timeline tick, so that
+  this comparatively expensive encode of up to an hour of history does not
+  add continuous background load on every UI refresh.
   """
 
   use OctopusWeb, :live_view
@@ -49,6 +53,13 @@ defmodule OctopusWeb.RadarDebugLive do
   @vb_height 32
   @units_per_second div(1_000, @unit_ms)
   @tick_ms 1_000
+  # The full-history JSON dump (up to 1h, all sensors) is only ever read by
+  # the "Copy Dump" button. Rebuilding + encoding it on every 1s UI tick is
+  # unnecessary background load, so it gets its own much slower interval —
+  # kept in sync client-side (rather than fetched on click) only because the
+  # Clipboard API requires the copy to happen synchronously within the click
+  # handler's user-activation window (see assets/js/hooks/index.js).
+  @dump_tick_ms 10_000
 
   @status_colors %{
     working: "#22c55e",
@@ -75,6 +86,7 @@ defmodule OctopusWeb.RadarDebugLive do
       end
 
       :timer.send_interval(@tick_ms, :tick)
+      :timer.send_interval(@dump_tick_ms, :dump_tick)
     end
 
     {:ok,
@@ -194,9 +206,12 @@ defmodule OctopusWeb.RadarDebugLive do
      assign(socket,
        histories: histories,
        stats: if(socket.assigns.radar_configured, do: Radar.get_stats(), else: socket.assigns.stats),
-       now_ms: now,
-       dump_json: generate_dump_json(generate_dump_id())
+       now_ms: now
      )}
+  end
+
+  def handle_info(:dump_tick, socket) do
+    {:noreply, assign(socket, dump_json: generate_dump_json(generate_dump_id()))}
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}

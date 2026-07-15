@@ -13,21 +13,19 @@ type PixelState = { r: number; g: number; b: number; w: number };
 
 const EMPTY_PIXEL: PixelState = { r: 0, g: 0, b: 0, w: 0 };
 
-function calculateRedForWFrame(w: number): number {
-  const maxW = 255;
-  const maxR = 63;
-  if (w === 0) {
-    return 0;
-  }
-
-  const ratio = (maxW - w) / maxW;
-  return Math.round(maxR * ratio * ratio);
+/** Screen-blend white LED (W) onto an RGB channel. */
+function blendWhite(channel: number, w: number): number {
+  return Math.min(255, Math.round(channel + w - (channel * w) / 255));
 }
 
 function toDisplayRgb({ r, g, b, w }: PixelState): RGB {
-  const wR = calculateRedForWFrame(w);
-  const screenR = Math.min(255, Math.round(r + wR - (r * wR) / 255));
-  return [screenR, g, b];
+  // W is a real white channel on hardware. In the simulator, add it as white
+  // so grayscale apps track intensity correctly (full W → bright white).
+  if (w <= 0) {
+    return [r, g, b];
+  }
+
+  return [blendWhite(r, w), blendWhite(g, w), blendWhite(b, w)];
 }
 
 function frameKeepW(frame: Frame): boolean {
@@ -82,7 +80,7 @@ export class FrameBuffer {
         this.pixels[i] = keepRgb
           ? { ...prev, w }
           : {
-              r: calculateRedForWFrame(w),
+              r: 0,
               g: 0,
               b: 0,
               w,

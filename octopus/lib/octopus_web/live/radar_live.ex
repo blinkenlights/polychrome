@@ -21,7 +21,7 @@ defmodule OctopusWeb.RadarLive do
 
   alias Octopus.Installation
   alias Octopus.Radar
-  alias Octopus.Radar.{Frame, Track, Transform}
+  alias Octopus.Radar.{Frame, Track, TrackMerge, Transform}
   alias Octopus.Radar.Mock.World
 
   # 10 s rolling window used both for the displayed min/max and for
@@ -168,6 +168,8 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:render_scheduled, false)
      |> assign(:bounds_mode, view_settings.bounds_mode)
      |> assign(:clutter_filter, view_settings.clutter_filter)
+     |> assign(:track_fusion, Radar.track_fusion_enabled?())
+     |> assign(:track_fusion_radius_m, Radar.track_fusion_radius_m())
      |> assign(:static_bounds, world_bounds(world_radius))
      |> reset_radar_state()}
   end
@@ -191,16 +193,11 @@ defmodule OctopusWeb.RadarLive do
   end
 
   defp ring_layout_info do
-    case {Installation.arrangement(), Installation.panel_type(), Installation.panel_outer_dimensions_cm()} do
-      {:circular, type, {w, _h, d}} when not is_nil(type) ->
-        %{
-          enabled: true,
-          count: Installation.num_panels(),
-          width_m: w / 100.0,
-          depth_m: d / 100.0
-        }
+    case Installation.ring_layout_m() do
+      %{num_panels: count, panel_width_m: width_m, panel_depth_m: depth_m} ->
+        %{enabled: true, count: count, width_m: width_m, depth_m: depth_m}
 
-      _ ->
+      nil ->
         %{enabled: false, count: 1, width_m: 0.0, depth_m: 0.0}
     end
   end
@@ -361,6 +358,20 @@ defmodule OctopusWeb.RadarLive do
     {:noreply, socket}
   end
 
+  def handle_event("toggle_track_fusion", _params, socket) do
+    Radar.toggle_track_fusion()
+    {:noreply, socket}
+  end
+
+  def handle_event("set_track_fusion_radius", %{"radius_m" => radius_str}, socket) do
+    case Float.parse(radius_str) do
+      {radius_m, _} -> Radar.set_track_fusion_radius_m(radius_m)
+      :error -> :ok
+    end
+
+    {:noreply, socket}
+  end
+
   def handle_event("toggle_sensor", %{"device_id" => id_str}, socket) do
     case Integer.parse(id_str) do
       {id, ""} ->
@@ -461,6 +472,14 @@ defmodule OctopusWeb.RadarLive do
 
   def handle_info({:mock_settings_changed, settings}, socket) do
     {:noreply, apply_mock_settings(socket, settings)}
+  end
+
+  def handle_info({:track_fusion_changed, %{enabled?: enabled?, radius_m: radius_m}}, socket) do
+    {:noreply,
+     socket
+     |> assign(:track_fusion, enabled?)
+     |> assign(:track_fusion_radius_m, radius_m)
+     |> rebuild_view()}
   end
 
   def handle_info({:pose_tweak_changed, tweak}, socket) do
@@ -589,6 +608,7 @@ defmodule OctopusWeb.RadarLive do
     |> assign(:min_z, nil)
     |> assign(:max_z, nil)
     |> assign(:view_targets, [])
+    |> assign(:fusion_links, [])
     |> assign(:detection_list, [])
     |> assign(:ruler, empty_ruler())
     |> assign(:range_indicators, [])
@@ -746,6 +766,8 @@ defmodule OctopusWeb.RadarLive do
         max_y: max_y
       })
 
+    fusion_links = build_fusion_links(view_targets)
+
     ruler = build_ruler(min_x, max_x, min_y, max_y)
 
     active_devices = Enum.filter(a.devices, &Radar.sensor_active?(&1.device_id))
@@ -798,6 +820,7 @@ defmodule OctopusWeb.RadarLive do
 
     socket
     |> assign(:view_targets, view_targets)
+    |> assign(:fusion_links, fusion_links)
     |> assign(:detection_list, detection_list)
     |> assign(:ruler, ruler)
     |> assign(:range_indicators, range_indicators)
@@ -890,37 +913,29 @@ defmodule OctopusWeb.RadarLive do
     |> MapSet.new()
   end
 
-  # LED displays on the installation ring (+Y = north). Panel fronts face inward;
-  # the front-face center sits on the world border at `radius_m`, with the panel
-  # body extending outward (center at R + depth/2).
-  defp build_ring_panels(radius_m, ring_layout, north_panel, min_x, max_x, min_y, max_y) do
-    panel_count = ring_layout.count
+  # LED displays on the installation ring (+Y = north). Geometry comes from
+  # `Installation.panel_positions_m/1` — this only projects meters → SVG.
+  defp build_ring_panels(_radius_m, ring_layout, north_panel, min_x, max_x, min_y, max_y) do
     width_m = ring_layout.width_m
     depth_m = ring_layout.depth_m
-    center_r = radius_m + depth_m / 2.0
-    step_deg = 360.0 / panel_count
 
-    Enum.map(1..panel_count, fn n ->
-      offset = Integer.mod(n - north_panel, panel_count)
-      theta_deg = offset * step_deg
-      theta_rad = theta_deg * :math.pi() / 180.0
+    positions =
+      Installation.panel_positions_m(
+        reference: :body_center,
+        north_panel: north_panel,
+        label_clearance_m: 0.25
+      )
 
-      tx = center_r * :math.sin(theta_rad)
-      ty = center_r * :math.cos(theta_rad)
-
-      label_r = radius_m + depth_m + 0.25
-      label_tx = label_r * :math.sin(theta_rad)
-      label_ty = label_r * :math.cos(theta_rad)
-
+    Enum.map(positions, fn p ->
       %{
-        number: n,
-        cx: world_to_svg_x(tx, min_x, max_x),
-        cy: world_to_svg_y(ty, min_y, max_y),
-        label_cx: world_to_svg_x(label_tx, min_x, max_x),
-        label_cy: world_to_svg_y(label_ty, min_y, max_y),
+        number: p.panel,
+        cx: world_to_svg_x(p.x, min_x, max_x),
+        cy: world_to_svg_y(p.y, min_y, max_y),
+        label_cx: world_to_svg_x(p.label_x, min_x, max_x),
+        label_cy: world_to_svg_y(p.label_y, min_y, max_y),
         half_w: width_m / (max_x - min_x) * @vb / 2,
         half_h: depth_m / (max_y - min_y) * @vb / 2,
-        rotation: theta_deg
+        rotation: p.theta_deg
       }
     end)
   end
@@ -962,9 +977,7 @@ defmodule OctopusWeb.RadarLive do
   end
 
   defp sensor_position(device) do
-    angle_rad = device.angle_deg * :math.pi() / 180.0
-    distance_m = device.distance_cm / 100.0
-    {distance_m * :math.cos(angle_rad), distance_m * :math.sin(angle_rad)}
+    Installation.sensor_mount_m(device.angle_deg, device.distance_cm)
   end
 
   defp compute_minmax([]) do
@@ -1323,6 +1336,21 @@ defmodule OctopusWeb.RadarLive do
                         <% end %>
                       <% end %>
 
+                      <%!-- Fusion links: connects detections the fusion layer folded into one combined object --%>
+                      <%= if @visuals.detections and @track_fusion do %>
+                        <%= for link <- @fusion_links do %>
+                          <line
+                            x1={fmt_f(link.x1)}
+                            y1={fmt_f(link.y1)}
+                            x2={fmt_f(link.x2)}
+                            y2={fmt_f(link.y2)}
+                            stroke="#f59e0b"
+                            stroke-width="2"
+                            stroke-dasharray="4 3"
+                          />
+                        <% end %>
+                      <% end %>
+
                       <%!-- Detections --%>
                       <%= if @visuals.detections do %>
                         <%= for v <- @view_targets do %>
@@ -1333,6 +1361,19 @@ defmodule OctopusWeb.RadarLive do
                             phx-value-track_id={v.track_id}
                             style="cursor: pointer"
                           >
+                            <%= if v.merged? do %>
+                              <circle
+                                cx={fmt_f(v.cx)}
+                                cy={fmt_f(v.cy)}
+                                r={fmt_f((if @visuals.height_size, do: v.radius, else: @detection_fixed_r) + 10)}
+                                fill="none"
+                                stroke="#f59e0b"
+                                stroke-width="2.5"
+                                stroke-dasharray="4 3"
+                              >
+                                <title>Fused with another sensor's detection of the same object</title>
+                              </circle>
+                            <% end %>
                             <%= if @visuals.trails do %>
                               <%= for seg <- v.trail do %>
                                 <line
@@ -1359,16 +1400,36 @@ defmodule OctopusWeb.RadarLive do
                               />
                               <circle cx={fmt_f(v.arrow_x)} cy={fmt_f(v.arrow_y)} r="4" fill={v.color} />
                             <% end %>
-                            <circle
-                              cx={fmt_f(v.cx)}
-                              cy={fmt_f(v.cy)}
-                              r={fmt_f(if @visuals.height_size, do: v.radius, else: @detection_fixed_r)}
-                              fill={v.color}
-                              fill-opacity="0.5"
-                              stroke={v.color}
-                              stroke-width="1.5"
-                            />
-                            <%= if @visuals.labels do %>
+                            <%= if v.merged? do %>
+                              <%= for slice <- pie_slices(
+                                v.cx,
+                                v.cy,
+                                if(@visuals.height_size, do: v.radius, else: @detection_fixed_r),
+                                v.sensor_ids
+                              ) do %>
+                                <path d={slice.d} fill={slice.color} fill-opacity="0.5" stroke={slice.color} stroke-width="1" />
+                              <% end %>
+                              <circle
+                                cx={fmt_f(v.cx)}
+                                cy={fmt_f(v.cy)}
+                                r={fmt_f(if @visuals.height_size, do: v.radius, else: @detection_fixed_r)}
+                                fill="none"
+                                stroke="black"
+                                stroke-width="1"
+                                stroke-opacity="0.3"
+                              />
+                            <% else %>
+                              <circle
+                                cx={fmt_f(v.cx)}
+                                cy={fmt_f(v.cy)}
+                                r={fmt_f(if @visuals.height_size, do: v.radius, else: @detection_fixed_r)}
+                                fill={v.color}
+                                fill-opacity="0.5"
+                                stroke={v.color}
+                                stroke-width="1.5"
+                              />
+                            <% end %>
+                            <%= if @visuals.labels and not v.merged? do %>
                               <text
                                 x={fmt_f(v.cx)}
                                 y={fmt_f(v.cy)}
@@ -1429,6 +1490,46 @@ defmodule OctopusWeb.RadarLive do
                         </button>
                       <% end %>
                     </div>
+                  </div>
+
+                  <div class="flex flex-col gap-1">
+                    <label
+                      id="radar-track-fusion"
+                      class="flex items-center gap-2 cursor-pointer text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        class="checkbox checkbox-xs"
+                        checked={@track_fusion}
+                        phx-click="toggle_track_fusion"
+                      />
+                      <span>Fuse duplicate detections</span>
+                    </label>
+                    <p class="text-xs opacity-60">
+                      Combines the same object seen by multiple sensors into one, so gravity/activity don't double up or flicker as it drifts between sensors' fields of view. Fused pairs are outlined in amber below.
+                    </p>
+                    <%= if @track_fusion do %>
+                      <form
+                        id="radar-track-fusion-radius-form"
+                        phx-change="set_track_fusion_radius"
+                        class="flex items-center gap-2 text-xs"
+                      >
+                        <label for="radar-track-fusion-radius" class="opacity-70">
+                          Fusion radius
+                        </label>
+                        <input
+                          id="radar-track-fusion-radius"
+                          name="radius_m"
+                          type="number"
+                          min="0.1"
+                          max="5"
+                          step="0.1"
+                          value={fmt_f(@track_fusion_radius_m)}
+                          class="input input-bordered input-xs w-20 font-mono"
+                        />
+                        <span class="opacity-60">m</span>
+                      </form>
+                    <% end %>
                   </div>
 
                   <%= if mock_source?(@source_mode) do %>
@@ -1719,6 +1820,7 @@ defmodule OctopusWeb.RadarLive do
     trail_cutoff = now - @trail_ms
 
     samples_by_key = group_samples_by_key(samples, trail_cutoff)
+    fusion_clusters = build_fusion_clusters(tracks_now)
 
     Enum.map(tracks_now, fn {{device_id, id} = key, t} ->
       cx = world_to_svg_x(t.x, min_x, max_x)
@@ -1736,6 +1838,8 @@ defmodule OctopusWeb.RadarLive do
         |> Map.get(key, [])
         |> build_trail_segments(now, hue, min_x, max_x, min_y, max_y)
 
+      cluster = Map.get(fusion_clusters, key)
+
       %{
         device_id: device_id,
         track_id: id,
@@ -1747,9 +1851,57 @@ defmodule OctopusWeb.RadarLive do
         color: sensor_color(device_id),
         arrow_x: cx + arrow_dx,
         arrow_y: cy - arrow_dy,
-        trail: trail_segments
+        trail: trail_segments,
+        merged?: cluster != nil,
+        cluster_id: cluster && cluster.cluster_id,
+        sensor_ids: (cluster && cluster.sensor_ids) || []
       }
     end)
+  end
+
+  # Maps every `{device_id, track_id}` that took part in an actual cross-sensor
+  # fusion to its cluster index and the (sorted, de-duplicated) sensor ids that
+  # contributed to it, so the view can highlight fused detections, draw a link
+  # between them, and render the per-sensor pie breakdown. Empty (no
+  # highlight) when fusion is off or there is nothing to merge — this mirrors
+  # exactly what `Radar.fuse_people/1` will hand to PanelGravity/PanelActivity,
+  # not a separate preview computation.
+  defp build_fusion_clusters(tracks_now) do
+    if Radar.track_fusion_enabled?() do
+      tracks_now
+      |> Enum.map(fn {{device_id, id} = key, t} ->
+        %{id: TrackMerge.encode_id(device_id, id), key: key, x: t.x, y: t.y, vx: t.vx, vy: t.vy}
+      end)
+      |> Radar.fuse_groups()
+      |> Enum.filter(& &1.merged?)
+      |> Enum.with_index()
+      |> Enum.flat_map(fn {%{sources: sources}, cluster_id} ->
+        sensor_ids = sources |> Enum.map(&TrackMerge.device_id/1) |> Enum.uniq() |> Enum.sort()
+
+        Enum.map(sources, fn source ->
+          {source.key, %{cluster_id: cluster_id, sensor_ids: sensor_ids}}
+        end)
+      end)
+      |> Map.new()
+    else
+      %{}
+    end
+  end
+
+  # One line per pair in a fused cluster (a star from the first member when
+  # more than two sensors detect the same object, which is rare).
+  defp build_fusion_links(view_targets) do
+    view_targets
+    |> Enum.filter(& &1.merged?)
+    |> Enum.group_by(& &1.cluster_id)
+    |> Enum.flat_map(fn {_cluster_id, members} -> fusion_link_segments(members) end)
+  end
+
+  defp fusion_link_segments([_single]), do: []
+  defp fusion_link_segments([a, b]), do: [%{x1: a.cx, y1: a.cy, x2: b.cx, y2: b.cy}]
+
+  defp fusion_link_segments([anchor | rest]) do
+    Enum.map(rest, fn m -> %{x1: anchor.cx, y1: anchor.cy, x2: m.cx, y2: m.cy} end)
   end
 
   # Every label is prefixed by the source sensor's letter so two sensors
@@ -2065,6 +2217,48 @@ defmodule OctopusWeb.RadarLive do
 
   defp sensor_color(device_id),
     do: "hsl(#{sensor_hue(device_id)}, #{@body_saturation}%, #{@body_lightness}%)"
+
+  # Splits a combined-object marker into equal pie slices, one per
+  # contributing sensor, so a fused detection visually shows *which* sensors
+  # agreed on it instead of just a single flat color.
+  defp pie_slices(_cx, _cy, _r, []), do: []
+
+  defp pie_slices(cx, cy, r, [device_id]),
+    do: [%{d: full_circle_path(cx, cy, r), color: sensor_color(device_id)}]
+
+  defp pie_slices(cx, cy, r, sensor_ids) do
+    step = 360.0 / length(sensor_ids)
+
+    sensor_ids
+    |> Enum.with_index()
+    |> Enum.map(fn {device_id, i} ->
+      %{
+        d: pie_slice_path(cx, cy, r, i * step, (i + 1) * step),
+        color: sensor_color(device_id)
+      }
+    end)
+  end
+
+  defp pie_slice_path(cx, cy, r, start_deg, end_deg) do
+    {x1, y1} = point_on_circle(cx, cy, r, start_deg)
+    {x2, y2} = point_on_circle(cx, cy, r, end_deg)
+    large_arc = if end_deg - start_deg > 180.0, do: 1, else: 0
+
+    "M #{fmt_f(cx)},#{fmt_f(cy)} L #{fmt_f(x1)},#{fmt_f(y1)} A #{fmt_f(r)},#{fmt_f(r)} 0 #{large_arc} 1 #{fmt_f(x2)},#{fmt_f(y2)} Z"
+  end
+
+  defp full_circle_path(cx, cy, r) do
+    {x1, y1} = point_on_circle(cx, cy, r, 0.0)
+    {x2, y2} = point_on_circle(cx, cy, r, 180.0)
+
+    "M #{fmt_f(x1)},#{fmt_f(y1)} A #{fmt_f(r)},#{fmt_f(r)} 0 1 1 #{fmt_f(x2)},#{fmt_f(y2)} " <>
+      "A #{fmt_f(r)},#{fmt_f(r)} 0 1 1 #{fmt_f(x1)},#{fmt_f(y1)} Z"
+  end
+
+  defp point_on_circle(cx, cy, r, angle_deg) do
+    theta = angle_deg * :math.pi() / 180.0
+    {cx + r * :math.sin(theta), cy - r * :math.cos(theta)}
+  end
 
   defp sensor_placement_color(device_id, true),
     do:

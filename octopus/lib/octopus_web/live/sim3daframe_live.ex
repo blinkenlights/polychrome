@@ -220,23 +220,21 @@ defmodule OctopusWeb.Sim3dAframeLive do
 
   defp installation_json, do: Jason.encode!(installation_payload())
 
-  # Same geometry as radar_live build_ring_panels / sensor_position so the 3D
-  # scene matches the 2D radar view exactly.
+  # Same geometry as radar_live — single source: Installation.panel_positions_m/1.
   defp installation_payload do
-    {panel_width_m, panel_depth_m} = panel_dimensions_m()
-    ring_radius_m = ring_radius_m()
-    num_panels = Installation.num_panels()
     north_panel = Radar.north_panel()
-    depth_m = panel_depth_m || 0.0
-    panels = panel_slots(ring_radius_m, num_panels, north_panel, depth_m)
+    layout = Installation.ring_layout_m(north_panel: north_panel, label_clearance_m: 0.25)
+    num_panels = Installation.num_panels()
+    ring_radius_m = if layout, do: layout.ring_radius_m, else: nil
+    panels = panel_slots_from_layout(layout)
 
     %{
       ring_radius_m: ring_radius_m,
       num_panels: num_panels,
       north_panel: north_panel,
       platform_radius_m: Installation.platform_radius_m(),
-      panel_width_m: panel_width_m,
-      panel_depth_m: panel_depth_m,
+      panel_width_m: layout && layout.panel_width_m,
+      panel_depth_m: layout && layout.panel_depth_m,
       canvas_to_texture: PanelMapping.canvas_to_texture(num_panels, north_panel),
       panel_sectors: panel_sectors(num_panels, north_panel),
       panels: panels,
@@ -261,34 +259,25 @@ defmodule OctopusWeb.Sim3dAframeLive do
     end
   end
 
-  defp panel_slots(nil, _num_panels, _north_panel, _panel_depth_m), do: []
+  defp panel_slots_from_layout(nil), do: []
 
-  defp panel_slots(ring_radius_m, num_panels, north_panel, panel_depth_m) do
-    center_r = ring_radius_m + panel_depth_m / 2.0
-    step_deg = 360.0 / num_panels
-
-    for i <- 0..(num_panels - 1) do
-      n = i + 1
-      offset = Integer.mod(n - north_panel, num_panels)
-      theta_deg = offset * step_deg
-      theta_rad = theta_deg * :math.pi() / 180.0
-
+  defp panel_slots_from_layout(%{panels: panels, north_panel: north_panel, num_panels: num_panels}) do
+    Enum.map(panels, fn p ->
       %{
-        index: i,
-        panel_number: n,
-        canvas_panel: PanelMapping.frame_panel_for_installation(n, num_panels, north_panel),
-        x_m: center_r * :math.sin(theta_rad),
-        z_m: center_r * :math.cos(theta_rad),
-        rotation_y: theta_rad + :math.pi()
+        index: p.panel - 1,
+        panel_number: p.panel,
+        canvas_panel: PanelMapping.frame_panel_for_installation(p.panel, num_panels, north_panel),
+        x_m: p.x,
+        z_m: p.y,
+        rotation_y: p.theta_rad + :math.pi()
       }
-    end
+    end)
   end
 
   defp installation_sensors do
     if Radar.configured?() do
       Enum.map(Radar.planned_devices(), fn d ->
-        angle_rad = d.angle_deg * :math.pi() / 180.0
-        distance_m = d.distance_cm / 100.0
+        {x_m, z_m} = Installation.sensor_mount_m(d.angle_deg, d.distance_cm)
 
         %{
           device_id: d.device_id,
@@ -297,23 +286,12 @@ defmodule OctopusWeb.Sim3dAframeLive do
           distance_cm: d.distance_cm,
           range_cm: d.range_cm,
           height_cm: d.height_cm,
-          x_m: distance_m * :math.cos(angle_rad),
-          z_m: distance_m * :math.sin(angle_rad)
+          x_m: x_m,
+          z_m: z_m
         }
       end)
     else
       []
-    end
-  end
-
-  defp ring_radius_m do
-    if Installation.arrangement() == :circular, do: Installation.ring_radius_m(), else: nil
-  end
-
-  defp panel_dimensions_m do
-    case Installation.panel_outer_dimensions_cm() do
-      {width_cm, _height_cm, depth_cm} -> {width_cm / 100.0, depth_cm / 100.0}
-      _ -> {nil, nil}
     end
   end
 

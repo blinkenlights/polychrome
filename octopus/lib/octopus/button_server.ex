@@ -29,6 +29,8 @@ defmodule Octopus.ButtonServer do
     {:noreply, unsubscribe_app(state, app_id)}
   end
 
+  def handle_info({:apps, _msg}, state), do: {:noreply, state}
+
   def handle_info({:app_manager, {:selected_app, selected_app}}, state) do
     state = %{state | selected_app: selected_app}
 
@@ -40,6 +42,8 @@ defmodule Octopus.ButtonServer do
 
     {:noreply, state}
   end
+
+  def handle_info({:app_manager, _msg}, state), do: {:noreply, state}
 
   def handle_info(message, state) do
     Logger.debug("unhandled message, #{inspect(message)}")

@@ -80,14 +80,33 @@ defmodule OctopusWeb.ManagerLive do
       ]}
     >
       <%= if @show_sim_preview do %>
+        <%!-- phx-update="ignore" prevents LiveView from re-patching this div on every
+             console_tick, which would reset the JS-set inline height and cause snap-back.
+             Default height lives in the <style> rule below; JS inline style overrides it. --%>
         <div
           id="sim-preview"
-          class={[
-            "shrink-0 z-30 w-full max-h-[42dvh] bg-black border-b border-base-300 overflow-hidden",
-            @sim_layout == "left" && "sim-layout-left"
-          ]}
+          phx-update="ignore"
+          class="shrink-0 z-30 relative w-full bg-black border-b border-base-300 overflow-hidden"
         >
           {live_render(@socket, PixelsLive, id: "main", session: %{"embedded" => true})}
+          <%!-- Vertical drag handle for left layout — shown/hidden via CSS --%>
+          <div
+            id="sim-resize-handle-vert"
+            phx-hook="SimResize"
+            data-direction="horizontal"
+            title="Drag to resize"
+            class="absolute inset-y-0 right-0 w-1.5 cursor-col-resize touch-none select-none z-50 bg-transparent hover:bg-primary/40 active:bg-primary/60 transition-colors"
+          />
+        </div>
+        <%!-- Horizontal drag handle for top layout — shown/hidden via CSS --%>
+        <div
+          id="sim-resize-handle"
+          phx-hook="SimResize"
+          data-direction="vertical"
+          title="Drag to resize"
+          class="group shrink-0 h-2 cursor-row-resize touch-none select-none z-40 bg-base-300 hover:bg-primary/40 active:bg-primary/60 transition-colors flex items-center justify-center"
+        >
+          <span class="w-8 h-0.5 rounded-full bg-base-content/25 group-hover:bg-primary/70 transition-colors" />
         </div>
       <% end %>
 
@@ -103,17 +122,21 @@ defmodule OctopusWeb.ManagerLive do
         <style>
           .console-root{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif}
           .console-mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,monospace}
+          #sim-preview{height:42dvh}
+          #sim-resize-handle-vert{display:none}
           @media (min-width:700px){
             #console-page.sim-layout-left{flex-direction:row}
-            #sim-preview.sim-layout-left{
+            #console-page.sim-layout-left #sim-preview{
               width:min(42dvw,28rem);
               max-height:none;
               height:100%;
               border-bottom:none;
               border-right:1px solid color-mix(in oklch,currentColor 15%,transparent)
             }
-            #sim-preview.sim-layout-left .sim-embedded-root{height:100%;min-height:0}
-            #sim-preview.sim-layout-left .sim-embedded-canvas{max-height:none;flex:1;min-height:0}
+            #console-page.sim-layout-left .sim-embedded-root{height:100%;min-height:0}
+            #console-page.sim-layout-left .sim-embedded-canvas{flex:1;min-height:0}
+            #console-page.sim-layout-left #sim-resize-handle{display:none}
+            #console-page.sim-layout-left #sim-resize-handle-vert{display:block}
           }
         </style>
         <div class="w-full px-4 sm:px-6 lg:px-8 py-6">

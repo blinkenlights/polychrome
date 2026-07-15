@@ -150,7 +150,7 @@ defmodule OctopusWeb.PixelsLive do
     <div
       class={[
         "flex w-full justify-center bg-black",
-        @embedded && "sim-embedded-root flex-col items-stretch min-h-0",
+        @embedded && "sim-embedded-root relative h-full flex-col items-stretch min-h-0",
         !@embedded && "h-full min-h-screen"
       ]}
       phx-window-keydown="keydown"
@@ -165,17 +165,23 @@ defmodule OctopusWeb.PixelsLive do
         />
       </div>
 
-      <div class="absolute top-2 left-1/2 -translate-x-1/2 flex flex-col gap-2 z-10">
+      <div class="absolute top-2 right-2 flex flex-col items-end gap-1.5 z-10">
         <form id="view-form" phx-change="view-changed">
-          <.input type="select" name="view" options={@view_options} value={@view} />
+          <select
+            id="view-select"
+            name="view"
+            class="select select-bordered select-xs w-40 text-xs"
+          >
+            {Phoenix.HTML.Form.options_for_select(@view_options, @view)}
+          </select>
         </form>
-        <div :if={@view != @default_view} class="flex gap-1 justify-center">
+        <div :if={@view != @default_view} class="flex gap-1 justify-end">
           <button
             :for={window <- 1..@max_windows}
             phx-click="window-changed"
             phx-value-window={window}
             class={[
-              "btn btn-sm btn-square",
+              "btn btn-xs btn-square",
               if(@window == window, do: "btn-primary", else: "btn-outline btn-primary")
             ]}
           >
@@ -185,7 +191,7 @@ defmodule OctopusWeb.PixelsLive do
       </div>
 
       <%= if @embedded do %>
-        <div class="sim-embedded-canvas flex-1 min-h-[12rem] max-h-[38vh] w-full flex items-center justify-center px-4 pt-14">
+        <div class="sim-embedded-canvas flex-1 min-h-0 w-full flex items-center justify-center px-4 pt-14">
           <canvas
             id={"#{@id_prefix}-#{@id}"}
             phx-hook="Pixels"
