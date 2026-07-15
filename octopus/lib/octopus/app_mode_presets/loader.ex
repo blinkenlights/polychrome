@@ -15,7 +15,8 @@ defmodule Octopus.AppModePresets.Loader do
     "Elixir.Octopus.Apps.Sand" => "sand",
     "Elixir.Octopus.Apps.SparkleMist" => "sparklemist",
     "Elixir.Octopus.Apps.Wood" => "wood",
-    "Elixir.Octopus.Apps.Fire" => "fire"
+    "Elixir.Octopus.Apps.Fire" => "fire",
+    "Elixir.Octopus.Apps.GravityMask" => "gravitymask"
   }
 
   @doc false

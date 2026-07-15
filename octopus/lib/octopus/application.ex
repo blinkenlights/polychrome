@@ -65,7 +65,14 @@ defmodule Octopus.Application do
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Octopus.Supervisor]
-    Supervisor.start_link(children, opts)
+    result = Supervisor.start_link(children, opts)
+
+    case result do
+      {:ok, _pid} -> Octopus.Boot.start_configured_app()
+      _ -> :ok
+    end
+
+    result
   end
 
   defp radar_children do

@@ -21,6 +21,18 @@ On Linux you need:
 
 Octopus should now be reachable on [`localhost:4000`](http://localhost:4000).
 
+To auto-start an app on boot (runtime, no recompile):
+
+```bash
+BOOT_APP=GravityMask iex -S mix phx.server
+# optional mode preset:
+BOOT_APP=GravityMask BOOT_APP_MODE=gravitymask:mask iex -S mix phx.server
+```
+
+`BOOT_APP` accepts a short Apps name (`GravityMask`) or a full module
+(`Octopus.Apps.GravityMask`). `OCTOPUS_BOOT_APP` / `OCTOPUS_BOOT_APP_MODE`
+are aliases.
+
 Start the "UDP Server" app to receive external frames on UDP port 2342
 
 ### Dual Octopus instances (Pixie + Pixie2 / Woodstock on one device)

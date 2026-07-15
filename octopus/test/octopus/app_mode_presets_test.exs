@@ -37,6 +37,8 @@ defmodule Octopus.AppModePresetsTest do
       assert preset_normalize_mode_id(Wood, "experiment") == "wood:experiment"
       assert preset_normalize_mode_id(Fire, "campfire") == "fire:campfire"
       assert preset_normalize_mode_id(Fire, "default") == "fire:campfire"
+      assert preset_normalize_mode_id(Octopus.Apps.GravityMask, "mask") == "gravitymask:mask"
+      assert preset_normalize_mode_id(Octopus.Apps.GravityMask, "default") == "gravitymask:mask"
     end
   end
 

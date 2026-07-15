@@ -26,7 +26,8 @@ defmodule Octopus.AppModePresets do
     "Elixir.Octopus.Apps.Sand" => "sand",
     "Elixir.Octopus.Apps.SparkleMist" => "sparklemist",
     "Elixir.Octopus.Apps.Wood" => "wood",
-    "Elixir.Octopus.Apps.Fire" => "fire"
+    "Elixir.Octopus.Apps.Fire" => "fire",
+    "Elixir.Octopus.Apps.GravityMask" => "gravitymask"
   }
 
   @formula_app_keys ~w(pixelfun pixelfun3d)
@@ -108,6 +109,9 @@ defmodule Octopus.AppModePresets do
 
       key == "fire" and mode_id in ["campfire", "default"] ->
         mode_id(app, "campfire")
+
+      key == "gravitymask" and mode_id in ["mask", "default"] ->
+        mode_id(app, "mask")
 
       true ->
         mode_id

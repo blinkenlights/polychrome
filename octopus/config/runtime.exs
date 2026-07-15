@@ -10,6 +10,17 @@ if local = System.get_env("FIRMWARE_BROADCASTER_LOCAL_PORT") do
   config :octopus, :firmware_broadcaster_local_port, String.to_integer(local)
 end
 
+# Auto-start an app after boot (runtime). Accepts a short Apps name
+# (`GravityMask`) or a full module (`Octopus.Apps.GravityMask`). Optional
+# mode id for apps with `mode_config/1` / presets.
+if boot_app = System.get_env("BOOT_APP") || System.get_env("OCTOPUS_BOOT_APP") do
+  config :octopus, :boot_app, boot_app
+end
+
+if boot_mode = System.get_env("BOOT_APP_MODE") || System.get_env("OCTOPUS_BOOT_APP_MODE") do
+  config :octopus, :boot_app_mode, boot_mode
+end
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration
