@@ -1,0 +1,37 @@
+---
+description: Fix invisible text in DaisyUI select/dropdown elements
+globs: octopus/**/*.ex,octopus/**/*.heex,octopus/assets/**/*.{ts,js,css}
+alwaysApply: false
+---
+
+# DaisyUI `<select>` Text Visibility
+
+## The Problem
+
+DaisyUI's `.select` / `.select-bordered` class uses CSS custom properties (`--b1`, `--bc`, etc.) that depend on the active `data-theme` attribute on `<html>`. When DaisyUI's theme variables haven't loaded yet, or when the page's `color-scheme` doesn't match the theme, the browser's native `<select>` rendering can make **option text invisible** (e.g., white text on a white background, or black text on a black background).
+
+This is a recurring issue in this project because:
+- The page background is always black (`bg-black`)
+- Some DaisyUI themes set a light background on `.select` but rely on the browser inheriting text color from the OS/theme `color-scheme`
+- Native `<option>` elements inside a `<select>` are NOT styled by CSS in most browsers; they use OS-native rendering
+
+## The Fix
+
+**Never use the shared `.input` component (from `core_components.ex`) for selects that live on dark or canvas-heavy pages.** Use a plain `<select>` with explicit DaisyUI size/color classes instead, and add explicit `text-base-content` to guarantee a readable text color regardless of theme:
+
+```html
+<%!-- ✅ GOOD: explicit color + no wrapper div from .input --%>
+<select name="view" class="select select-bordered select-xs text-base-content bg-base-100">
+  {Phoenix.HTML.Form.options_for_select(@options, @value)}
+</select>
+
+<%!-- ❌ BAD on dark pages: .input wraps in a form-control div and --%>
+<%!--    omits explicit text/bg color, leading to invisible text     --%>
+<.input type="select" name="view" options={@options} value={@value} />
+```
+
+If you must use the shared `.input` component, override its classes by editing `core_components.ex` to add `text-base-content` to the `<select>` class list.
+
+## Root Cause
+
+DaisyUI v4 injects theme CSS variables into `:root` via `data-theme`. The `<select>` background becomes a light color (e.g., retro cream, white), but `color` inherits from a dark ancestor, producing invisible text. Adding `text-base-content` forces the text to use the theme's foreground color token, which always contrasts against `bg-base-100`.
