@@ -4,8 +4,10 @@
       "accent_color": "#BDC3C7",
       "config": {
         "contrast": 3.0,
+        "easing_tau": 1.5,
         "floor_brightness": 25,
-        "reach": 50
+        "reach": 50,
+        "velocity_gain": 0.0
       },
       "name": "Gravity Mask",
       "slug": "mask"

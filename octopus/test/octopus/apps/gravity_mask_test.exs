@@ -1,6 +1,7 @@
 defmodule Octopus.Apps.GravityMaskTest do
   use ExUnit.Case, async: true
 
+  alias Octopus.AppModePresets
   alias Octopus.Apps.GravityMask
   alias Octopus.Canvas
 
@@ -63,6 +64,14 @@ defmodule Octopus.Apps.GravityMaskTest do
     {_, :float, opts} = schema.floor_brightness
     assert opts.min == 0
     assert opts.max == 100
+  end
+
+  test "builtin preset matches module defaults and id_for_config" do
+    preset = AppModePresets.get(GravityMask, "gravitymask:mask")
+    defaults = GravityMask.mode_config("gravitymask:mask")
+
+    assert preset.config == defaults
+    assert AppModePresets.id_for_config(GravityMask, preset.config) == "gravitymask:mask"
   end
 
   defp render(display_info, factors, floor_brightness) do

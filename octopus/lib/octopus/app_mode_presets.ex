@@ -1,7 +1,7 @@
 defmodule Octopus.AppModePresets do
   @moduledoc """
   Compile-time JSON mode presets for foyer apps (Pixel Fun, Pixel Fun 3D, Collective,
-  Matrix, Perlin Noise, Ocean, Sand, Sparkle Mist, Wood, Fire).
+  Matrix, Perlin Noise, Ocean, Sand, Sparkle Mist, Wood, Fire, Gravity Mask).
 
   Presets live under `priv/app_mode_presets/{app_key}/{app_key}-settings.json` and are
   embedded at compile time via `Octopus.AppModePresets.Loader`.

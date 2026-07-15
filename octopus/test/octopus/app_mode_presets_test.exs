@@ -1,7 +1,7 @@
 defmodule Octopus.AppModePresetsTest do
   use Octopus.DataCase, async: true
 
-  alias Octopus.Apps.{Collective, Fire, Matrix, PixelFun, Sand, SparkleMist, Wood}
+  alias Octopus.Apps.{Collective, Fire, GravityMask, Matrix, PixelFun, Sand, SparkleMist, Wood}
 
   @presets Module.concat(["Octopus", "AppModePresets"])
 
@@ -14,10 +14,11 @@ defmodule Octopus.AppModePresetsTest do
       assert length(preset_list(SparkleMist)) == 1
       assert length(preset_list(Wood)) == 2
       assert length(preset_list(Fire)) == 3
+      assert length(preset_list(GravityMask)) == 1
     end
 
     test "all presets are builtin origin" do
-      for app <- [PixelFun, Collective, Matrix, Sand, SparkleMist, Wood, Fire],
+      for app <- [PixelFun, Collective, Matrix, Sand, SparkleMist, Wood, Fire, GravityMask],
           preset <- preset_list(app) do
         assert preset.origin == :builtin
       end
@@ -37,8 +38,8 @@ defmodule Octopus.AppModePresetsTest do
       assert preset_normalize_mode_id(Wood, "experiment") == "wood:experiment"
       assert preset_normalize_mode_id(Fire, "campfire") == "fire:campfire"
       assert preset_normalize_mode_id(Fire, "default") == "fire:campfire"
-      assert preset_normalize_mode_id(Octopus.Apps.GravityMask, "mask") == "gravitymask:mask"
-      assert preset_normalize_mode_id(Octopus.Apps.GravityMask, "default") == "gravitymask:mask"
+      assert preset_normalize_mode_id(GravityMask, "mask") == "gravitymask:mask"
+      assert preset_normalize_mode_id(GravityMask, "default") == "gravitymask:mask"
     end
   end
 
@@ -106,6 +107,17 @@ defmodule Octopus.AppModePresetsTest do
       refute campfire.renamable
       assert inferno.name == "Inferno"
     end
+
+    test "returns gravity mask tile with summary" do
+      [mode] = preset_list_modes(GravityMask)
+
+      assert mode.id == "gravitymask:mask"
+      assert mode.name == "Gravity Mask"
+      assert mode.summary =~ "floor 25%"
+      assert mode.summary =~ "reach 50"
+      refute mode.deletable
+      refute mode.renamable
+    end
   end
 
   describe "get/2" do
@@ -114,6 +126,17 @@ defmodule Octopus.AppModePresetsTest do
       assert preset.origin == :builtin
       assert is_map(preset.config)
       assert preset.config[:speed] != nil
+    end
+
+    test "returns gravity mask preset with all config keys" do
+      preset = preset_get(GravityMask, "gravitymask:mask")
+
+      assert preset.origin == :builtin
+      assert preset.config[:floor_brightness] == 25
+      assert preset.config[:contrast] == 3.0
+      assert preset.config[:reach] == 50
+      assert preset.config[:easing_tau] == 1.5
+      assert preset.config[:velocity_gain] == 0.0
     end
   end
 
