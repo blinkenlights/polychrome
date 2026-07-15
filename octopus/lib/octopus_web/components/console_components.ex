@@ -39,14 +39,20 @@ defmodule OctopusWeb.ConsoleComponents do
   attr :countdown_label, :string, required: true
   attr :interval_seconds, :integer, required: true
   attr :interval_custom?, :boolean, required: true
+  attr :interval_label, :string, required: true
   attr :transition_seconds, :float, required: true
   attr :transition_custom?, :boolean, required: true
+  attr :transition_label, :string, default: ""
+  attr :show_settings, :boolean, default: false
+  attr :show_now_playing, :boolean, default: false
+  attr :now_playing_available, :boolean, default: false
+  attr :now_playing_dirty, :boolean, default: false
   attr :target, :any, default: nil
 
   def transport_bar(assigns) do
     ~H"""
     <div class="card bg-base-200 border border-base-300 shadow-sm">
-      <div class="card-body p-4 gap-4">
+      <div class="card-body p-4">
         <div class="flex items-center gap-4 flex-wrap">
           <.transport_controls rotating?={@rotating?} takeover?={@takeover?} target={@target} playing={@playing} />
 
@@ -59,35 +65,7 @@ defmodule OctopusWeb.ConsoleComponents do
             <div class="text-sm opacity-70">{@subtitle}</div>
           </div>
 
-          <.countdown_ring
-            :if={@rotating?}
-            playing={@playing}
-            countdown_percent={@countdown_percent}
-            countdown_label={@countdown_label}
-          />
-        </div>
-
-        <div class="grid gap-4 sm:grid-cols-2">
-          <div>
-            <.interval_picker
-              interval_seconds={@interval_seconds}
-              interval_custom?={@interval_custom?}
-              target={@target}
-            />
-            <p class="text-xs opacity-60 mt-1">
-              Applies at the next change — the running countdown isn't reset.
-            </p>
-          </div>
-          <div>
-            <.transition_picker
-              transition_seconds={@transition_seconds}
-              transition_custom?={@transition_custom?}
-              target={@target}
-            />
-            <p class="text-xs opacity-60 mt-1">
-              Fade applies on the next switch — total duration, split out/in.
-            </p>
-          </div>
+          <.transport_panel_buttons {assigns} />
         </div>
       </div>
     </div>
@@ -103,6 +81,16 @@ defmodule OctopusWeb.ConsoleComponents do
   attr :subtitle, :string, required: true
   attr :countdown_percent, :integer, required: true
   attr :countdown_label, :string, required: true
+  attr :interval_seconds, :integer, default: 300
+  attr :interval_custom?, :boolean, default: false
+  attr :interval_label, :string, default: "5 min"
+  attr :transition_seconds, :float, default: 1.0
+  attr :transition_custom?, :boolean, default: false
+  attr :transition_label, :string, default: ""
+  attr :show_settings, :boolean, default: false
+  attr :show_now_playing, :boolean, default: false
+  attr :now_playing_available, :boolean, default: false
+  attr :now_playing_dirty, :boolean, default: false
   attr :target, :any, default: nil
 
   def mini_transport(assigns) do
@@ -123,13 +111,103 @@ defmodule OctopusWeb.ConsoleComponents do
           </div>
           <div class="text-xs opacity-70 truncate">{@subtitle}</div>
         </div>
-        <.countdown_ring
-          :if={@rotating?}
-          playing={@playing}
-          countdown_percent={@countdown_percent}
-          countdown_label={@countdown_label}
-        />
+        <.transport_panel_buttons {assigns} compact />
       </div>
+    </div>
+    """
+  end
+
+  attr :playing, :boolean, required: true
+  attr :rotating?, :boolean, required: true
+  attr :countdown_percent, :integer, required: true
+  attr :countdown_label, :string, required: true
+  attr :interval_seconds, :integer, default: 300
+  attr :interval_custom?, :boolean, default: false
+  attr :interval_label, :string, default: "5 min"
+  attr :transition_seconds, :float, default: 1.0
+  attr :transition_custom?, :boolean, default: false
+  attr :transition_label, :string, default: ""
+  attr :show_settings, :boolean, default: false
+  attr :show_now_playing, :boolean, default: false
+  attr :now_playing_available, :boolean, default: false
+  attr :now_playing_dirty, :boolean, default: false
+  attr :compact, :boolean, default: false
+  attr :target, :any, default: nil
+
+  def transport_panel_buttons(assigns) do
+    ~H"""
+    <div class={["flex items-center gap-3 shrink-0", !@compact && "ml-auto sm:ml-0"]}>
+      <button
+        :if={@now_playing_available}
+        type="button"
+        class={[
+          "btn btn-sm btn-square min-h-10 min-w-10 btn-ghost relative",
+          @show_now_playing && "btn-active",
+          @now_playing_dirty && !@show_now_playing && "border-[#fcb700] text-[#fcb700]"
+        ]}
+        phx-click="toggle_now_playing_panel"
+        phx-target={@target}
+        title="Now playing controls"
+        aria-label="Now playing controls"
+        aria-expanded={to_string(@show_now_playing)}
+      >
+        <.console_icon_cog class="w-5 h-5" />
+        <span
+          :if={@now_playing_dirty && !@show_now_playing}
+          class="absolute top-1 right-1 w-2 h-2 rounded-full bg-[#fcb700]"
+        />
+      </button>
+
+      <div class="relative">
+        <button
+          type="button"
+          class={[
+            "btn btn-sm btn-square min-h-10 min-w-10 btn-ghost",
+            @show_settings && "btn-active"
+          ]}
+          phx-click="toggle_transport_settings"
+          phx-target={@target}
+          title={"Timing: #{transport_timing_summary(@interval_label, @transition_label)}"}
+          aria-label="Rotation timing"
+          aria-expanded={to_string(@show_settings)}
+        >
+          <.console_icon_dots_vertical class="w-5 h-5" />
+        </button>
+        <div
+          :if={@show_settings}
+          class="absolute right-0 top-full z-20 mt-3 w-[min(calc(100vw-3rem),38rem)] card bg-base-100 border border-base-300 shadow-lg"
+        >
+          <div class="card-body p-5 grid gap-6 sm:grid-cols-2 sm:gap-x-8">
+            <div class="space-y-2">
+              <.interval_picker
+                interval_seconds={@interval_seconds}
+                interval_custom?={@interval_custom?}
+                target={@target}
+              />
+              <p class="text-xs opacity-60">
+                Applies at the next change — the running countdown isn't reset.
+              </p>
+            </div>
+            <div class="space-y-2">
+              <.transition_picker
+                transition_seconds={@transition_seconds}
+                transition_custom?={@transition_custom?}
+                target={@target}
+              />
+              <p class="text-xs opacity-60">
+                Fade applies on the next switch — total duration, split out/in.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <.countdown_ring
+        :if={@rotating?}
+        playing={@playing}
+        countdown_percent={@countdown_percent}
+        countdown_label={@countdown_label}
+      />
     </div>
     """
   end
@@ -164,7 +242,7 @@ defmodule OctopusWeb.ConsoleComponents do
         title="Stop"
         aria-label="Stop"
       >
-        ■
+        <.console_icon_stop class="w-5 h-5" />
       </button>
       <button
         :if={@takeover?}
@@ -190,7 +268,8 @@ defmodule OctopusWeb.ConsoleComponents do
         phx-target={@target}
         aria-label={if @playing, do: "Pause", else: "Play"}
       >
-        {if @playing, do: "❚❚", else: "▶"}
+        <.console_icon_pause :if={@playing} class="w-6 h-6" />
+        <.console_icon_play :if={!@playing} class="w-6 h-6" />
       </button>
       <button
         class="btn btn-circle btn-ghost w-11 h-11"
@@ -257,12 +336,12 @@ defmodule OctopusWeb.ConsoleComponents do
   def interval_picker(assigns) do
     ~H"""
     <div>
-      <div class="text-[11px] uppercase tracking-wide opacity-60 mb-1">Change mode every</div>
-      <div class="join">
+      <div class="text-[11px] uppercase tracking-wide opacity-60 mb-2">Change mode every</div>
+      <div class="flex flex-wrap gap-2">
         <button
           :for={{label, seconds} <- interval_presets()}
           class={[
-            "btn btn-sm join-item min-h-11",
+            "btn btn-sm min-h-10",
             @interval_seconds == seconds && "btn-primary bg-[#6d7cff] border-[#6d7cff]"
           ]}
           phx-click="set_interval"
@@ -273,7 +352,7 @@ defmodule OctopusWeb.ConsoleComponents do
         </button>
         <button
           class={[
-            "btn btn-sm join-item min-h-11",
+            "btn btn-sm min-h-10",
             @interval_custom? && "btn-primary bg-[#6d7cff] border-[#6d7cff]"
           ]}
           phx-click="open_custom_interval"
@@ -293,12 +372,12 @@ defmodule OctopusWeb.ConsoleComponents do
   def transition_picker(assigns) do
     ~H"""
     <div>
-      <div class="text-[11px] uppercase tracking-wide opacity-60 mb-1">Fade through black</div>
-      <div class="join">
+      <div class="text-[11px] uppercase tracking-wide opacity-60 mb-2">Fade through black</div>
+      <div class="flex flex-wrap gap-2">
         <button
           :for={{label, seconds} <- transition_presets()}
           class={[
-            "btn btn-sm join-item min-h-11",
+            "btn btn-sm min-h-10",
             @transition_seconds == seconds && "btn-primary bg-[#6d7cff] border-[#6d7cff]"
           ]}
           phx-click="set_transition_duration"
@@ -309,7 +388,7 @@ defmodule OctopusWeb.ConsoleComponents do
         </button>
         <button
           class={[
-            "btn btn-sm join-item min-h-11",
+            "btn btn-sm min-h-10",
             @transition_custom? && "btn-primary bg-[#6d7cff] border-[#6d7cff]"
           ]}
           phx-click="open_custom_transition"
@@ -357,7 +436,7 @@ defmodule OctopusWeb.ConsoleComponents do
           The wall keeps showing {@holding_label}. Add modes with ＋ Playlist.
         </div>
 
-        <div :if={@count > 0} class="flex flex-col gap-2">
+        <div :if={@count > 0} class="flex flex-col gap-2 max-h-[min(65dvh,42rem)] overflow-y-auto overscroll-y-contain py-0.5">
           <.queue_row
             :for={{entry, idx} <- Enum.with_index(@queue)}
             entry={entry}
@@ -394,56 +473,61 @@ defmodule OctopusWeb.ConsoleComponents do
   def queue_row(assigns) do
     ~H"""
     <div class={[
-      "relative flex items-center gap-2 rounded-lg border p-2 overflow-hidden",
+      "relative flex items-center gap-2 rounded-lg border px-2 py-2.5 min-h-[2.75rem]",
       @live? && "border-[#00d390] bg-[#00d390]/10",
       !@live? && "border-base-300 bg-base-100"
     ]}>
-      <span class="w-5 text-center text-xs opacity-60">{@idx + 1}</span>
-      <span class="w-1 h-8 rounded shrink-0" style={"background-color: #{@entry.accent_color}"} />
-      <div class="flex-1 min-w-0">
-        <div class="text-[10px] uppercase tracking-wide opacity-60 truncate">{@entry.app_name}</div>
-        <div class="font-semibold text-sm truncate">{@entry.mode_name}</div>
+      <span class="w-5 text-center text-xs opacity-60 shrink-0 leading-none">{@idx + 1}</span>
+      <span class="w-1 self-stretch min-h-[1.75rem] rounded shrink-0" style={"background-color: #{@entry.accent_color}"} />
+      <div
+        class="flex-1 min-w-0 font-semibold text-sm truncate leading-normal"
+        title={"#{@entry.app_name} · #{@entry.mode_name}"}
+      >
+        {@entry.mode_name}
       </div>
 
       <.live_badge :if={@live?} />
-      <span :if={@up_next? and not @live?} class="badge badge-outline badge-sm">
+      <span :if={@up_next? and not @live?} class="badge badge-outline badge-sm whitespace-nowrap">
         up next · {@countdown_label}
       </span>
 
-      <div class="flex items-center gap-1">
+      <div class="flex items-center gap-1 shrink-0">
         <button
-          class="btn btn-ghost btn-xs btn-square w-8 h-8"
+          class="btn btn-ghost btn-sm btn-square min-h-9 min-w-9"
           phx-click="queue_move"
           phx-value-index={@idx}
           phx-value-dir="up"
           phx-target={@target}
           disabled={@idx == 0}
+          aria-label="Move up"
         >
-          ▲
+          <.console_icon_chevron_up class="w-4 h-4" />
         </button>
         <button
-          class="btn btn-ghost btn-xs btn-square w-8 h-8"
+          class="btn btn-ghost btn-sm btn-square min-h-9 min-w-9"
           phx-click="queue_move"
           phx-value-index={@idx}
           phx-value-dir="down"
           phx-target={@target}
           disabled={@idx == @count - 1}
+          aria-label="Move down"
         >
-          ▼
+          <.console_icon_chevron_down class="w-4 h-4" />
         </button>
         <button
-          class="btn btn-ghost btn-xs btn-square w-8 h-8"
+          class="btn btn-ghost btn-sm btn-square min-h-9 min-w-9"
           phx-click="queue_remove"
           phx-value-index={@idx}
           phx-target={@target}
+          aria-label="Remove from playlist"
         >
-          ✕
+          <.console_icon_x class="w-4 h-4" />
         </button>
       </div>
 
       <div
         :if={@live?}
-        class="absolute bottom-0 left-0 h-[3px] bg-[#00d390]"
+        class="absolute bottom-0 left-0 h-[3px] bg-[#00d390] rounded-bl-lg"
         style={"width: #{@elapsed_percent}%"}
       />
     </div>
@@ -474,30 +558,32 @@ defmodule OctopusWeb.ConsoleComponents do
             </span>
             <button
               :if={@stop_takeover?}
-              class="btn btn-xs btn-square btn-error min-h-8 min-w-8"
+              class="btn btn-sm btn-square btn-error min-h-9 min-w-9"
               phx-click="stop_takeover"
               phx-value-app={Atom.to_string(@app_module)}
               phx-value-mode_id={@mode.id}
               phx-target={@target}
               title="Stop"
+              aria-label="Stop"
             >
-              ■
+              <.console_icon_stop class="w-4 h-4" />
             </button>
             <button
               :if={!@stop_takeover?}
-              class="btn btn-xs btn-square min-h-8 min-w-8"
+              class="btn btn-sm btn-square min-h-9 min-w-9"
               phx-click="play_now"
               phx-value-app={Atom.to_string(@app_module)}
               phx-value-mode_id={@mode.id}
               phx-target={@target}
               title={@play_now_title}
+              aria-label={@play_now_title}
             >
-              ▶
+              <.console_icon_play class="w-4 h-4" />
             </button>
             <button
               :if={@queueable?}
               class={[
-                "btn btn-xs btn-square min-h-8 min-w-8",
+                "btn btn-sm btn-square min-h-9 min-w-9",
                 @queued_pos && "btn-primary bg-[#6d7cff] border-[#6d7cff]"
               ]}
               phx-click="queue_toggle"
@@ -505,8 +591,10 @@ defmodule OctopusWeb.ConsoleComponents do
               phx-value-mode_id={@mode.id}
               phx-target={@target}
               title={if @queued_pos, do: "In playlist", else: "Add to playlist"}
+              aria-label={if @queued_pos, do: "In playlist", else: "Add to playlist"}
             >
-              {if @queued_pos, do: "✓", else: "＋"}
+              <.console_icon_check :if={@queued_pos} class="w-4 h-4" />
+              <.console_icon_plus :if={!@queued_pos} class="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -585,6 +673,7 @@ defmodule OctopusWeb.ConsoleComponents do
   attr :countdown_percent, :integer, default: 0
   attr :countdown_label, :string, default: "--:--"
   attr :id_suffix, :string, default: "main"
+  attr :embedded, :boolean, default: false
   attr :target, :any, required: true
 
   def now_playing_card(assigns) do
@@ -614,9 +703,16 @@ defmodule OctopusWeb.ConsoleComponents do
       )
 
     ~H"""
-    <div :if={@now_playing && @live} id={"now-playing-#{@id_suffix}"} class="card bg-base-200 border border-base-300 shadow-sm">
-      <div class="card-body p-4 gap-3">
-        <div class="flex items-center justify-between gap-3">
+    <div
+      :if={@now_playing && @live}
+      id={"now-playing-#{@id_suffix}"}
+      class={[
+        @embedded && "space-y-3",
+        !@embedded && "card bg-base-200 border border-base-300 shadow-sm"
+      ]}
+    >
+      <div class={[!@embedded && "card-body p-4 gap-3", @embedded && "space-y-3"]}>
+        <div :if={!@embedded} class="flex items-center justify-between gap-3">
           <h2 class="text-base font-semibold">Now playing</h2>
           <.countdown_ring
             :if={@show_countdown}
@@ -1208,6 +1304,17 @@ defmodule OctopusWeb.ConsoleComponents do
     end
   end
 
+  defp transport_timing_summary(interval_label, transition_label) do
+    fade =
+      if transition_label in ["", "Off"] do
+        "no fade"
+      else
+        "#{transition_label} fade"
+      end
+
+    "#{interval_label} · #{fade}"
+  end
+
   def humanize_transition(seconds) when is_float(seconds) do
     if seconds == trunc(seconds) do
       "#{trunc(seconds)} s"
@@ -1217,6 +1324,96 @@ defmodule OctopusWeb.ConsoleComponents do
   end
 
   def humanize_transition(seconds) when is_integer(seconds), do: humanize_transition(seconds * 1.0)
+
+  attr :class, :string, default: "w-5 h-5"
+
+  def console_icon_dots_vertical(assigns) do
+    ~H"""
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class={@class} aria-hidden="true">
+      <path
+        fill-rule="evenodd"
+        d="M12 3.75a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Zm0 6.75a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Zm0 6.75a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Z"
+        clip-rule="evenodd"
+      />
+    </svg>
+    """
+  end
+
+  def console_icon_cog(assigns) do
+    ~H"""
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class={@class} aria-hidden="true">
+      <path
+        fill-rule="evenodd"
+        d="M11.078 2.25c-.917 0-1.699.663-1.85 1.567L9.05 4.889c-.02.12-.115.26-.297.348a7.493 7.493 0 0 0-.986.57c-.166.115-.334.126-.45.083L6.3 5.508a1.875 1.875 0 0 0-2.282.819l-.922 1.597a1.875 1.875 0 0 0 .432 2.385l.84.692c.095.078.17.229.154.43a7.598 7.598 0 0 0 0 1.139c.015.2-.059.352-.153.43l-.841.692a1.875 1.875 0 0 0-.432 2.385l.922 1.597a1.875 1.875 0 0 0 2.282.818l1.019-.382c.115-.043.283-.031.45.082.312.214.641.405.985.57.182.088.277.228.297.35l.178 1.071c.151.904.933 1.567 1.85 1.567h1.844c.916 0 1.699-.663 1.85-1.567l.178-1.072c.02-.12.114-.26.297-.349.344-.165.673-.356.985-.57.167-.114.335-.125.45-.082l1.02.382a1.875 1.875 0 0 0 2.28-.819l.923-1.597a1.875 1.875 0 0 0-.432-2.385l-.84-.692c-.094-.078-.17-.229-.154-.43a7.598 7.598 0 0 0 0-1.139c-.016-.2.059-.352.153-.43l.84-.692c.708-.582.891-1.59.433-2.385l-.922-1.597a1.875 1.875 0 0 0-2.282-.818l-1.02.382c-.114.043-.282.031-.449-.083a7.49 7.49 0 0 0-.985-.57c-.183-.087-.277-.227-.297-.348l-.179-1.072a1.875 1.875 0 0 0-1.85-1.567h-1.843ZM12 15.75a3.75 3.75 0 1 0 0-7.5 3.75 3.75 0 0 0 0 7.5Z"
+        clip-rule="evenodd"
+      />
+    </svg>
+    """
+  end
+
+  def console_icon_play(assigns) do
+    ~H"""
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class={@class} aria-hidden="true">
+      <path fill-rule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clip-rule="evenodd" />
+    </svg>
+    """
+  end
+
+  def console_icon_pause(assigns) do
+    ~H"""
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class={@class} aria-hidden="true">
+      <path fill-rule="evenodd" d="M6.75 5.25a.75.75 0 0 1 .75-.75h2.25a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H7.5a.75.75 0 0 1-.75-.75V5.25Zm7.5 0A.75.75 0 0 1 15 4.5h2.25a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H15a.75.75 0 0 1-.75-.75V5.25Z" clip-rule="evenodd" />
+    </svg>
+    """
+  end
+
+  def console_icon_plus(assigns) do
+    ~H"""
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class={@class} aria-hidden="true">
+      <path fill-rule="evenodd" d="M12 3.75a.75.75 0 0 1 .75.75v6.75h6.75a.75.75 0 0 1 0 1.5h-6.75v6.75a.75.75 0 0 1-1.5 0v-6.75H4.5a.75.75 0 0 1 0-1.5h6.75V4.5a.75.75 0 0 1 .75-.75Z" clip-rule="evenodd" />
+    </svg>
+    """
+  end
+
+  def console_icon_check(assigns) do
+    ~H"""
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class={@class} aria-hidden="true">
+      <path fill-rule="evenodd" d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.739a.75.75 0 0 1 1.04-.208Z" clip-rule="evenodd" />
+    </svg>
+    """
+  end
+
+  def console_icon_stop(assigns) do
+    ~H"""
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class={@class} aria-hidden="true">
+      <path fill-rule="evenodd" d="M4.5 7.5a3 3 0 0 1 3-3h9a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-9a3 3 0 0 1-3-3v-9Z" clip-rule="evenodd" />
+    </svg>
+    """
+  end
+
+  def console_icon_chevron_up(assigns) do
+    ~H"""
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class={@class} aria-hidden="true">
+      <path fill-rule="evenodd" d="M11.47 7.72a.75.75 0 0 1 1.06 0l7.5 7.5a.75.75 0 1 1-1.06 1.06L12 9.31l-6.97 6.97a.75.75 0 0 1-1.06-1.06l7.5-7.5Z" clip-rule="evenodd" />
+    </svg>
+    """
+  end
+
+  def console_icon_chevron_down(assigns) do
+    ~H"""
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class={@class} aria-hidden="true">
+      <path fill-rule="evenodd" d="M12.53 16.28a.75.75 0 0 1-1.06 0l-7.5-7.5a.75.75 0 1 1 1.06-1.06L12 14.69l6.97-6.97a.75.75 0 0 1 1.06 1.06l-7.5 7.5Z" clip-rule="evenodd" />
+    </svg>
+    """
+  end
+
+  def console_icon_x(assigns) do
+    ~H"""
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class={@class} aria-hidden="true">
+      <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
+    </svg>
+    """
+  end
 
   def humanize_interval(seconds) do
     cond do

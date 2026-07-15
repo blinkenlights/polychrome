@@ -32,6 +32,7 @@ defmodule Octopus.Apps.Collective do
     breath: Animations.Breath,
     dots: Animations.Dots,
     lava_lamp: Animations.LavaLamp,
+    fireflies: Animations.Fireflies,
     ring_noise: Animations.RingNoise,
     presence: Animations.PresencePanels
   }
@@ -147,6 +148,67 @@ defmodule Octopus.Apps.Collective do
         max: 0.5,
         step: 0.05,
         default: 0.2
+      }
+    ]
+  end
+
+  def mode_tweakables_for("fireflies") do
+    [
+      %{
+        key: :firefly_reactivity,
+        label: "Crowd heat",
+        type: :slider,
+        min: 0.0,
+        max: 1.0,
+        step: 0.05,
+        default: 0.6,
+        runtime: true
+      },
+      %{
+        key: :firefly_speed,
+        label: "Speed",
+        type: :slider,
+        min: 0.2,
+        max: 2.0,
+        step: 0.05,
+        default: 1.5,
+        runtime: true
+      },
+      %{
+        key: :firefly_count,
+        label: "Base count",
+        type: :slider,
+        min: 1,
+        max: 40,
+        step: 1,
+        default: 24
+      },
+      %{
+        key: :firefly_glow,
+        label: "Glow",
+        type: :slider,
+        min: 0.5,
+        max: 1.8,
+        step: 0.05,
+        default: 1.0,
+        runtime: true
+      },
+      %{
+        key: :firefly_flash_rate,
+        label: "Breath depth",
+        type: :slider,
+        min: 0.4,
+        max: 1.2,
+        step: 0.05,
+        default: 0.85,
+        runtime: true
+      },
+      %{
+        key: :firefly_palette,
+        label: "Palette",
+        type: :choice,
+        default: :classic,
+        options: [{:classic, "Classic"}, {:amber, "Amber"}, {:ghost, "Ghost"}]
       }
     ]
   end
@@ -325,6 +387,12 @@ defmodule Octopus.Apps.Collective do
     lava_palette = Map.get(config, :lava_palette, :classic)
     lava_reactivity = Map.get(config, :lava_reactivity, 0.6)
     lava_warmth = Map.get(config, :lava_warmth, 0.5)
+    firefly_count = Map.get(config, :firefly_count, 24)
+    firefly_speed = Map.get(config, :firefly_speed, 1.5)
+    firefly_reactivity = Map.get(config, :firefly_reactivity, 0.6)
+    firefly_glow = Map.get(config, :firefly_glow, 1.0)
+    firefly_flash_rate = Map.get(config, :firefly_flash_rate, 0.85)
+    firefly_palette = Map.get(config, :firefly_palette, :classic)
     ring_noise_speed = Map.get(config, :ring_noise_speed, 1.0)
     ring_noise_pulse_period = Map.get(config, :ring_noise_pulse_period, 24.0)
     ring_noise_pulse_amount = Map.get(config, :ring_noise_pulse_amount, 0.65)
@@ -363,6 +431,12 @@ defmodule Octopus.Apps.Collective do
       lava_palette: lava_palette,
       lava_reactivity: lava_reactivity,
       lava_warmth: lava_warmth,
+      firefly_count: firefly_count,
+      firefly_speed: firefly_speed,
+      firefly_reactivity: firefly_reactivity,
+      firefly_glow: firefly_glow,
+      firefly_flash_rate: firefly_flash_rate,
+      firefly_palette: firefly_palette,
       ring_noise_speed: ring_noise_speed,
       ring_noise_pulse_period: ring_noise_pulse_period,
       ring_noise_pulse_amount: ring_noise_pulse_amount,
@@ -436,6 +510,12 @@ defmodule Octopus.Apps.Collective do
       lava_palette: state.lava_palette,
       lava_reactivity: state.lava_reactivity,
       lava_warmth: state.lava_warmth,
+      firefly_count: state.firefly_count,
+      firefly_speed: state.firefly_speed,
+      firefly_reactivity: state.firefly_reactivity,
+      firefly_glow: state.firefly_glow,
+      firefly_flash_rate: state.firefly_flash_rate,
+      firefly_palette: state.firefly_palette,
       ring_noise_speed: state.ring_noise_speed,
       ring_noise_pulse_period: state.ring_noise_pulse_period,
       ring_noise_pulse_amount: state.ring_noise_pulse_amount,
@@ -481,6 +561,7 @@ defmodule Octopus.Apps.Collective do
              {"Crowd Breath", :breath},
              {"Crowd Dots", :dots},
              {"Lava Lamp", :lava_lamp},
+             {"Fireflies", :fireflies},
              {"Ring Noise", :ring_noise},
              {"Presence", :presence}
            ]
@@ -632,6 +713,61 @@ defmodule Octopus.Apps.Collective do
            default: 0.5,
            step: 0.05,
            visible_when: {:animation, [:lava_lamp]}
+         }},
+      firefly_reactivity:
+        {"Crowd Heat", :float,
+         %{
+           min: 0.0,
+           max: 1.0,
+           default: 0.6,
+           step: 0.05,
+           visible_when: {:animation, [:fireflies]}
+         }},
+      firefly_speed:
+        {"Speed", :float,
+         %{
+           min: 0.2,
+           max: 2.0,
+           default: 1.5,
+           step: 0.05,
+           visible_when: {:animation, [:fireflies]}
+         }},
+      firefly_count:
+        {"Base Count", :int,
+         %{
+           min: 1,
+           max: 40,
+           default: 24,
+           visible_when: {:animation, [:fireflies]}
+         }},
+      firefly_glow:
+        {"Glow", :float,
+         %{
+           min: 0.5,
+           max: 1.8,
+           default: 1.0,
+           step: 0.05,
+           visible_when: {:animation, [:fireflies]}
+         }},
+      firefly_flash_rate:
+        {"Breath Depth", :float,
+         %{
+           min: 0.4,
+           max: 1.2,
+           default: 0.85,
+           step: 0.05,
+           visible_when: {:animation, [:fireflies]}
+         }},
+      firefly_palette:
+        {"Palette", :select,
+         %{
+           default: 0,
+           options: [
+             {"Classic", :classic},
+             {"Amber", :amber},
+             {"Ghost", :ghost}
+           ],
+           visible_when: {:animation, [:fireflies]}
          }},
       ring_noise_speed:
         {"Noise Speed", :float,
@@ -802,6 +938,21 @@ defmodule Octopus.Apps.Collective do
     """
   end
 
+  def config_info(%{animation: :fireflies}) do
+    """
+    Fireflies — soft bioluminescent points drifting over a night field.
+    Global crowd heat spawns more fireflies (smooth fade in/out); local heat
+    attracts them into swarms over busy panels. Each one glows with a slow breath,
+    no discrete blinks.
+    • Crowd Heat — master crowd influence (0 = fixed meadow, no sensor needed).
+    • Speed — drift and breath time scale.
+    • Base Count — fireflies visible with an empty room.
+    • Glow — point size.
+    • Breath Depth — how strongly each firefly pulses.
+    • Palette — Classic, Amber, or Ghost colour pairs.
+    """
+  end
+
   def config_info(%{animation: :ring_noise}) do
     """
     Ring Noise — seamless cylindrical noise field with palette colours and
@@ -860,6 +1011,12 @@ defmodule Octopus.Apps.Collective do
       lava_palette: state.lava_palette,
       lava_reactivity: state.lava_reactivity,
       lava_warmth: state.lava_warmth,
+      firefly_count: state.firefly_count,
+      firefly_speed: state.firefly_speed,
+      firefly_reactivity: state.firefly_reactivity,
+      firefly_glow: state.firefly_glow,
+      firefly_flash_rate: state.firefly_flash_rate,
+      firefly_palette: state.firefly_palette,
       ring_noise_speed: state.ring_noise_speed,
       ring_noise_pulse_period: state.ring_noise_pulse_period,
       ring_noise_pulse_amount: state.ring_noise_pulse_amount,
@@ -912,6 +1069,12 @@ defmodule Octopus.Apps.Collective do
          lava_palette: Map.get(config, :lava_palette, state.lava_palette),
          lava_reactivity: Map.get(config, :lava_reactivity, state.lava_reactivity),
          lava_warmth: Map.get(config, :lava_warmth, state.lava_warmth),
+         firefly_count: Map.get(config, :firefly_count, state.firefly_count),
+         firefly_speed: Map.get(config, :firefly_speed, state.firefly_speed),
+         firefly_reactivity: Map.get(config, :firefly_reactivity, state.firefly_reactivity),
+         firefly_glow: Map.get(config, :firefly_glow, state.firefly_glow),
+         firefly_flash_rate: Map.get(config, :firefly_flash_rate, state.firefly_flash_rate),
+         firefly_palette: Map.get(config, :firefly_palette, state.firefly_palette),
          ring_noise_speed: Map.get(config, :ring_noise_speed, state.ring_noise_speed),
          ring_noise_pulse_period:
            Map.get(config, :ring_noise_pulse_period, state.ring_noise_pulse_period),
@@ -1001,6 +1164,7 @@ defmodule Octopus.Apps.Collective do
   defp coerce_config_value(:breath_palette, value), do: coerce_atom(value, :ocean)
   defp coerce_config_value(:breath_layout, value), do: coerce_atom(value, :wave)
   defp coerce_config_value(:lava_palette, value), do: coerce_atom(value, :classic)
+  defp coerce_config_value(:firefly_palette, value), do: coerce_atom(value, :classic)
   defp coerce_config_value(:ring_noise_palette, value), do: coerce_atom(value, :lava)
   defp coerce_config_value(:ring_noise_crowd_mode, value), do: coerce_atom(value, :off)
   defp coerce_config_value(_key, value), do: value
