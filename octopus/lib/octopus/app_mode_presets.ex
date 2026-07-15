@@ -27,7 +27,8 @@ defmodule Octopus.AppModePresets do
     "Elixir.Octopus.Apps.SparkleMist" => "sparklemist",
     "Elixir.Octopus.Apps.Wood" => "wood",
     "Elixir.Octopus.Apps.Fire" => "fire",
-    "Elixir.Octopus.Apps.GravityMask" => "gravitymask"
+    "Elixir.Octopus.Apps.GravityMask" => "gravitymask",
+    "Elixir.Octopus.Apps.ShapeShifter" => "shapeshifter"
   }
 
   @formula_app_keys ~w(pixelfun pixelfun3d)

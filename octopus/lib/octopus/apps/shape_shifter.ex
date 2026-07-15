@@ -12,6 +12,8 @@ defmodule Octopus.Apps.ShapeShifter do
 
   use Octopus.App, category: :animation, output_type: :grayscale
 
+  @mode_presets Module.concat(["Octopus", "AppModePresets"])
+
   alias Octopus.Canvas
 
   @fps 30
@@ -32,6 +34,88 @@ defmodule Octopus.Apps.ShapeShifter do
   @default_shape_size 0.8
 
   def name, do: "Shape Shifter"
+
+  def list_modes do
+    apply(@mode_presets, :list_modes, [__MODULE__])
+  end
+
+  def mode_config(mode_id) do
+    apply(@mode_presets, :config_for, [__MODULE__, mode_id]) || default_config()
+  end
+
+  defp default_config do
+    %{
+      shape_duration: @default_shape_duration,
+      transition_duration: @default_transition_duration,
+      rotation_speed: @default_rotation_speed,
+      axis_speed: @default_axis_speed,
+      edge_softness: @default_edge_softness,
+      shape_size: @default_shape_size
+    }
+  end
+
+  def mode_tweakables(_mode_id) do
+    [
+      %{
+        key: :shape_duration,
+        label: "Shape duration",
+        type: :slider,
+        min: 1.0,
+        max: 30.0,
+        step: 0.5,
+        unit: "s",
+        default: @default_shape_duration
+      },
+      %{
+        key: :transition_duration,
+        label: "Transition duration",
+        type: :slider,
+        min: 0.1,
+        max: 10.0,
+        step: 0.1,
+        unit: "s",
+        default: @default_transition_duration
+      },
+      %{
+        key: :shape_size,
+        label: "Shape size",
+        type: :slider,
+        min: 0.1,
+        max: 1.0,
+        step: 0.05,
+        default: @default_shape_size
+      },
+      %{
+        key: :rotation_speed,
+        label: "Rotation speed",
+        type: :slider,
+        min: 0.0,
+        max: 360.0,
+        step: 5.0,
+        unit: "°/s",
+        default: @default_rotation_speed
+      },
+      %{
+        key: :axis_speed,
+        label: "Axis speed",
+        type: :slider,
+        min: 0.0,
+        max: 180.0,
+        step: 5.0,
+        unit: "°/s",
+        default: @default_axis_speed
+      },
+      %{
+        key: :edge_softness,
+        label: "Edge softness",
+        type: :slider,
+        min: 0.0,
+        max: 1.0,
+        step: 0.05,
+        default: @default_edge_softness
+      }
+    ]
+  end
 
   def app_init(config) do
     Octopus.App.configure_display(

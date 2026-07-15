@@ -1,0 +1,17 @@
+{
+  "presets": [
+    {
+      "accent_color": "#9B59B6",
+      "config": {
+        "shape_duration": 10.0,
+        "transition_duration": 1.5,
+        "rotation_speed": 60.0,
+        "axis_speed": 45.0,
+        "edge_softness": 0.5,
+        "shape_size": 0.8
+      },
+      "name": "Shape Shifter",
+      "slug": "default"
+    }
+  ]
+}
