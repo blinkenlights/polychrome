@@ -87,7 +87,9 @@ defmodule OctopusWeb.TopBarComponent do
     [
       {"/", "Foyer"},
       {"/radar", "Radar"},
-      {"/radar/debug", "Radar Debug"}
+      {"/radar/debug", "Radar Debug"},
+      {"/sim3daframe", "3D Sim (Web)"},
+      {"/sim3d", "3D Sim (VR)"}
     ]
   end
 end
