@@ -1,7 +1,7 @@
 defmodule Octopus.AppModePresetsTest do
   use Octopus.DataCase, async: true
 
-  alias Octopus.Apps.{Collective, Fire, GravityMask, Matrix, PixelFun, Sand, SparkleMist, Wood}
+  alias Octopus.Apps.{Collective, Fire, GravityMask, Matrix, PixelFun, Sand, ShapeShifter, SparkleMist, Wood}
 
   @presets Module.concat(["Octopus", "AppModePresets"])
 
@@ -15,10 +15,11 @@ defmodule Octopus.AppModePresetsTest do
       assert length(preset_list(Wood)) == 2
       assert length(preset_list(Fire)) == 3
       assert length(preset_list(GravityMask)) == 1
+      assert length(preset_list(ShapeShifter)) == 1
     end
 
     test "all presets are builtin origin" do
-      for app <- [PixelFun, Collective, Matrix, Sand, SparkleMist, Wood, Fire, GravityMask],
+      for app <- [PixelFun, Collective, Matrix, Sand, SparkleMist, Wood, Fire, GravityMask, ShapeShifter],
           preset <- preset_list(app) do
         assert preset.origin == :builtin
       end
@@ -115,6 +116,16 @@ defmodule Octopus.AppModePresetsTest do
       assert mode.name == "Gravity Mask"
       assert mode.summary =~ "floor 25%"
       assert mode.summary =~ "reach 50"
+      refute mode.deletable
+      refute mode.renamable
+    end
+
+    test "returns shape shifter tile with summary" do
+      [mode] = preset_list_modes(ShapeShifter)
+
+      assert mode.id == "shapeshifter:default"
+      assert mode.name == "Shape Shifter"
+      assert mode.summary =~ "shape 10.0s"
       refute mode.deletable
       refute mode.renamable
     end
