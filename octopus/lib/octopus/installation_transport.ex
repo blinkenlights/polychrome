@@ -340,28 +340,27 @@ defmodule Octopus.InstallationTransport do
   end
 
   def handle_cast({:launch_app, module}, %State{} = state) do
-    cond do
-      not app_rotation_eligible?(module) ->
-        case AppSupervisor.start_or_select_app(module) do
-          {:ok, app_id} ->
-            AppManager.select_app(app_id)
+    case AppSupervisor.start_or_select_app(module) do
+      {:ok, app_id} ->
+        AppManager.select_app(app_id)
 
-            %State{} = paused = pause(state)
-            state = %State{paused | rotation_paused: true, takeover_app_id: app_id}
+        %State{} = paused = pause(state)
 
-            {:noreply, broadcast(state)}
-
-          _ ->
-            {:noreply, state}
-        end
-
-      true ->
-        case AppSupervisor.start_or_select_app(module) do
-          {:ok, app_id} -> AppManager.select_app(app_id)
-          _ -> :ok
-        end
+        state = %State{
+          paused
+          | rotation_paused: true,
+            takeover_app_id: app_id,
+            live_entry: nil,
+            pending_entry: nil,
+            now_playing_app_id: nil,
+            now_playing_stored_config: %{},
+            now_playing_overrides: %{}
+        }
 
         {:noreply, broadcast(state)}
+
+      _ ->
+        {:noreply, state}
     end
   end
 
@@ -1098,7 +1097,6 @@ defmodule Octopus.InstallationTransport do
 
   defp now_ms, do: System.os_time(:millisecond)
 
-  defp app_rotation_eligible?(module), do: apply(@app, :rotation_eligible?, [module])
   defp app_mode_config(app, mode_id), do: apply(@app, :mode_config, [app, mode_id])
   defp app_apply_mode(app_id, app, mode_id), do: apply(@app, :apply_mode, [app_id, app, mode_id])
   defp app_mode_tweakables(app, mode_id), do: apply(@app, :mode_tweakables, [app, mode_id])

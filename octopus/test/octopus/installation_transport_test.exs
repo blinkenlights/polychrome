@@ -2,7 +2,7 @@ defmodule Octopus.InstallationTransportTest do
   use ExUnit.Case, async: false
 
   alias Octopus.{AppManager, AppSupervisor, InstallationTransport}
-  alias Octopus.Apps.{Collective, Matrix, Ocean, PerlinNoise, PixelFun, PixelFun3D, PixieDebug, Sand, SparkleMist, Wood}
+  alias Octopus.Apps.{CanvasTest, Collective, Matrix, Ocean, PerlinNoise, PixelFun, PixelFun3D, PixieDebug, Sand, SparkleMist, Wood}
   alias Octopus.Apps.PixelFun.Program
 
   @classic "pixelfun:classic_ripple"
@@ -399,6 +399,33 @@ defmodule Octopus.InstallationTransportTest do
       assert s.rotation_paused == false
       assert s.live == nil
       assert AppManager.get_selected_app() == nil
+    end
+  end
+
+  describe "launch_app" do
+    test "pauses rotation and clears live entry for legacy apps" do
+      InstallationTransport.set_queue([
+        %{app: PixelFun, mode_id: @classic},
+        %{app: PixelFun, mode_id: @cross}
+      ])
+
+      InstallationTransport.play_now(PixelFun, @classic)
+
+      InstallationTransport.launch_app(CanvasTest)
+
+      s = state()
+      assert s.rotation_paused
+      assert s.takeover_app_id != nil
+      assert s.takeover_app_name == "Canvas Test"
+      assert s.live == nil
+      assert AppManager.get_selected_app() == s.takeover_app_id
+
+      InstallationTransport.resume_rotation_after_takeover()
+
+      s = state()
+      assert s.rotation_paused == false
+      assert s.live.app == PixelFun
+      assert s.live.mode_id == @classic
     end
   end
 

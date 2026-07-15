@@ -847,7 +847,18 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       end
 
     live = transport.live
-    live_label = if live, do: "#{live.app_name} · #{live.mode_name}", else: "—"
+
+    live_label =
+      cond do
+        live ->
+          "#{live.app_name} · #{live.mode_name}"
+
+        transport.rotation_paused && transport.takeover_app_name ->
+          transport.takeover_app_name
+
+        true ->
+          "—"
+      end
     takeover? = transport.rotation_paused
 
     transport_mode =
