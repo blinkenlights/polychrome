@@ -24,11 +24,12 @@ defmodule Octopus.Apps.ShapeShifter do
   # Radius within the 8×8 panel (centre at 3.5, 3.5; max distance to edge is 3.5)
   @panel_radius 3.0
 
-  @default_shape_duration 5.0
+  @default_shape_duration 10.0
   @default_transition_duration 1.5
   @default_rotation_speed 60.0
   @default_axis_speed 45.0
   @default_edge_softness 0.5
+  @default_shape_size 0.8
 
   def name, do: "Shape Shifter"
 
@@ -53,7 +54,8 @@ defmodule Octopus.Apps.ShapeShifter do
        transition_duration: Map.get(config, :transition_duration, @default_transition_duration),
        rotation_speed: Map.get(config, :rotation_speed, @default_rotation_speed),
        axis_speed: Map.get(config, :axis_speed, @default_axis_speed),
-       edge_softness: Map.get(config, :edge_softness, @default_edge_softness)
+       edge_softness: Map.get(config, :edge_softness, @default_edge_softness),
+       shape_size: Map.get(config, :shape_size, @default_shape_size)
      }}
   end
 
@@ -90,7 +92,8 @@ defmodule Octopus.Apps.ShapeShifter do
         current_shape,
         next_shape,
         blend,
-        state.edge_softness
+        state.edge_softness,
+        state.shape_size
       )
 
     Octopus.App.update_display(canvas, :grayscale)
@@ -100,15 +103,17 @@ defmodule Octopus.Apps.ShapeShifter do
 
   def handle_info(_msg, state), do: {:noreply, state}
 
-  defp render_canvas(display_info, rotation, axis_angle, current_shape, next_shape, blend, edge_softness) do
+  defp render_canvas(display_info, rotation, axis_angle, current_shape, next_shape, blend, edge_softness, shape_size) do
     rot_rad = rotation * :math.pi() / 180.0
     axis_rad = axis_angle * :math.pi() / 180.0
     cos_r = :math.cos(rot_rad)
     sin_r = :math.sin(rot_rad)
     cos_a = :math.cos(axis_rad)
 
+    radius = @panel_radius * shape_size
+
     # Soft edge width: minimum 0.3 px; grows with the softness setting
-    soft = edge_softness * @panel_radius * 0.4 + 0.3
+    soft = edge_softness * radius * 0.4 + 0.3
 
     h = display_info.height
     w = display_info.width
@@ -133,8 +138,8 @@ defmodule Octopus.Apps.ShapeShifter do
         ax = rx * cos_a
         ay = ry
 
-        i1 = sdf_to_intensity(shape_sdf(current_shape, ax, ay, @panel_radius), soft)
-        i2 = sdf_to_intensity(shape_sdf(next_shape, ax, ay, @panel_radius), soft)
+        i1 = sdf_to_intensity(shape_sdf(current_shape, ax, ay, radius), soft)
+        i2 = sdf_to_intensity(shape_sdf(next_shape, ax, ay, radius), soft)
         intensity = i1 * (1.0 - blend) + i2 * blend
 
         Canvas.put_pixel(acc, {x, y}, trunc(intensity * 255))
@@ -187,7 +192,7 @@ defmodule Octopus.Apps.ShapeShifter do
     r_param = r / 0.81
 
     an = :math.pi() / 5
-    en = :math.pi() / 2.5
+    en = :math.pi() / 3.5
     acs_x = :math.cos(an)
     acs_y = :math.sin(an)
     ecs_x = :math.cos(en)
@@ -270,7 +275,10 @@ defmodule Octopus.Apps.ShapeShifter do
          %{min: 0.0, max: 180.0, step: 5.0, unit: "°/s", default: @default_axis_speed}},
       edge_softness:
         {"Edge softness", :float,
-         %{min: 0.0, max: 1.0, step: 0.05, default: @default_edge_softness}}
+         %{min: 0.0, max: 1.0, step: 0.05, default: @default_edge_softness}},
+      shape_size:
+        {"Shape size", :float,
+         %{min: 0.1, max: 1.0, step: 0.05, default: @default_shape_size}}
     }
   end
 
@@ -280,7 +288,8 @@ defmodule Octopus.Apps.ShapeShifter do
       transition_duration: state.transition_duration,
       rotation_speed: state.rotation_speed,
       axis_speed: state.axis_speed,
-      edge_softness: state.edge_softness
+      edge_softness: state.edge_softness,
+      shape_size: state.shape_size
     }
   end
 
@@ -292,7 +301,8 @@ defmodule Octopus.Apps.ShapeShifter do
          transition_duration: Map.get(config, :transition_duration, state.transition_duration),
          rotation_speed: Map.get(config, :rotation_speed, state.rotation_speed),
          axis_speed: Map.get(config, :axis_speed, state.axis_speed),
-         edge_softness: Map.get(config, :edge_softness, state.edge_softness)
+         edge_softness: Map.get(config, :edge_softness, state.edge_softness),
+         shape_size: Map.get(config, :shape_size, state.shape_size)
      }}
   end
 
