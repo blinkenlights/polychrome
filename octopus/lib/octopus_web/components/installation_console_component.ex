@@ -25,6 +25,8 @@ defmodule OctopusWeb.InstallationConsoleComponent do
        show_all_apps: false,
        show_running_now: false,
        running_apps: [],
+       front_app: nil,
+       mask_app: nil,
        browse_apps: [],
        browse_app_count: 0,
        console_theme: "light",
@@ -75,6 +77,8 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         show_now_playing={@show_now_playing_panel}
         now_playing_available={now_playing_panel_available?(assigns)}
         now_playing_dirty={now_playing_panel_dirty?(assigns)}
+        front_app={@front_app}
+        mask_app={@mask_app}
         target={@myself}
       >
         <:global_params>
@@ -83,11 +87,13 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       </.player_block>
 
       <section id="mode-library" class="space-y-6 pb-8 scroll-mt-4">
-        <.mode_library sections={@library_sections || []} target={@myself} transport={@transport} />
+        <.mode_library sections={@library_sections || []} target={@myself} transport={@transport} mask_app={@mask_app} />
       </section>
 
       <.running_now_panel
         running_apps={@running_apps}
+        front_app={@front_app}
+        mask_app={@mask_app}
         expanded={@show_running_now}
         target={@myself}
         dom_id="running-now"
@@ -243,6 +249,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   attr :sections, :list, required: true
   attr :transport, :map, required: true
   attr :target, :any, required: true
+  attr :mask_app, :map, default: nil
 
   defp mode_library(assigns) do
     ~H"""
@@ -297,8 +304,10 @@ defmodule OctopusWeb.InstallationConsoleComponent do
               mode={tile.mode}
               app_module={tile.app}
               live?={tile.live?}
+              mask?={@mask_app != nil && @mask_app.module == tile.app}
               queued_pos={tile.queued_pos}
               queueable?={Map.get(tile, :queueable?, true)}
+              mask_eligible?={Map.get(tile, :mask_eligible?, false)}
               stop_takeover?={tile.stop_takeover?}
               play_now_title={tile.play_now_title}
               target={@target}
@@ -358,6 +367,8 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   end
 
   attr :running_apps, :list, required: true
+  attr :front_app, :map, default: nil
+  attr :mask_app, :map, default: nil
   attr :expanded, :boolean, required: true
   attr :target, :any, required: true
   attr :class, :string, default: nil
@@ -366,18 +377,16 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   defp running_now_panel(assigns) do
     panel_id = "#{assigns.dom_id}-panel"
     toggle_id = "#{assigns.dom_id}-toggle"
-    count = length(assigns.running_apps)
 
     subtitle =
-      case count do
-        0 -> "No apps running — Show, Mask & Stop for games and test apps."
-        1 -> "1 app running — Only one app is Active at a time."
-        n -> "#{n} apps running — Only one app is Active at a time."
+      cond do
+        assigns.front_app && assigns.mask_app -> "Front-App und Mask-App aktiv."
+        assigns.front_app -> "Front-App aktiv — keine Mask."
+        assigns.mask_app -> "Nur Mask aktiv — keine Front-App."
+        true -> "Keine Apps aktiv."
       end
 
-    assigns =
-      assigns
-      |> assign(panel_id: panel_id, toggle_id: toggle_id, subtitle: subtitle)
+    assigns = assign(assigns, panel_id: panel_id, toggle_id: toggle_id, subtitle: subtitle)
 
     ~H"""
     <div id={@dom_id} class={["card bg-base-200 border border-base-300", @class]}>
@@ -392,7 +401,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
           aria-controls={@panel_id}
         >
           <div>
-            <h2 class="text-base font-semibold">Running now</h2>
+            <h2 class="text-base font-semibold">App-Slots</h2>
             <p class="text-xs opacity-60">{@subtitle}</p>
           </div>
           <span class={["text-lg opacity-50 shrink-0 transition-transform", @expanded && "rotate-180"]}>
@@ -401,7 +410,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         </button>
 
         <div :if={@expanded} id={@panel_id} class="pt-4 border-t border-base-300 mt-3">
-          <.running_now_rows running_apps={@running_apps} target={@target} />
+          <.app_slots front_app={@front_app} mask_app={@mask_app} target={@target} />
         </div>
       </div>
     </div>
@@ -447,16 +456,32 @@ defmodule OctopusWeb.InstallationConsoleComponent do
           <div :for={{category, apps} <- @apps} class="space-y-2">
             <div class="text-xs uppercase opacity-60">{category}</div>
             <div class="flex flex-wrap gap-2">
-              <button
-                :for={app <- apps}
-                class={["btn btn-sm min-h-11", !app.compatible && "btn-disabled"]}
-                phx-click="launch_app"
-                phx-value-module={app.module}
-                phx-target={@target}
-                disabled={!app.compatible}
-              >
-                {app.name}
-              </button>
+              <div :for={app <- apps} class="join">
+                <button
+                  class={["btn btn-sm min-h-11 join-item", !app.compatible && "btn-disabled"]}
+                  phx-click="launch_app_as_front"
+                  phx-value-module={app.module}
+                  phx-target={@target}
+                  disabled={!app.compatible}
+                  title="Als Front-App starten"
+                >
+                  {app.name}
+                </button>
+                <button
+                  class={[
+                    "btn btn-sm btn-square min-h-11 join-item btn-ghost border border-base-300",
+                    (!app.compatible || !app.mask_eligible?) && "btn-disabled opacity-30"
+                  ]}
+                  phx-click="launch_app_as_mask"
+                  phx-value-module={app.module}
+                  phx-target={@target}
+                  disabled={!app.compatible || !app.mask_eligible?}
+                  title={if app.mask_eligible?, do: "Als Mask-App starten", else: "Kein Greyscale-Output"}
+                  aria-label="Als Mask-App starten"
+                >
+                  <.console_icon_mask class="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -734,9 +759,74 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     {:noreply, socket}
   end
 
+  def handle_event("stop_front_app", _params, socket) do
+    transport = socket.assigns.transport
+    front_id = socket.assigns[:front_app] && socket.assigns.front_app.app_id
+
+    if front_id && transport.takeover_app_id == front_id do
+      InstallationTransport.resume_rotation_after_takeover()
+    end
+
+    AppSupervisor.stop_front_app()
+    {:noreply, socket}
+  end
+
+  def handle_event("stop_mask_app", _params, socket) do
+    AppSupervisor.stop_mask_app()
+    {:noreply, socket}
+  end
+
+  def handle_event("start_as_mask", %{"module" => module_string}, socket) do
+    module = parse_app_module(module_string)
+
+    case AppSupervisor.start_as_mask_app(module) do
+      {:ok, _app_id} ->
+        {:noreply, assign_running(socket)}
+
+      {:error, :not_grayscale} ->
+        {:noreply, put_flash(socket, :error, "#{app_name(module)} unterstützt kein Greyscale und kann nicht als Mask genutzt werden")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Konnte #{app_name(module)} nicht als Mask starten")}
+    end
+  end
+
   def handle_event("launch_app", %{"module" => module_string}, socket) do
     InstallationTransport.launch_app(parse_app_module(module_string))
     {:noreply, refresh_transport(socket) |> assign_running()}
+  end
+
+  def handle_event("launch_app_as_front", %{"module" => module_string}, socket) do
+    module = parse_app_module(module_string)
+
+    case AppSupervisor.start_as_front_app(module) do
+      {:ok, _app_id} ->
+        {:noreply, assign_running(socket)}
+
+      {:error, :incompatible} ->
+        {:noreply, put_flash(socket, :error, "#{app_name(module)} ist nicht kompatibel mit dieser Installation")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Konnte #{app_name(module)} nicht starten")}
+    end
+  end
+
+  def handle_event("launch_app_as_mask", %{"module" => module_string}, socket) do
+    module = parse_app_module(module_string)
+
+    case AppSupervisor.start_as_mask_app(module) do
+      {:ok, _app_id} ->
+        {:noreply, assign_running(socket)}
+
+      {:error, :not_grayscale} ->
+        {:noreply, put_flash(socket, :error, "#{app_name(module)} unterstützt kein Greyscale und kann nicht als Mask genutzt werden")}
+
+      {:error, :incompatible} ->
+        {:noreply, put_flash(socket, :error, "#{app_name(module)} ist nicht kompatibel mit dieser Installation")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Konnte #{app_name(module)} nicht als Mask starten")}
+    end
   end
 
   defp refresh_transport(socket, opts \\ []) do
@@ -1005,6 +1095,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   defp tile_list(app, modes, transport, opts \\ []) do
     queueable? = Keyword.get(opts, :queueable?, true)
     rotating_active? = length(transport.queue) >= 2 and not transport.rotation_paused
+    mask_eligible? = AppManager.supports_grayscale_module?(app)
 
     Enum.map(modes, fn mode ->
       queued_pos = queue_position(transport.queue, app, mode.id, 1)
@@ -1015,6 +1106,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         live?: live?(transport, app, mode.id),
         queued_pos: queued_pos,
         queueable?: queueable?,
+        mask_eligible?: mask_eligible?,
         stop_takeover?: takeover_live?(transport, app, mode.id),
         play_now_title: play_now_title(queued_pos, rotating_active?)
       }
@@ -1026,8 +1118,8 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   defp play_now_title(_queued_pos, _rotating_active?), do: "Show on the wall"
 
   defp assign_running(socket) do
-    selected = AppManager.get_selected_app()
-    mask = AppManager.get_mask_app()
+    front_id = AppManager.get_selected_app()
+    mask_id = AppManager.get_mask_app()
 
     running =
       for {module, app_id} <- AppSupervisor.running_apps() do
@@ -1035,10 +1127,14 @@ defmodule OctopusWeb.InstallationConsoleComponent do
           module: module,
           app_id: app_id,
           name: app_name(module),
-          selected: app_id == selected,
-          masked: app_id == mask
+          selected: app_id == front_id,
+          masked: app_id == mask_id,
+          mask_eligible?: AppManager.supports_grayscale_module?(module)
         }
       end
+
+    front_app = Enum.find(running, & &1.selected)
+    mask_app = Enum.find(running, & &1.masked)
 
     browse_apps =
       AppSupervisor.available_apps()
@@ -1048,7 +1144,8 @@ defmodule OctopusWeb.InstallationConsoleComponent do
           module: module,
           name: app_name(module),
           compatible: apply(module, :compatible?, []),
-          category: app_category(module)
+          category: app_category(module),
+          mask_eligible?: AppManager.supports_grayscale_module?(module)
         }
       end)
 
@@ -1058,7 +1155,13 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       |> Enum.sort_by(fn {cat, _} -> category_order(cat) end)
 
     socket
-    |> assign(running_apps: running, browse_apps: browse, browse_app_count: length(browse_apps))
+    |> assign(
+      running_apps: running,
+      front_app: front_app,
+      mask_app: mask_app,
+      browse_apps: browse,
+      browse_app_count: length(browse_apps)
+    )
   end
 
   defp app_name(module), do: apply(@app, :name, [module])

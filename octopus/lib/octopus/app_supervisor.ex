@@ -2,7 +2,7 @@ defmodule Octopus.AppSupervisor do
   use DynamicSupervisor
   require Logger
 
-  alias Octopus.{AppManager, App}
+  alias Octopus.{AppManager, App, Mixer}
   alias Octopus.Events.Event.Audio, as: AudioEvent
   alias Octopus.Events.Event.Proximity, as: ProximityEvent
   alias Octopus.Events.Event.Input, as: InputEvent
@@ -47,10 +47,35 @@ defmodule Octopus.AppSupervisor do
   end
 
   @doc """
-  Starts an app and assigns a unique app_id. It is possible to start multiple instances of the same app.
-  Checks app compatibility before starting.
+  Starts an app in the Front App slot. Stops the current front app (if different from the
+  current mask app) and selects the new app as front.
   """
-  def start_app(module, opts \\ []) when is_atom(module) do
+  def start_as_front_app(module, opts \\ []) when is_atom(module) do
+    with {:ok, config} <- validate_and_build_config(module, opts) do
+      old_front = AppManager.get_selected_app()
+      old_mask = AppManager.get_mask_app()
+
+      case do_start_raw(module, config) do
+        {:ok, new_id} ->
+          AppManager.select_app(new_id)
+          # Only stop single-app fronts; dual-side fronts (tuples) are managed externally
+          if is_binary(old_front) do
+            stop_slot_app(old_front, preserve: [old_mask, new_id])
+          end
+          {:ok, new_id}
+
+        err ->
+          err
+      end
+    end
+  end
+
+  @doc """
+  Starts an app in the Mask App slot. Only greyscale-capable apps are allowed.
+  Stops the current mask app (if different from the current front app) and sets the
+  new app as mask.
+  """
+  def start_as_mask_app(module, opts \\ []) when is_atom(module) do
     cond do
       module not in available_apps() ->
         Logger.error("App #{module} not found")
@@ -60,17 +85,66 @@ defmodule Octopus.AppSupervisor do
         Logger.info("App #{module} is not compatible with current installation")
         {:error, :incompatible}
 
+      apply(module, :output_type, []) not in [:grayscale, :both] ->
+        Logger.info("App #{module} does not support greyscale output — cannot be used as mask")
+        {:error, :not_grayscale}
+
       true ->
         default_config = module |> App.config_schema() |> App.default_config()
         config = Keyword.get(opts, :config, %{})
         config = default_config |> Map.merge(config) |> Map.put_new(:bleeding, 0.0)
-        do_start_app(module, config)
+
+        old_mask = AppManager.get_mask_app()
+        old_front = AppManager.get_selected_app()
+
+        # Tell the Mixer to use the front app's layout for the mask app's display buffers,
+        # so both apps share the same coordinate system.
+        front_layout = front_app_layout(old_front)
+        Mixer.set_pending_mask_layout(front_layout)
+
+        case do_start_raw(module, config) do
+          {:ok, new_id} ->
+            AppManager.set_mask_app(new_id)
+            stop_slot_app(old_mask, preserve: [old_front, new_id])
+            {:ok, new_id}
+
+          err ->
+            Mixer.set_pending_mask_layout(nil)
+            err
+        end
     end
   end
 
   @doc """
-  Starts an app if not already running, otherwise returns the existing app_id.
-  This prevents duplicate instances of the same app module.
+  Stops the app currently occupying the Front App slot.
+  """
+  def stop_front_app() do
+    case AppManager.get_selected_app() do
+      nil -> :ok
+      app_id -> stop_app(app_id)
+    end
+  end
+
+  @doc """
+  Stops the app currently occupying the Mask App slot.
+  """
+  def stop_mask_app() do
+    case AppManager.get_mask_app() do
+      nil -> :ok
+      app_id -> stop_app(app_id)
+    end
+  end
+
+  @doc """
+  Starts an app in the Front App slot. Alias for `start_as_front_app/2`.
+  """
+  def start_app(module, opts \\ []) when is_atom(module) do
+    start_as_front_app(module, opts)
+  end
+
+  @doc """
+  Starts an app in the Front App slot if not already running, otherwise selects the
+  existing instance. Alias for `start_or_select_as_front_app/2`.
   """
   def start_or_select_app(module, opts \\ []) when is_atom(module) do
     case find_running_app(module) do
@@ -79,7 +153,7 @@ defmodule Octopus.AppSupervisor do
         {:ok, existing_app_id}
 
       :not_found ->
-        start_app(module, opts)
+        start_as_front_app(module, opts)
     end
   end
 
@@ -93,16 +167,27 @@ defmodule Octopus.AppSupervisor do
     end
   end
 
-  defp do_start_app(module, config) when is_atom(module) do
-    stop_other_apps(preserve_app_ids(config))
+  defp validate_and_build_config(module, opts) do
+    cond do
+      module not in available_apps() ->
+        Logger.error("App #{module} not found")
+        {:error, :app_not_found}
 
+      not apply(module, :compatible?, []) ->
+        Logger.info("App #{module} is not compatible with current installation")
+        {:error, :incompatible}
+
+      true ->
+        default_config = module |> App.config_schema() |> App.default_config()
+        config = Keyword.get(opts, :config, %{})
+        config = default_config |> Map.merge(config) |> Map.put_new(:bleeding, 0.0)
+        {:ok, config}
+    end
+  end
+
+  defp do_start_raw(module, config) when is_atom(module) do
     app_id = generate_app_id()
     name = {:via, Registry, {Octopus.AppRegistry, app_id, module}}
-
-    # select app in AppManager if there is no other app running
-    if running_apps() == [] do
-      AppManager.select_app(app_id)
-    end
 
     case DynamicSupervisor.start_child(__MODULE__, {module, {config, name: name}}) do
       {:ok, _pid} ->
@@ -112,6 +197,27 @@ defmodule Octopus.AppSupervisor do
       {:error, error} ->
         Logger.error("Could not start app #{module}: #{inspect(error)}")
         {:error, :start_failed}
+    end
+  end
+
+  defp front_app_layout(nil), do: :gapped_panels
+
+  defp front_app_layout(app_id) when is_binary(app_id) do
+    case Mixer.get_app_display_info(app_id) do
+      %{layout: layout} -> layout
+      _ -> :gapped_panels
+    end
+  end
+
+  defp front_app_layout(_), do: :gapped_panels
+
+  defp stop_slot_app(nil, _opts), do: :ok
+
+  defp stop_slot_app(app_id, opts) do
+    preserve = Keyword.get(opts, :preserve, [])
+
+    unless app_id in preserve do
+      stop_app(app_id)
     end
   end
 
@@ -225,18 +331,4 @@ defmodule Octopus.AppSupervisor do
     Enum.map(1..6, fn _ -> Enum.random(alphabet) end) |> to_string()
   end
 
-  defp stop_other_apps(preserve_ids) when is_list(preserve_ids) do
-    running_apps()
-    |> Enum.map(fn {_, app_id} -> app_id end)
-    |> Enum.reject(&(&1 in preserve_ids))
-    |> Enum.each(&stop_app/1)
-  end
-
-  defp preserve_app_ids(config) do
-    case {AppManager.get_selected_app(), Map.get(config, :side)} do
-      {{_left, right}, :left} -> Enum.reject([right], &is_nil/1)
-      {{left, _right}, :right} -> Enum.reject([left], &is_nil/1)
-      _ -> []
-    end
-  end
 end

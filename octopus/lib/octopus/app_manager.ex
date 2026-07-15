@@ -256,12 +256,25 @@ defmodule Octopus.AppManager do
     end
   end
 
-  # Helper function to check if an app supports grayscale output
-  defp supports_grayscale?(app_id) do
+  @doc """
+  Returns true if the running app with the given app_id supports greyscale output.
+  """
+  def supports_grayscale?(app_id) do
     try do
       {_pid, module} = AppSupervisor.lookup_app(app_id)
       output_type = apply(module, :output_type, [])
       output_type in [:grayscale, :both]
+    rescue
+      _ -> false
+    end
+  end
+
+  @doc """
+  Returns true if the given app module supports greyscale output (without a running instance).
+  """
+  def supports_grayscale_module?(module) when is_atom(module) do
+    try do
+      apply(module, :output_type, []) in [:grayscale, :both]
     rescue
       _ -> false
     end

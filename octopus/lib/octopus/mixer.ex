@@ -33,7 +33,12 @@ defmodule Octopus.Mixer do
 
       # Transition system
       transition: nil,
-      max_luminance: 255
+      max_luminance: 255,
+
+      # Layout override for the next mask app that calls create_display_buffers.
+      # Set by AppSupervisor.start_as_mask_app before starting the mask app process
+      # so the mask app's canvas uses the same coordinate system as the front app.
+      pending_mask_layout: nil
     ]
   end
 
@@ -48,6 +53,22 @@ defmodule Octopus.Mixer do
   """
   def create_display_buffers(app_id, config) do
     GenServer.call(__MODULE__, {:create_display_buffers, app_id, config})
+  end
+
+  @doc """
+  Signals the Mixer that the next app calling `create_display_buffers` should use
+  the given layout instead of its own, so mask apps share the same coordinate
+  system as the current front app.
+
+  Must be called synchronously before the mask app process is started.
+  The override is consumed by the very next `create_display_buffers` call and then cleared.
+  """
+  def set_pending_mask_layout(layout) when layout in [:gapped_panels, :adjacent_panels, :gapped_panels_wrapped] do
+    GenServer.call(__MODULE__, {:set_pending_mask_layout, layout})
+  end
+
+  def set_pending_mask_layout(nil) do
+    GenServer.call(__MODULE__, {:set_pending_mask_layout, nil})
   end
 
   @doc """
@@ -142,10 +163,22 @@ defmodule Octopus.Mixer do
 
   # Display buffer management callbacks
 
+  def handle_call({:set_pending_mask_layout, layout}, _from, %State{} = state) do
+    {:reply, :ok, %State{state | pending_mask_layout: layout}}
+  end
+
   def handle_call({:create_display_buffers, app_id, config}, _from, %State{} = state) do
-    # Build display info for this app's layout
-    layout = Map.get(config, :layout, :gapped_panels)
+    # Use the pending mask layout override if set (so mask apps share the front app's
+    # coordinate system), otherwise use the app's own layout.
+    layout =
+      if state.pending_mask_layout do
+        state.pending_mask_layout
+      else
+        Map.get(config, :layout, :gapped_panels)
+      end
+
     display_info = build_display_info(layout)
+    state = %State{state | pending_mask_layout: nil}
 
     width = display_info.width
     height = display_info.height
@@ -622,11 +655,15 @@ defmodule Octopus.Mixer do
     }
   end
 
-  # Converts canvas to frame with masking applied during frame generation
+  # Converts canvas to frame with masking applied during frame generation.
+  # Uses each app's own display_info for coordinate lookup so the layout
+  # is always consistent (mask apps are started with the front app's layout
+  # via set_pending_mask_layout, so in practice both display_infos are identical).
   defp canvas_to_frame_with_mask(
          canvas,
          mask_canvas,
          display_info,
+         mask_display_info,
          easing_interval,
          output_type,
          app_display
@@ -634,26 +671,22 @@ defmodule Octopus.Mixer do
     panel_width = Installation.panel_width()
     panel_height = Installation.panel_height()
 
-    # Ensure mask canvas is in grayscale format for masking
     grayscale_mask = Canvas.to_grayscale(mask_canvas)
 
-    # Iterate through panels in order with masking applied
     data =
       for panel_id <- 0..(Installation.num_panels() - 1),
           y <- 0..(panel_height - 1),
           x <- 0..(panel_width - 1) do
-        # Calculate virtual canvas coordinates for this panel pixel
         {panel_x_start, _} = display_info.panel_range.(panel_id, :x)
         canvas_x = panel_x_start + x
         canvas_y = y
 
-        # Get pixel value from main app's virtual canvas
+        {mask_panel_x_start, _} = mask_display_info.panel_range.(panel_id, :x)
+        mask_canvas_x = mask_panel_x_start + x
+
         pixel_value = Canvas.get_pixel(canvas, {canvas_x, canvas_y})
+        mask_value = Canvas.get_pixel(grayscale_mask, {mask_canvas_x, canvas_y})
 
-        # Get mask value from the same virtual coordinates in the mask canvas
-        mask_value = Canvas.get_pixel(grayscale_mask, {canvas_x, canvas_y})
-
-        # Apply masking based on output type
         case output_type do
           :rgb ->
             case pixel_value do
@@ -685,31 +718,35 @@ defmodule Octopus.Mixer do
     }
   end
 
-  # Converts canvas to wframe with masking applied during frame generation
-  defp canvas_to_wframe_with_mask(canvas, mask_canvas, display_info, easing_interval, app_display) do
+  # Converts canvas to wframe with masking applied during frame generation.
+  # See canvas_to_frame_with_mask for layout-matching notes.
+  defp canvas_to_wframe_with_mask(
+         canvas,
+         mask_canvas,
+         display_info,
+         mask_display_info,
+         easing_interval,
+         app_display
+       ) do
     panel_width = Installation.panel_width()
     panel_height = Installation.panel_height()
 
-    # Ensure mask canvas is in grayscale format for masking
     grayscale_mask = Canvas.to_grayscale(mask_canvas)
 
-    # Iterate through panels in order with masking applied
     data =
       for panel_id <- 0..(Installation.num_panels() - 1),
           y <- 0..(panel_height - 1),
           x <- 0..(panel_width - 1) do
-        # Calculate virtual canvas coordinates for this panel pixel
         {panel_x_start, _} = display_info.panel_range.(panel_id, :x)
         canvas_x = panel_x_start + x
         canvas_y = y
 
-        # Get pixel value from main app's virtual canvas
+        {mask_panel_x_start, _} = mask_display_info.panel_range.(panel_id, :x)
+        mask_canvas_x = mask_panel_x_start + x
+
         pixel_value = Canvas.get_pixel(canvas, {canvas_x, canvas_y})
+        mask_value = Canvas.get_pixel(grayscale_mask, {mask_canvas_x, canvas_y})
 
-        # Get mask value from the same virtual coordinates in the mask canvas
-        mask_value = Canvas.get_pixel(grayscale_mask, {canvas_x, canvas_y})
-
-        # Convert to grayscale and apply masking
         gray_value =
           case pixel_value do
             {r, g, b} -> Canvas.rgb_to_grayscale(r, g, b)
@@ -976,6 +1013,7 @@ defmodule Octopus.Mixer do
           main_canvas,
           mask_canvas,
           main_display_info,
+          mask_display.display_info,
           easing_interval,
           :rgb,
           main_app_display
@@ -1005,6 +1043,7 @@ defmodule Octopus.Mixer do
           main_canvas,
           mask_canvas,
           main_display_info,
+          mask_display.display_info,
           easing_interval,
           main_app_display
         )

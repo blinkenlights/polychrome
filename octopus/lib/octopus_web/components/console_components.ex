@@ -84,6 +84,8 @@ defmodule OctopusWeb.ConsoleComponents do
   attr :up_next_index, :integer, default: nil
   attr :elapsed_percent, :integer, required: true
   attr :holding_label, :string, required: true
+  attr :front_app, :map, default: nil
+  attr :mask_app, :map, default: nil
   attr :target, :any, default: nil
 
   slot :global_params, required: true
@@ -97,6 +99,12 @@ defmodule OctopusWeb.ConsoleComponents do
           <div class="border-t border-base-300/60 pt-3">
             {render_slot(@global_params)}
           </div>
+          <.slot_status_row
+            :if={@front_app || @mask_app}
+            front_app={@front_app}
+            mask_app={@mask_app}
+            target={@target}
+          />
         </div>
       </div>
       <div class="px-3 pb-2 pt-1 min-[700px]:px-4 min-[700px]:pb-3">
@@ -113,6 +121,53 @@ defmodule OctopusWeb.ConsoleComponents do
           target={@target}
           embedded
         />
+      </div>
+    </div>
+    """
+  end
+
+  attr :front_app, :map, default: nil
+  attr :mask_app, :map, default: nil
+  attr :target, :any, default: nil
+
+  defp slot_status_row(assigns) do
+    ~H"""
+    <div class="border-t border-base-300/60 pt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="text-[10px] uppercase tracking-wider font-semibold opacity-50 shrink-0">Front</span>
+        <%= if @front_app do %>
+          <span class="w-1.5 h-1.5 rounded-full bg-[#00d390] shrink-0" />
+          <span class="text-sm font-medium truncate max-w-[12rem]">{@front_app.name}</span>
+          <button
+            class="btn btn-xs btn-error btn-square min-h-7 min-w-7 shrink-0"
+            phx-click="stop_front_app"
+            phx-target={@target}
+            title="Front-App beenden"
+            aria-label="Front-App beenden"
+          >
+            <.console_icon_stop class="w-3 h-3" />
+          </button>
+        <% else %>
+          <span class="text-sm opacity-40 italic">Leer</span>
+        <% end %>
+      </div>
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="text-[10px] uppercase tracking-wider font-semibold opacity-50 shrink-0">Mask</span>
+        <%= if @mask_app do %>
+          <span class="w-1.5 h-1.5 rounded-full bg-base-content/50 shrink-0" />
+          <span class="text-sm font-medium truncate max-w-[12rem]">{@mask_app.name}</span>
+          <button
+            class="btn btn-xs btn-error btn-square min-h-7 min-w-7 shrink-0"
+            phx-click="stop_mask_app"
+            phx-target={@target}
+            title="Mask-App beenden"
+            aria-label="Mask-App beenden"
+          >
+            <.console_icon_stop class="w-3 h-3" />
+          </button>
+        <% else %>
+          <span class="text-sm opacity-40 italic">Keine Mask</span>
+        <% end %>
       </div>
     </div>
     """
@@ -652,8 +707,10 @@ defmodule OctopusWeb.ConsoleComponents do
   attr :mode, :map, required: true
   attr :app_module, :atom, required: true
   attr :live?, :boolean, default: false
+  attr :mask?, :boolean, default: false
   attr :queued_pos, :integer, default: nil
   attr :queueable?, :boolean, default: true
+  attr :mask_eligible?, :boolean, default: false
   attr :play_now_title, :string, default: "Show on the wall"
   attr :stop_takeover?, :boolean, default: false
   attr :target, :any, default: nil
@@ -667,6 +724,7 @@ defmodule OctopusWeb.ConsoleComponents do
           <h3 class="font-semibold text-sm leading-tight truncate min-w-0 flex-1">{@mode.name}</h3>
           <div class="flex items-center gap-1 shrink-0">
             <.live_badge :if={@live?} />
+            <.mask_badge :if={@mask?} />
             <span :if={@queued_pos} class="badge badge-outline badge-xs">Nr. {@queued_pos}</span>
             <span :if={Map.get(@mode, :builtin) == false} class="badge badge-outline badge-xs opacity-70">
               yours
@@ -694,6 +752,18 @@ defmodule OctopusWeb.ConsoleComponents do
               aria-label={@play_now_title}
             >
               <.console_icon_play class="w-4 h-4" />
+            </button>
+            <button
+              :if={@mask_eligible? && !@stop_takeover?}
+              class="btn btn-sm btn-square btn-ghost min-h-9 min-w-9 opacity-70 hover:opacity-100"
+              phx-click="start_as_mask"
+              phx-value-module={Atom.to_string(@app_module)}
+              phx-value-mode_id={@mode.id}
+              phx-target={@target}
+              title="Als Mask-App starten"
+              aria-label="Als Mask-App starten"
+            >
+              <.console_icon_mask class="w-4 h-4" />
             </button>
             <button
               :if={@queueable?}
@@ -728,47 +798,59 @@ defmodule OctopusWeb.ConsoleComponents do
     """
   end
 
-  attr :running_apps, :list, required: true
+  attr :front_app, :map, default: nil
+  attr :mask_app, :map, default: nil
   attr :target, :any, default: nil
 
-  def running_now_rows(assigns) do
+  def app_slots(assigns) do
     ~H"""
-    <div class="space-y-0">
-      <div :if={@running_apps == []} class="text-sm opacity-60 text-center py-4">
-        No apps running.
+    <div class="divide-y divide-base-300">
+      <%!-- Front App Slot --%>
+      <div class="flex items-center gap-3 py-3">
+        <div class="w-16 shrink-0">
+          <span class="text-[10px] uppercase tracking-wider font-semibold opacity-50">Front</span>
+        </div>
+        <%= if @front_app do %>
+          <span class="w-2 h-2 rounded-full bg-[#00d390] shrink-0" />
+          <span class="font-medium flex-1 min-w-0 truncate">{@front_app.name}</span>
+          <span class="badge badge-sm bg-[#00d390] text-black border-0 shrink-0">Aktiv</span>
+          <button
+            class="btn btn-sm btn-error btn-square min-h-9 min-w-9 shrink-0"
+            phx-click="stop_front_app"
+            phx-target={@target}
+            title="Front-App beenden"
+            aria-label="Front-App beenden"
+          >
+            <.console_icon_stop class="w-4 h-4" />
+          </button>
+        <% else %>
+          <span class="w-2 h-2 rounded-full bg-base-content/20 shrink-0" />
+          <span class="flex-1 text-sm opacity-50 italic">Leer</span>
+        <% end %>
       </div>
 
-      <div :for={app <- @running_apps} class="flex flex-wrap items-center gap-2 py-2 border-b border-base-300 last:border-0">
-        <span class={["w-2 h-2 rounded-full", app.selected && "bg-[#00d390]", !app.selected && "bg-base-content/30"]} />
-        <span class="font-medium flex-1 min-w-[8rem]">{app.name}</span>
-        <span :if={app.selected} class="badge badge-sm bg-[#00d390] text-black border-0">Active</span>
-        <span :if={app.masked} class="badge badge-neutral badge-sm">Masked</span>
-        <div class="flex gap-1 ml-auto">
-          <button
-            class={["btn btn-sm", app.selected && "btn-success", !app.selected && "btn-outline"]}
-            phx-click="select_app"
-            phx-value-app-id={app.app_id}
-            phx-target={@target}
-          >
-            Show
-          </button>
-          <button
-            class={["btn btn-sm", app.masked && "btn-neutral", !app.masked && "btn-outline"]}
-            phx-click="mask_app"
-            phx-value-app-id={app.app_id}
-            phx-target={@target}
-          >
-            Mask
-          </button>
-          <button
-            class="btn btn-sm btn-error"
-            phx-click="stop_app"
-            phx-value-app-id={app.app_id}
-            phx-target={@target}
-          >
-            Stop
-          </button>
+      <%!-- Mask App Slot --%>
+      <div class="flex items-center gap-3 py-3">
+        <div class="w-16 shrink-0">
+          <span class="text-[10px] uppercase tracking-wider font-semibold opacity-50">Mask</span>
         </div>
+        <%= if @mask_app do %>
+          <span class="w-2 h-2 rounded-full bg-base-content/60 shrink-0" />
+          <span class="font-medium flex-1 min-w-0 truncate">{@mask_app.name}</span>
+          <span class="badge badge-neutral badge-sm shrink-0">Mask</span>
+          <button
+            class="btn btn-sm btn-error btn-square min-h-9 min-w-9 shrink-0"
+            phx-click="stop_mask_app"
+            phx-target={@target}
+            title="Mask-App beenden"
+            aria-label="Mask-App beenden"
+          >
+            <.console_icon_stop class="w-4 h-4" />
+          </button>
+        <% else %>
+          <span class="w-2 h-2 rounded-full bg-base-content/20 shrink-0" />
+          <span class="flex-1 text-sm opacity-50 italic">Keine Mask aktiv</span>
+        <% end %>
       </div>
     </div>
     """
@@ -776,7 +858,13 @@ defmodule OctopusWeb.ConsoleComponents do
 
   def live_badge(assigns) do
     ~H"""
-    <span class="badge badge-sm bg-[#00d390] text-black border-0 font-semibold">LIVE</span>
+    <span class="badge badge-sm bg-[#00d390] text-black border-0 font-semibold">FRONT</span>
+    """
+  end
+
+  def mask_badge(assigns) do
+    ~H"""
+    <span class="badge badge-sm bg-[#a855f7] text-white border-0 font-semibold">MASK</span>
     """
   end
 
@@ -1526,6 +1614,17 @@ defmodule OctopusWeb.ConsoleComponents do
     ~H"""
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class={@class} aria-hidden="true">
       <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
+    </svg>
+    """
+  end
+
+  attr :class, :string, default: "w-5 h-5"
+
+  def console_icon_mask(assigns) do
+    ~H"""
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class={@class} aria-hidden="true">
+      <path d="M12 3a9 9 0 0 0 0 18V3Z" />
+      <path fill-rule="evenodd" d="M12 2.25C6.615 2.25 2.25 6.615 2.25 12S6.615 21.75 12 21.75 21.75 17.385 21.75 12 17.385 2.25 12 2.25Zm0 1.5a8.25 8.25 0 1 1 0 16.5 8.25 8.25 0 0 1 0-16.5Z" clip-rule="evenodd" />
     </svg>
     """
   end
