@@ -45,14 +45,14 @@ defmodule Octopus.Radar.PanelGravity.CoreTest do
     assert_in_delta Enum.max(values), Enum.min(values), 1.0e-9
   end
 
-  test "center object at reach 100 is about 50% on every panel" do
-    s = settings(reach: 100, contrast: 3.0, sensitivity: 1.0, softening_m: 0.25)
+  test "center object at reach 100 yields equal gravity on all panels and normalises to 1.0" do
+    s = settings(reach: 100, contrast: 3.0, softening_m: 0.25)
     panels = ring_panels(10.0)
     raw = Core.raw_gravity([person(x: 0.0, y: 0.0)], panels, s)
     targets = Core.targets(raw, 1.0, s)
 
     Enum.each(targets, fn {_panel, level} ->
-      assert_in_delta level, 0.5, 0.05
+      assert_in_delta level, 1.0, 1.0e-6
     end)
   end
 
@@ -99,14 +99,20 @@ defmodule Octopus.Radar.PanelGravity.CoreTest do
     end)
   end
 
-  test "targets map absolute values without cross-panel min-max" do
-    s = settings(sensitivity: 1.0, contrast: 3.0)
-    # Equal mid values stay equal mid — not remapped to 0/1.
-    targets = Core.targets(%{1 => 0.5, 2 => 0.5, 3 => 0.5}, 1.0, s)
+  test "targets normalises so the brightest panel always reaches 1.0" do
+    s = settings(contrast: 3.0)
 
-    assert_in_delta targets[1], 0.5, 1.0e-6
-    assert_in_delta targets[2], 0.5, 1.0e-6
-    assert_in_delta targets[3], 0.5, 1.0e-6
+    # Equal raw values → all normalise to 1.0 (any input is the max).
+    equal = Core.targets(%{1 => 0.5, 2 => 0.5, 3 => 0.5}, 1.0, s)
+    assert_in_delta equal[1], 1.0, 1.0e-6
+    assert_in_delta equal[2], 1.0, 1.0e-6
+    assert_in_delta equal[3], 1.0, 1.0e-6
+
+    # Unequal raw values → peak panel = 1.0; others proportionally below.
+    unequal = Core.targets(%{1 => 1.0, 2 => 0.5, 3 => 0.25}, 1.0, s)
+    assert_in_delta unequal[1], 1.0, 1.0e-6
+    assert unequal[2] < 1.0
+    assert unequal[3] < unequal[2]
   end
 
   test "targets are zero when all panels are zero" do
@@ -115,13 +121,16 @@ defmodule Octopus.Radar.PanelGravity.CoreTest do
     assert Enum.all?(targets, fn {_panel, value} -> value == 0.0 end)
   end
 
-  test "smooth_asymmetric attacks faster than it releases" do
-    s = settings(attack_tau: 0.2, release_tau: 5.0)
-    dt = 0.04
+  test "smooth converges symmetrically toward target in both directions" do
+    s = settings(easing_tau: 1.0)
+    dt = 0.1
 
-    up = Core.smooth_asymmetric(%{1 => 0.0}, %{1 => 1.0}, dt, s)
-    down = Core.smooth_asymmetric(%{1 => 1.0}, %{1 => 0.0}, dt, s)
+    up = Core.smooth(%{1 => 0.0}, %{1 => 1.0}, dt, s)
+    down = Core.smooth(%{1 => 1.0}, %{1 => 0.0}, dt, s)
 
-    assert up[1] > 1.0 - down[1]
+    expected_alpha = 1.0 - :math.exp(-dt / 1.0)
+
+    assert_in_delta up[1], expected_alpha, 1.0e-9
+    assert_in_delta down[1], 1.0 - expected_alpha, 1.0e-9
   end
 end

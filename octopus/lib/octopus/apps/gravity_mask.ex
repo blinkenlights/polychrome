@@ -22,6 +22,8 @@ defmodule Octopus.Apps.GravityMask do
   @default_floor_pct 25
   @default_contrast 3.0
   @default_reach 50
+  @default_easing_tau 1.5
+  @default_velocity_gain 0.0
   @debug_log_interval_ms 1_000
 
   def name, do: "Gravity Mask"
@@ -42,7 +44,9 @@ defmodule Octopus.Apps.GravityMask do
     %{
       floor_brightness: @default_floor_pct,
       contrast: @default_contrast,
-      reach: @default_reach
+      reach: @default_reach,
+      easing_tau: @default_easing_tau,
+      velocity_gain: @default_velocity_gain
     }
   end
 
@@ -79,6 +83,25 @@ defmodule Octopus.Apps.GravityMask do
         max: 100,
         step: 1,
         default: @default_reach
+      },
+      %{
+        key: :easing_tau,
+        label: "Easing",
+        type: :slider,
+        min: 0.2,
+        max: 5.0,
+        step: 0.1,
+        unit: "s",
+        default: @default_easing_tau
+      },
+      %{
+        key: :velocity_gain,
+        label: "Velocity gain",
+        type: :slider,
+        min: 0.0,
+        max: 3.0,
+        step: 0.25,
+        default: @default_velocity_gain
       }
     ]
   end
@@ -118,6 +141,8 @@ defmodule Octopus.Apps.GravityMask do
       floor_brightness: floor_config_to_unit(Map.get(config, :floor_brightness, @default_floor_pct)),
       contrast: Map.get(config, :contrast, @default_contrast),
       reach: Map.get(config, :reach, @default_reach),
+      easing_tau: Map.get(config, :easing_tau, @default_easing_tau),
+      velocity_gain: Map.get(config, :velocity_gain, @default_velocity_gain),
       last_debug_ms: nil
     }
 
@@ -128,6 +153,8 @@ defmodule Octopus.Apps.GravityMask do
       "[GravityMask] started floor=#{floor_config_to_pct(Map.get(config, :floor_brightness, @default_floor_pct))}% " <>
         "contrast=#{Map.get(config, :contrast, @default_contrast)} " <>
         "reach=#{Map.get(config, :reach, @default_reach)} " <>
+        "easing_tau=#{Map.get(config, :easing_tau, @default_easing_tau)}s " <>
+        "velocity_gain=#{Map.get(config, :velocity_gain, @default_velocity_gain)} " <>
         "panel_gravity=#{inspect(Process.whereis(Octopus.Radar.PanelGravity) != nil)}"
     )
 
@@ -137,7 +164,7 @@ defmodule Octopus.Apps.GravityMask do
   def handle_info(:paint_now, state) do
     factors =
       if Process.whereis(Octopus.Radar.PanelGravity) do
-        Radar.panel_factors_gravity()
+        Radar.panel_gravity() |> factors_from_snapshot(state.factors)
       else
         state.factors
       end
@@ -168,7 +195,11 @@ defmodule Octopus.Apps.GravityMask do
       floor_brightness:
         {"Floor brightness", :float, %{min: 0, max: 100, step: 5, default: @default_floor_pct}},
       contrast: {"Contrast", :float, %{min: 1.0, max: 6.0, step: 0.5, default: @default_contrast}},
-      reach: {"Reach", :float, %{min: 1, max: 100, step: 1, default: @default_reach}}
+      reach: {"Reach", :float, %{min: 1, max: 100, step: 1, default: @default_reach}},
+      easing_tau:
+        {"Easing", :float, %{min: 0.2, max: 5.0, step: 0.1, default: @default_easing_tau}},
+      velocity_gain:
+        {"Velocity gain", :float, %{min: 0.0, max: 3.0, step: 0.25, default: @default_velocity_gain}}
     }
   end
 
@@ -176,7 +207,9 @@ defmodule Octopus.Apps.GravityMask do
     %{
       floor_brightness: floor_unit_to_pct(state.floor_brightness),
       contrast: state.contrast,
-      reach: state.reach
+      reach: state.reach,
+      easing_tau: state.easing_tau,
+      velocity_gain: state.velocity_gain
     }
   end
 
@@ -190,18 +223,20 @@ defmodule Octopus.Apps.GravityMask do
             Map.get(config, :floor_brightness, floor_unit_to_pct(state.floor_brightness))
           ),
         contrast: Map.get(config, :contrast, state.contrast),
-        reach: Map.get(config, :reach, state.reach)
+        reach: Map.get(config, :reach, state.reach),
+        easing_tau: Map.get(config, :easing_tau, state.easing_tau),
+        velocity_gain: Map.get(config, :velocity_gain, state.velocity_gain)
     }
 
-    # Floor is display-local; reach/contrast notify PanelGravity via settings —
-    # force a redraw now, and the next PubSub snapshot will refine if needed.
+    # Floor is display-local; reach/contrast/easing_tau/velocity_gain notify PanelGravity
+    # via settings — force a redraw now, and the next PubSub snapshot will refine if needed.
     {:noreply, maybe_render(state, force: true)}
   end
 
   defp factors_from_snapshot(snapshot, fallback) do
     case snapshot do
-      %{target: target} when map_size(target) > 0 -> target
       %{gravity: gravity} when map_size(gravity) > 0 -> gravity
+      %{target: target} when map_size(target) > 0 -> target
       _ -> fallback
     end
   end
@@ -256,6 +291,8 @@ defmodule Octopus.Apps.GravityMask do
       []
       |> maybe_put(:contrast, Map.get(config, :contrast))
       |> maybe_put(:reach, Map.get(config, :reach))
+      |> maybe_put(:easing_tau, Map.get(config, :easing_tau))
+      |> maybe_put(:velocity_gain, Map.get(config, :velocity_gain))
 
     if opts != [], do: Radar.set_panel_gravity_config(opts)
 

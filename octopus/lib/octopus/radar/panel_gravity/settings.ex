@@ -13,13 +13,16 @@ defmodule Octopus.Radar.PanelGravity.Settings do
     sensitivity: 1.0,
     contrast: 3.0,
     adaptive: true,
-    # Quick but visible rise, ~3s fade so a brief dropout or occlusion doesn't
-    # snap to black — see `Core.smooth_asymmetric/4`.
-    attack_tau: 0.2,
-    release_tau: 3.0,
+    # Symmetric first-order lag applied to every panel level on each flush.
+    # Slow in both directions so appearance and disappearance of objects both
+    # build/fade gradually — eliminates flashing from brief transient positions.
+    easing_tau: 1.5,
+    # Multiplier applied to each object's gravity contribution proportional to
+    # its speed: contribution *= (1 + velocity_gain * speed_m_s).
+    # 0.0 = velocity has no effect (default).
+    velocity_gain: 0.0,
     # Cross-sensor fusion (Octopus.Radar.TrackFusion) now covers duplicate
-    # detections, so this only needs to bridge genuinely missed frames —
-    # release_tau handles the visual smoothing of real disappearances.
+    # detections, so this only needs to bridge genuinely missed frames.
     track_stale_ms: 400,
     tick_hz: 25,
     broadcast_epsilon: 0.001
@@ -35,8 +38,8 @@ defmodule Octopus.Radar.PanelGravity.Settings do
     :sensitivity,
     :contrast,
     :adaptive,
-    :attack_tau,
-    :release_tau,
+    :easing_tau,
+    :velocity_gain,
     :track_stale_ms,
     :tick_hz,
     :broadcast_epsilon
@@ -52,8 +55,8 @@ defmodule Octopus.Radar.PanelGravity.Settings do
           sensitivity: float(),
           contrast: float(),
           adaptive: boolean(),
-          attack_tau: float(),
-          release_tau: float(),
+          easing_tau: float(),
+          velocity_gain: float(),
           track_stale_ms: pos_integer(),
           tick_hz: pos_integer(),
           broadcast_epsilon: float()

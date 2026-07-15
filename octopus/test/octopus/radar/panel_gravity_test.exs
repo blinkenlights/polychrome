@@ -48,7 +48,7 @@ defmodule Octopus.Radar.PanelGravityTest do
     {peak_panel, peak_value} = Enum.max_by(gravity, fn {_panel, value} -> value end)
 
     assert peak_panel == north_panel
-    assert peak_value > 0.2
+    assert peak_value > 0.05
 
     # Peak panel dominates; distant panels stay clearly below it.
     Enum.each(gravity, fn {panel, value} ->

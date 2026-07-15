@@ -10,11 +10,13 @@ defmodule Octopus.Radar.PanelGravity do
   drifting in/out of a second sensor's field of view doesn't change the
   contributing object count underneath it.
 
-  Panel levels follow an asymmetric envelope (`Core.smooth_asymmetric/4`):
-  fast attack, slow release — so a real disappearance/occlusion fades out over
-  a few seconds instead of snapping to black. This also means a flush always
-  recomputes, even when the input fingerprint is unchanged, so the release
-  tail keeps decaying on the low-rate stale-check heartbeat while idle.
+  Panel levels are smoothed with a symmetric first-order lag (`Core.smooth/4`)
+  controlled by `easing_tau` (default 1.5 s). Both rising (object appears) and
+  falling (object departs) transitions happen at the same rate, which eliminates
+  flashing from brief transient positions while giving a smooth "glow follows
+  you" effect for moving objects. A flush always recomputes even when the input
+  fingerprint is unchanged so the easing tail keeps decaying on the stale-check
+  heartbeat while idle.
   Consumers subscribe via `Octopus.Radar.subscribe_panel_gravity/0` or read
   `snapshot/0`.
   """
@@ -212,10 +214,7 @@ defmodule Octopus.Radar.PanelGravity do
       |> ensure_all_panels(state.num_panels)
 
     target = Core.targets(raw, settings.min_ref, settings)
-    # Fast attack, slow release: a real disappearance fades out instead of
-    # snapping to black; a genuine approach still tracks target almost
-    # immediately (attack_tau is tiny relative to release_tau).
-    level = Core.smooth_asymmetric(state.level, target, dt, settings)
+    level = Core.smooth(state.level, target, dt, settings)
 
     snapshot = %{
       gravity: level,
@@ -264,13 +263,16 @@ defmodule Octopus.Radar.PanelGravity do
     people_key =
       people
       |> Enum.map(fn p ->
-        {Map.get(p, :id), Float.round(p.x, 3), Float.round(p.y, 3)}
+        {Map.get(p, :id),
+         Float.round(p.x, 3), Float.round(p.y, 3),
+         Float.round(Map.get(p, :vx, 0.0), 2),
+         Float.round(Map.get(p, :vy, 0.0), 2)}
       end)
       |> Enum.sort()
 
     settings_key =
-      {settings.reach, settings.contrast, settings.sensitivity, settings.softening_m, settings.mass,
-       settings.exponent}
+      {settings.reach, settings.contrast, settings.softening_m, settings.mass,
+       settings.exponent, settings.easing_tau, settings.velocity_gain}
 
     {people_key, settings_key, north_panel}
   end

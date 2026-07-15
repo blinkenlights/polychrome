@@ -880,8 +880,8 @@ defmodule Octopus.Radar do
   Shape: `%{gravity: %{panel => float}, target: %{panel => float}, raw: %{panel => float}, ref: float, at: ms}`
   Panel keys are 1-based installation panel numbers.
 
-  `target` is the pre-EMA instantaneous weight (preferred for proximity masks);
-  `gravity` is the smoothed level.
+  `gravity` is the symmetrically eased level (preferred for display);
+  `target` is the instantaneous normalised weight before easing.
   """
   @spec panel_gravity() :: map()
   def panel_gravity do
@@ -891,14 +891,15 @@ defmodule Octopus.Radar do
   @doc """
   Return normalised per-panel gravity factors (1-based installation panels).
 
-  Prefers pre-EMA `target` so display consumers follow motion without the
-  smoothed trail that lags behind the person.
+  Prefers the EMA-smoothed `gravity` so that brief transient object positions
+  (e.g. a cursor crossing the ring centre) do not produce visible spikes.
+  Falls back to the instantaneous `target` only when `gravity` is absent.
   """
   @spec panel_factors_gravity() :: %{pos_integer() => float()}
   def panel_factors_gravity do
     case panel_gravity() do
-      %{target: target} when map_size(target) > 0 -> target
-      %{gravity: gravity} -> gravity
+      %{gravity: gravity} when map_size(gravity) > 0 -> gravity
+      %{target: target} -> target
       _ -> %{}
     end
   end

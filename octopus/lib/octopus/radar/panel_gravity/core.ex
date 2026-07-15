@@ -55,29 +55,43 @@ defmodule Octopus.Radar.PanelGravity.Core do
   end
 
   @doc """
-  Absolute panel gravity in 0..1.
+  Normalised panel gravity in 0..1.
 
-  Maps the summed raw value of each panel independently — never min–max across
-  the ring (that would turn a centred object into uneven bright/dark panels).
+  Min-max normalises across the ring so the brightest panel always reaches 1.0
+  regardless of the absolute scale of the raw sums. Contrast is applied as a
+  gamma/power function on the normalised value:
+  - exponent < 1 (contrast < 3): lifts dim panels → more uniform illumination
+  - exponent = 1 (contrast = 3): linear, identity
+  - exponent > 1 (contrast > 3): compresses dim panels → stronger spotlight effect
   """
   @spec targets(panel_map(), float(), Settings.t()) :: panel_map()
-  def targets(raw, _ref, %Settings{sensitivity: sensitivity, contrast: contrast}) do
-    Map.new(raw, fn {panel, value} ->
-      level = (sensitivity * value) |> max(0.0) |> min(1.0)
-      # Contrast as gamma on absolute brightness (1 = identity-ish mid, higher = darker mids).
-      level = :math.pow(level, max(contrast, 0.01) / 3.0)
-      {panel, clamp01(level)}
-    end)
+  def targets(raw, _ref, %Settings{contrast: contrast}) do
+    max_raw = raw |> Map.values() |> Enum.max(fn -> 0.0 end)
+
+    if max_raw <= 0.0 do
+      Map.new(raw, fn {panel, _} -> {panel, 0.0} end)
+    else
+      Map.new(raw, fn {panel, value} ->
+        normalized = value / max_raw
+        level = :math.pow(normalized, max(contrast, 0.01) / 3.0)
+        {panel, clamp01(level)}
+      end)
+    end
   end
 
   @doc """
-  Asymmetric per-panel EMA: fast attack, slow release.
+  Symmetric per-panel first-order lag (EMA) toward target.
+
+  Uses a single `easing_tau` for both rising and falling so appearance and
+  disappearance of objects build and fade at the same rate. A brief transient
+  (e.g. cursor crossing the ring centre in one flush window) accumulates only a
+  tiny fraction of the target level and is visually imperceptible.
   """
-  @spec smooth_asymmetric(panel_map(), panel_map(), float(), Settings.t()) :: panel_map()
-  def smooth_asymmetric(level, target, dt, %Settings{} = settings) do
+  @spec smooth(panel_map(), panel_map(), float(), Settings.t()) :: panel_map()
+  def smooth(level, target, dt, %Settings{easing_tau: tau}) do
+    alpha = 1.0 - :math.exp(-dt / max(tau, 0.01))
+
     Map.merge(level, target, fn _panel, cur, tgt ->
-      tau = if tgt > cur, do: settings.attack_tau, else: settings.release_tau
-      alpha = 1.0 - :math.exp(-dt / tau)
       cur + (tgt - cur) * alpha
     end)
   end
@@ -101,9 +115,12 @@ defmodule Octopus.Radar.PanelGravity.Core do
   Exponential falloff of softened distance. Reach 1..100 raises both the
   characteristic length (shallower decay) and amplitude (overall stronger),
   so a high reach yields higher per-panel sums.
+
+  When `velocity_gain > 0`, the contribution is scaled by
+  `1 + velocity_gain * speed` so faster-moving objects cast more gravity.
   """
   @spec contribution(person(), panel_pos(), Settings.t()) :: float()
-  def contribution(%{x: x, y: y}, %{x: px, y: py}, %Settings{} = settings) do
+  def contribution(%{x: x, y: y} = person, %{x: px, y: py}, %Settings{} = settings) do
     dx = x - px
     dy = y - py
     d = :math.sqrt(dx * dx + dy * dy)
@@ -111,7 +128,12 @@ defmodule Octopus.Radar.PanelGravity.Core do
     d_soft = :math.sqrt(d * d + soft * soft)
 
     {lambda, amplitude} = reach_params(settings.reach)
-    settings.mass * amplitude * :math.exp(-d_soft / lambda)
+    base = settings.mass * amplitude * :math.exp(-d_soft / lambda)
+
+    vx = Map.get(person, :vx, 0.0)
+    vy = Map.get(person, :vy, 0.0)
+    speed = :math.sqrt(vx * vx + vy * vy)
+    base * (1.0 + settings.velocity_gain * speed)
   end
 
   # t=0 (reach 1): short λ, low amplitude → distant objects almost irrelevant.
