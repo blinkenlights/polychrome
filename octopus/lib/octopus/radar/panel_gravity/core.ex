@@ -3,6 +3,10 @@ defmodule Octopus.Radar.PanelGravity.Core do
 
   alias Octopus.Radar.PanelGravity.Settings
 
+  # Reference ring radius used to calibrate reach: one object at the centre
+  # with reach=100 yields ~0.5 gravity on every panel of a 10 m Nation ring.
+  @ref_radius_m 10.0
+
   @type person :: %{
           required(:id) => pos_integer(),
           required(:x) => float(),
@@ -20,8 +24,10 @@ defmodule Octopus.Radar.PanelGravity.Core do
         }
 
   @doc """
-  Sums per-object gravitational contributions into installation panel numbers
-  (1-based).
+  Sums per-object gravity into installation panel numbers (1-based).
+
+  For every panel and every object: evaluate exponential falloff of distance,
+  then sum. No cross-panel normalisation happens here.
   """
   @spec raw_gravity([person()], [panel_pos()], Settings.t()) :: panel_map()
   def raw_gravity(people, panel_positions, %Settings{} = settings) do
@@ -49,28 +55,19 @@ defmodule Octopus.Radar.PanelGravity.Core do
   end
 
   @doc """
-  Normalised pre-EMA targets in 0..1 (installation panel numbers).
+  Absolute panel gravity in 0..1.
 
-  Peak panel is scaled to 1.0; others follow `(value / max)^contrast` so
-  nearby panels stay bright while distant ones fall off sharply. When all
-  panels are effectively equal (no proximity signal), every target is 0.
+  Maps the summed raw value of each panel independently — never min–max across
+  the ring (that would turn a centred object into uneven bright/dark panels).
   """
   @spec targets(panel_map(), float(), Settings.t()) :: panel_map()
-  def targets(raw, _ref, %Settings{sensitivity: sensitivity, min_ref: min_span, contrast: contrast}) do
-    values = Map.values(raw)
-    min_v = Enum.min(values, fn -> 0.0 end)
-    max_v = Enum.max(values, fn -> 0.0 end)
-    span = max_v - min_v
-
-    if max_v <= 0.0 or span < min_span do
-      Map.new(raw, fn {panel, _} -> {panel, 0.0} end)
-    else
-      Map.new(raw, fn {panel, value} ->
-        ratio = value / max_v
-        normalized = sensitivity * :math.pow(ratio, contrast)
-        {panel, normalized |> max(0.0) |> min(1.0)}
-      end)
-    end
+  def targets(raw, _ref, %Settings{sensitivity: sensitivity, contrast: contrast}) do
+    Map.new(raw, fn {panel, value} ->
+      level = (sensitivity * value) |> max(0.0) |> min(1.0)
+      # Contrast as gamma on absolute brightness (1 = identity-ish mid, higher = darker mids).
+      level = :math.pow(level, max(contrast, 0.01) / 3.0)
+      {panel, clamp01(level)}
+    end)
   end
 
   @doc """
@@ -98,14 +95,46 @@ defmodule Octopus.Radar.PanelGravity.Core do
     Map.new(panel_positions, fn %{panel: panel} -> {panel, 0.0} end)
   end
 
+  @doc """
+  Single object → panel gravity.
+
+  Exponential falloff of softened distance. Reach 1..100 raises both the
+  characteristic length (shallower decay) and amplitude (overall stronger),
+  so a high reach yields higher per-panel sums.
+  """
   @spec contribution(person(), panel_pos(), Settings.t()) :: float()
   def contribution(%{x: x, y: y}, %{x: px, y: py}, %Settings{} = settings) do
     dx = x - px
     dy = y - py
     d = :math.sqrt(dx * dx + dy * dy)
-    softening_pow = :math.pow(settings.softening_m, settings.exponent)
-    denom = :math.pow(d, settings.exponent) + softening_pow
-    settings.mass / denom
+    soft = max(settings.softening_m, 0.0)
+    d_soft = :math.sqrt(d * d + soft * soft)
+
+    {lambda, amplitude} = reach_params(settings.reach)
+    settings.mass * amplitude * :math.exp(-d_soft / lambda)
   end
 
+  # t=0 (reach 1): short λ, low amplitude → distant objects almost irrelevant.
+  # t=1 (reach 100): λ ≈ R/ln(2) so an object at the ring centre is ~0.5.
+  #
+  # Interpolating on sqrt(t) rather than t bends the curve concave: reach
+  # already hits hard by the middle of the range instead of only paying off
+  # near 100, while both endpoints (and their calibration) stay unchanged.
+  defp reach_params(reach) do
+    t = :math.sqrt((clamp_reach(reach) - 1) / 99.0)
+    lambda_min = 0.6
+    lambda_max = @ref_radius_m / :math.log(2)
+    lambda = lambda_min + (lambda_max - lambda_min) * t
+
+    amp_min = 0.2
+    amp_max = 1.0
+    amplitude = amp_min + (amp_max - amp_min) * t
+
+    {lambda, amplitude}
+  end
+
+  defp clamp_reach(reach) when is_number(reach), do: reach |> max(1) |> min(100)
+  defp clamp_reach(_), do: 50
+
+  defp clamp01(v), do: v |> max(0.0) |> min(1.0)
 end

@@ -10,7 +10,7 @@ defmodule Octopus.Radar.ClutterFilter do
   @min_speed_m_s 0.08
   @displacement_threshold_m 0.05
   @registry_stale_ms 300_000
-  @qualification_ms 3_000
+  @qualification_ms 1_000
   @history_window_ms 10_000
 
   def start_link(_opts) do

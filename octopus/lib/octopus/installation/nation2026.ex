@@ -4,7 +4,8 @@ defmodule Octopus.Installation.Nation2026 do
     circular: [
       ring_radius_m: 10.0,
       north_panel: 10,
-      platform_radius_m: 2.25
+      platform_radius_m: 2.25,
+      panel_bottom_m: 0.4
     ],
     panel_type: :polychrome,
     panels: [
@@ -61,6 +62,7 @@ defmodule Octopus.Installation.Nation2026 do
       panel_gravity: [
         exponent: 3.0,
         softening_m: 0.25,
+        reach: 50,
         sensitivity: 1.0,
         contrast: 3.0,
         adaptive: true

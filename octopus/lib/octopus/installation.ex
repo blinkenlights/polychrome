@@ -122,6 +122,12 @@ defmodule Octopus.Installation do
   """
   @callback platform_radius_m() :: float() | nil
 
+  @doc """
+  Height from ground to the bottom edge of each panel in meters, or `nil`
+  when not configured (typical Nation pole height: `0.4`).
+  """
+  @callback panel_bottom_m() :: float() | nil
+
   @options_schema NimbleOptions.new!(
                     arrangement: [type: {:in, [:linear, :circular]}, required: true],
                     panels: [
@@ -164,6 +170,12 @@ defmodule Octopus.Installation do
                           required: false,
                           doc:
                             "Central platform radius in meters for radar and mock views; omit to use Sim3D param."
+                        ],
+                        panel_bottom_m: [
+                          type: :float,
+                          required: false,
+                          doc:
+                            "Height from ground to the bottom edge of each panel in meters (e.g. 0.4 for 40 cm posts)."
                         ]
                       ],
                       doc:
@@ -382,7 +394,7 @@ defmodule Octopus.Installation do
     panel_layout = Keyword.fetch!(opts, :panel_layout)
     panel_type = Keyword.get(opts, :panel_type)
 
-    {ring_radius_m, north_panel, platform_radius_m} =
+    {ring_radius_m, north_panel, platform_radius_m, panel_bottom_m} =
       case arrangement do
         :circular ->
           circular = Keyword.fetch!(opts, :circular)
@@ -390,11 +402,12 @@ defmodule Octopus.Installation do
           {
             Keyword.fetch!(circular, :ring_radius_m),
             Keyword.get(circular, :north_panel, 1),
-            Keyword.get(circular, :platform_radius_m)
+            Keyword.get(circular, :platform_radius_m),
+            Keyword.get(circular, :panel_bottom_m)
           }
 
         :linear ->
-          {nil, 1, nil}
+          {nil, 1, nil, nil}
       end
 
     num_panels = Keyword.fetch!(opts, :num_panels)
@@ -544,6 +557,9 @@ defmodule Octopus.Installation do
       def platform_radius_m, do: unquote(Macro.escape(platform_radius_m))
 
       @impl Octopus.Installation
+      def panel_bottom_m, do: unquote(Macro.escape(panel_bottom_m))
+
+      @impl Octopus.Installation
       def radar_config, do: unquote(Macro.escape(radar_config))
 
       unquote(panel_type_fns)
@@ -569,7 +585,7 @@ defmodule Octopus.Installation do
   end
 
   defp reject_legacy_arrangement_keys!(opts) do
-    legacy = [:ring_radius_m, :north_panel, :platform_radius_m]
+    legacy = [:ring_radius_m, :north_panel, :platform_radius_m, :panel_bottom_m]
 
     case Enum.filter(legacy, &Keyword.has_key?(opts, &1)) do
       [] ->
@@ -769,7 +785,18 @@ defmodule Octopus.Installation do
   @impl __MODULE__
   def height, do: installation().height()
   @impl __MODULE__
-  def simulator_layouts, do: installation().simulator_layouts()
+  def simulator_layouts do
+    info = panel_info()
+    {panel_width, panel_height} = panel_layout()
+    pixel_count = panel_width * panel_height
+
+    installation().simulator_layouts()
+    |> Enum.map(&maybe_circularize_layout/1)
+    |> Enum.map(fn %Octopus.Layout{} = layout ->
+      %Octopus.Layout{layout | panel_info: info, panel_pixel_count: pixel_count}
+    end)
+  end
+
   @impl __MODULE__
   def num_buttons, do: installation().num_buttons()
   @impl __MODULE__
@@ -797,6 +824,12 @@ defmodule Octopus.Installation do
     end
   end
 
+  @doc """
+  Height from ground to panel bottom edge in meters, or `nil` if unset.
+  """
+  @impl __MODULE__
+  def panel_bottom_m, do: installation().panel_bottom_m()
+
   @impl __MODULE__
   def radar_config, do: installation().radar_config()
 
@@ -822,68 +855,195 @@ defmodule Octopus.Installation do
     end
   end
 
+  @type panel_position_m :: %{
+          required(:panel) => pos_integer(),
+          required(:x) => float(),
+          required(:y) => float(),
+          required(:theta_deg) => float(),
+          required(:theta_rad) => float(),
+          required(:offset) => non_neg_integer(),
+          optional(:label_x) => float(),
+          optional(:label_y) => float()
+        }
+
+  @type ring_layout_m :: %{
+          enabled: true,
+          num_panels: pos_integer(),
+          north_panel: pos_integer(),
+          ring_radius_m: float(),
+          platform_radius_m: float() | nil,
+          panel_bottom_m: float() | nil,
+          panel_width_m: float(),
+          panel_depth_m: float(),
+          panels: [panel_position_m()],
+          gravity_panels: [panel_position_m()]
+        }
+
   @doc """
-  Returns world-space panel center positions in meters for circular installations.
+  Physical panel width in meters from `panel_outer_dimensions_cm/0`, or `0.0`.
+  """
+  @spec panel_width_m() :: float()
+  def panel_width_m do
+    case panel_outer_dimensions_cm() do
+      {w, _h, _d} -> w / 100.0
+      _ -> 0.0
+    end
+  end
+
+  @doc """
+  Physical panel depth in meters from `panel_outer_dimensions_cm/0`, or `0.0`.
+  """
+  @spec panel_depth_m() :: float()
+  def panel_depth_m do
+    case panel_outer_dimensions_cm() do
+      {_w, _h, d} -> d / 100.0
+      _ -> 0.0
+    end
+  end
+
+  @doc """
+  Sensor mount position on the radar ground plane (`x` left/right, `y` front/back).
+
+  Bearing `angle_deg` is measured from **+X**, counter-clockwise (same as
+  `Octopus.Radar.Transform.pose_factors/1`). This differs from panel angles,
+  which are measured clockwise from **+Y** (north).
+  """
+  @spec sensor_mount_m(number(), number()) :: {float(), float()}
+  def sensor_mount_m(angle_deg, distance_cm)
+      when is_number(angle_deg) and is_number(distance_cm) do
+    angle_rad = angle_deg * :math.pi() / 180.0
+    distance_m = distance_cm / 100.0
+    {distance_m * :math.cos(angle_rad), distance_m * :math.sin(angle_rad)}
+  end
+
+  @doc """
+  World-space panel positions for circular installations (single source of truth).
 
   Coordinates match the radar ground plane: `x` = left/right, `y` = front/back
-  (+Y = north). Panel fronts face inward; the center sits on the ring at
-  `ring_radius_m + panel_depth_m / 2`, using the same geometry as the radar
-  and 3D sim views.
+  (+Y = north). Panel numbers increase clockwise from `:north_panel`.
+
+  ## Options
+
+    * `:reference` — `:body_center` (default, panel body center at
+      `ring_radius_m + panel_depth_m / 2`) or `:inner_face` (inward LED face at
+      `ring_radius_m`, for proximity / gravity)
+    * `:north_panel` — defaults to `north_panel/0` (installation config). Pass
+      a runtime override (e.g. `Radar.north_panel/0`) so views and gravity stay
+      aligned when north is adjusted in the UI.
+    * `:label_clearance_m` — when set, also includes `label_x` / `label_y` at
+      `ring_radius_m + panel_depth_m + clearance` (radar map labels)
 
   Returns `[]` for non-circular arrangements.
   """
-  @spec panel_world_positions_m() :: [%{panel: pos_integer(), x: float(), y: float()}]
-  def panel_world_positions_m do
-    panel_world_positions_m(:body_center)
-  end
+  @spec panel_positions_m(keyword()) :: [panel_position_m()]
+  def panel_positions_m(opts \\ []) when is_list(opts) do
+    if arrangement() != :circular do
+      []
+    else
+      reference = Keyword.get(opts, :reference, :body_center)
+      north = Keyword.get(opts, :north_panel, north_panel())
+      label_clearance_m = Keyword.get(opts, :label_clearance_m)
 
-  @doc """
-  Returns world-space panel positions in meters for proximity calculations.
-
-  `:body_center` matches the 3D/radar ring layout (body center on the ring).
-  `:inner_face` uses the inward-facing LED surface, which better matches
-  operator cursor placement on the radar map and walking distance to panels.
-  """
-  @spec panel_world_gravity_positions_m() :: [%{panel: pos_integer(), x: float(), y: float()}]
-  def panel_world_gravity_positions_m, do: panel_world_positions_m(:inner_face)
-
-  defp panel_world_positions_m(reference) when reference in [:body_center, :inner_face] do
-    if arrangement() == :circular do
-      ring_radius_m = ring_radius_m()
-      num_panels = num_panels()
-      north_panel = north_panel()
+      ring_r = ring_radius_m()
+      depth_m = panel_depth_m()
+      n_panels = num_panels()
+      step_deg = 360.0 / n_panels
 
       radius_m =
         case reference do
-          :inner_face ->
-            ring_radius_m
-
-          :body_center ->
-            panel_depth_m =
-              case panel_outer_dimensions_cm() do
-                {_w, _h, d} -> d / 100.0
-                _ -> 0.0
-              end
-
-            ring_radius_m + panel_depth_m / 2.0
+          :inner_face -> ring_r
+          :body_center -> ring_r + depth_m / 2.0
         end
 
-      step_deg = 360.0 / num_panels
+      label_r =
+        if is_number(label_clearance_m) do
+          ring_r + depth_m + label_clearance_m
+        else
+          nil
+        end
 
-      for n <- 1..num_panels do
-        offset = Integer.mod(n - north_panel, num_panels)
-        theta_rad = offset * step_deg * :math.pi() / 180.0
+      for n <- 1..n_panels do
+        offset = Integer.mod(n - north, n_panels)
+        theta_deg = offset * step_deg
+        theta_rad = theta_deg * :math.pi() / 180.0
 
-        %{
+        base = %{
           panel: n,
           x: radius_m * :math.sin(theta_rad),
-          y: radius_m * :math.cos(theta_rad)
+          y: radius_m * :math.cos(theta_rad),
+          theta_deg: theta_deg,
+          theta_rad: theta_rad,
+          offset: offset
         }
+
+        if label_r do
+          Map.merge(base, %{
+            label_x: label_r * :math.sin(theta_rad),
+            label_y: label_r * :math.cos(theta_rad)
+          })
+        else
+          base
+        end
       end
-    else
-      []
     end
   end
+
+  @doc """
+  Compact ring layout snapshot for radar / 3D / gravity consumers.
+
+  Returns `nil` when the installation is not circular or has no panel type.
+  Panel lists use installation `north_panel/0` unless `:north_panel` is passed.
+  """
+  @spec ring_layout_m(keyword()) :: ring_layout_m() | nil
+  def ring_layout_m(opts \\ []) when is_list(opts) do
+    with :circular <- arrangement(),
+         type when not is_nil(type) <- panel_type() do
+      north = Keyword.get(opts, :north_panel, north_panel())
+      position_opts = Keyword.take(opts, [:label_clearance_m]) |> Keyword.put(:north_panel, north)
+
+      %{
+        enabled: true,
+        num_panels: num_panels(),
+        north_panel: north,
+        ring_radius_m: ring_radius_m(),
+        platform_radius_m: platform_radius_m(),
+        panel_bottom_m: panel_bottom_m(),
+        panel_width_m: panel_width_m(),
+        panel_depth_m: panel_depth_m(),
+        panels: panel_positions_m([{:reference, :body_center} | position_opts]),
+        gravity_panels: panel_positions_m([{:reference, :inner_face} | position_opts])
+      }
+    else
+      _ -> nil
+    end
+  end
+
+  @doc """
+  Returns world-space panel body-center positions (`%{panel, x, y}`) for
+  circular installations. Prefer `panel_positions_m/1` for new code.
+  """
+  @spec panel_world_positions_m() :: [%{panel: pos_integer(), x: float(), y: float()}]
+  def panel_world_positions_m do
+    panel_positions_m(reference: :body_center)
+    |> Enum.map(&Map.take(&1, [:panel, :x, :y]))
+  end
+
+  @doc """
+  Returns world-space inner-face panel positions for proximity / gravity.
+  Prefer `panel_positions_m/1` with `reference: :inner_face` for new code.
+  """
+  @spec panel_world_gravity_positions_m() :: [%{panel: pos_integer(), x: float(), y: float()}]
+  def panel_world_gravity_positions_m do
+    panel_positions_m(reference: :inner_face)
+    |> Enum.map(&Map.take(&1, [:panel, :x, :y]))
+  end
+
+  @doc """
+  Full static world description (panels, sensors, ring, sizes) for the active
+  installation. See `Octopus.Installation.World`.
+  """
+  @spec world_m(keyword()) :: Octopus.Installation.World.t()
+  def world_m(opts \\ []), do: Octopus.Installation.World.describe(opts)
 
   @doc """
   Returns the concrete pixel positions of all panels in the installation
@@ -904,5 +1064,39 @@ defmodule Octopus.Installation do
     for i <- 0..(num_panels() - 1) do
       {i * (panel_width() + panel_gap()), 0}
     end
+  end
+
+  # Circular installations show their "generic" (no background image)
+  # development layout arranged as a ring, matching the panel order/angles
+  # used by `panel_positions_m/1` and `OctopusWeb.RadarLive`'s ring view.
+  # Image-backed layouts (annotated photos) are left untouched.
+  defp maybe_circularize_layout(%Octopus.Layout{background_image: bg} = layout)
+       when bg in [nil, ""] do
+    if arrangement() == :circular do
+      Octopus.Installation.CircularLayout.build(layout)
+    else
+      layout
+    end
+  end
+
+  defp maybe_circularize_layout(layout), do: layout
+
+  # Static per-panel metadata for the simulator's hover tooltip, in
+  # frame-data order (matches every layout's panel blocks, regardless of
+  # arrangement/mode).
+  defp panel_info do
+    {width, height} = panel_layout()
+
+    panel_slots()
+    |> Enum.with_index(1)
+    |> Enum.map(fn {slot, n} ->
+      %{
+        panel: n,
+        controller: Atom.to_string(slot.controller_id),
+        wiring: Atom.to_string(slot.wiring_id),
+        width: width,
+        height: height
+      }
+    end)
   end
 end

@@ -13,7 +13,7 @@ defmodule Octopus.Radar.PanelActivity do
   alias Octopus.Radar.Frame
   alias Octopus.Radar.Mock.World
   alias Octopus.Radar.PanelActivity.{Core, Settings}
-  alias Octopus.Radar.{PanelMapping, TrackMerge}
+  alias Octopus.Radar.PanelMapping
   alias Phoenix.PubSub
 
   @topic_suffix "panel_activity"
@@ -145,7 +145,7 @@ defmodule Octopus.Radar.PanelActivity do
     people =
       track_registry
       |> active_people(now, settings.track_stale_ms)
-      |> TrackMerge.merge(settings.merge_radius_m)
+      |> Octopus.Radar.fuse_people()
 
     cond do
       people != [] ->

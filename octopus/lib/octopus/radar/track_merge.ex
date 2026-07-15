@@ -17,6 +17,8 @@ defmodule Octopus.Radar.TrackMerge do
           optional(:vy) => float()
         }
 
+  @type group :: %{person: person(), sources: [person()], merged?: boolean()}
+
   @doc """
   Returns a de-duplicated person list.
 
@@ -32,8 +34,23 @@ defmodule Octopus.Radar.TrackMerge do
 
   def merge(people, radius_m) when is_list(people) do
     people
+    |> merge_groups(radius_m)
+    |> Enum.map(& &1.person)
+  end
+
+  @doc """
+  Like `merge/2` but keeps provenance: every result carries its `:sources`
+  (the original tracks folded into it) and `:merged?`, so callers that need to
+  explain *why* a point looks the way it does — e.g. the radar live view
+  highlighting fused detections — don't have to redo the clustering.
+  """
+  @spec merge_groups([person()], float()) :: [group()]
+  def merge_groups([], _radius_m), do: []
+
+  def merge_groups(people, radius_m) when is_list(people) do
+    people
     |> cluster(radius_m)
-    |> Enum.flat_map(&resolve_cluster/1)
+    |> Enum.flat_map(&resolve_cluster_group/1)
   end
 
   @doc false
@@ -41,8 +58,18 @@ defmodule Octopus.Radar.TrackMerge do
   def device_id(%{id: id}) when id >= 10_000, do: div(id, 10_000)
   def device_id(%{id: _id}), do: 0
 
-  defp resolve_cluster(cluster) do
-    if duplicate_devices?(cluster), do: cluster, else: [merge_cluster(cluster)]
+  @doc "Encodes a `{device_id, track_id}` pair into the shared person id scheme."
+  @spec encode_id(pos_integer(), non_neg_integer()) :: pos_integer()
+  def encode_id(device_id, track_id) when is_integer(device_id) and is_integer(track_id) do
+    device_id * 10_000 + track_id
+  end
+
+  defp resolve_cluster_group(cluster) do
+    if duplicate_devices?(cluster) do
+      Enum.map(cluster, fn person -> %{person: person, sources: [person], merged?: false} end)
+    else
+      [%{person: merge_cluster(cluster), sources: cluster, merged?: length(cluster) > 1}]
+    end
   end
 
   defp duplicate_devices?(cluster) do

@@ -2,7 +2,8 @@ defmodule Octopus.Installation.Nation2025 do
   use Octopus.Installation,
     arrangement: :circular,
     circular: [
-      ring_radius_m: 10.0
+      ring_radius_m: 10.0,
+      panel_bottom_m: 0.4
     ],
     panel_type: :polychrome,
     panels: [

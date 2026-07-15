@@ -123,6 +123,8 @@ defmodule Octopus.Radar do
     SensorPlan,
     SensorType,
     SourceMode,
+    TrackFusion,
+    TrackMerge,
     ViewSettings
   }
 
@@ -457,6 +459,61 @@ defmodule Octopus.Radar do
   def clutter_filter_track_debug(device_id, track_id)
       when is_integer(track_id) and track_id >= 0 do
     ClutterFilter.track_debug(device_id, track_id)
+  end
+
+  @doc "Whether cross-sensor track fusion (combining duplicate detections) is active."
+  @spec track_fusion_enabled?() :: boolean()
+  def track_fusion_enabled? do
+    if Process.whereis(TrackFusion), do: TrackFusion.enabled?(), else: true
+  end
+
+  @spec set_track_fusion_enabled(boolean()) :: :ok
+  def set_track_fusion_enabled(enabled?) when is_boolean(enabled?) do
+    TrackFusion.set_enabled(enabled?)
+    broadcast_track_fusion_changed()
+    :ok
+  end
+
+  @spec toggle_track_fusion() :: boolean()
+  def toggle_track_fusion do
+    enabled? = TrackFusion.toggle_enabled()
+    broadcast_track_fusion_changed()
+    enabled?
+  end
+
+  @doc "Max distance (m) between different sensors' detections to count as one object."
+  @spec track_fusion_radius_m() :: float()
+  def track_fusion_radius_m do
+    if Process.whereis(TrackFusion), do: TrackFusion.radius_m(), else: 1.0
+  end
+
+  @spec set_track_fusion_radius_m(number()) :: :ok
+  def set_track_fusion_radius_m(radius_m) when is_number(radius_m) do
+    TrackFusion.set_radius_m(radius_m)
+    broadcast_track_fusion_changed()
+    :ok
+  end
+
+  @doc """
+  Cross-sensor fusion of duplicate detections, honoring the global toggle and
+  radius, with merge provenance (`:sources`, `:merged?`) attached — for
+  callers that need to explain the result, e.g. UI highlighting.
+
+  Falls back to unmerged singletons when fusion is disabled.
+  """
+  @spec fuse_groups([TrackMerge.person()]) :: [TrackMerge.group()]
+  def fuse_groups(people) when is_list(people) do
+    if track_fusion_enabled?() do
+      TrackMerge.merge_groups(people, track_fusion_radius_m())
+    else
+      Enum.map(people, &%{person: &1, sources: [&1], merged?: false})
+    end
+  end
+
+  @doc "Cross-sensor fusion of duplicate detections, honoring the global toggle and radius."
+  @spec fuse_people([TrackMerge.person()]) :: [TrackMerge.person()]
+  def fuse_people(people) when is_list(people) do
+    people |> fuse_groups() |> Enum.map(& &1.person)
   end
 
   @doc """
@@ -820,18 +877,27 @@ defmodule Octopus.Radar do
   @doc """
   Return the latest per-panel gravity snapshot.
 
-  Shape: `%{gravity: %{panel => float}, raw: %{panel => float}, ref: float, at: ms}`
+  Shape: `%{gravity: %{panel => float}, target: %{panel => float}, raw: %{panel => float}, ref: float, at: ms}`
   Panel keys are 1-based installation panel numbers.
+
+  `target` is the pre-EMA instantaneous weight (preferred for proximity masks);
+  `gravity` is the smoothed level.
   """
   @spec panel_gravity() :: map()
   def panel_gravity do
     if Process.whereis(PanelGravity), do: PanelGravity.snapshot(), else: empty_panel_gravity()
   end
 
-  @doc "Return normalised per-panel gravity factors (1-based installation panels)."
+  @doc """
+  Return normalised per-panel gravity factors (1-based installation panels).
+
+  Prefers pre-EMA `target` so display consumers follow motion without the
+  smoothed trail that lags behind the person.
+  """
   @spec panel_factors_gravity() :: %{pos_integer() => float()}
   def panel_factors_gravity do
     case panel_gravity() do
+      %{target: target} when map_size(target) > 0 -> target
       %{gravity: gravity} -> gravity
       _ -> %{}
     end
@@ -850,6 +916,9 @@ defmodule Octopus.Radar do
   def set_panel_gravity_config(opts) when is_list(opts) do
     if Process.whereis(PanelGravity.Settings) do
       PanelGravity.Settings.update(opts)
+      # Settings fingerprint change must trigger a recompute (no continuous tick).
+      if Process.whereis(PanelGravity), do: PanelGravity.tick()
+      :ok
     else
       :ok
     end
@@ -1017,6 +1086,7 @@ defmodule Octopus.Radar do
         {Sensitivity, []},
         {ViewSettings, []},
         {ClutterFilter, []},
+        {TrackFusion, []},
         {PanelActivity.Settings, []},
         Octopus.Radar.PanelActivity,
         {PanelGravity.Settings, []},
@@ -1314,6 +1384,15 @@ defmodule Octopus.Radar do
     Phoenix.PubSub.broadcast(Octopus.PubSub, topic(), {:view_settings_changed, view_settings()})
   end
 
+  defp broadcast_track_fusion_changed do
+    Phoenix.PubSub.broadcast(
+      Octopus.PubSub,
+      topic(),
+      {:track_fusion_changed,
+       %{enabled?: track_fusion_enabled?(), radius_m: track_fusion_radius_m()}}
+    )
+  end
+
   defp broadcast_mock_settings_changed do
     Phoenix.PubSub.broadcast(
       Octopus.PubSub,
@@ -1367,6 +1446,7 @@ defmodule Octopus.Radar do
 
     %{
       gravity: empty,
+      target: empty,
       raw: empty,
       ref: Map.fetch!(PanelGravity.Settings.defaults(), :min_ref),
       at: 0

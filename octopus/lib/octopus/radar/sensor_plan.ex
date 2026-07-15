@@ -121,12 +121,27 @@ defmodule Octopus.Radar.SensorPlan do
   """
   @spec build(keyword() | nil, keyword() | nil, :live | :exact | :fuzzy) ::
           [{pos_integer(), keyword()}]
-  def build(nil, _deployment, _plan_mode), do: []
-
   def build(installation_radar, deployment, plan_mode) do
+    build(installation_radar, deployment, plan_mode, [])
+  end
+
+  @doc """
+  Like `build/3`, with options.
+
+  ## Options
+
+    * `:pose_tweaks` — when `false`, use the installation layout angles as
+      authored (ignore runtime PoseTweak). Default `true`.
+  """
+  @spec build(keyword() | nil, keyword() | nil, :live | :exact | :fuzzy, keyword()) ::
+          [{pos_integer(), keyword()}]
+  def build(nil, _deployment, _plan_mode, _opts), do: []
+
+  def build(installation_radar, deployment, plan_mode, opts) when is_list(opts) do
+    pose_tweaks? = Keyword.get(opts, :pose_tweaks, true)
     layout = Keyword.fetch!(installation_radar, :layout)
     sensor_entries = layout |> Keyword.fetch!(:sensors) |> normalize_sensor_entries()
-    pose_list = expand_layout(layout, length(sensor_entries))
+    pose_list = expand_layout(layout, length(sensor_entries), pose_tweaks?)
     bindings = bindings_by_id(deployment)
 
     unless length(pose_list) == length(sensor_entries) do
@@ -151,11 +166,20 @@ defmodule Octopus.Radar.SensorPlan do
         |> Keyword.merge(pose_opts)
         |> Keyword.merge(port_opts)
         |> Keyword.put(:sensor_id, sensor_id)
-        |> maybe_apply_pose_tweaks(layout, device_id)
+        |> maybe_apply_pose_tweaks(layout, device_id, pose_tweaks?)
         |> normalize_sensor_config(device_id)
 
       {device_id, config}
     end)
+  end
+
+  @doc """
+  Installation radar mounts from authored config only (no deployment ports,
+  no live PoseTweak). Suitable for static world / 3D scene description.
+  """
+  @spec build_static(keyword() | nil) :: [{pos_integer(), keyword()}]
+  def build_static(installation_radar) do
+    build(installation_radar, nil, :exact, pose_tweaks: false)
   end
 
   @doc "True when every installation sensor id has a deployment port binding."
@@ -224,19 +248,25 @@ defmodule Octopus.Radar.SensorPlan do
     [port: "/dev/tty.unbound-#{device_id}", type: :ld6001a, sensor_id: sensor_id]
   end
 
-  defp expand_layout(layout, sensor_count) do
+  defp expand_layout(layout, sensor_count, pose_tweaks?) do
     case Keyword.fetch!(layout, :type) do
-      :radial -> expand_radial(layout, sensor_count)
+      :radial -> expand_radial(layout, sensor_count, pose_tweaks?)
       other -> raise ArgumentError, "radar layout: unsupported :type #{inspect(other)}"
     end
   end
 
-  defp expand_radial(layout, count) do
+  defp expand_radial(layout, count, pose_tweaks?) do
     unless count > 0 do
       raise ArgumentError, "radar layout :sensors must be a non-empty list"
     end
 
-    start_angle = effective_layout_start_angle(layout)
+    start_angle =
+      if pose_tweaks? do
+        effective_layout_start_angle(layout)
+      else
+        Keyword.get(layout, :start_angle_deg, 0) * 1.0
+      end
+
     step = 360.0 / count
 
     # Sensor ids are placed in list order clockwise around the ring.
@@ -259,7 +289,9 @@ defmodule Octopus.Radar.SensorPlan do
     end
   end
 
-  defp maybe_apply_pose_tweaks(config, layout, device_id) do
+  defp maybe_apply_pose_tweaks(config, _layout, _device_id, false), do: config
+
+  defp maybe_apply_pose_tweaks(config, layout, device_id, true) do
     if Keyword.get(layout, :type) == :radial do
       config
       |> apply_global_rotation_offset()

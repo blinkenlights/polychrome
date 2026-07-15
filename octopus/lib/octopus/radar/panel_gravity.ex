@@ -1,11 +1,22 @@
 defmodule Octopus.Radar.PanelGravity do
   @moduledoc """
-  Shared per-panel gravity factors derived from radar track proximity.
+  Shared per-panel gravity factors derived from radar / mock-world people.
 
-  Subscribes to radar frames, maintains a track registry, and ticks at a
-  fixed rate to publish normalised gravity factors per installation panel
-  (1-based indices). Consumers call `Octopus.Radar.panel_gravity/0` or
-  subscribe via `Octopus.Radar.subscribe_panel_gravity/0`.
+  Inputs (radar frames, mock world, settings) only update state and request a
+  flush. A flush recomputes at most once per `@flush_interval_ms`
+  (`objects × panels` distance evaluations), so bursty sensor input is
+  coalesced. Cross-sensor duplicates are folded into one "combined object" via
+  `Octopus.Radar.fuse_people/1` before gravity sees them, so an object
+  drifting in/out of a second sensor's field of view doesn't change the
+  contributing object count underneath it.
+
+  Panel levels follow an asymmetric envelope (`Core.smooth_asymmetric/4`):
+  fast attack, slow release — so a real disappearance/occlusion fades out over
+  a few seconds instead of snapping to black. This also means a flush always
+  recomputes, even when the input fingerprint is unchanged, so the release
+  tail keeps decaying on the low-rate stale-check heartbeat while idle.
+  Consumers subscribe via `Octopus.Radar.subscribe_panel_gravity/0` or read
+  `snapshot/0`.
   """
 
   use GenServer
@@ -15,11 +26,15 @@ defmodule Octopus.Radar.PanelGravity do
   alias Octopus.Radar.Frame
   alias Octopus.Radar.Mock.World
   alias Octopus.Radar.PanelGravity.{Core, Settings}
-  alias Octopus.Radar.TrackMerge
   alias Phoenix.PubSub
 
   @topic_suffix "panel_gravity"
   @debug_log_interval_ms 1_000
+  # Low-rate tick only for stale-track expiry (not for continuous recomputes).
+  @stale_check_ms 250
+  # Coalesce bursty inputs (6 sensors × 10 Hz + mock world) into at most one
+  # recompute/broadcast per interval. No timer runs while nothing is dirty.
+  @flush_interval_ms 33
 
   ## Client API
 
@@ -39,7 +54,7 @@ defmodule Octopus.Radar.PanelGravity do
   @doc false
   @spec tick() :: :ok
   def tick do
-    GenServer.cast(__MODULE__, :tick)
+    GenServer.cast(__MODULE__, :recompute)
   end
 
   ## GenServer callbacks
@@ -48,17 +63,27 @@ defmodule Octopus.Radar.PanelGravity do
   def init(_opts) do
     num_panels = Octopus.Installation.num_panels()
     settings = Settings.get()
-    panel_positions = Octopus.Installation.panel_world_gravity_positions_m()
+    north = Octopus.Radar.north_panel()
 
     state = %{
       track_registry: %{},
+      mock_people: [],
       level: Core.empty_installation_panels(num_panels),
-      ref: settings.min_ref,
       snapshot: empty_snapshot(num_panels, settings.min_ref),
-      last_tick_ms: now_ms(),
       num_panels: num_panels,
-      panel_positions: panel_positions,
-      last_debug_ms: 0
+      north_panel: north,
+      panel_positions: gravity_panel_positions(north),
+      input_fp: nil,
+      dirty: false,
+      dirty_source: :boot,
+      flush_scheduled: false,
+      # Seed relative to monotonic now (which can be negative at VM start) so the
+      # very first flush runs immediately instead of being deferred.
+      last_flush_ms: now_ms() - @flush_interval_ms,
+      last_level_ms: now_ms(),
+      last_debug_ms: nil,
+      frames_seen: 0,
+      last_frame_tracks: 0
     }
 
     {:ok, state, {:continue, :subscribe}}
@@ -67,8 +92,13 @@ defmodule Octopus.Radar.PanelGravity do
   @impl true
   def handle_continue(:subscribe, state) do
     :ok = Octopus.Radar.subscribe()
-    schedule_tick(Settings.get().tick_hz)
-    {:noreply, state}
+
+    if Process.whereis(World) do
+      :ok = PubSub.subscribe(Octopus.PubSub, World.world_topic())
+    end
+
+    schedule_stale_check()
+    {:noreply, state |> mark_dirty(:boot) |> request_flush()}
   end
 
   @impl true
@@ -77,15 +107,20 @@ defmodule Octopus.Radar.PanelGravity do
   end
 
   @impl true
-  def handle_cast(:tick, state) do
-    {:noreply, run_tick(state)}
+  def handle_cast(:recompute, state) do
+    {:noreply, state |> mark_dirty(:cast) |> request_flush()}
   end
 
   @impl true
-  def handle_info(:tick, state) do
-    settings = Settings.get()
-    schedule_tick(settings.tick_hz)
-    {:noreply, run_tick(state)}
+  def handle_info(:stale_check, state) do
+    schedule_stale_check()
+    {:noreply, state |> mark_dirty(:stale_check) |> request_flush()}
+  end
+
+  def handle_info(:flush, state) do
+    state = %{state | flush_scheduled: false}
+    state = if state.dirty, do: do_flush(state), else: state
+    {:noreply, state}
   end
 
   def handle_info({:radar_frame, device_id, %Frame{tracks: tracks}}, state) do
@@ -94,13 +129,28 @@ defmodule Octopus.Radar.PanelGravity do
     track_registry =
       Enum.reduce(tracks, state.track_registry, fn track, acc ->
         person = track_to_person(track, device_id)
+
+        Logger.debug(
+          "[PanelGravity][DIAG] dev=#{device_id} track_id=#{track.id} x=#{Float.round(person.x, 4)} y=#{Float.round(person.y, 4)}"
+        )
+
         Map.put(acc, person.id, {person, now})
       end)
 
-    {:noreply, %{state | track_registry: track_registry}}
+    state = %{
+      state
+      | track_registry: track_registry,
+        frames_seen: state.frames_seen + 1,
+        last_frame_tracks: length(tracks)
+    }
+
+    {:noreply, state |> mark_dirty(:tracks) |> request_flush()}
   end
 
-  def handle_info({:mock_world, _objects}, state), do: {:noreply, state}
+  def handle_info({:mock_world, objects}, state) when is_list(objects) do
+    people = Enum.map(objects, &object_to_person/1)
+    {:noreply, %{state | mock_people: people} |> mark_dirty(:mock_world) |> request_flush()}
+  end
 
   def handle_info(_msg, state) do
     {:noreply, state}
@@ -108,37 +158,76 @@ defmodule Octopus.Radar.PanelGravity do
 
   ## Private helpers
 
-  defp run_tick(state) do
-    settings = Settings.get()
-    now = now_ms()
-    dt = (max(now - state.last_tick_ms, 1) / 1000.0) |> min(0.2)
+  defp mark_dirty(state, source) do
+    %{state | dirty: true, dirty_source: source}
+  end
 
-    {people, source} = fetch_people(state.track_registry, now, settings)
+  # Recompute immediately when the interval has elapsed, otherwise defer with a
+  # single timer that coalesces every dirty input until it fires.
+  defp request_flush(%{flush_scheduled: true} = state), do: state
+
+  defp request_flush(state) do
+    elapsed = now_ms() - state.last_flush_ms
+
+    if elapsed >= @flush_interval_ms do
+      do_flush(state)
+    else
+      Process.send_after(self(), :flush, @flush_interval_ms - elapsed)
+      %{state | flush_scheduled: true}
+    end
+  end
+
+  defp do_flush(state) do
+    settings = Settings.get()
+    north = Octopus.Radar.north_panel()
+
+    state =
+      if north != state.north_panel do
+        %{
+          state
+          | north_panel: north,
+            panel_positions: gravity_panel_positions(north)
+        }
+      else
+        state
+      end
+
+    {people, people_source} = fetch_people(state, settings)
+    fp = input_fingerprint(people, settings, north)
+    state = %{state | dirty: false, last_flush_ms: now_ms()}
+
+    # Always recompute (even when the fingerprint is unchanged): the release
+    # envelope keeps decaying toward target on every heartbeat while a
+    # departed object's gravity is still fading out.
+    recompute(state, people, people_source, settings, fp, state.dirty_source)
+  end
+
+  defp recompute(state, people, people_source, settings, fp, source) do
+    now = now_ms()
+    dt = ((now - state.last_level_ms) |> max(1)) / 1000.0 |> min(1.0)
 
     raw =
       people
       |> Core.raw_gravity(state.panel_positions, settings)
       |> ensure_all_panels(state.num_panels)
 
-    ref = Core.update_ref(state.ref, raw, settings.adaptive, dt, settings)
-    target = Core.targets(raw, ref, settings)
-
-    level =
-      state.level
-      |> Core.smooth_asymmetric(target, dt, settings)
-      |> Enum.map(fn {panel, value} -> {panel, clamp01(value)} end)
-      |> Map.new()
+    target = Core.targets(raw, settings.min_ref, settings)
+    # Fast attack, slow release: a real disappearance fades out instead of
+    # snapping to black; a genuine approach still tracks target almost
+    # immediately (attack_tau is tiny relative to release_tau).
+    level = Core.smooth_asymmetric(state.level, target, dt, settings)
 
     snapshot = %{
       gravity: level,
+      target: target,
       raw: raw,
-      ref: ref,
+      ref: settings.min_ref,
       at: now
     }
 
     state =
-      if debug_due?(now, state.last_debug_ms, people) do
-        log_debug(source, people, raw, target, level, dt, ref)
+      if debug_due?(now, state.last_debug_ms) do
+        log_debug(people_source, people, raw, target, level, settings, state, source)
         %{state | last_debug_ms: now}
       else
         state
@@ -148,38 +237,42 @@ defmodule Octopus.Radar.PanelGravity do
       :ok = PubSub.broadcast(Octopus.PubSub, topic(), {:panel_gravity, snapshot})
     end
 
-    %{state | level: level, ref: ref, snapshot: snapshot, last_tick_ms: now}
+    %{state | level: level, snapshot: snapshot, input_fp: fp, last_level_ms: now}
   end
 
-  defp fetch_people(track_registry, now, %Settings{} = settings) do
+  defp fetch_people(state, %Settings{} = settings) do
+    now = now_ms()
+
     people =
-      track_registry
+      state.track_registry
       |> active_people(now, settings.track_stale_ms)
-      |> TrackMerge.merge(settings.merge_radius_m)
+      |> Octopus.Radar.fuse_people()
 
     cond do
       people != [] ->
         {people, :tracks}
 
-      map_size(track_registry) > 0 ->
+      map_size(state.track_registry) > 0 ->
         {[], :stale}
 
       true ->
-        {mock_world_people(), :mock_world}
+        {state.mock_people, :mock_world}
     end
   end
 
-  defp mock_world_people do
-    case Process.whereis(World) do
-      nil ->
-        []
+  defp input_fingerprint(people, settings, north_panel) do
+    people_key =
+      people
+      |> Enum.map(fn p ->
+        {Map.get(p, :id), Float.round(p.x, 3), Float.round(p.y, 3)}
+      end)
+      |> Enum.sort()
 
-      _pid ->
-        World.objects()
-        |> Enum.map(&object_to_person/1)
-    end
-  rescue
-    _ -> []
+    settings_key =
+      {settings.reach, settings.contrast, settings.sensitivity, settings.softening_m, settings.mass,
+       settings.exponent}
+
+    {people_key, settings_key, north_panel}
   end
 
   defp active_people(track_registry, now, stale_ms) do
@@ -189,9 +282,15 @@ defmodule Octopus.Radar.PanelGravity do
   end
 
   defp changed_enough?(old_snapshot, new_snapshot, epsilon) do
-    old = Map.fetch!(old_snapshot, :gravity)
-    new = Map.fetch!(new_snapshot, :gravity)
+    map_changed?(Map.fetch!(old_snapshot, :gravity), Map.fetch!(new_snapshot, :gravity), epsilon) or
+      map_changed?(
+        Map.get(old_snapshot, :target, %{}),
+        Map.get(new_snapshot, :target, %{}),
+        epsilon
+      )
+  end
 
+  defp map_changed?(old, new, epsilon) do
     Enum.any?(old, fn {panel, value} ->
       abs(value - Map.get(new, panel, 0.0)) > epsilon
     end) or
@@ -226,50 +325,57 @@ defmodule Octopus.Radar.PanelGravity do
     }
   end
 
+  defp gravity_panel_positions(north_panel) do
+    Octopus.Installation.panel_positions_m(
+      reference: :inner_face,
+      north_panel: north_panel
+    )
+    |> Enum.map(&Map.take(&1, [:panel, :x, :y]))
+  end
+
   defp empty_snapshot(num_panels, ref) do
+    empty = Core.empty_installation_panels(num_panels)
+
     %{
-      gravity: Core.empty_installation_panels(num_panels),
-      raw: Core.empty_installation_panels(num_panels),
+      gravity: empty,
+      target: empty,
+      raw: empty,
       ref: ref,
       at: 0
     }
   end
 
-  defp schedule_tick(hz) when is_integer(hz) and hz > 0 do
-    interval = max(trunc(1000 / hz), 1)
-    Process.send_after(self(), :tick, interval)
+  defp schedule_stale_check do
+    Process.send_after(self(), :stale_check, @stale_check_ms)
   end
 
-  defp debug_due?(_now, _last_debug_ms, []), do: false
+  defp debug_due?(_now, nil), do: true
 
-  defp debug_due?(now, last_debug_ms, _people) do
-    now - last_debug_ms >= @debug_log_interval_ms
+  defp debug_due?(now, last_debug_ms) when is_integer(last_debug_ms) do
+    last_debug_ms == 0 or now - last_debug_ms >= @debug_log_interval_ms
   end
 
-  defp log_debug(source, people, raw, target, level, dt, ref) do
-    raw_span = map_span(raw)
+  defp log_debug(people_source, people, raw, target, level, settings, state, trigger) do
     {peak_panel, peak_level} = peak_entry(level)
+    raw_values = Map.values(raw)
+    raw_min = Enum.min(raw_values, fn -> 0.0 end)
+    raw_max = Enum.max(raw_values, fn -> 0.0 end)
 
     Logger.debug(
-      "[PanelGravity] source=#{source} people=#{format_people(people)} " <>
-        "dt=#{Float.round(dt, 3)}s ref=#{Float.round(ref, 4)} raw_span=#{Float.round(raw_span, 4)} " <>
-        "peak=p#{peak_panel} raw=#{fmt(raw, peak_panel)} tgt=#{fmt(target, peak_panel)} " <>
-        "lvl=#{Float.round(peak_level, 3)} top_raw=[#{top_panels(raw)}] " <>
-        "top_lvl=[#{top_panels(level)}]"
+      "[PanelGravity] trigger=#{trigger} source=#{people_source} " <>
+        "people=#{length(people)} panels=#{state.num_panels} " <>
+        "ops=#{length(people) * state.num_panels} " <>
+        "reach=#{settings.reach} raw_span=#{Float.round(raw_max - raw_min, 4)} " <>
+        "peak=p#{peak_panel}=#{Float.round(peak_level, 4)} " <>
+        "top=[#{top_panels(target, 5)}]"
     )
   end
 
-  defp format_people(people) do
-    people
-    |> Enum.map(fn %{x: x, y: y} -> "(#{Float.round(x, 2)},#{Float.round(y, 2)})" end)
-    |> Enum.join(" ")
-  end
-
-  defp top_panels(map, n \\ 3) do
+  defp top_panels(map, n) do
     map
     |> Enum.sort_by(fn {_panel, value} -> -value end)
     |> Enum.take(n)
-    |> Enum.map(fn {panel, value} -> "p#{panel}=#{Float.round(value, 3)}" end)
+    |> Enum.map(fn {panel, value} -> "p#{panel}=#{Float.round(value, 4)}" end)
     |> Enum.join(" ")
   end
 
@@ -277,13 +383,5 @@ defmodule Octopus.Radar.PanelGravity do
     Enum.max_by(map, fn {_panel, value} -> value end, fn -> {0, 0.0} end)
   end
 
-  defp fmt(map, panel), do: Float.round(Map.get(map, panel, 0.0), 3)
-
-  defp map_span(map) do
-    values = Map.values(map)
-    Enum.max(values, fn -> 0.0 end) - Enum.min(values, fn -> 0.0 end)
-  end
-
   defp now_ms, do: :erlang.monotonic_time(:millisecond)
-  defp clamp01(v), do: v |> max(0.0) |> min(1.0)
 end
