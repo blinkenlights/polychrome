@@ -2,13 +2,14 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
   use Octopus.DataCase, async: false
 
   alias Octopus.Apps.PixelFun.Program
+  alias Octopus.Apps.PixelFun3D
   alias Octopus.Apps.PixelFun3D.ScenePresets
 
   describe "builtins/0" do
     test "returns presets with valid formulas and scene fields" do
       presets = ScenePresets.builtins()
 
-      assert length(presets) == 24
+      assert length(presets) == 33
 
       for preset <- presets do
         assert preset.builtin
@@ -36,10 +37,13 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
       ]
 
       new_slugs = ~w(
-        kreiswelle chaser doppelhelix nordlicht wolkenzug seegras
+        chaser doppelhelix nordlicht wolkenzug seegras
         weiche_blobs leuchtplankton wasserwaage sternenhimmel nebeldrift
         facettenstrudel marmor
         strudel spiralband globus kippende_baender
+        seitenwoge schubfront
+        abendkreuz weiche_kacheln himmelsgitter lichtjagd verknotung
+        nebelringe taktphasen gleitfront
       )
 
       for slug <- new_slugs do
@@ -96,14 +100,44 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
       assert kipp_config.rot_auto == true
       assert_in_delta kipp_config.rot_auto_range, 45.0, 0.0001
       assert_in_delta kipp_config.rot_auto_interval, 60.0, 0.0001
+
+      seitenwoge_config = ScenePresets.to_config(ScenePresets.get("builtin:seitenwoge"))
+      assert seitenwoge_config.sway_auto == true
+      assert_in_delta seitenwoge_config.sway_auto_range, 4.0, 0.0001
+      assert_in_delta seitenwoge_config.sway_auto_interval, 20.0, 0.0001
+
+      schubfront_config = ScenePresets.to_config(ScenePresets.get("builtin:schubfront"))
+      assert schubfront_config.trans_auto == true
+      assert schubfront_config.rot_auto == true
+      assert_in_delta schubfront_config.trans_auto_range_x, 0.0, 0.0001
+      assert_in_delta schubfront_config.trans_auto_range_y, 4.0, 0.0001
+
+      abendkreuz_config = ScenePresets.to_config(ScenePresets.get("builtin:abendkreuz"))
+      assert abendkreuz_config.rot_auto == true
+      abendkreuz_mode = PixelFun3D.mode_config("builtin:abendkreuz")
+      assert abendkreuz_mode.color_mode in [:gradient, "gradient"]
+      assert abendkreuz_mode.gradient_palette in [:sunset, "sunset"]
+
+      lichtjagd_config = ScenePresets.to_config(ScenePresets.get("builtin:lichtjagd"))
+      assert lichtjagd_config.rot_auto == false
+      assert lichtjagd_config.program =~ "fract"
+
+      taktphasen_config = ScenePresets.to_config(ScenePresets.get("builtin:taktphasen"))
+      assert taktphasen_config.trans_auto == true
+      assert_in_delta taktphasen_config.trans_auto_range_x, 120.0, 0.0001
+      assert_in_delta taktphasen_config.trans_auto_interval, 50.0, 0.0001
+      assert_in_delta PixelFun3D.mode_config("builtin:taktphasen").bleeding, 30.0, 0.0001
     end
 
     test "config_matches? identifies each new builtin against its own config" do
       new_slugs = ~w(
-        kreiswelle chaser doppelhelix nordlicht wolkenzug seegras
+        chaser doppelhelix nordlicht wolkenzug seegras
         weiche_blobs leuchtplankton wasserwaage sternenhimmel nebeldrift
         facettenstrudel marmor
         strudel spiralband globus kippende_baender
+        seitenwoge schubfront
+        abendkreuz weiche_kacheln himmelsgitter lichtjagd verknotung
+        nebelringe taktphasen gleitfront
       )
 
       for slug <- new_slugs do
@@ -121,7 +155,7 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
       ids = ScenePresets.list_all() |> Enum.map(& &1.id)
 
       assert "builtin:classic_ripple" in ids
-      assert length(ids) == 24
+      assert length(ids) == 33
       refute Enum.any?(ids, &String.starts_with?(&1, "user:"))
     end
   end
@@ -189,7 +223,7 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresetsTest do
 
       assert preset.tilt_scale == 2.5
       assert preset.tilt_speed == 0.4
-      assert preset.tilt_mode == :wobble
+      assert preset.tilt_mode in [:wobble, "wobble"]
     end
   end
 

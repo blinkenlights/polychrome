@@ -103,7 +103,7 @@ defmodule Octopus.Apps.Sand do
     mode_tweakables_for(apply(@mode_presets, :mode_slug, [mode_id]))
   end
 
-  def mode_tweakables_for(slug) when slug in ["sand", "dunes", "hourglass", "cascade", "aurora", "storm"] do
+  def mode_tweakables_for(slug) when slug in ["sand", "aurora", "storm"] do
     s = @default_supersample
     g = Sim.default_gravity(s)
     num = max(Installation.num_panels(), 1)
@@ -397,9 +397,29 @@ defmodule Octopus.Apps.Sand do
 
     %{
       spawn_rate: {"Spawn Rate", :float, %{default: 0.25, min: 0.05, max: 0.8, step: 0.05}},
-      spawn_shape: {"Spawn Shape", :atom, %{default: :rain}},
+      spawn_shape:
+        {"Spawn Shape", :atom,
+         %{
+           default: :rain,
+           options: [
+             {"Rain", :rain},
+             {"Fountain", :fountain},
+             {"Arc", :arc},
+             {"Jet", :jet}
+           ]
+         }},
       auto_drain: {"Auto Clear When Full", :boolean, %{default: true}},
-      color_mode: {"Colors", :atom, %{default: :rainbow}},
+      color_mode:
+        {"Colors", :atom,
+         %{
+           default: :rainbow,
+           options: [
+             {"Rainbow", :rainbow},
+             {"Warm", :warm},
+             {"Cool", :cool},
+             {"Mono", :mono}
+           ]
+         }},
       color_random_panels: {"Random Panels", :integer, %{default: num, min: 1, max: num}},
       color_mix: {"Color Mix", :float, %{default: 0.0, min: 0.0, max: 1.0, step: 0.01}},
       bleeding: {"Bleeding", :float, %{default: 30.0, min: 0.0, max: 100.0, step: 1.0}},
@@ -409,10 +429,27 @@ defmodule Octopus.Apps.Sand do
       wind_auto: {"Wind Auto", :boolean, %{default: false}},
       wind_auto_range: {"Wind Auto Range", :float, %{default: 1.5, min: 0.0, max: 3.0, step: 0.1}},
       wind_auto_interval: {"Wind Auto Interval", :float, %{default: 30.0, min: 4.0, max: 120.0, step: 1.0}},
-      overflow_mode: {"Overflow", :atom, %{default: :block}},
+      overflow_mode:
+        {"Overflow", :atom,
+         %{
+           default: :block,
+           options: [
+             {"Block", :block},
+             {"Waterfall", :waterfall},
+             {"Abyss", :abyss}
+           ]
+         }},
       overflow_auto: {"Overflow Auto", :boolean, %{default: false}},
       overflow_auto_interval: {"Overflow Auto Interval", :float, %{default: 30.0, min: 4.0, max: 120.0, step: 1.0}},
-      abyss_fate: {"Abyss Fate", :atom, %{default: :particles}},
+      abyss_fate:
+        {"Abyss Fate", :atom,
+         %{
+           default: :particles,
+           options: [
+             {"Particles", :particles},
+             {"Respawn", :respawn}
+           ]
+         }},
       collapse_sensitivity: {"Collapse Sensitivity", :float, %{default: 0.0, min: 0.0, max: 1.0, step: 0.01}},
       collapse_cooldown: {"Collapse Cooldown", :float, %{default: 8.0, min: 4.0, max: 60.0, step: 1.0}},
       plug_drain: {"Plug Drain", :boolean, %{default: false}},

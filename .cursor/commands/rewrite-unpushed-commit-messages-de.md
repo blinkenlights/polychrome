@@ -1,3 +1,6 @@
+---                                                                                                                                                                                                                  
+description: Rewrite unpushed commit messages into German                                                                                                                                                            
+---
 # Ungepushte Commits: Commit-Messages auf Deutsch umschreiben
 
 Für alle lokalen Git-Commits, die noch nicht nach `origin` gepusht wurden: analysiere die Änderungen jedes Commits und ersetze die Commit-Message durch eine präzise deutsche Message, die den Inhalt des Commits zusammenfasst.

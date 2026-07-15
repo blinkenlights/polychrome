@@ -8,7 +8,7 @@ defmodule Octopus.AppModePresetsTest do
   describe "loader/0" do
     test "embeds expected preset counts per app" do
       assert length(preset_list(PixelFun)) == 7
-      assert length(preset_list(Collective)) == 8
+      assert length(preset_list(Collective)) == 9
       assert length(preset_list(Matrix)) == 1
       assert length(preset_list(Sand)) == 6
       assert length(preset_list(SparkleMist)) == 1
@@ -58,7 +58,7 @@ defmodule Octopus.AppModePresetsTest do
       classic = Enum.find(modes, &(&1.id == "sand:sand"))
       storm = Enum.find(modes, &(&1.id == "sand:storm"))
 
-      assert length(modes) == 6
+      assert length(modes) == 3
       assert classic.summary != ""
       refute classic.deletable
       refute classic.renamable

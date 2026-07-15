@@ -17,11 +17,9 @@ defmodule Octopus.Apps.SandTest do
     ids = Enum.map(modes, & &1.id)
 
     assert "sand:sand" in ids
-    assert "sand:dunes" in ids
-    assert "sand:hourglass" in ids
-    assert "sand:cascade" in ids
     assert "sand:aurora" in ids
     assert "sand:storm" in ids
+    assert length(modes) == 3
     assert Enum.all?(modes, & &1.builtin)
   end
 
@@ -34,10 +32,9 @@ defmodule Octopus.Apps.SandTest do
   end
 
   test "mode_config/1 returns preset-specific values" do
-    hourglass = sand_mode_config("sand:hourglass")
-    assert hourglass.spawn_shape == :fountain
-    assert hourglass.spawn_rate == 0.08
-    assert hourglass.plug_drain == true
+    aurora = sand_mode_config("sand:aurora")
+    assert aurora.color_mix == 0.8
+    assert aurora.bleeding == 60.0
 
     storm = sand_mode_config("sand:storm")
     assert storm.wind_auto == true

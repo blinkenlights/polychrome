@@ -36,7 +36,7 @@ defmodule OctopusWeb.AppConfigComponent do
             <span class="label-text font-semibold">{name}</span>
           </label>
           <%= cond do %>
-            <% type in [:float, :int] -> %>
+            <% type in [:float, :int, :integer] -> %>
               <div class="flex items-center gap-2">
                 <.config_input
                   class="flex-grow"
@@ -217,18 +217,35 @@ defmodule OctopusWeb.AppConfigComponent do
       :int ->
         value |> Integer.parse() |> elem(0)
 
+      :integer ->
+        value |> Integer.parse() |> elem(0)
+
       :boolean ->
         value == "on"
 
       :select ->
-        {_name, _type, %{options: options}} = Map.get(config_schema, key)
-        i = value |> Integer.parse() |> elem(0)
-        {_name, value} = Enum.at(options, i)
-        value
+        parse_choice(key, value, config_schema)
+
+      :atom ->
+        {_name, _type, opts} = Map.get(config_schema, key)
+
+        if is_list(opts[:options]) and opts[:options] != [] do
+          parse_choice(key, value, config_schema)
+        else
+          String.to_existing_atom(value)
+        end
 
       type when type in [:string, :color] ->
         value
     end
+  end
+
+  defp parse_choice(key, value, config_schema) do
+    {_name, _type, opts} = Map.get(config_schema, key)
+    options = Map.get(opts, :options, [])
+    i = value |> Integer.parse() |> elem(0)
+    {_name, val} = Enum.at(options, i)
+    val
   end
 
   attr(:app_id, :string, required: true)
@@ -241,13 +258,15 @@ defmodule OctopusWeb.AppConfigComponent do
   attr(:target, :any, default: nil)
   attr(:rest, :global)
 
-  defp config_input(%{type: :float} = assigns) do
+  defp config_input(%{type: :int} = assigns), do: config_input(%{assigns | type: :integer})
+
+  defp config_input(%{type: :integer} = assigns) do
     ~H"""
     <input
       type="range"
       name={@key}
       id={"#{@app_id}-#{@key}"}
-      step={@opts |> Map.get(:step, 0.01)}
+      step={@opts |> Map.get(:step, 1)}
       min={@opts[:min]}
       max={@opts[:max]}
       phx-debounce={@debounce}
@@ -259,13 +278,13 @@ defmodule OctopusWeb.AppConfigComponent do
     """
   end
 
-  defp config_input(%{type: :int} = assigns) do
+  defp config_input(%{type: :float} = assigns) do
     ~H"""
     <input
       type="range"
       name={@key}
       id={"#{@app_id}-#{@key}"}
-      step={@opts |> Map.get(:step, 1)}
+      step={@opts |> Map.get(:step, 0.01)}
       min={@opts[:min]}
       max={@opts[:max]}
       phx-debounce={@debounce}
@@ -328,34 +347,32 @@ defmodule OctopusWeb.AppConfigComponent do
     """
   end
 
-  defp config_input(%{type: :select} = assigns) do
-    index =
-      assigns.opts.options
-      |> Enum.find_index(fn {_name, val} -> val == assigns.value end)
-      |> case do
-        nil -> 0
-        i -> i
+  defp config_input(%{type: :select} = assigns), do: choice_input(assigns)
+
+  defp config_input(%{type: :atom, opts: %{options: options}} = assigns)
+       when is_list(options) and options != [] do
+    choice_input(assigns)
+  end
+
+  defp config_input(%{type: :atom} = assigns) do
+    value =
+      case assigns.value do
+        v when is_atom(v) -> Atom.to_string(v)
+        v -> to_string(v)
       end
 
-    assigns = assign(assigns, :selected_index, index)
+    assigns = assign(assigns, :string_value, value)
 
     ~H"""
-    <select
+    <input
+      type="text"
       name={@key}
       id={"#{@app_id}-#{@key}"}
       phx-debounce={@debounce}
-      class="select select-bordered w-full"
-      value={@selected_index}
+      value={@string_value}
+      class="input input-bordered w-full font-mono"
       {@rest}
-    >
-      <option
-        :for={{{name, _value}, i} <- Enum.with_index(@opts.options)}
-        value={i}
-        selected={i == @selected_index}
-      >
-        {name}
-      </option>
-    </select>
+    />
     """
   end
 
@@ -375,6 +392,42 @@ defmodule OctopusWeb.AppConfigComponent do
     """
   end
 
+  defp choice_input(assigns) do
+    options = Map.get(assigns.opts, :options, [])
+
+    index =
+      options
+      |> Enum.find_index(fn {_name, val} -> val == assigns.value end)
+      |> case do
+        nil -> 0
+        i -> i
+      end
+
+    assigns =
+      assigns
+      |> assign(:selected_index, index)
+      |> assign(:choice_options, options)
+
+    ~H"""
+    <select
+      name={@key}
+      id={"#{@app_id}-#{@key}"}
+      phx-debounce={@debounce}
+      class="select select-bordered w-full"
+      value={@selected_index}
+      {@rest}
+    >
+      <option
+        :for={{{name, _value}, i} <- Enum.with_index(@choice_options)}
+        value={i}
+        selected={i == @selected_index}
+      >
+        {name}
+      </option>
+    </select>
+    """
+  end
+
   attr(:app_id, :string, required: true)
   attr(:key, :atom, required: true)
   attr(:type, :atom, required: true)
@@ -389,7 +442,7 @@ defmodule OctopusWeb.AppConfigComponent do
       type="number"
       name={@key}
       id={"#{@app_id}-#{@key}-number"}
-      step={@opts |> Map.get(:step, if(@type == :int, do: 1, else: 0.01))}
+      step={@opts |> Map.get(:step, if(@type in [:int, :integer], do: 1, else: 0.01))}
       min={@opts[:min]}
       max={@opts[:max]}
       phx-debounce={@debounce}

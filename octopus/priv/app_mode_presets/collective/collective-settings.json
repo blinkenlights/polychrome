@@ -61,6 +61,20 @@
       "slug": "presence"
     },
     {
+      "accent_color": "#9B59B6",
+      "config": {
+        "animation": "fireflies",
+        "firefly_count": 24,
+        "firefly_flash_rate": 0.85,
+        "firefly_glow": 1.0,
+        "firefly_palette": "classic",
+        "firefly_reactivity": 0.6,
+        "firefly_speed": 1.5
+      },
+      "name": "Fireflies",
+      "slug": "fireflies"
+    },
+    {
       "accent_color": "#1ABC9C",
       "config": {
         "animation": "ring_noise",
