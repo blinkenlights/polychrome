@@ -1,13 +1,22 @@
 # Gravity Deployment (Raspberry Pi)
 
 Deploys octopus to `gravity` (`gravity.crested-frog.ts.net`) via Tailscale.
-The stack runs two Docker containers in `network_mode: host`:
+The stack runs four Docker containers in `network_mode: host`:
 
-- **polychrome** — the Elixir/Phoenix app (HTTP on port 4000)
+- **polychrome-woodstock** — Installation Woodstock, Boot App Fire (HTTP port 4000)
+- **polychrome-pixie** — Installation Pixie, Boot App PixelFun3d / Seegras (HTTP port 4001)
 - **caddy** — reverse proxy that terminates TLS using Tailscale certificates
 
-Both use host networking so UDP broadcast to ESP32 LED panels works without
-Docker NAT.
+Both app instances use host networking so UDP broadcast to ESP32 LED panels works
+without Docker NAT. Caddy exposes both on the same hostname via different HTTPS ports:
+
+| Instance | URL |
+|----------|-----|
+| Pixie | `https://gravity.crested-frog.ts.net` (port 443) |
+| Woodstock | `https://gravity.crested-frog.ts.net:8443` |
+
+There is no HTTPS port conflict: only Caddy listens on 443/8443. The two Octopus
+instances run on internal HTTP ports 4000/4001 and are never exposed directly.
 
 ## One-time setup on the Pi
 
@@ -68,7 +77,10 @@ This runs on the 1st of every other month at 03:00.
 
 ```bash
 cp deploy/gravity/.env.example deploy/gravity/.env
-# Edit .env and fill in SECRET_KEY_BASE (generate: mix phx.gen.secret)
+# Edit .env and fill in both SECRET_KEY_BASE values:
+#   SECRET_KEY_BASE       — for the Woodstock instance
+#   PIXIE_SECRET_KEY_BASE — for the Pixie instance
+# Generate each with: mix phx.gen.secret
 ```
 
 ## Deploy
@@ -88,16 +100,31 @@ Subsequent builds reuse Docker layer cache.
 ## Logs
 
 ```bash
+# All services
 ssh tim@gravity.crested-frog.ts.net \
     'cd /home/tim/polychrome/deploy/gravity && docker compose logs -f'
+
+# Single service
+ssh tim@gravity.crested-frog.ts.net \
+    'cd /home/tim/polychrome/deploy/gravity && docker compose logs -f polychrome-woodstock'
+ssh tim@gravity.crested-frog.ts.net \
+    'cd /home/tim/polychrome/deploy/gravity && docker compose logs -f polychrome-pixie'
 ```
 
-## Installation profile
+## Installation profiles
 
-Gravity builds with the **Woodstock** installation (`Octopus.Installation.Woodstock`) —
-a single 2×32 panel on Pixie port 2. This is set via `INSTALLATION_MODULE` in
-`.env` and passed as a Docker build arg by `deploy.sh`. Change it there and
-redeploy to use a different profile.
+Both instances share a **single Docker image** built from the same release. The
+installation module is selected at container startup via the `INSTALLATION_MODULE`
+environment variable (set in `docker-compose.yml`), which overrides the compile-time
+default from `config.exs`. All installation modules are compiled into the release,
+so no separate image build is needed.
+
+| Service | Installation | Boot App | Boot Mode | HTTP-Port | HTTPS-Port |
+|---------|-------------|----------|-----------|-----------|------------|
+| `polychrome-pixie` | `Octopus.Installation.Pixie` | `PixelFun3d` | `seegras` | 4001 | 443 |
+| `polychrome-woodstock` | `Octopus.Installation.Woodstock` | `Fire` | — | 4000 | 8443 |
+
+To change the boot app or preset, edit `docker-compose.yml` and redeploy.
 
 ## mDNS / `.local` hostnames
 

@@ -1,11 +1,19 @@
 # Octopus — gravity (Raspberry Pi) deployment
 #
-# Both services use network_mode: host so that:
+# Three services share network_mode: host so that:
 #   - UDP broadcast to ESP32 panels works (no Docker NAT)
-#   - Caddy can reach the app at localhost:4000
+#   - Caddy can reach both app instances at localhost:4000 / localhost:4001
 #
 # TLS is provided by Caddy using Tailscale certificates.
 # See README.md for one-time setup steps.
+#
+# Two Octopus instances run from the same image, differentiated by env vars:
+#   polychrome-woodstock  — Installation Woodstock, Boot App Fire, port 4000
+#   polychrome-pixie      — Installation Pixie, Boot App PixelFun3d (Seegras), port 4001
+#
+# Caddy exposes both via HTTPS on the same hostname but different ports:
+#   https://gravity.crested-frog.ts.net       → Pixie (port 4001)
+#   https://gravity.crested-frog.ts.net:8443  → Woodstock (port 4000)
 
 services:
   caddy:
@@ -18,10 +26,20 @@ services:
       - caddy-config:/config
     restart: unless-stopped
 
-  polychrome:
+  polychrome-woodstock:
     image: polychrome:latest
     network_mode: host
     env_file: .env
+    environment:
+      PORT: "4000"
+      INSTALLATION_MODULE: Octopus.Installation.Woodstock
+      BOOT_APP: Fire
+      DATABASE_PATH: /data/woodstock.db
+      PHX_URL_PORT: "8443"
+      PHX_URL_SCHEME: https
+      OSC_SERVER_ENABLED: "false"
+      # Disable Erlang distribution — not needed for standalone nodes.
+      RELEASE_DISTRIBUTION: none
     # dialout group is required to open /dev/ttyACM* devices.
     group_add:
       - dialout
@@ -44,6 +62,37 @@ services:
       - /sys/bus/usb:/sys/bus/usb
       - /sys/devices:/sys/devices
       # Host Avahi for NSS *.local lookups (libnss-mdns in the image).
+      - /var/run/avahi-daemon/socket:/var/run/avahi-daemon/socket
+    restart: unless-stopped
+
+  polychrome-pixie:
+    image: polychrome:latest
+    network_mode: host
+    env_file: .env
+    environment:
+      PORT: "4001"
+      INSTALLATION_MODULE: Octopus.Installation.Pixie
+      BOOT_APP: PixelFun3d
+      BOOT_APP_MODE: seegras
+      DATABASE_PATH: /data/pixie.db
+      PHX_URL_PORT: "443"
+      PHX_URL_SCHEME: https
+      SECRET_KEY_BASE: ${PIXIE_SECRET_KEY_BASE}
+      OSC_SERVER_ENABLED: "false"
+      # Disable Erlang distribution — not needed for standalone nodes.
+      RELEASE_DISTRIBUTION: none
+    group_add:
+      - dialout
+    device_cgroup_rules:
+      - 'c 166:* rmw'
+    cap_add:
+      - SYS_ADMIN
+    volumes:
+      - ./data:/data
+      - /dev:/dev
+      - /dev/serial:/dev/serial:ro
+      - /sys/bus/usb:/sys/bus/usb
+      - /sys/devices:/sys/devices
       - /var/run/avahi-daemon/socket:/var/run/avahi-daemon/socket
     restart: unless-stopped
 

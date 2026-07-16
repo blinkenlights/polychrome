@@ -1,4 +1,11 @@
+# Pixie instance — HTTPS on the default port (443)
 gravity.crested-frog.ts.net {
+	tls /certs/gravity.crested-frog.ts.net.crt /certs/gravity.crested-frog.ts.net.key
+	reverse_proxy localhost:4001
+}
+
+# Woodstock instance — HTTPS on port 8443 (same TLS cert, different port)
+gravity.crested-frog.ts.net:8443 {
 	tls /certs/gravity.crested-frog.ts.net.crt /certs/gravity.crested-frog.ts.net.key
 	reverse_proxy localhost:4000
 }

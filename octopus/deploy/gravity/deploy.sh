@@ -48,6 +48,7 @@ fi
 # Prepare remote directory
 echo "Preparing remote directory ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}..."
 ssh "${REMOTE_USER}@${REMOTE_HOST}" "mkdir -p ${REMOTE_DIR}/deploy/gravity/data"
+# data/ is shared by both instances (different DB file names per service).
 
 # Copy files to remote
 echo "Copying image to ${REMOTE_HOST}..."
@@ -66,8 +67,9 @@ ssh "${REMOTE_USER}@${REMOTE_HOST}" "
     echo 'Loading image...'
     gunzip -c ${REMOTE_DIR}/${TARBALL} | docker load
 
-    echo 'Stopping existing container...'
-    docker compose stop polychrome 2>/dev/null || true
+    echo 'Stopping existing containers...'
+    # Also stop the legacy single-service name from before the two-instance setup.
+    docker compose stop polychrome polychrome-woodstock polychrome-pixie 2>/dev/null || true
 
     echo 'Ensuring data directory has correct permissions...'
     docker run --rm -v ${REMOTE_DIR}/deploy/gravity/data:/data --user root polychrome:latest \
