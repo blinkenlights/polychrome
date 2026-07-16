@@ -17,9 +17,6 @@ release:
 	mix assets.deploy
 	mix release --overwrite
 
-deploy-fly:
-	fly deploy --config deploy/fly/fly.toml
-
 deploy-oldie:
 	rsync -rlv --delete --filter=':- .gitignore' --exclude='_build' --exclude='deps' --exclude='priv/native' --exclude='native/target' --exclude='native/octopus_webp/target' . ${oldie_hostname}:/opt/octopus
 	ssh ${oldie_hostname} "sudo systemctl restart octopus.service"
@@ -67,6 +64,3 @@ deploy-gravity-skip-build:
 
 remote-logs:
 	ssh ${oldie_hostname} "sudo journalctl -u octopus.service -f"
-
-remote-shell:
-	fly ssh console --pty -C "/app/bin/octopus remote"
