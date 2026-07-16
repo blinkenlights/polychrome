@@ -40,6 +40,7 @@ defmodule Octopus.Apps.Collective.Animations.Glowworms do
   - when there are gravitation objects sensed and available, all glowworms consider within 1-3 random seconds, to start flying towards the strongest gravity
     - when multiple gravitation points with the same value are present, each glowworm picks its own target
     - the center of the gravity is used as an unsharp target for worms, which means when the decide to fly towards the gravity they pick a target slightly off (3px-5px) the actual center of gravity
+    - when a worm decides to fly towards gravity, it increases its movement speed by 10% to 50% for that journey, correlating linearly to the gravity value (10% at <= 0.3 gravity, 50% at 1.0 gravity)
     - when they reached the center of gravity, they switch to stay phase for ca. 3x (with little randomness, and configurable via web view) longer time than usual, bevor they iterate towards travel phase
 
   - when two glowworms are longer than 30seconds (configurable via web view) within a radius of 2px to 4px a new glowworm is born
@@ -258,68 +259,72 @@ defmodule Octopus.Apps.Collective.Animations.Glowworms do
         timer = (worm.dead_timer || 1.0) - dt
         if timer <= 0, do: %{worm | phase: :purged}, else: %{worm | dead_timer: timer}
 
-      worm.phase == :stay ->
-        if worm.phase_timer <= 0 do
-          # Switch to travel
-          target_x = :rand.uniform() * @width
-          target_y = :rand.uniform() * @height
-          travel_speed_multiplier = :rand.uniform() * 0.5 + 0.75
-
-          %{
-            worm
-            | phase: :travel,
-              target_x: target_x,
-              target_y: target_y,
-              phase_timer: 0.0,
-              travel_speed_multiplier: travel_speed_multiplier,
-              fast?: 0.0
-          }
-        else
-          # Stay logic: small random movement within circling area
-          # We'll just use a small random force and damping
-          vx = worm.vx + (:rand.uniform() - 0.5) * 0.5 * speed_multiplier
-          vy = worm.vy + (:rand.uniform() - 0.5) * 0.2 * speed_multiplier
-          # Keep speed low in stay phase
-          speed_sq = vx * vx + vy * vy
-          max_stay_speed = circling_area * 0.2 * speed_multiplier
-          {vx, vy} = if speed_sq > max_stay_speed * max_stay_speed do
-            f = max_stay_speed / :math.sqrt(speed_sq)
-            {vx * f, vy * f}
-          else
-            {vx, vy}
-          end
-
-          %{worm | vx: vx * 0.9, vy: vy * 0.9, phase_timer: worm.phase_timer - dt}
-        end
-
-      worm.phase == :travel ->
-        # Traveling logic
-        dx = angular_diff(worm.target_x, worm.x, @width)
-        dy = worm.target_y - worm.y
-        dist = :math.sqrt(dx * dx + dy * dy)
-
-        if dist < 1.0 do
-          # Reached target
-          %{worm | phase: :stay, phase_timer: (:rand.uniform(5) + 5.0) * worm.stay_duration_multiplier, stay_duration_multiplier: 1.0, vx: 0.0, vy: 0.0, fast?: 0.0}
-        else
-          # Move towards target with wobbling and deceleration
-          base_speed = 2.0 * speed_multiplier * (worm.travel_speed_multiplier || 1.0)
-          current_speed = if worm.fast? > 0, do: base_speed + worm.fast?, else: base_speed
-
-          vx = (dx / dist) * current_speed + (:rand.uniform() - 0.5) * 0.8 * speed_multiplier * (worm.travel_speed_multiplier || 1.0) # wobbling
-          vy = (dy / dist) * (current_speed * 0.2) + (:rand.uniform() - 0.5) * 0.3 * speed_multiplier * (worm.travel_speed_multiplier || 1.0) # more horizontal
-
-          # Decelerate if running away
-          new_fast = if worm.fast? > 0, do: max(0.0, worm.fast? - dt * 2.0), else: 0.0
-
-          # Gravity check
-          {worm, vx, vy} = check_gravity(worm, dt, gravity_info, gravity_stay_multiplier, speed_multiplier, vx, vy)
-
-          %{worm | vx: vx, vy: vy, fast?: new_fast}
-        end
-
       true ->
-        worm
+        # Gravity check for both stay and travel phases
+        {worm, vx, vy} = check_gravity(worm, dt, gravity_info, gravity_stay_multiplier, speed_multiplier, worm.vx, worm.vy)
+        worm = %{worm | vx: vx, vy: vy}
+
+        case worm.phase do
+          :stay ->
+            if worm.phase_timer <= 0 do
+              # Switch to travel
+              target_x = :rand.uniform() * @width
+              target_y = :rand.uniform() * @height
+              travel_speed_multiplier = :rand.uniform() * 0.5 + 0.75
+
+              %{
+                worm
+                | phase: :travel,
+                  target_x: target_x,
+                  target_y: target_y,
+                  phase_timer: 0.0,
+                  travel_speed_multiplier: travel_speed_multiplier,
+                  fast?: 0.0
+              }
+            else
+              # Stay logic: small random movement within circling area
+              # We'll just use a small random force and damping
+              vx = worm.vx + (:rand.uniform() - 0.5) * 0.5 * speed_multiplier
+              vy = worm.vy + (:rand.uniform() - 0.5) * 0.2 * speed_multiplier
+              # Keep speed low in stay phase
+              speed_sq = vx * vx + vy * vy
+              max_stay_speed = circling_area * 0.2 * speed_multiplier
+              {vx, vy} = if speed_sq > max_stay_speed * max_stay_speed do
+                f = max_stay_speed / :math.sqrt(speed_sq)
+                {vx * f, vy * f}
+              else
+                {vx, vy}
+              end
+
+              %{worm | vx: vx * 0.9, vy: vy * 0.9, phase_timer: worm.phase_timer - dt}
+            end
+
+          :travel ->
+            # Traveling logic
+            dx = angular_diff(worm.target_x, worm.x, @width)
+            dy = worm.target_y - worm.y
+            dist = :math.sqrt(dx * dx + dy * dy)
+
+            if dist < 1.0 do
+              # Reached target
+              %{worm | phase: :stay, phase_timer: (:rand.uniform(5) + 5.0) * worm.stay_duration_multiplier, stay_duration_multiplier: 1.0, vx: 0.0, vy: 0.0, fast?: 0.0}
+            else
+              # Move towards target with wobbling and deceleration
+              base_speed = 2.0 * speed_multiplier * (worm.travel_speed_multiplier || 1.0)
+              current_speed = if worm.fast? > 0, do: base_speed + worm.fast?, else: base_speed
+
+              vx = (dx / dist) * current_speed + (:rand.uniform() - 0.5) * 0.8 * speed_multiplier * (worm.travel_speed_multiplier || 1.0) # wobbling
+              vy = (dy / dist) * (current_speed * 0.2) + (:rand.uniform() - 0.5) * 0.3 * speed_multiplier * (worm.travel_speed_multiplier || 1.0) # more horizontal
+
+              # Decelerate if running away
+              new_fast = if worm.fast? > 0, do: max(0.0, worm.fast? - dt * 2.0), else: 0.0
+
+              %{worm | vx: vx, vy: vy, fast?: new_fast}
+            end
+
+          _ ->
+            worm
+        end
     end
   end
 
@@ -335,31 +340,47 @@ defmodule Octopus.Apps.Collective.Animations.Glowworms do
 
         target_panel = Enum.random(best_panels)
         offset = (if :rand.uniform() > 0.5, do: 1, else: -1) * (3 + :rand.uniform() * 2)
-        target_x = target_panel * 8 + 3.5 + offset
+        target_x = :math.fmod(target_panel * 8 + 3.5 + offset + @width, @width)
         target_y = :rand.uniform() * @height
-        travel_speed_multiplier = :rand.uniform() * 0.5 + 0.75
 
-        new_worm = %{
-          worm
-          | phase: :travel,
-            target_x: :math.fmod(target_x + @width, @width),
-            target_y: target_y,
-            gravity_timer: :rand.uniform() * 2.0 + 1.0,
-            stay_duration_multiplier: gravity_stay_multiplier,
-            travel_speed_multiplier: travel_speed_multiplier,
-            fast?: 0.0
-        }
+        # Check if we are already staying near this gravity target
+        already_at_gravity? = worm.phase == :stay and abs(angular_diff(target_x, worm.x, @width)) < 5.0
 
-        # Update velocity towards new target immediately
-        dx = angular_diff(new_worm.target_x, new_worm.x, @width)
-        dy = new_worm.target_y - new_worm.y
-        dist = :math.sqrt(dx * dx + dy * dy)
-
-        if dist > 0.1 do
-          speed = 2.0 * speed_multiplier * new_worm.travel_speed_multiplier
-          {new_worm, (dx / dist) * speed, (dy / dist) * speed * 0.2}
+        if already_at_gravity? do
+          {%{worm | gravity_timer: :rand.uniform() * 2.0 + 1.0}, vx, vy}
         else
-          {new_worm, vx, vy}
+          boost =
+            cond do
+              max_val <= 0.3 -> 0.1
+              max_val >= 1.0 -> 0.5
+              true -> 0.1 + (max_val - 0.3) * 0.4 / 0.7
+            end
+
+          gravity_multiplier = 1.0 + boost
+          travel_speed_multiplier = (:rand.uniform() * 0.5 + 0.75) * gravity_multiplier
+
+          new_worm = %{
+            worm
+            | phase: :travel,
+              target_x: target_x,
+              target_y: target_y,
+              gravity_timer: :rand.uniform() * 2.0 + 1.0,
+              stay_duration_multiplier: gravity_stay_multiplier,
+              travel_speed_multiplier: travel_speed_multiplier,
+              fast?: 0.0
+          }
+
+          # Update velocity towards new target immediately
+          dx = angular_diff(new_worm.target_x, new_worm.x, @width)
+          dy = new_worm.target_y - new_worm.y
+          dist = :math.sqrt(dx * dx + dy * dy)
+
+          if dist > 0.1 do
+            speed = 2.0 * speed_multiplier * new_worm.travel_speed_multiplier
+            {new_worm, (dx / dist) * speed, (dy / dist) * speed * 0.2}
+          else
+            {new_worm, vx, vy}
+          end
         end
       else
         {%{worm | gravity_timer: :rand.uniform() * 2.0 + 1.0}, vx, vy}
