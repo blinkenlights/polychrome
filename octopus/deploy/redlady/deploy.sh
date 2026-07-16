@@ -6,7 +6,7 @@ REMOTE_USER="tim"
 REMOTE_DIR="/home/tim/polychrome"
 IMAGE_NAME="polychrome"
 IMAGE_TAG="latest"
-TARBALL="${IMAGE_NAME}-${IMAGE_TAG}.tar.gz"
+TARBALL="/tmp/${IMAGE_NAME}-${IMAGE_TAG}.tar.gz"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OCTOPUS_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
@@ -34,12 +34,9 @@ fi
 # the Mac's native arm64; the Raspberry Pi is also arm64).
 if [ "$SKIP_BUILD" = false ]; then
     build_polychrome_image "${ENV_FILE}" "${OCTOPUS_DIR}" "${IMAGE_NAME}" "${IMAGE_TAG}"
-
-    echo "Saving image to tarball..."
-    docker save "${IMAGE_NAME}:${IMAGE_TAG}" | gzip > "/tmp/${TARBALL}"
 else
-    if [ ! -f "/tmp/${TARBALL}" ]; then
-        echo "Error: No existing tarball at /tmp/${TARBALL}. Run without --skip-build."
+    if [ ! -f "${TARBALL}" ]; then
+        echo "Error: No existing tarball at ${TARBALL}. Run without --skip-build."
         exit 1
     fi
     echo "Using existing tarball..."
@@ -49,22 +46,36 @@ fi
 echo "Preparing remote directory ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}..."
 ssh "${REMOTE_USER}@${REMOTE_HOST}" "mkdir -p ${REMOTE_DIR}/deploy/redlady/data"
 
-# Copy files to remote
-echo "Copying image to ${REMOTE_HOST}..."
-rsync -av --progress "/tmp/${TARBALL}" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/"
+# Copy deploy config
 echo "Copying deploy config..."
 rsync -av "${SCRIPT_DIR}/docker-compose.yml" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/deploy/redlady/"
 rsync -av "${SCRIPT_DIR}/Caddyfile" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/deploy/redlady/"
 rsync -av "${ENV_FILE}" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/deploy/redlady/.env"
+
+# Stream image directly to remote docker. tee simultaneously saves a local tarball
+# (reused by --skip-build on subsequent runs) while piping to the remote in one pass.
+echo "Streaming image to ${REMOTE_HOST}..."
+if [ "$SKIP_BUILD" = false ]; then
+    IMAGE_SIZE=$(docker image inspect --format='{{.Size}}' "${IMAGE_NAME}:${IMAGE_TAG}")
+    if command -v pv &>/dev/null; then
+        docker save "${IMAGE_NAME}:${IMAGE_TAG}" | pv -s "${IMAGE_SIZE}" -pterab | gzip | tee "${TARBALL}" | ssh "${REMOTE_USER}@${REMOTE_HOST}" "gunzip | docker load"
+    else
+        docker save "${IMAGE_NAME}:${IMAGE_TAG}" | gzip | tee "${TARBALL}" | ssh "${REMOTE_USER}@${REMOTE_HOST}" "gunzip | docker load"
+    fi
+else
+    if command -v pv &>/dev/null; then
+        TARBALL_SIZE=$(stat -f%z "${TARBALL}")
+        pv -s "${TARBALL_SIZE}" -pterab "${TARBALL}" | ssh "${REMOTE_USER}@${REMOTE_HOST}" "gunzip | docker load"
+    else
+        ssh "${REMOTE_USER}@${REMOTE_HOST}" "gunzip | docker load" < "${TARBALL}"
+    fi
+fi
 
 # Deploy on remote
 echo "Deploying on ${REMOTE_HOST}..."
 ssh "${REMOTE_USER}@${REMOTE_HOST}" "
     set -e
     cd ${REMOTE_DIR}/deploy/redlady
-
-    echo 'Loading image...'
-    gunzip -c ${REMOTE_DIR}/${TARBALL} | docker load
 
     echo 'Cleaning up old images...'
     docker image prune -f
@@ -79,13 +90,7 @@ ssh "${REMOTE_USER}@${REMOTE_HOST}" "
     echo 'Starting services (migrations run automatically on startup)...'
     docker compose up -d
 
-    echo 'Cleaning up tarball...'
-    rm ${REMOTE_DIR}/${TARBALL}
-
     echo 'Deployment complete.'
 "
 
-# Clean up local tarball
-rm "/tmp/${TARBALL}"
-
-echo "Done. Check logs with: ssh ${REMOTE_USER}@${REMOTE_HOST} 'cd ${REMOTE_DIR}/deploy/redlady && docker compose logs -f'"
+echo "Done. Check logs with: ssh ${REMOTE_USER}@${REMOTE_HOST} 'cd ${REMOTE_DIR}/deploy/redlady && docker compose logs -f --tail=100 polychrome'"
