@@ -286,8 +286,6 @@ defmodule Octopus.Apps.Collective.Animations.Fireflies do
     end
   end
 
-  defp heat_at(_theta, heat, _num_panels) when map_size(heat) == 0, do: 0.0
-
   defp heat_at(theta, heat, num_panels) do
     pos = norm_theta(theta) / @two_pi * num_panels
     i = trunc(pos)
