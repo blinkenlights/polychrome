@@ -141,7 +141,9 @@ defmodule OctopusWeb.PixelsLive do
        panel_status_visible: panel_status_visible,
        sending_to_panels: sending_to_panels,
        panel_statuses: initial_panel_statuses(panel_status_visible),
-       current_time: System.os_time(:second)
+       current_time: System.os_time(:second),
+       channel_mode: :mix,
+       has_mask: false
      )}
   end
 
@@ -163,6 +165,43 @@ defmodule OctopusWeb.PixelsLive do
           panel_statuses={@panel_statuses}
           current_time={@current_time}
         />
+      </div>
+
+      <div class="absolute top-2 left-1/2 -translate-x-1/2 z-10">
+        <div class="join">
+          <button
+            phx-click="channel-mode"
+            phx-value-mode="mix"
+            class={[
+              "join-item btn btn-xs",
+              if(@channel_mode == :mix, do: "btn-primary", else: "btn-outline btn-primary")
+            ]}
+          >
+            Mix
+          </button>
+          <button
+            phx-click="channel-mode"
+            phx-value-mode="front"
+            class={[
+              "join-item btn btn-xs",
+              if(@channel_mode == :front, do: "btn-primary", else: "btn-outline btn-primary")
+            ]}
+          >
+            Front
+          </button>
+          <button
+            phx-click="channel-mode"
+            phx-value-mode="mask"
+            disabled={not @has_mask}
+            class={[
+              "join-item btn btn-xs",
+              if(@channel_mode == :mask, do: "btn-secondary", else: "btn-outline btn-secondary"),
+              not @has_mask && "opacity-40"
+            ]}
+          >
+            Mask
+          </button>
+        </div>
       </div>
 
       <div class="absolute top-2 right-2 flex flex-col items-end gap-1.5 z-10">
@@ -248,6 +287,17 @@ defmodule OctopusWeb.PixelsLive do
       </div>
     </div>
     """
+  end
+
+  def handle_event("channel-mode", %{"mode" => mode_string}, socket) do
+    channel_mode =
+      case mode_string do
+        "front" -> :front
+        "mask" -> :mask
+        _ -> :mix
+      end
+
+    {:noreply, assign(socket, channel_mode: channel_mode)}
   end
 
   def handle_event("toggle-panel-sending", _params, socket) do
@@ -532,11 +582,46 @@ defmodule OctopusWeb.PixelsLive do
   end
 
   def handle_info({:mixer, {:frame, frame}}, socket) do
-    {:noreply, socket |> push_frame(frame)}
+    case socket.assigns.channel_mode do
+      :mix -> {:noreply, push_frame(socket, frame)}
+      :front when not socket.assigns.has_mask -> {:noreply, push_frame(socket, frame)}
+      _ -> {:noreply, socket}
+    end
+  end
+
+  def handle_info({:mixer, {:front_frame, frame}}, socket) do
+    if socket.assigns.channel_mode == :front do
+      {:noreply, push_frame(socket, frame)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info({:mixer, {:mask_frame, frame}}, socket) do
+    socket = if not socket.assigns.has_mask, do: assign(socket, has_mask: true), else: socket
+
+    if socket.assigns.channel_mode == :mask do
+      {:noreply, push_frame(socket, frame)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info({:mixer, {:output_mode, output_mode}}, socket) do
+    has_mask = output_mode == :masked
+
+    channel_mode =
+      if not has_mask and socket.assigns.channel_mode == :mask do
+        :mix
+      else
+        socket.assigns.channel_mode
+      end
+
+    {:noreply, assign(socket, has_mask: has_mask, channel_mode: channel_mode)}
   end
 
   def handle_info({:mixer, {:config, config}}, socket) do
-    {:noreply, socket |> push_config(config)}
+    {:noreply, push_config(socket, config)}
   end
 
   def handle_info({:mixer, _msg}, socket) do
