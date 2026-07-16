@@ -34,7 +34,7 @@ deploy-gravity:
 	./deploy/gravity/deploy.sh
 
 monitor-redlady:
-	ssh -t tim@redlady.crested-frog.ts.net "cd /home/tim/polychrome/deploy/redlady && docker compose logs -f --tail=100"
+	ssh -t tim@redlady.crested-frog.ts.net "cd /home/tim/polychrome/deploy/redlady && docker compose logs -f --tail=100 polychrome"
 
 monitor-redlady-polychrome:
 	ssh -t tim@redlady.crested-frog.ts.net "cd /home/tim/polychrome/deploy/redlady && docker compose logs -f --tail=100 polychrome"
