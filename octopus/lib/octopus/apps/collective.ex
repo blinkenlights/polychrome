@@ -33,6 +33,7 @@ defmodule Octopus.Apps.Collective do
     dots: Animations.Dots,
     lava_lamp: Animations.LavaLamp,
     fireflies: Animations.Fireflies,
+    glowworms: Animations.Glowworms,
     ring_noise: Animations.RingNoise,
     presence: Animations.PresencePanels
   }
@@ -209,6 +210,121 @@ defmodule Octopus.Apps.Collective do
         type: :choice,
         default: :classic,
         options: [{:classic, "Classic"}, {:amber, "Amber"}, {:ghost, "Ghost"}]
+      }
+    ]
+  end
+
+  def mode_tweakables_for("glowworms") do
+    [
+      %{
+        key: :glowworms_speed,
+        label: "Glowworms Speed",
+        type: :slider,
+        min: 0.2,
+        max: 5.0,
+        step: 0.1,
+        default: 1.6,
+        runtime: true
+      },
+      %{
+        key: :glowworms_color_intensity,
+        label: "Color Intensity",
+        type: :slider,
+        min: 0.0,
+        max: 1.0,
+        step: 0.05,
+        default: 0.55,
+        runtime: true
+      },
+      %{
+        key: :glowworms_max_count,
+        label: "Max population of Glowworms",
+        type: :slider,
+        min: 1,
+        max: 20,
+        step: 1,
+        default: 13,
+        runtime: true
+      },
+      %{
+        key: :glowworms_circling_area,
+        label: "Glowworm circling area",
+        type: :slider,
+        min: 1,
+        max: 10,
+        step: 1,
+        default: 4,
+        runtime: true
+      },
+      %{
+        key: :glowworms_stay_chance,
+        label: "Stay Chance",
+        type: :slider,
+        min: 0.0,
+        max: 1.0,
+        step: 0.05,
+        default: 0.5,
+        runtime: true
+      },
+      %{
+        key: :glowworms_run_away_proximity,
+        label: "Run Away Proximity",
+        type: :slider,
+        min: 2,
+        max: 10,
+        step: 1,
+        default: 5,
+        runtime: true
+      },
+      %{
+        key: :glowworms_run_away_count,
+        label: "Run Away Count",
+        type: :slider,
+        min: 1,
+        max: 10,
+        step: 1,
+        default: 3,
+        runtime: true
+      },
+      %{
+        key: :glowworms_run_away_duration,
+        label: "Run Away Duration",
+        type: :slider,
+        min: 1,
+        max: 10,
+        step: 1,
+        default: 5,
+        runtime: true
+      },
+      %{
+        key: :glowworms_gravity_stay_multiplier,
+        label: "Gravity Stay Multiplier",
+        type: :slider,
+        min: 1.0,
+        max: 10.0,
+        step: 0.5,
+        default: 3.0,
+        runtime: true
+      },
+      %{
+        key: :glowworms_birth_proximity_duration,
+        label: "Birth Proximity Duration",
+        type: :slider,
+        min: 5,
+        max: 60,
+        step: 1,
+        default: 30,
+        runtime: true
+      },
+      %{
+        key: :glowworms_overpopulation_death_duration,
+        label: "Overpopulation Death Duration",
+        type: :slider,
+        min: 5,
+        max: 120,
+        step: 1,
+        default: 45,
+        runtime: true
       }
     ]
   end
@@ -393,6 +509,20 @@ defmodule Octopus.Apps.Collective do
     firefly_glow = Map.get(config, :firefly_glow, 1.0)
     firefly_flash_rate = Map.get(config, :firefly_flash_rate, 0.85)
     firefly_palette = Map.get(config, :firefly_palette, :classic)
+    glowworms_speed = Map.get(config, :glowworms_speed, 1.6)
+    glowworms_color_intensity = Map.get(config, :glowworms_color_intensity, 0.55)
+    glowworms_max_count = Map.get(config, :glowworms_max_count, 13)
+    glowworms_circling_area = Map.get(config, :glowworms_circling_area, 4)
+    glowworms_stay_chance = Map.get(config, :glowworms_stay_chance, 0.5)
+    glowworms_run_away_proximity = Map.get(config, :glowworms_run_away_proximity, 5)
+    glowworms_run_away_count = Map.get(config, :glowworms_run_away_count, 3)
+    glowworms_run_away_duration = Map.get(config, :glowworms_run_away_duration, 5)
+    glowworms_gravity_stay_multiplier = Map.get(config, :glowworms_gravity_stay_multiplier, 3.0)
+    glowworms_birth_proximity_duration = Map.get(config, :glowworms_birth_proximity_duration, 30)
+
+    glowworms_overpopulation_death_duration =
+      Map.get(config, :glowworms_overpopulation_death_duration, 45)
+
     ring_noise_speed = Map.get(config, :ring_noise_speed, 1.0)
     ring_noise_pulse_period = Map.get(config, :ring_noise_pulse_period, 24.0)
     ring_noise_pulse_amount = Map.get(config, :ring_noise_pulse_amount, 0.65)
@@ -437,6 +567,17 @@ defmodule Octopus.Apps.Collective do
       firefly_glow: firefly_glow,
       firefly_flash_rate: firefly_flash_rate,
       firefly_palette: firefly_palette,
+      glowworms_speed: glowworms_speed,
+      glowworms_color_intensity: glowworms_color_intensity,
+      glowworms_max_count: glowworms_max_count,
+      glowworms_circling_area: glowworms_circling_area,
+      glowworms_stay_chance: glowworms_stay_chance,
+      glowworms_run_away_proximity: glowworms_run_away_proximity,
+      glowworms_run_away_count: glowworms_run_away_count,
+      glowworms_run_away_duration: glowworms_run_away_duration,
+      glowworms_gravity_stay_multiplier: glowworms_gravity_stay_multiplier,
+      glowworms_birth_proximity_duration: glowworms_birth_proximity_duration,
+      glowworms_overpopulation_death_duration: glowworms_overpopulation_death_duration,
       ring_noise_speed: ring_noise_speed,
       ring_noise_pulse_period: ring_noise_pulse_period,
       ring_noise_pulse_amount: ring_noise_pulse_amount,
@@ -516,6 +657,17 @@ defmodule Octopus.Apps.Collective do
       firefly_glow: state.firefly_glow,
       firefly_flash_rate: state.firefly_flash_rate,
       firefly_palette: state.firefly_palette,
+      glowworms_speed: state.glowworms_speed,
+      glowworms_color_intensity: state.glowworms_color_intensity,
+      glowworms_max_count: state.glowworms_max_count,
+      glowworms_circling_area: state.glowworms_circling_area,
+      glowworms_stay_chance: state.glowworms_stay_chance,
+      glowworms_run_away_proximity: state.glowworms_run_away_proximity,
+      glowworms_run_away_count: state.glowworms_run_away_count,
+      glowworms_run_away_duration: state.glowworms_run_away_duration,
+      glowworms_gravity_stay_multiplier: state.glowworms_gravity_stay_multiplier,
+      glowworms_birth_proximity_duration: state.glowworms_birth_proximity_duration,
+      glowworms_overpopulation_death_duration: state.glowworms_overpopulation_death_duration,
       ring_noise_speed: state.ring_noise_speed,
       ring_noise_pulse_period: state.ring_noise_pulse_period,
       ring_noise_pulse_amount: state.ring_noise_pulse_amount,
@@ -562,6 +714,7 @@ defmodule Octopus.Apps.Collective do
              {"Crowd Dots", :dots},
              {"Lava Lamp", :lava_lamp},
              {"Fireflies", :fireflies},
+             {"Glowworms", :glowworms},
              {"Ring Noise", :ring_noise},
              {"Presence", :presence}
            ]
@@ -769,6 +922,63 @@ defmodule Octopus.Apps.Collective do
            ],
            visible_when: {:animation, [:fireflies]}
          }},
+      glowworms_speed:
+        {"Speed", :float,
+         %{
+           min: 0.2,
+           max: 5.0,
+           default: 1.6,
+           step: 0.1,
+           visible_when: {:animation, [:glowworms]}
+         }},
+      glowworms_color_intensity:
+        {"Color Intensity", :float,
+         %{
+           min: 0.0,
+           max: 1.0,
+           default: 0.55,
+           step: 0.05,
+           visible_when: {:animation, [:glowworms]}
+         }},
+      glowworms_max_count:
+        {"Max Glowworms", :int,
+         %{min: 1, max: 20, default: 13, visible_when: {:animation, [:glowworms]}}},
+      glowworms_circling_area:
+        {"Circling Area", :int,
+         %{min: 1, max: 10, default: 4, visible_when: {:animation, [:glowworms]}}},
+      glowworms_stay_chance:
+        {"Stay Chance", :float,
+         %{
+           min: 0.0,
+           max: 1.0,
+           default: 0.5,
+           step: 0.05,
+           visible_when: {:animation, [:glowworms]}
+         }},
+      glowworms_run_away_proximity:
+        {"Run Away Proximity", :int,
+         %{min: 2, max: 10, default: 5, visible_when: {:animation, [:glowworms]}}},
+      glowworms_run_away_count:
+        {"Run Away Count", :int,
+         %{min: 1, max: 10, default: 3, visible_when: {:animation, [:glowworms]}}},
+      glowworms_run_away_duration:
+        {"Run Away Duration", :int,
+         %{min: 1, max: 10, default: 5, visible_when: {:animation, [:glowworms]}}},
+      glowworms_gravity_stay_multiplier:
+        {"Gravity Stay Multiplier", :float,
+         %{
+           min: 1.0,
+           max: 10.0,
+           default: 3.0,
+           step: 0.5,
+           visible_when: {:animation, [:glowworms]}
+         }},
+      glowworms_birth_proximity_duration:
+        {"Birth Proximity Duration", :int,
+         %{min: 5, max: 60, default: 30, visible_when: {:animation, [:glowworms]}}},
+      glowworms_overpopulation_death_duration:
+        {"Overpopulation Death Duration", :int,
+         %{min: 5, max: 120, default: 45, visible_when: {:animation, [:glowworms]}}},
       ring_noise_speed:
         {"Noise Speed", :float,
          %{
@@ -953,6 +1163,18 @@ defmodule Octopus.Apps.Collective do
     """
   end
 
+  def config_info(%{animation: :glowworms}) do
+    """
+    Glowworms — bright dots with a soft corona and fluttering wings.
+    They fly horizontally, clustering together or seeking gravity sources.
+    They can meet, birth new glowworms, or scatter if overcrowded.
+    • Max Count — population limit.
+    • Color Intensity — white to pastel balance.
+    • Stay Chance — tendency to stop traveling when meeting.
+    • Gravity Stay Multiplier — how much longer they stay at gravity points.
+    """
+  end
+
   def config_info(%{animation: :ring_noise}) do
     """
     Ring Noise — seamless cylindrical noise field with palette colours and
@@ -1017,18 +1239,18 @@ defmodule Octopus.Apps.Collective do
       firefly_glow: state.firefly_glow,
       firefly_flash_rate: state.firefly_flash_rate,
       firefly_palette: state.firefly_palette,
+      glowworms_speed: state.glowworms_speed,
+      glowworms_color_intensity: state.glowworms_color_intensity,
+      glowworms_max_count: state.glowworms_max_count,
+      glowworms_circling_area: state.glowworms_circling_area,
+      glowworms_stay_chance: state.glowworms_stay_chance,
+      glowworms_run_away_proximity: state.glowworms_run_away_proximity,
+      glowworms_run_away_count: state.glowworms_run_away_count,
+      glowworms_run_away_duration: state.glowworms_run_away_duration,
+      glowworms_gravity_stay_multiplier: state.glowworms_gravity_stay_multiplier,
+      glowworms_birth_proximity_duration: state.glowworms_birth_proximity_duration,
+      glowworms_overpopulation_death_duration: state.glowworms_overpopulation_death_duration,
       ring_noise_speed: state.ring_noise_speed,
-      ring_noise_pulse_period: state.ring_noise_pulse_period,
-      ring_noise_pulse_amount: state.ring_noise_pulse_amount,
-      ring_noise_counter_wave: state.ring_noise_counter_wave,
-      ring_noise_palette: state.ring_noise_palette,
-      ring_noise_crowd_mode: state.ring_noise_crowd_mode,
-      ring_noise_reactivity: state.ring_noise_reactivity,
-      ring_noise_crowd_gain: state.ring_noise_crowd_gain,
-      ring_noise_sat_idle: state.ring_noise_sat_idle,
-      ring_noise_activity_bleed: state.ring_noise_activity_bleed,
-      presence_floor: state.presence_floor,
-      presence_bleed: state.presence_bleed
     }
   end
 
@@ -1075,6 +1297,25 @@ defmodule Octopus.Apps.Collective do
          firefly_glow: Map.get(config, :firefly_glow, state.firefly_glow),
          firefly_flash_rate: Map.get(config, :firefly_flash_rate, state.firefly_flash_rate),
          firefly_palette: Map.get(config, :firefly_palette, state.firefly_palette),
+         glowworms_speed: Map.get(config, :glowworms_speed, state.glowworms_speed),
+         glowworms_color_intensity:
+           Map.get(config, :glowworms_color_intensity, state.glowworms_color_intensity),
+         glowworms_max_count: Map.get(config, :glowworms_max_count, state.glowworms_max_count),
+         glowworms_circling_area:
+           Map.get(config, :glowworms_circling_area, state.glowworms_circling_area),
+         glowworms_stay_chance: Map.get(config, :glowworms_stay_chance, state.glowworms_stay_chance),
+         glowworms_run_away_proximity:
+           Map.get(config, :glowworms_run_away_proximity, state.glowworms_run_away_proximity),
+         glowworms_run_away_count:
+           Map.get(config, :glowworms_run_away_count, state.glowworms_run_away_count),
+         glowworms_run_away_duration:
+           Map.get(config, :glowworms_run_away_duration, state.glowworms_run_away_duration),
+         glowworms_gravity_stay_multiplier:
+           Map.get(config, :glowworms_gravity_stay_multiplier, state.glowworms_gravity_stay_multiplier),
+         glowworms_birth_proximity_duration:
+           Map.get(config, :glowworms_birth_proximity_duration, state.glowworms_birth_proximity_duration),
+         glowworms_overpopulation_death_duration:
+           Map.get(config, :glowworms_overpopulation_death_duration, state.glowworms_overpopulation_death_duration),
          ring_noise_speed: Map.get(config, :ring_noise_speed, state.ring_noise_speed),
          ring_noise_pulse_period:
            Map.get(config, :ring_noise_pulse_period, state.ring_noise_pulse_period),

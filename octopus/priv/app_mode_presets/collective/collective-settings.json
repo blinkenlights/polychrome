@@ -75,6 +75,25 @@
       "slug": "fireflies"
     },
     {
+      "accent_color": "#F39C12",
+      "config": {
+        "animation": "glowworms",
+        "glowworms_speed": 1.6,
+        "glowworms_birth_proximity_duration": 30,
+        "glowworms_circling_area": 4,
+        "glowworms_color_intensity": 0.55,
+        "glowworms_gravity_stay_multiplier": 3.0,
+        "glowworms_max_count": 13,
+        "glowworms_overpopulation_death_duration": 45,
+        "glowworms_run_away_count": 3,
+        "glowworms_run_away_duration": 5,
+        "glowworms_run_away_proximity": 5,
+        "glowworms_stay_chance": 0.5
+      },
+      "name": "Glowworms",
+      "slug": "glowworms"
+    },
+    {
       "accent_color": "#1ABC9C",
       "config": {
         "animation": "ring_noise",
