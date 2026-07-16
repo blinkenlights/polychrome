@@ -32,8 +32,9 @@ defmodule Octopus.InputAdapter do
 
   def init(:ok) do
     local_port = Application.fetch_env!(:octopus, :controller_interface_port)
-    Logger.info("Starting input adapter. Listening on port #{local_port}")
     {:ok, udp} = :gen_udp.open(local_port, [:binary, active: true])
+    {:ok, assigned_port} = :inet.port(udp)
+    Logger.info("Starting input adapter. Listening on port #{assigned_port}")
 
     {:ok, %State{udp: udp}}
   end

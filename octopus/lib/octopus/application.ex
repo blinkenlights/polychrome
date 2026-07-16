@@ -53,9 +53,12 @@ defmodule Octopus.Application do
         {Finch, name: Octopus.Finch},
         OctopusWeb.Endpoint,
 
-        # OSC
-        Octopus.Osc.Server
+        # OSC — skipped when OSC_SERVER_ENABLED=false.
       ] ++
+        case System.get_env("OSC_SERVER_ENABLED", "true") do
+          "false" -> []
+          _ -> [Octopus.Osc.Server]
+        end ++
         case System.get_env("TELEGRAM_BOT_SECRET") do
           nil -> []
           telegram_bot_secret -> [{Octopus.TelegramBot, bot_key: telegram_bot_secret}]

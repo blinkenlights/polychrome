@@ -22,11 +22,15 @@ config :octopus,
 # Used by Octopus.Apps.FrameRelay - receives frames from external sources
 config :octopus, :frame_relay_port, 2342
 
-# Used by Octopus.InputAdapter - bidirectional controller communication
-config :octopus, :controller_interface_port, 4423
+# Used by Octopus.InputAdapter - bidirectional controller communication.
+# Port 0 lets the OS assign an ephemeral port; controllers learn it
+# from the source address of pixel packets (no fixed port required).
+config :octopus, :controller_interface_port, 0
 
-# Used by Octopus.Broadcaster - communicates with ESP32/hardware devices
-config :octopus, :firmware_broadcaster_local_port, 4422
+# Used by Octopus.Broadcaster - communicates with ESP32/hardware devices.
+# Port 0 lets the OS assign an ephemeral port; firmware learns the reply
+# address from the source port of received pixel packets (no fixed port required).
+config :octopus, :firmware_broadcaster_local_port, 0
 config :octopus, :firmware_broadcaster_remote_port, 1337
 
 # Used by Octopus.Osc.Server - Open Sound Control for audio/visual applications

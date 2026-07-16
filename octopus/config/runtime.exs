@@ -10,6 +10,20 @@ if local = System.get_env("FIRMWARE_BROADCASTER_LOCAL_PORT") do
   config :octopus, :firmware_broadcaster_local_port, String.to_integer(local)
 end
 
+if port = System.get_env("CONTROLLER_INTERFACE_PORT") do
+  config :octopus, :controller_interface_port, String.to_integer(port)
+end
+
+
+# Installation module: can be overridden at runtime via INSTALLATION_MODULE.
+# In a release the compile-time default from config.exs is baked in, but
+# docker-compose (or any other launcher) can override it per-service by
+# setting INSTALLATION_MODULE in the container environment. All installation
+# modules are compiled into the release, so Module.concat is safe here.
+if installation_module = System.get_env("INSTALLATION_MODULE") do
+  config :octopus, :installation, Module.concat([installation_module])
+end
+
 # Auto-start an app after boot (runtime). Accepts a short Apps name
 # (`GravityMask`) or a full module (`Octopus.Apps.GravityMask`). Optional
 # mode id for apps with `mode_config/1` / presets.

@@ -107,10 +107,11 @@ defmodule Octopus.Broadcaster do
     {targets, network_mode, should_send_udp} = determine_targets(network_config, default_remote_port)
     pixel_count = Installation.panel_width() * Installation.panel_height()
 
-    {:ok, udp} = :gen_udp.open(local_port, [:binary, active: true, broadcast: true, reuseaddr: true])
+    {:ok, udp} = :gen_udp.open(local_port, [:binary, active: true, broadcast: true])
+    {:ok, assigned_port} = :inet.port(udp)
 
     Logger.info(
-      "Broadcasting to #{inspect(targets)}. Default remote port #{default_remote_port}. Send UDP: #{should_send_udp}"
+      "Broadcasting to #{inspect(targets)}. Default remote port #{default_remote_port}. Send UDP: #{should_send_udp}. Local port: #{assigned_port}"
     )
 
     state = %State{
