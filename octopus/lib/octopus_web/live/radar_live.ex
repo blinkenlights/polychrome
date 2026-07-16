@@ -144,6 +144,7 @@ defmodule OctopusWeb.RadarLive do
     {:ok,
      socket
      |> assign(:radar_configured, Radar.configured?())
+     |> assign(:ui_mode, :developer)
      |> assign(:live_available, Radar.live_available?())
      |> assign(:layout_devices, layout_devices)
      |> assign(:devices, devices)
@@ -222,6 +223,11 @@ defmodule OctopusWeb.RadarLive do
     new_mode = if params["auto"] == "true", do: :auto, else: :static
     Radar.set_bounds_mode(new_mode)
     {:noreply, socket}
+  end
+
+  def handle_event("toggle_ui_mode", %{"mode" => mode}, socket) do
+    ui_mode = if mode == "live", do: :live, else: :developer
+    {:noreply, assign(socket, :ui_mode, ui_mode)}
   end
 
   def handle_event("set_sensitivity", %{"sensitivity_level" => level_str}, socket) do
@@ -1062,7 +1068,53 @@ defmodule OctopusWeb.RadarLive do
         </div>
       </div>
     <% else %>
-      <div class="flex flex-row flex-nowrap w-full h-[calc(100vh-2.5rem)] min-h-0 items-stretch">
+      <div class={["flex w-full h-[calc(100vh-2.5rem)] min-h-0",
+                   if(@ui_mode == :developer, do: "flex-row flex-nowrap items-stretch", else: "flex-col")]}>
+        <%= if @ui_mode == :live do %>
+          <div class="shrink-0 flex flex-row items-center gap-6 px-4 py-2 border-b border-base-300 bg-base-100">
+            <div class="flex items-center gap-2">
+              <p class="text-xs font-semibold opacity-70 whitespace-nowrap">Source</p>
+              <div class="flex flex-wrap gap-1" id="radar-source-mode-live">
+                <%= for {value, label, disabled?} <- source_mode_options(@live_available) do %>
+                  <button
+                    type="button"
+                    phx-click="set_source_mode"
+                    phx-value-mode={value}
+                    disabled={disabled?}
+                    title={source_mode_button_title(value, disabled?)}
+                    class={[
+                      "btn btn-sm",
+                      if(Atom.to_string(@source_mode) == value, do: "btn-primary", else: "btn-outline"),
+                      disabled? && "btn-disabled"
+                    ]}
+                  >
+                    {label}
+                  </button>
+                <% end %>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <p class="text-xs font-semibold opacity-70 whitespace-nowrap">Sensors</p>
+              <div class="flex flex-nowrap gap-1">
+                <%= for d <- @devices do %>
+                  <button
+                    type="button"
+                    phx-click="toggle_sensor"
+                    phx-value-device_id={d.device_id}
+                    title={sensor_tooltip(d, @sensor_statuses[d.device_id])}
+                    class={[
+                      "btn btn-sm font-mono px-2",
+                      sensor_status_class(@sensor_statuses[d.device_id])
+                    ]}
+                  >
+                    {device_letter(d.device_id)}
+                  </button>
+                <% end %>
+              </div>
+            </div>
+          </div>
+        <% end %>
+        <%= if @ui_mode == :developer do %>
         <div class="w-64 shrink-0 h-full overflow-y-auto flex flex-col gap-3 p-3 border-r border-base-300 bg-base-100">
           <div class="flex flex-col gap-2">
             <p class="text-xs font-semibold opacity-70">Detections</p>
@@ -1173,8 +1225,26 @@ defmodule OctopusWeb.RadarLive do
             </div>
           <% end %>
         </div>
+        <% end %>
 
-        <div class="flex-1 min-w-0 min-h-0 h-full flex items-center justify-center overflow-hidden bg-base-200">
+        <div class={["min-w-0 min-h-0 flex items-center justify-center overflow-hidden bg-base-200 relative",
+                     if(@ui_mode == :developer, do: "flex-1 h-full", else: "flex-1")]}>
+          <div class="absolute top-2 right-2 z-10 join shadow">
+            <button
+              type="button"
+              class={["btn btn-xs join-item", if(@ui_mode == :developer, do: "btn-neutral", else: "btn-ghost opacity-50 hover:opacity-100")]}
+              phx-click="toggle_ui_mode"
+              phx-value-mode="developer"
+              title="Developer view"
+            >Dev</button>
+            <button
+              type="button"
+              class={["btn btn-xs join-item", if(@ui_mode == :live, do: "btn-neutral", else: "btn-ghost opacity-50 hover:opacity-100")]}
+              phx-click="toggle_ui_mode"
+              phx-value-mode="live"
+              title="Live view"
+            >Live</button>
+          </div>
           <div
             class="max-h-full max-w-full"
             style="width: min(100%, calc(100vh - 2.5rem)); aspect-ratio: 1; height: auto; max-height: 100%;"
@@ -1488,6 +1558,7 @@ defmodule OctopusWeb.RadarLive do
           </div>
         </div>
 
+        <%= if @ui_mode == :developer do %>
         <div class="w-80 shrink-0 h-full overflow-y-auto flex flex-col gap-4 p-3 border-l border-base-300 bg-base-100">
           <div class="flex flex-col gap-3">
             <p class="text-xs font-semibold opacity-70">Source</p>
@@ -1920,6 +1991,7 @@ defmodule OctopusWeb.RadarLive do
                     <% end %>
                   </div>
         </div>
+        <% end %>
       </div>
     <% end %>
     """
