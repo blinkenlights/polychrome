@@ -134,10 +134,6 @@ defmodule Octopus.Radar.PanelGravity do
       Enum.reduce(tracks, state.track_registry, fn track, acc ->
         person = track_to_person(track, device_id)
 
-        Logger.debug(
-          "[PanelGravity][DIAG] dev=#{device_id} track_id=#{track.id} x=#{Float.round(person.x, 4)} y=#{Float.round(person.y, 4)}"
-        )
-
         Map.put(acc, person.id, {person, now})
       end)
 
