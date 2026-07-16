@@ -84,6 +84,8 @@ defmodule OctopusWeb.ConsoleComponents do
   attr :up_next_index, :integer, default: nil
   attr :elapsed_percent, :integer, required: true
   attr :holding_label, :string, required: true
+  attr :mask_picker_index, :integer, default: nil
+  attr :mask_eligible_apps, :list, default: []
   attr :front_app, :map, default: nil
   attr :mask_app, :map, default: nil
   attr :target, :any, default: nil
@@ -118,6 +120,8 @@ defmodule OctopusWeb.ConsoleComponents do
           elapsed_percent={@elapsed_percent}
           countdown_label={@countdown_label}
           holding_label={@holding_label}
+          mask_picker_index={@mask_picker_index}
+          mask_eligible_apps={@mask_eligible_apps}
           target={@target}
           embedded
         />
@@ -156,15 +160,6 @@ defmodule OctopusWeb.ConsoleComponents do
         <%= if @mask_app do %>
           <span class="w-1.5 h-1.5 rounded-full bg-base-content/50 shrink-0" />
           <span class="text-sm font-medium truncate max-w-[12rem]">{@mask_app.name}</span>
-          <button
-            class="btn btn-xs btn-error btn-square min-h-7 min-w-7 shrink-0"
-            phx-click="stop_mask_app"
-            phx-target={@target}
-            title="Mask-App beenden"
-            aria-label="Mask-App beenden"
-          >
-            <.console_icon_stop class="w-3 h-3" />
-          </button>
         <% else %>
           <span class="text-sm opacity-40 italic">Keine Mask</span>
         <% end %>
@@ -210,7 +205,6 @@ defmodule OctopusWeb.ConsoleComponents do
         />
       </div>
       <div class="flex-1 min-w-[8rem]">
-        <div class="text-[11px] uppercase tracking-wide opacity-60 max-[699px]:hidden">Now on the wall</div>
         <div class="flex items-center gap-2 flex-wrap">
           <span class="text-base min-[700px]:text-lg font-semibold truncate">{@live_label}</span>
           <.transport_mode_badge mode={@transport_mode} />
@@ -413,7 +407,7 @@ defmodule OctopusWeb.ConsoleComponents do
         {if @compact, do: "↩", else: "Resume playlist"}
       </button>
       <button
-        :if={!@takeover?}
+        :if={!@takeover? && @rotating?}
         class={[
           "btn btn-circle btn-primary bg-[#6d7cff] border-[#6d7cff] hover:bg-[#5b6aff] text-lg",
           @compact && "btn-sm w-11 h-11",
@@ -565,6 +559,8 @@ defmodule OctopusWeb.ConsoleComponents do
   attr :elapsed_percent, :integer, required: true
   attr :countdown_label, :string, required: true
   attr :holding_label, :string, required: true
+  attr :mask_picker_index, :integer, default: nil
+  attr :mask_eligible_apps, :list, default: []
   attr :embedded, :boolean, default: false
   attr :target, :any, default: nil
 
@@ -613,6 +609,8 @@ defmodule OctopusWeb.ConsoleComponents do
             up_next?={@up_next_index == idx}
             elapsed_percent={@elapsed_percent}
             countdown_label={@countdown_label}
+            mask_picker_open={@mask_picker_index == idx}
+            mask_eligible_apps={@mask_eligible_apps}
             target={@target}
           />
         </div>
@@ -632,85 +630,180 @@ defmodule OctopusWeb.ConsoleComponents do
   attr :up_next?, :boolean, required: true
   attr :elapsed_percent, :integer, required: true
   attr :countdown_label, :string, required: true
+  attr :mask_picker_open, :boolean, default: false
+  attr :mask_eligible_apps, :list, default: []
   attr :target, :any, default: nil
 
   def queue_row(assigns) do
     ~H"""
     <div class={[
-      "group relative flex items-center gap-1 rounded-md border px-2 py-1 min-h-[1.75rem]",
+      "group relative flex flex-col rounded-md border",
       @live? && "border-[#00d390] bg-[#00d390]/10",
       !@live? && "border-base-300 bg-base-100"
     ]}>
-      <span class="w-4 text-center text-[11px] opacity-60 shrink-0 leading-none">{@idx + 1}</span>
-      <span class="w-1 self-stretch min-h-[1rem] rounded shrink-0" style={"background-color: #{@entry.accent_color}"} />
-      <div
-        class="flex-1 min-w-0 font-semibold text-sm truncate leading-tight"
-        title={"#{@entry.app_name} · #{@entry.mode_name}"}
-      >
-        {@entry.mode_name}
-      </div>
+      <div class="relative flex items-center gap-1 px-2 py-1 min-h-[1.75rem]">
+        <span class="w-4 text-center text-[11px] opacity-60 shrink-0 leading-none">{@idx + 1}</span>
+        <span class="w-1 self-stretch min-h-[1rem] rounded shrink-0" style={"background-color: #{@entry.accent_color}"} />
+        <div
+          class="flex-1 min-w-0 font-semibold text-sm truncate leading-tight"
+          title={"#{@entry.app_name} · #{@entry.mode_name}"}
+        >
+          {@entry.mode_name}
+        </div>
 
-      <.live_badge :if={@live?} />
-      <span :if={@up_next? and not @live?} class="text-xs opacity-70 whitespace-nowrap shrink-0">
-        up next · {@countdown_label}
-      </span>
+        <.live_badge :if={@live?} />
+        <span :if={@up_next? and not @live?} class="text-xs opacity-70 whitespace-nowrap shrink-0">
+          up next · {@countdown_label}
+        </span>
+
+        <div class={[
+          "flex items-center gap-0.5 shrink-0",
+          "max-[699px]:opacity-100 max-[699px]:pointer-events-auto",
+          "opacity-0 pointer-events-none",
+          "group-hover:opacity-100 group-hover:pointer-events-auto",
+          "group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
+        ]}>
+          <button
+            class="btn btn-ghost btn-xs btn-square min-h-8 min-w-8"
+            phx-click="queue_move"
+            phx-value-index={@idx}
+            phx-value-dir="up"
+            phx-target={@target}
+            disabled={@idx == 0}
+            aria-label="Move up"
+          >
+            <.console_icon_chevron_up class="w-3.5 h-3.5" />
+          </button>
+          <button
+            class="btn btn-ghost btn-xs btn-square min-h-8 min-w-8"
+            phx-click="queue_move"
+            phx-value-index={@idx}
+            phx-value-dir="down"
+            phx-target={@target}
+            disabled={@idx == @count - 1}
+            aria-label="Move down"
+          >
+            <.console_icon_chevron_down class="w-3.5 h-3.5" />
+          </button>
+          <button
+            class="btn btn-ghost btn-xs btn-square min-h-8 min-w-8"
+            phx-click="queue_remove"
+            phx-value-index={@idx}
+            phx-target={@target}
+            aria-label="Remove from playlist"
+          >
+            <.console_icon_x class="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div
+          :if={@live?}
+          class="absolute bottom-0 left-0 h-[2px] bg-[#00d390] rounded-bl-md"
+          style={"width: #{@elapsed_percent}%"}
+        />
+      </div>
 
       <div class={[
-        "flex items-center gap-0.5 shrink-0",
-        "max-[699px]:opacity-100 max-[699px]:pointer-events-auto",
-        "opacity-0 pointer-events-none",
-        "group-hover:opacity-100 group-hover:pointer-events-auto",
-        "group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
+        "flex items-center gap-1.5 px-2 py-0.5 border-t border-base-300/50 min-h-[1.5rem]",
+        @live? && @entry.mask && "bg-[#a855f7]/10 border-l-2 border-l-[#a855f7]"
       ]}>
+        <span class="w-4 shrink-0" />
+        <span class="text-[10px] uppercase tracking-wider font-semibold opacity-50 shrink-0 w-8">mask</span>
+        <%= if @entry.mask do %>
+          <.mask_badge />
+          <span class="flex-1 min-w-0 text-xs truncate" title={"#{@entry.mask_app_name} · #{@entry.mask_mode_name}"}>
+            {@entry.mask_mode_name}
+          </span>
+        <% else %>
+          <span class="flex-1 text-xs italic opacity-40">Keine Mask</span>
+        <% end %>
         <button
-          class="btn btn-ghost btn-xs btn-square min-h-8 min-w-8"
-          phx-click="queue_move"
-          phx-value-index={@idx}
-          phx-value-dir="up"
-          phx-target={@target}
-          disabled={@idx == 0}
-          aria-label="Move up"
-        >
-          <.console_icon_chevron_up class="w-3.5 h-3.5" />
-        </button>
-        <button
-          class="btn btn-ghost btn-xs btn-square min-h-8 min-w-8"
-          phx-click="queue_move"
-          phx-value-index={@idx}
-          phx-value-dir="down"
-          phx-target={@target}
-          disabled={@idx == @count - 1}
-          aria-label="Move down"
-        >
-          <.console_icon_chevron_down class="w-3.5 h-3.5" />
-        </button>
-        <button
-          class="btn btn-ghost btn-xs btn-square min-h-8 min-w-8"
-          phx-click="queue_remove"
+          type="button"
+          class="btn btn-ghost btn-xs btn-square min-h-7 min-w-7 shrink-0 opacity-70 hover:opacity-100"
+          phx-click="queue_mask_open"
           phx-value-index={@idx}
           phx-target={@target}
-          aria-label="Remove from playlist"
+          title="Mask für diesen Track wählen"
+          aria-label="Mask für diesen Track wählen"
         >
-          <.console_icon_x class="w-3.5 h-3.5" />
+          <.console_icon_mask class="w-3.5 h-3.5" />
         </button>
       </div>
 
-      <div
-        :if={@live?}
-        class="absolute bottom-0 left-0 h-[2px] bg-[#00d390] rounded-bl-md"
-        style={"width: #{@elapsed_percent}%"}
+      <.queue_mask_picker
+        :if={@mask_picker_open}
+        idx={@idx}
+        entry={@entry}
+        mask_apps={@mask_eligible_apps}
+        target={@target}
       />
     </div>
     """
   end
 
+  attr :idx, :integer, required: true
+  attr :entry, :map, required: true
+  attr :mask_apps, :list, required: true
+  attr :target, :any, default: nil
+
+  defp queue_mask_picker(assigns) do
+    ~H"""
+    <div
+      id={"queue-mask-picker-#{@idx}"}
+      class="px-2 pb-2 pt-1 border-t border-base-300/50 space-y-2 text-xs bg-base-200/50"
+    >
+      <div class="font-semibold opacity-70">Mask für Track {@idx + 1}</div>
+      <button
+        type="button"
+        class={[
+          "btn btn-xs w-full justify-start font-normal",
+          !@entry.mask && "btn-primary"
+        ]}
+        phx-click="queue_set_mask"
+        phx-value-index={@idx}
+        phx-value-mask_app=""
+        phx-value-mask_mode_id=""
+        phx-target={@target}
+      >
+        Keine Mask
+      </button>
+      <div :for={app <- @mask_apps} class="space-y-1">
+        <div class="font-semibold opacity-70">{app.name}</div>
+        <div class="flex flex-wrap gap-1">
+          <button
+            :for={mode <- app.modes}
+            type="button"
+            class={[
+              "btn btn-xs font-normal",
+              mask_mode_selected?(@entry.mask, app.module, mode.id) && "btn-primary bg-[#a855f7] border-[#a855f7]"
+            ]}
+            phx-click="queue_set_mask"
+            phx-value-index={@idx}
+            phx-value-mask_app={Atom.to_string(app.module)}
+            phx-value-mask_mode_id={mode.id}
+            phx-target={@target}
+          >
+            {mode.name}
+          </button>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  defp mask_mode_selected?(nil, _app, _mode_id), do: false
+
+  defp mask_mode_selected?(%{app: mask_app, mode_id: mask_mode_id}, app, mode_id) do
+    mask_app == app and mask_mode_id == mode_id
+  end
+
+  defp mask_mode_selected?(_, _, _), do: false
+
   attr :mode, :map, required: true
   attr :app_module, :atom, required: true
   attr :live?, :boolean, default: false
-  attr :mask?, :boolean, default: false
   attr :queued_pos, :integer, default: nil
   attr :queueable?, :boolean, default: true
-  attr :mask_eligible?, :boolean, default: false
   attr :play_now_title, :string, default: "Show on the wall"
   attr :stop_takeover?, :boolean, default: false
   attr :target, :any, default: nil
@@ -724,7 +817,6 @@ defmodule OctopusWeb.ConsoleComponents do
           <h3 class="font-semibold text-sm leading-tight truncate min-w-0 flex-1">{@mode.name}</h3>
           <div class="flex items-center gap-1 shrink-0">
             <.live_badge :if={@live?} />
-            <.mask_badge :if={@mask?} />
             <span :if={@queued_pos} class="badge badge-outline badge-xs">Nr. {@queued_pos}</span>
             <span :if={Map.get(@mode, :builtin) == false} class="badge badge-outline badge-xs opacity-70">
               yours
@@ -752,18 +844,6 @@ defmodule OctopusWeb.ConsoleComponents do
               aria-label={@play_now_title}
             >
               <.console_icon_play class="w-4 h-4" />
-            </button>
-            <button
-              :if={@mask_eligible? && !@stop_takeover?}
-              class="btn btn-sm btn-square btn-ghost min-h-9 min-w-9 opacity-70 hover:opacity-100"
-              phx-click="start_as_mask"
-              phx-value-module={Atom.to_string(@app_module)}
-              phx-value-mode_id={@mode.id}
-              phx-target={@target}
-              title="Als Mask-App starten"
-              aria-label="Als Mask-App starten"
-            >
-              <.console_icon_mask class="w-4 h-4" />
             </button>
             <button
               :if={@queueable?}
@@ -838,15 +918,6 @@ defmodule OctopusWeb.ConsoleComponents do
           <span class="w-2 h-2 rounded-full bg-base-content/60 shrink-0" />
           <span class="font-medium flex-1 min-w-0 truncate">{@mask_app.name}</span>
           <span class="badge badge-neutral badge-sm shrink-0">Mask</span>
-          <button
-            class="btn btn-sm btn-error btn-square min-h-9 min-w-9 shrink-0"
-            phx-click="stop_mask_app"
-            phx-target={@target}
-            title="Mask-App beenden"
-            aria-label="Mask-App beenden"
-          >
-            <.console_icon_stop class="w-4 h-4" />
-          </button>
         <% else %>
           <span class="w-2 h-2 rounded-full bg-base-content/20 shrink-0" />
           <span class="flex-1 text-sm opacity-50 italic">Keine Mask aktiv</span>

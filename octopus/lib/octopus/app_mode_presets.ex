@@ -145,7 +145,9 @@ defmodule Octopus.AppModePresets do
     new_queue = filter_queue(transport.queue, app, normalized)
 
     apply(@installation_transport, :set_queue, [
-      Enum.map(new_queue, fn e -> %{app: e.app, mode_id: e.mode_id} end)
+      Enum.map(new_queue, fn e ->
+        %{app: e.app, mode_id: e.mode_id, mask: Map.get(e, :mask)}
+      end)
     ])
   end
 
