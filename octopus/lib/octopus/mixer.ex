@@ -422,8 +422,15 @@ defmodule Octopus.Mixer do
   def handle_info(:idle_frame, %State{} = state) do
     schedule_idle_frame()
 
-    if state.rendered_app == nil and AppManager.get_selected_app() == nil do
-      send_blank_frame(state)
+    cond do
+      state.rendered_app != nil ->
+        rerender_selected_app(state)
+
+      AppManager.get_selected_app() == nil ->
+        send_blank_frame(state)
+
+      true ->
+        :ok
     end
 
     {:noreply, state}
