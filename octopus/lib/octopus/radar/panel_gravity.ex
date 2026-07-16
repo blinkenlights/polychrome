@@ -404,15 +404,7 @@ defmodule Octopus.Radar.PanelGravity do
     raw_values = Map.values(raw)
     raw_max = Enum.max(raw_values, fn -> 0.0 end)
 
-    Logger.debug(
-      "[PanelGravity] trigger=#{trigger} source=#{people_source} " <>
-        "people=#{length(people)} panels=#{state.num_panels} " <>
-        "near=#{Float.round(settings.near_dist_m * 1.0, 2)}m far=#{Float.round(settings.far_dist_m * 1.0, 2)}m " <>
-        "max=#{settings.max_gravity_pct}% " <>
-        "easing=#{settings.easing_tau}s raw_peak=#{Float.round(raw_max, 4)} " <>
-        "peak=p#{peak_panel}=#{Float.round(peak_level, 4)} " <>
-        "top=[#{top_panels(target, 5)}]"
-    )
+      _ = {trigger, people_source, people, state, settings, raw_max, peak_panel, peak_level, target}
   end
 
   defp top_panels(map, n) do
