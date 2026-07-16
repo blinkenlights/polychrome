@@ -144,7 +144,7 @@ defmodule OctopusWeb.RadarLive do
     {:ok,
      socket
      |> assign(:radar_configured, Radar.configured?())
-     |> assign(:ui_mode, :developer)
+     |> assign(:ui_mode, :live)
      |> assign(:live_available, Radar.live_available?())
      |> assign(:layout_devices, layout_devices)
      |> assign(:devices, devices)
@@ -183,6 +183,11 @@ defmodule OctopusWeb.RadarLive do
      |> reset_radar_state()}
   end
 
+  @impl true
+  def handle_params(params, _uri, socket) do
+    ui_mode = if params["view"] == "developer", do: :developer, else: :live
+    {:noreply, assign(socket, :ui_mode, ui_mode)}
+  end
 
   # The canvas always frames the entire simulated world (in every mode) so the
   # world border, the sensors and their coverage, and the detections all share
@@ -226,8 +231,8 @@ defmodule OctopusWeb.RadarLive do
   end
 
   def handle_event("toggle_ui_mode", %{"mode" => mode}, socket) do
-    ui_mode = if mode == "live", do: :live, else: :developer
-    {:noreply, assign(socket, :ui_mode, ui_mode)}
+    params = if mode == "live", do: %{}, else: %{view: "developer"}
+    {:noreply, push_patch(socket, to: ~p"/radar?#{params}", replace: true)}
   end
 
   def handle_event("set_sensitivity", %{"sensitivity_level" => level_str}, socket) do
