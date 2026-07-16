@@ -35,11 +35,7 @@ defmodule Octopus.Mixer do
       transition: nil,
       max_luminance: 255,
 
-      # Layout override for the next mask app that calls create_display_buffers.
-      # Set by AppSupervisor.start_as_mask_app before starting the mask app process
-      # so the mask app's canvas uses the same coordinate system as the front app.
-      pending_mask_layout: nil
-    ]
+      ]
   end
 
   def start_link(_) do
@@ -53,22 +49,6 @@ defmodule Octopus.Mixer do
   """
   def create_display_buffers(app_id, config) do
     GenServer.call(__MODULE__, {:create_display_buffers, app_id, config})
-  end
-
-  @doc """
-  Signals the Mixer that the next app calling `create_display_buffers` should use
-  the given layout instead of its own, so mask apps share the same coordinate
-  system as the current front app.
-
-  Must be called synchronously before the mask app process is started.
-  The override is consumed by the very next `create_display_buffers` call and then cleared.
-  """
-  def set_pending_mask_layout(layout) when layout in [:gapped_panels, :adjacent_panels, :gapped_panels_wrapped] do
-    GenServer.call(__MODULE__, {:set_pending_mask_layout, layout})
-  end
-
-  def set_pending_mask_layout(nil) do
-    GenServer.call(__MODULE__, {:set_pending_mask_layout, nil})
   end
 
   @doc """
@@ -163,22 +143,9 @@ defmodule Octopus.Mixer do
 
   # Display buffer management callbacks
 
-  def handle_call({:set_pending_mask_layout, layout}, _from, %State{} = state) do
-    {:reply, :ok, %State{state | pending_mask_layout: layout}}
-  end
-
   def handle_call({:create_display_buffers, app_id, config}, _from, %State{} = state) do
-    # Use the pending mask layout override if set (so mask apps share the front app's
-    # coordinate system), otherwise use the app's own layout.
-    layout =
-      if state.pending_mask_layout do
-        state.pending_mask_layout
-      else
-        Map.get(config, :layout, :gapped_panels)
-      end
-
+    layout = Map.get(config, :layout, :gapped_panels)
     display_info = build_display_info(layout)
-    state = %State{state | pending_mask_layout: nil}
 
     width = display_info.width
     height = display_info.height
@@ -663,9 +630,9 @@ defmodule Octopus.Mixer do
   end
 
   # Converts canvas to frame with masking applied during frame generation.
-  # Uses each app's own display_info for coordinate lookup so the layout
-  # is always consistent (mask apps are started with the front app's layout
-  # via set_pending_mask_layout, so in practice both display_infos are identical).
+  # Uses each app's own display_info for coordinate lookup, so front and mask
+  # apps can use different layouts — the mixer maps each panel_id independently
+  # in both canvases.
   defp canvas_to_frame_with_mask(
          canvas,
          mask_canvas,
@@ -726,7 +693,7 @@ defmodule Octopus.Mixer do
   end
 
   # Converts canvas to wframe with masking applied during frame generation.
-  # See canvas_to_frame_with_mask for layout-matching notes.
+  # See canvas_to_frame_with_mask for layout notes.
   defp canvas_to_wframe_with_mask(
          canvas,
          mask_canvas,
@@ -972,6 +939,20 @@ defmodule Octopus.Mixer do
 
     case state.output_mode do
       :masked when not is_nil(state.mask_app_id) ->
+        # Broadcast unmasked front frame for channel viewers
+        front_frame = canvas_to_frame(main_canvas, main_display_info, easing_interval, main_app_display)
+        Phoenix.PubSub.broadcast(Octopus.PubSub, @pubsub_topic, {:mixer, {:front_frame, front_frame}})
+
+        # Broadcast mask frame for channel viewers
+        with mask_display when not is_nil(mask_display) <-
+               Map.get(state.app_displays, state.mask_app_id),
+             mask_canvas when not is_nil(mask_canvas) <- get_mask_canvas(mask_display) do
+          mask_frame =
+            canvas_to_frame(mask_canvas, mask_display.display_info, easing_interval, mask_display)
+
+          Phoenix.PubSub.broadcast(Octopus.PubSub, @pubsub_topic, {:mixer, {:mask_frame, mask_frame}})
+        end
+
         # Send frame type based on selected app's mode, but with masking applied
         case main_app_mode do
           :rgb ->
@@ -1095,11 +1076,18 @@ defmodule Octopus.Mixer do
   end
 
   defp update_output_mode(%State{rendered_app: main, mask_app_id: mask} = state) do
-    cond do
-      main && mask -> %State{state | output_mode: :masked}
-      main -> %State{state | output_mode: :rgb}
-      true -> %State{state | output_mode: :rgb}
+    new_mode =
+      cond do
+        main && mask -> :masked
+        main -> :rgb
+        true -> :rgb
+      end
+
+    if new_mode != state.output_mode do
+      Phoenix.PubSub.broadcast(Octopus.PubSub, @pubsub_topic, {:mixer, {:output_mode, new_mode}})
     end
+
+    %State{state | output_mode: new_mode}
   end
 
   defp rendered_app_id(%State{rendered_app: app_id}) when is_binary(app_id), do: app_id

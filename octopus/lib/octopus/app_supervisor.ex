@@ -2,7 +2,7 @@ defmodule Octopus.AppSupervisor do
   use DynamicSupervisor
   require Logger
 
-  alias Octopus.{AppManager, App, Mixer}
+  alias Octopus.{AppManager, App}
   alias Octopus.Events.Event.Audio, as: AudioEvent
   alias Octopus.Events.Event.Proximity, as: ProximityEvent
   alias Octopus.Events.Event.Input, as: InputEvent
@@ -97,11 +97,6 @@ defmodule Octopus.AppSupervisor do
         old_mask = AppManager.get_mask_app()
         old_front = AppManager.get_selected_app()
 
-        # Tell the Mixer to use the front app's layout for the mask app's display buffers,
-        # so both apps share the same coordinate system.
-        front_layout = front_app_layout(old_front)
-        Mixer.set_pending_mask_layout(front_layout)
-
         case do_start_raw(module, config) do
           {:ok, new_id} ->
             AppManager.set_mask_app(new_id)
@@ -109,7 +104,6 @@ defmodule Octopus.AppSupervisor do
             {:ok, new_id}
 
           err ->
-            Mixer.set_pending_mask_layout(nil)
             err
         end
     end
@@ -199,17 +193,6 @@ defmodule Octopus.AppSupervisor do
         {:error, :start_failed}
     end
   end
-
-  defp front_app_layout(nil), do: :gapped_panels
-
-  defp front_app_layout(app_id) when is_binary(app_id) do
-    case Mixer.get_app_display_info(app_id) do
-      %{layout: layout} -> layout
-      _ -> :gapped_panels
-    end
-  end
-
-  defp front_app_layout(_), do: :gapped_panels
 
   defp stop_slot_app(nil, _opts), do: :ok
 
