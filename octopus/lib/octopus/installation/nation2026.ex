@@ -49,7 +49,7 @@ defmodule Octopus.Installation.Nation2026 do
           [id: :c, rotation_deg: 323],
           :d,
           :e,
-          [id: :f, rotation_deg: 334]
+          :f
         ],
         start_angle_deg: 150,
         distance_cm: 300
@@ -58,14 +58,6 @@ defmodule Octopus.Installation.Nation2026 do
         sensitivity: 1.0,
         adaptive: true,
         release_tau: 5.0
-      ],
-      panel_gravity: [
-        exponent: 3.0,
-        softening_m: 0.25,
-        reach: 50,
-        sensitivity: 1.0,
-        contrast: 3.0,
-        adaptive: true
       ]
     ],
     network_config: [

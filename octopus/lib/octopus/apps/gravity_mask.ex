@@ -18,12 +18,7 @@ defmodule Octopus.Apps.GravityMask do
   alias Octopus.Radar
 
   @panel_width 8
-  # Floor brightness as percent 0..100 in config / UI; stored as 0..1 unit internally.
-  @default_floor_pct 25
-  @default_contrast 3.0
-  @default_reach 50
   @default_easing_tau 1.5
-  @default_velocity_gain 0.0
   @debug_log_interval_ms 1_000
 
   def name, do: "Gravity Mask"
@@ -41,13 +36,7 @@ defmodule Octopus.Apps.GravityMask do
   end
 
   defp default_config do
-    %{
-      floor_brightness: @default_floor_pct,
-      contrast: @default_contrast,
-      reach: @default_reach,
-      easing_tau: @default_easing_tau,
-      velocity_gain: @default_velocity_gain
-    }
+    %{easing_tau: @default_easing_tau}
   end
 
   def mode_tweakables(mode_id) do
@@ -57,51 +46,14 @@ defmodule Octopus.Apps.GravityMask do
   def mode_tweakables_for(slug) when slug in ["mask", "default"] do
     [
       %{
-        key: :floor_brightness,
-        label: "Floor brightness",
-        type: :slider,
-        min: 0,
-        max: 100,
-        step: 5,
-        unit: "%",
-        default: @default_floor_pct
-      },
-      %{
-        key: :contrast,
-        label: "Contrast",
-        type: :slider,
-        min: 1.0,
-        max: 6.0,
-        step: 0.5,
-        default: @default_contrast
-      },
-      %{
-        key: :reach,
-        label: "Reach",
-        type: :slider,
-        min: 1,
-        max: 100,
-        step: 1,
-        default: @default_reach
-      },
-      %{
         key: :easing_tau,
         label: "Easing",
         type: :slider,
-        min: 0.2,
+        min: 0.0,
         max: 5.0,
         step: 0.1,
         unit: "s",
         default: @default_easing_tau
-      },
-      %{
-        key: :velocity_gain,
-        label: "Velocity gain",
-        type: :slider,
-        min: 0.0,
-        max: 3.0,
-        step: 0.25,
-        default: @default_velocity_gain
       }
     ]
   end
@@ -109,13 +61,8 @@ defmodule Octopus.Apps.GravityMask do
   def mode_tweakables_for(_), do: []
 
   def now_playing_meta(config) do
-    floor_pct = floor_config_to_pct(Map.get(config, :floor_brightness, @default_floor_pct))
-    reach = Map.get(config, :reach, @default_reach)
-
-    [
-      "floor #{trunc(floor_pct)}%",
-      "reach #{trunc(reach)}"
-    ]
+    easing = Map.get(config, :easing_tau, @default_easing_tau)
+    ["easing #{easing}s"]
   end
 
   def app_init(config) do
@@ -138,11 +85,7 @@ defmodule Octopus.Apps.GravityMask do
       display_info: display_info,
       factors: %{},
       rendered_levels: nil,
-      floor_brightness: floor_config_to_unit(Map.get(config, :floor_brightness, @default_floor_pct)),
-      contrast: Map.get(config, :contrast, @default_contrast),
-      reach: Map.get(config, :reach, @default_reach),
       easing_tau: Map.get(config, :easing_tau, @default_easing_tau),
-      velocity_gain: Map.get(config, :velocity_gain, @default_velocity_gain),
       last_debug_ms: nil
     }
 
@@ -150,11 +93,7 @@ defmodule Octopus.Apps.GravityMask do
     send(self(), :paint_now)
 
     Logger.debug(
-      "[GravityMask] started floor=#{floor_config_to_pct(Map.get(config, :floor_brightness, @default_floor_pct))}% " <>
-        "contrast=#{Map.get(config, :contrast, @default_contrast)} " <>
-        "reach=#{Map.get(config, :reach, @default_reach)} " <>
-        "easing_tau=#{Map.get(config, :easing_tau, @default_easing_tau)}s " <>
-        "velocity_gain=#{Map.get(config, :velocity_gain, @default_velocity_gain)} " <>
+      "[GravityMask] started easing_tau=#{Map.get(config, :easing_tau, @default_easing_tau)}s " <>
         "panel_gravity=#{inspect(Process.whereis(Octopus.Radar.PanelGravity) != nil)}"
     )
 
@@ -192,44 +131,17 @@ defmodule Octopus.Apps.GravityMask do
 
   def config_schema do
     %{
-      floor_brightness:
-        {"Floor brightness", :float, %{min: 0, max: 100, step: 5, default: @default_floor_pct}},
-      contrast: {"Contrast", :float, %{min: 1.0, max: 6.0, step: 0.5, default: @default_contrast}},
-      reach: {"Reach", :float, %{min: 1, max: 100, step: 1, default: @default_reach}},
-      easing_tau:
-        {"Easing", :float, %{min: 0.2, max: 5.0, step: 0.1, default: @default_easing_tau}},
-      velocity_gain:
-        {"Velocity gain", :float, %{min: 0.0, max: 3.0, step: 0.25, default: @default_velocity_gain}}
+      easing_tau: {"Easing", :float, %{min: 0.0, max: 5.0, step: 0.1, default: @default_easing_tau}}
     }
   end
 
   def get_config(state) do
-    %{
-      floor_brightness: floor_unit_to_pct(state.floor_brightness),
-      contrast: state.contrast,
-      reach: state.reach,
-      easing_tau: state.easing_tau,
-      velocity_gain: state.velocity_gain
-    }
+    %{easing_tau: state.easing_tau}
   end
 
   def handle_config(config, state) do
     apply_gravity_config(config)
-
-    state = %{
-      state
-      | floor_brightness:
-          floor_config_to_unit(
-            Map.get(config, :floor_brightness, floor_unit_to_pct(state.floor_brightness))
-          ),
-        contrast: Map.get(config, :contrast, state.contrast),
-        reach: Map.get(config, :reach, state.reach),
-        easing_tau: Map.get(config, :easing_tau, state.easing_tau),
-        velocity_gain: Map.get(config, :velocity_gain, state.velocity_gain)
-    }
-
-    # Floor is display-local; reach/contrast/easing_tau/velocity_gain notify PanelGravity
-    # via settings — force a redraw now, and the next PubSub snapshot will refine if needed.
+    state = %{state | easing_tau: Map.get(config, :easing_tau, state.easing_tau)}
     {:noreply, maybe_render(state, force: true)}
   end
 
@@ -262,21 +174,17 @@ defmodule Octopus.Apps.GravityMask do
     end
   end
 
-  defp render_canvas(
-         %{display_info: display_info, floor_brightness: floor},
-         levels
-       ) do
+  defp render_canvas(%{display_info: display_info}, levels) do
     num_panels = max(div(display_info.width, @panel_width), 1)
     height = display_info.height
 
-    # Install panel N → canvas column N-1 (Presence / firmware slot order).
+    # Gravity (0..1) maps directly to intensity (0..255) — no floor, no contrast.
     Enum.reduce(
       1..num_panels,
       Canvas.new(display_info.width, display_info.height, :grayscale),
       fn panel, canvas ->
         level = Map.get(levels, panel, 0.0)
-        brightness = floor + (1.0 - floor) * level
-        intensity = trunc(brightness * 255) |> max(0) |> min(255)
+        intensity = trunc(level * 255) |> max(0) |> min(255)
 
         x0 = (panel - 1) * @panel_width
         x1 = x0 + @panel_width - 1
@@ -287,22 +195,12 @@ defmodule Octopus.Apps.GravityMask do
   end
 
   defp apply_gravity_config(config) when is_map(config) do
-    opts =
-      []
-      |> maybe_put(:contrast, Map.get(config, :contrast))
-      |> maybe_put(:reach, Map.get(config, :reach))
-      |> maybe_put(:easing_tau, Map.get(config, :easing_tau))
-      |> maybe_put(:velocity_gain, Map.get(config, :velocity_gain))
-
-    if opts != [], do: Radar.set_panel_gravity_config(opts)
-
-    :ok
+    case Map.get(config, :easing_tau) do
+      nil -> :ok
+      tau -> Radar.set_panel_gravity_config(easing_tau: tau)
+    end
   end
 
-  defp maybe_put(opts, _key, nil), do: opts
-  defp maybe_put(opts, key, value), do: Keyword.put(opts, key, value)
-
-  # Monotonic ms can be negative (OTP/erts); never seed last_debug_ms with 0.
   defp debug_due?(_now, nil), do: true
 
   defp debug_due?(now, last_debug_ms) when is_integer(last_debug_ms) do
@@ -310,45 +208,24 @@ defmodule Octopus.Apps.GravityMask do
   end
 
   defp log_display_debug(state, factors, levels) do
-    floor = state.floor_brightness
     factor_values = Map.values(factors)
-    fac_min = Enum.min(factor_values, fn -> 0.0 end)
     fac_max = Enum.max(factor_values, fn -> 0.0 end)
-    fac_span = fac_max - fac_min
-
-    entries =
-      levels
-      |> Enum.map(fn {panel, level} ->
-        factor = Map.get(factors, panel, 0.0)
-        brightness = floor + (1.0 - floor) * level
-        intensity = trunc(brightness * 255) |> max(0) |> min(255)
-        {panel, factor, level, brightness, intensity}
-      end)
-      |> Enum.sort_by(fn {_panel, _factor, level, _brightness, _intensity} -> -level end)
 
     top =
-      entries
+      levels
+      |> Enum.sort_by(fn {_panel, level} -> -level end)
       |> Enum.take(5)
-      |> Enum.map(fn {panel, factor, level, brightness, intensity} ->
-        "p#{panel} fac=#{Float.round(factor, 4)} lvl=#{Float.round(level, 3)} " <>
-          "bri=#{trunc(brightness * 100)}% px=#{intensity}"
+      |> Enum.map(fn {panel, level} ->
+        intensity = trunc(level * 255) |> max(0) |> min(255)
+        "p#{panel} lvl=#{Float.round(level, 3)} px=#{intensity}"
       end)
       |> Enum.join(" | ")
 
     Logger.debug(
-      "[GravityMask] floor=#{trunc(floor * 100)}% factors_min=#{Float.round(fac_min, 4)} " <>
-        "factors_max=#{Float.round(fac_max, 4)} span=#{Float.round(fac_span, 4)} | top: #{top}"
+      "[GravityMask] easing=#{state.easing_tau}s " <>
+        "factors_max=#{Float.round(fac_max, 4)} | top: #{top}"
     )
   end
-
-  # Config/UI use 0..100 percent. Accept legacy 0..1 fractions from older presets.
-  defp floor_config_to_unit(v) when is_number(v) and v > 1.0, do: clamp01(v / 100.0)
-  defp floor_config_to_unit(v) when is_number(v), do: clamp01(v)
-
-  defp floor_config_to_pct(v) when is_number(v) and v > 1.0, do: v |> max(0.0) |> min(100.0)
-  defp floor_config_to_pct(v) when is_number(v), do: clamp01(v) * 100.0
-
-  defp floor_unit_to_pct(v), do: clamp01(v) * 100.0
 
   defp clamp01(v), do: v |> max(0.0) |> min(1.0)
 end

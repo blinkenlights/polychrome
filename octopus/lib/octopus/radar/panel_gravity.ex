@@ -64,14 +64,13 @@ defmodule Octopus.Radar.PanelGravity do
   @impl true
   def init(_opts) do
     num_panels = Octopus.Installation.num_panels()
-    settings = Settings.get()
     north = Octopus.Radar.north_panel()
 
     state = %{
       track_registry: %{},
       mock_people: [],
       level: Core.empty_installation_panels(num_panels),
-      snapshot: empty_snapshot(num_panels, settings.min_ref),
+      snapshot: empty_snapshot(num_panels),
       num_panels: num_panels,
       north_panel: north,
       panel_positions: gravity_panel_positions(north),
@@ -201,26 +200,45 @@ defmodule Octopus.Radar.PanelGravity do
     # Always recompute (even when the fingerprint is unchanged): the release
     # envelope keeps decaying toward target on every heartbeat while a
     # departed object's gravity is still fading out.
-    recompute(state, people, people_source, settings, fp, state.dirty_source)
+    state = recompute(state, people, people_source, settings, fp, state.dirty_source)
+
+    # If levels are still moving toward their target (easing tail), keep
+    # scheduling flushes at the render rate so the decay is smooth — without
+    # this the easing continues only at the @stale_check_ms rate (250 ms)
+    # which produces visible steps.
+    if still_settling?(state, settings.broadcast_epsilon) do
+      request_flush(mark_dirty(state, :settling))
+    else
+      state
+    end
   end
 
   defp recompute(state, people, people_source, settings, fp, source) do
     now = now_ms()
     dt = ((now - state.last_level_ms) |> max(1)) / 1000.0 |> min(1.0)
 
+    floor  = clamp01(settings.floor_pct / 100.0)
+    max_g  = clamp01(settings.max_gravity_pct / 100.0)
+
+    # Linear nearest-object gravity: values are already in 0..1, no normalisation needed.
     raw =
       people
-      |> Core.raw_gravity(state.panel_positions, settings)
+      |> Core.raw_gravity(
+           state.panel_positions,
+           settings.near_dist_m * 1.0,
+           settings.far_dist_m * 1.0,
+           floor,
+           max_g
+         )
       |> ensure_all_panels(state.num_panels)
 
-    target = Core.targets(raw, settings.min_ref, settings)
+    target = raw
     level = Core.smooth(state.level, target, dt, settings)
 
     snapshot = %{
       gravity: level,
       target: target,
       raw: raw,
-      ref: settings.min_ref,
       at: now
     }
 
@@ -242,10 +260,14 @@ defmodule Octopus.Radar.PanelGravity do
   defp fetch_people(state, %Settings{} = settings) do
     now = now_ms()
 
+    raw_people = active_people(state.track_registry, now, settings.track_stale_ms)
+
     people =
-      state.track_registry
-      |> active_people(now, settings.track_stale_ms)
-      |> Octopus.Radar.fuse_people()
+      if settings.fuse_people do
+        Octopus.Radar.fuse_people(raw_people)
+      else
+        raw_people
+      end
 
     cond do
       people != [] ->
@@ -270,18 +292,33 @@ defmodule Octopus.Radar.PanelGravity do
       end)
       |> Enum.sort()
 
-    settings_key =
-      {settings.reach, settings.contrast, settings.softening_m, settings.mass,
-       settings.exponent, settings.easing_tau, settings.velocity_gain}
+    settings_key = {settings.easing_tau, settings.near_dist_m, settings.far_dist_m, settings.fuse_people}
 
     {people_key, settings_key, north_panel}
   end
 
   defp active_people(track_registry, now, stale_ms) do
+    clutter_filter? = Octopus.Radar.clutter_filter_enabled?()
+
     track_registry
-    |> Enum.filter(fn {_id, {_person, seen_at}} -> now - seen_at <= stale_ms end)
+    |> Enum.filter(fn {id, {_person, seen_at}} ->
+      in_time? = now - seen_at <= stale_ms
+
+      clutter_ok? =
+        if clutter_filter? do
+          device_id = div(id, 10_000)
+          track_id = rem(id, 10_000)
+          Octopus.Radar.clutter_filter_track_qualified?(device_id, track_id)
+        else
+          true
+        end
+
+      in_time? and clutter_ok?
+    end)
     |> Enum.map(fn {_id, {person, _seen_at}} -> person end)
   end
+
+  defp clamp01(v), do: v |> max(0.0) |> min(1.0)
 
   defp changed_enough?(old_snapshot, new_snapshot, epsilon) do
     map_changed?(Map.fetch!(old_snapshot, :gravity), Map.fetch!(new_snapshot, :gravity), epsilon) or
@@ -299,6 +336,14 @@ defmodule Octopus.Radar.PanelGravity do
       Enum.any?(new, fn {panel, value} ->
         abs(value - Map.get(old, panel, 0.0)) > epsilon
       end)
+  end
+
+  defp still_settling?(state, epsilon) do
+    target = Map.get(state.snapshot, :target, %{})
+
+    Enum.any?(state.level, fn {panel, val} ->
+      abs(val - Map.get(target, panel, 0.0)) > epsilon
+    end)
   end
 
   defp ensure_all_panels(map, num_panels) do
@@ -335,16 +380,9 @@ defmodule Octopus.Radar.PanelGravity do
     |> Enum.map(&Map.take(&1, [:panel, :x, :y]))
   end
 
-  defp empty_snapshot(num_panels, ref) do
+  defp empty_snapshot(num_panels) do
     empty = Core.empty_installation_panels(num_panels)
-
-    %{
-      gravity: empty,
-      target: empty,
-      raw: empty,
-      ref: ref,
-      at: 0
-    }
+    %{gravity: empty, target: empty, raw: empty, at: 0}
   end
 
   defp schedule_stale_check do
@@ -360,14 +398,14 @@ defmodule Octopus.Radar.PanelGravity do
   defp log_debug(people_source, people, raw, target, level, settings, state, trigger) do
     {peak_panel, peak_level} = peak_entry(level)
     raw_values = Map.values(raw)
-    raw_min = Enum.min(raw_values, fn -> 0.0 end)
     raw_max = Enum.max(raw_values, fn -> 0.0 end)
 
     Logger.debug(
       "[PanelGravity] trigger=#{trigger} source=#{people_source} " <>
         "people=#{length(people)} panels=#{state.num_panels} " <>
-        "ops=#{length(people) * state.num_panels} " <>
-        "reach=#{settings.reach} raw_span=#{Float.round(raw_max - raw_min, 4)} " <>
+        "near=#{Float.round(settings.near_dist_m * 1.0, 2)}m far=#{Float.round(settings.far_dist_m * 1.0, 2)}m " <>
+        "floor=#{settings.floor_pct}% max=#{settings.max_gravity_pct}% " <>
+        "easing=#{settings.easing_tau}s raw_peak=#{Float.round(raw_max, 4)} " <>
         "peak=p#{peak_panel}=#{Float.round(peak_level, 4)} " <>
         "top=[#{top_panels(target, 5)}]"
     )

@@ -170,6 +170,11 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:clutter_filter, view_settings.clutter_filter)
      |> assign(:track_fusion, Radar.track_fusion_enabled?())
      |> assign(:track_fusion_radius_m, Radar.track_fusion_radius_m())
+     |> assign(:gravity_fuse, Radar.gravity_fuse_enabled?())
+     |> assign(:gravity_near_dist_m, Radar.gravity_near_dist_m())
+     |> assign(:gravity_far_dist_m, Radar.gravity_far_dist_m())
+     |> assign(:gravity_floor_pct, Radar.gravity_floor_pct())
+     |> assign(:gravity_max_pct, Radar.gravity_max_pct())
      |> assign(:static_bounds, world_bounds(world_radius))
      |> reset_radar_state()}
   end
@@ -363,6 +368,25 @@ defmodule OctopusWeb.RadarLive do
     {:noreply, socket}
   end
 
+  def handle_event("toggle_gravity_fuse", _params, socket) do
+    new_val = Radar.toggle_gravity_fuse()
+    {:noreply, assign(socket, :gravity_fuse, new_val)}
+  end
+
+  def handle_event("set_gravity_distances", params, socket) do
+    near = parse_float(params["near_dist_m"], socket.assigns.gravity_near_dist_m)
+    far = parse_float(params["far_dist_m"], socket.assigns.gravity_far_dist_m)
+    Radar.set_gravity_distances(near, far)
+    {:noreply, socket |> assign(:gravity_near_dist_m, near) |> assign(:gravity_far_dist_m, far)}
+  end
+
+  def handle_event("set_gravity_levels", params, socket) do
+    floor = parse_float(params["floor_pct"], socket.assigns.gravity_floor_pct)
+    max_g = parse_float(params["max_gravity_pct"], socket.assigns.gravity_max_pct)
+    Radar.set_gravity_levels(floor, max_g)
+    {:noreply, socket |> assign(:gravity_floor_pct, floor) |> assign(:gravity_max_pct, max_g)}
+  end
+
   def handle_event("set_track_fusion_radius", %{"radius_m" => radius_str}, socket) do
     case Float.parse(radius_str) do
       {radius_m, _} -> Radar.set_track_fusion_radius_m(radius_m)
@@ -480,6 +504,18 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:track_fusion, enabled?)
      |> assign(:track_fusion_radius_m, radius_m)
      |> rebuild_view()}
+  end
+
+  def handle_info({:panel_gravity_settings_changed, settings}, socket) do
+    socket =
+      socket
+      |> assign(:gravity_fuse, Map.get(settings, :fuse_people, socket.assigns.gravity_fuse))
+      |> assign(:gravity_near_dist_m, Map.get(settings, :near_dist_m, socket.assigns.gravity_near_dist_m))
+      |> assign(:gravity_far_dist_m, Map.get(settings, :far_dist_m, socket.assigns.gravity_far_dist_m))
+      |> assign(:gravity_floor_pct, Map.get(settings, :floor_pct, socket.assigns.gravity_floor_pct))
+      |> assign(:gravity_max_pct, Map.get(settings, :max_gravity_pct, socket.assigns.gravity_max_pct))
+
+    {:noreply, socket}
   end
 
   def handle_info({:pose_tweak_changed, tweak}, socket) do
@@ -1532,6 +1568,107 @@ defmodule OctopusWeb.RadarLive do
                     <% end %>
                   </div>
 
+                  <div class="flex flex-col gap-2 border-t border-base-300 pt-3">
+                    <p class="text-xs font-semibold opacity-70">Panel gravity</p>
+
+                    <%!-- Distance thresholds --%>
+                    <form
+                      id="radar-gravity-distances-form"
+                      phx-change="set_gravity_distances"
+                      class="grid grid-cols-2 gap-x-3 gap-y-1 items-end"
+                    >
+                      <div class="flex flex-col gap-1">
+                        <label for="radar-gravity-near" class="text-xs opacity-70">Near (max %)</label>
+                        <div class="flex items-center gap-1">
+                          <input
+                            id="radar-gravity-near"
+                            name="near_dist_m"
+                            type="number"
+                            min="0.1"
+                            max="10"
+                            step="0.1"
+                            value={fmt_f(@gravity_near_dist_m)}
+                            phx-debounce="400"
+                            class="input input-bordered input-xs w-16 font-mono"
+                          />
+                          <span class="text-xs opacity-60">m</span>
+                        </div>
+                      </div>
+                      <div class="flex flex-col gap-1">
+                        <label for="radar-gravity-far" class="text-xs opacity-70">Far (floor %)</label>
+                        <div class="flex items-center gap-1">
+                          <input
+                            id="radar-gravity-far"
+                            name="far_dist_m"
+                            type="number"
+                            min="0.2"
+                            max="30"
+                            step="0.1"
+                            value={fmt_f(@gravity_far_dist_m)}
+                            phx-debounce="400"
+                            class="input input-bordered input-xs w-16 font-mono"
+                          />
+                          <span class="text-xs opacity-60">m</span>
+                        </div>
+                      </div>
+                    </form>
+
+                    <%!-- Brightness levels --%>
+                    <form
+                      id="radar-gravity-levels-form"
+                      phx-change="set_gravity_levels"
+                      class="grid grid-cols-2 gap-x-3 gap-y-1 items-end"
+                    >
+                      <div class="flex flex-col gap-1">
+                        <label for="radar-gravity-floor" class="text-xs opacity-70">Floor</label>
+                        <div class="flex items-center gap-1">
+                          <input
+                            id="radar-gravity-floor"
+                            name="floor_pct"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="1"
+                            value={@gravity_floor_pct}
+                            phx-debounce="400"
+                            class="input input-bordered input-xs w-16 font-mono"
+                          />
+                          <span class="text-xs opacity-60">%</span>
+                        </div>
+                      </div>
+                      <div class="flex flex-col gap-1">
+                        <label for="radar-gravity-max" class="text-xs opacity-70">Max</label>
+                        <div class="flex items-center gap-1">
+                          <input
+                            id="radar-gravity-max"
+                            name="max_gravity_pct"
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="1"
+                            value={@gravity_max_pct}
+                            phx-debounce="400"
+                            class="input input-bordered input-xs w-16 font-mono"
+                          />
+                          <span class="text-xs opacity-60">%</span>
+                        </div>
+                      </div>
+                    </form>
+
+                    <label
+                      id="radar-gravity-fuse"
+                      class="flex items-center gap-2 cursor-pointer text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        class="checkbox checkbox-xs"
+                        checked={@gravity_fuse}
+                        phx-click="toggle_gravity_fuse"
+                      />
+                      <span>Fuse tracks</span>
+                    </label>
+                  </div>
+
                   <%= if mock_source?(@source_mode) do %>
                     <div class="flex flex-col gap-1">
                       <div class="flex items-center justify-between gap-2">
@@ -2388,6 +2525,16 @@ defmodule OctopusWeb.RadarLive do
       :error -> :error
     end
   end
+
+  defp parse_float(v, default) when is_binary(v) do
+    case Float.parse(v) do
+      {f, _} -> f
+      :error -> default
+    end
+  end
+
+  defp parse_float(v, _default) when is_number(v), do: v * 1.0
+  defp parse_float(_, default), do: default
 
   defp safe_max_people, do: max(Radar.max_people(), 1)
 

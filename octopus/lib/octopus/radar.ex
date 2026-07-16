@@ -925,6 +925,69 @@ defmodule Octopus.Radar do
     end
   end
 
+  @doc "Whether cross-sensor people fusion is active for gravity computation."
+  @spec gravity_fuse_enabled?() :: boolean()
+  def gravity_fuse_enabled? do
+    if Process.whereis(PanelGravity.Settings),
+      do: Map.get(PanelGravity.Settings.get(), :fuse_people, true),
+      else: true
+  end
+
+  @spec toggle_gravity_fuse() :: boolean()
+  def toggle_gravity_fuse do
+    new_val = not gravity_fuse_enabled?()
+    set_panel_gravity_config(fuse_people: new_val)
+    broadcast_panel_gravity_settings_changed()
+    new_val
+  end
+
+  @doc "Near distance threshold (m) — gravity is 100 % at this distance."
+  @spec gravity_near_dist_m() :: float()
+  def gravity_near_dist_m do
+    if Process.whereis(PanelGravity.Settings),
+      do: PanelGravity.Settings.get().near_dist_m * 1.0,
+      else: 1.0
+  end
+
+  @doc "Far distance threshold (m) — gravity is 0 % at this distance."
+  @spec gravity_far_dist_m() :: float()
+  def gravity_far_dist_m do
+    if Process.whereis(PanelGravity.Settings),
+      do: PanelGravity.Settings.get().far_dist_m * 1.0,
+      else: 7.75
+  end
+
+  @spec set_gravity_distances(number(), number()) :: :ok
+  def set_gravity_distances(near_m, far_m) when is_number(near_m) and is_number(far_m) do
+    set_panel_gravity_config(near_dist_m: near_m * 1.0, far_dist_m: far_m * 1.0)
+    broadcast_panel_gravity_settings_changed()
+    :ok
+  end
+
+  @doc "Floor brightness percentage (0..100) applied to all panels at all times."
+  @spec gravity_floor_pct() :: number()
+  def gravity_floor_pct do
+    if Process.whereis(PanelGravity.Settings),
+      do: PanelGravity.Settings.get().floor_pct,
+      else: 5
+  end
+
+  @doc "Maximum gravity brightness percentage (0..100) at near_dist_m."
+  @spec gravity_max_pct() :: number()
+  def gravity_max_pct do
+    if Process.whereis(PanelGravity.Settings),
+      do: PanelGravity.Settings.get().max_gravity_pct,
+      else: 100
+  end
+
+  @spec set_gravity_levels(number(), number()) :: :ok
+  def set_gravity_levels(floor_pct, max_pct)
+      when is_number(floor_pct) and is_number(max_pct) do
+    set_panel_gravity_config(floor_pct: floor_pct, max_gravity_pct: max_pct)
+    broadcast_panel_gravity_settings_changed()
+    :ok
+  end
+
   @doc """
   Return `true` when the active radar setup uses a `:radial` layout block.
 
@@ -1385,6 +1448,21 @@ defmodule Octopus.Radar do
     Phoenix.PubSub.broadcast(Octopus.PubSub, topic(), {:view_settings_changed, view_settings()})
   end
 
+  defp broadcast_panel_gravity_settings_changed do
+    Phoenix.PubSub.broadcast(
+      Octopus.PubSub,
+      topic(),
+      {:panel_gravity_settings_changed,
+       %{
+         fuse_people: gravity_fuse_enabled?(),
+         near_dist_m: gravity_near_dist_m(),
+         far_dist_m: gravity_far_dist_m(),
+         floor_pct: gravity_floor_pct(),
+         max_gravity_pct: gravity_max_pct()
+       }}
+    )
+  end
+
   defp broadcast_track_fusion_changed do
     Phoenix.PubSub.broadcast(
       Octopus.PubSub,
@@ -1449,7 +1527,6 @@ defmodule Octopus.Radar do
       gravity: empty,
       target: empty,
       raw: empty,
-      ref: Map.fetch!(PanelGravity.Settings.defaults(), :min_ref),
       at: 0
     }
   end

@@ -15,7 +15,7 @@ defmodule Octopus.Radar.TrackFusion do
   use Agent
 
   @default_enabled? true
-  @default_radius_m 1.0
+  @default_radius_m 2.0
   @min_radius_m 0.1
   @max_radius_m 5.0
 
