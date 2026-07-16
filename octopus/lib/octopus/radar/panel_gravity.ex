@@ -34,6 +34,9 @@ defmodule Octopus.Radar.PanelGravity do
   @debug_log_interval_ms 1_000
   # Low-rate tick only for stale-track expiry (not for continuous recomputes).
   @stale_check_ms 250
+  # Tracks whose XY speed is below this threshold (m/s) are treated as
+  # stationary and excluded from gravity computation.
+  @velocity_min_m_s 0.05
   # Coalesce bursty inputs (6 sensors × 10 Hz + mock world) into at most one
   # recompute/broadcast per interval. No timer runs while nothing is dirty.
   @flush_interval_ms 33
@@ -301,7 +304,7 @@ defmodule Octopus.Radar.PanelGravity do
     clutter_filter? = Octopus.Radar.clutter_filter_enabled?()
 
     track_registry
-    |> Enum.filter(fn {id, {_person, seen_at}} ->
+    |> Enum.filter(fn {id, {person, seen_at}} ->
       in_time? = now - seen_at <= stale_ms
 
       clutter_ok? =
@@ -313,7 +316,9 @@ defmodule Octopus.Radar.PanelGravity do
           true
         end
 
-      in_time? and clutter_ok?
+      moving? = :math.sqrt(person.vx * person.vx + person.vy * person.vy) >= @velocity_min_m_s
+
+      in_time? and clutter_ok? and moving?
     end)
     |> Enum.map(fn {_id, {person, _seen_at}} -> person end)
   end

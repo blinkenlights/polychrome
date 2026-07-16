@@ -78,6 +78,10 @@ defmodule OctopusWeb.RadarLive do
   @velocity_scale 40
   @velocity_max_len 100
 
+  # Tracks whose XY speed is below this threshold (m/s) are treated as
+  # stationary and excluded from the visualization and gravity computation.
+  @velocity_min_m_s 0.05
+
   # Fixed palette of well-separated hues. Saturation and lightness are
   # shared across all sensors so the only dimension that varies between
   # sensors is hue, giving the strongest cross-sensor distinguishability.
@@ -689,6 +693,7 @@ defmodule OctopusWeb.RadarLive do
 
     tracks_now =
       tracks
+      |> Enum.filter(fn t -> :math.sqrt(t.vx * t.vx + t.vy * t.vy) >= @velocity_min_m_s end)
       |> Enum.reduce(socket.assigns.tracks_now, fn %Track{} = t, acc ->
         key = {device_id, t.id}
         prev = Map.get(acc, key)
@@ -1397,6 +1402,7 @@ defmodule OctopusWeb.RadarLive do
                             phx-value-track_id={v.track_id}
                             style="cursor: pointer"
                           >
+                            <title>{detection_tooltip(v)}</title>
                             <%= if v.merged? do %>
                               <circle
                                 cx={fmt_f(v.cx)}
@@ -1969,6 +1975,7 @@ defmodule OctopusWeb.RadarLive do
       arrow_dy = clamp(t.vy * @velocity_scale, -@velocity_max_len, @velocity_max_len)
 
       hue = sensor_hue(device_id)
+      speed = :math.sqrt(t.vx * t.vx + t.vy * t.vy)
 
       trail_segments =
         samples_by_key
@@ -1991,7 +1998,13 @@ defmodule OctopusWeb.RadarLive do
         trail: trail_segments,
         merged?: cluster != nil,
         cluster_id: cluster && cluster.cluster_id,
-        sensor_ids: (cluster && cluster.sensor_ids) || []
+        sensor_ids: (cluster && cluster.sensor_ids) || [],
+        speed: speed,
+        vx: t.vx,
+        vy: t.vy,
+        z: t.z,
+        stale_ms: age,
+        track_alive_ms: now - t.first_seen
       }
     end)
   end
@@ -2727,6 +2740,21 @@ defmodule OctopusWeb.RadarLive do
 
   defp fmt_f(v) when is_integer(v), do: Integer.to_string(v)
   defp fmt_f(v) when is_float(v), do: :erlang.float_to_binary(v, decimals: 2)
+
+  defp detection_tooltip(v) do
+    f2 = fn x -> :erlang.float_to_binary(x * 1.0, decimals: 2) end
+
+    stale_line =
+      if v.stale_ms > 50,
+        do: "\nStale: #{f2.(v.stale_ms / 1000.0)} s",
+        else: ""
+
+    "Track #{v.label}\n" <>
+      "Speed: #{f2.(v.speed)} m/s  vx=#{f2.(v.vx)}  vy=#{f2.(v.vy)}\n" <>
+      "Height: #{f2.(v.z)} m\n" <>
+      "Active: #{f2.(v.track_alive_ms / 1000.0)} s" <>
+      stale_line
+  end
 
   defp fmt_m(v) when is_integer(v), do: Integer.to_string(v) <> " m"
   defp fmt_m(v) when is_float(v), do: :erlang.float_to_binary(v, decimals: 2) <> " m"
