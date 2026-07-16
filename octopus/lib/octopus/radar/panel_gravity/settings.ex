@@ -19,13 +19,11 @@ defmodule Octopus.Radar.PanelGravity.Settings do
     fuse_people: true,
     # Distance thresholds for the linear gravity ramp.
     # near_dist_m: object at this distance → max_gravity_pct
-    # far_dist_m:  object at this distance → floor_pct  (typically ring_radius - platform_radius)
+    # far_dist_m:  object at this distance → 0 (typically ring_radius - platform_radius)
     near_dist_m: @default_near_dist_m,
     far_dist_m: 7.75,
-    # Brightness range (percent 0..100).
-    # floor_pct:       base brightness for all panels, even with no objects in range.
-    # max_gravity_pct: brightness when an object is at near_dist_m.
-    floor_pct: 5,
+    # Maximum brightness (percent 0..100) when an object is at near_dist_m.
+    # The floor is always 0 — per-app min_brightness handles display floors.
     max_gravity_pct: 100
   }
 
@@ -36,7 +34,6 @@ defmodule Octopus.Radar.PanelGravity.Settings do
     :fuse_people,
     :near_dist_m,
     :far_dist_m,
-    :floor_pct,
     :max_gravity_pct
   ]
 
@@ -47,7 +44,6 @@ defmodule Octopus.Radar.PanelGravity.Settings do
           fuse_people: boolean(),
           near_dist_m: float(),
           far_dist_m: float(),
-          floor_pct: number(),
           max_gravity_pct: number()
         }
 
@@ -85,10 +81,10 @@ defmodule Octopus.Radar.PanelGravity.Settings do
     _ -> @defaults.far_dist_m
   end
 
-  # Silently drop any keys that belonged to the old exponential gravity model
-  # so existing installation configs don't break on update.
+  # Silently drop keys that belonged to the old exponential gravity model or
+  # that have been moved to per-app config (floor_pct → GravityMask min_brightness).
   @legacy_keys [:exponent, :softening_m, :reach, :reach_m, :mass, :min_ref, :ref_tau,
-                :sensitivity, :contrast, :adaptive, :velocity_gain, :tick_hz]
+                :sensitivity, :contrast, :adaptive, :velocity_gain, :tick_hz, :floor_pct]
 
   defp normalize_opts(opts) when is_list(opts) do
     opts
@@ -96,7 +92,6 @@ defmodule Octopus.Radar.PanelGravity.Settings do
     |> Enum.map(fn
       {:near_dist_m, v}    -> {:near_dist_m, clamp_num(v, 0.1, 10.0)}
       {:far_dist_m, v}     -> {:far_dist_m, clamp_num(v, 0.2, 30.0)}
-      {:floor_pct, v}      -> {:floor_pct, clamp_num(v, 0, 100)}
       {:max_gravity_pct, v}-> {:max_gravity_pct, clamp_num(v, 0, 100)}
       other -> other
     end)

@@ -17,8 +17,8 @@ defmodule Octopus.Apps.GravityMask do
   alias Octopus.Installation
   alias Octopus.Radar
 
-  @panel_width 8
   @default_easing_tau 1.5
+  @default_min_brightness 5.0
   @debug_log_interval_ms 1_000
 
   def name, do: "Gravity Mask"
@@ -36,14 +36,14 @@ defmodule Octopus.Apps.GravityMask do
   end
 
   defp default_config do
-    %{easing_tau: @default_easing_tau}
+    %{easing_tau: @default_easing_tau, min_brightness_pct: @default_min_brightness}
   end
 
   def mode_tweakables(mode_id) do
     mode_tweakables_for(apply(@mode_presets, :mode_slug, [mode_id]))
   end
 
-  def mode_tweakables_for(slug) when slug in ["mask", "default"] do
+  def mode_tweakables_for(_slug) do
     [
       %{
         key: :easing_tau,
@@ -54,15 +54,24 @@ defmodule Octopus.Apps.GravityMask do
         step: 0.1,
         unit: "s",
         default: @default_easing_tau
+      },
+      %{
+        key: :min_brightness_pct,
+        label: "Min brightness",
+        type: :slider,
+        min: 0.0,
+        max: 50.0,
+        step: 1.0,
+        unit: "%",
+        default: @default_min_brightness
       }
     ]
   end
 
-  def mode_tweakables_for(_), do: []
-
   def now_playing_meta(config) do
     easing = Map.get(config, :easing_tau, @default_easing_tau)
-    ["easing #{easing}s"]
+    min_b = Map.get(config, :min_brightness_pct, @default_min_brightness)
+    ["easing #{easing}s", "floor #{trunc(min_b)}%"]
   end
 
   def app_init(config) do
@@ -86,6 +95,7 @@ defmodule Octopus.Apps.GravityMask do
       factors: %{},
       rendered_levels: nil,
       easing_tau: Map.get(config, :easing_tau, @default_easing_tau),
+      min_brightness_pct: Map.get(config, :min_brightness_pct, @default_min_brightness),
       last_debug_ms: nil
     }
 
@@ -94,6 +104,7 @@ defmodule Octopus.Apps.GravityMask do
 
     Logger.debug(
       "[GravityMask] started easing_tau=#{Map.get(config, :easing_tau, @default_easing_tau)}s " <>
+        "min_brightness=#{Map.get(config, :min_brightness_pct, @default_min_brightness)}% " <>
         "panel_gravity=#{inspect(Process.whereis(Octopus.Radar.PanelGravity) != nil)}"
     )
 
@@ -131,17 +142,21 @@ defmodule Octopus.Apps.GravityMask do
 
   def config_schema do
     %{
-      easing_tau: {"Easing", :float, %{min: 0.0, max: 5.0, step: 0.1, default: @default_easing_tau}}
+      easing_tau: {"Easing", :float, %{min: 0.0, max: 5.0, step: 0.1, default: @default_easing_tau}},
+      min_brightness_pct: {"Min brightness", :float, %{min: 0.0, max: 50.0, step: 1.0, unit: "%", default: @default_min_brightness}}
     }
   end
 
   def get_config(state) do
-    %{easing_tau: state.easing_tau}
+    %{easing_tau: state.easing_tau, min_brightness_pct: state.min_brightness_pct}
   end
 
   def handle_config(config, state) do
     apply_gravity_config(config)
-    state = %{state | easing_tau: Map.get(config, :easing_tau, state.easing_tau)}
+    state = %{state |
+      easing_tau: Map.get(config, :easing_tau, state.easing_tau),
+      min_brightness_pct: Map.get(config, :min_brightness_pct, state.min_brightness_pct)
+    }
     {:noreply, maybe_render(state, force: true)}
   end
 
@@ -167,27 +182,30 @@ defmodule Octopus.Apps.GravityMask do
   end
 
   defp levels_from_factors(factors, display_info) do
-    num_panels = max(div(display_info.width, @panel_width), 1)
+    num_panels = display_info.num_panels
 
     for panel <- 1..num_panels, into: %{} do
       {panel, clamp01(Map.get(factors, panel, 0.0))}
     end
   end
 
-  defp render_canvas(%{display_info: display_info}, levels) do
-    num_panels = max(div(display_info.width, @panel_width), 1)
+  defp render_canvas(%{display_info: display_info, min_brightness_pct: min_brightness_pct}, levels) do
+    num_panels = display_info.num_panels
     height = display_info.height
+    min_brightness = clamp01(min_brightness_pct / 100.0)
 
-    # Gravity (0..1) maps directly to intensity (0..255) — no floor, no contrast.
+    # Scale gravity (0..1) into the range [min_brightness, 1.0] so that even
+    # panels with zero gravity show at least the configured minimum brightness.
+    # Panel indices in gravity data are 1-based; panel_range uses 0-based panel IDs.
     Enum.reduce(
       1..num_panels,
       Canvas.new(display_info.width, display_info.height, :grayscale),
       fn panel, canvas ->
         level = Map.get(levels, panel, 0.0)
-        intensity = trunc(level * 255) |> max(0) |> min(255)
+        scaled = min_brightness + level * (1.0 - min_brightness)
+        intensity = trunc(scaled * 255) |> max(0) |> min(255)
 
-        x0 = (panel - 1) * @panel_width
-        x1 = x0 + @panel_width - 1
+        {x0, x1} = display_info.panel_range.(panel - 1, :x)
 
         Canvas.fill_rect(canvas, {x0, 0}, {x1, height - 1}, intensity)
       end

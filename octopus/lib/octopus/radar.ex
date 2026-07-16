@@ -964,14 +964,6 @@ defmodule Octopus.Radar do
     :ok
   end
 
-  @doc "Floor brightness percentage (0..100) applied to all panels at all times."
-  @spec gravity_floor_pct() :: number()
-  def gravity_floor_pct do
-    if Process.whereis(PanelGravity.Settings),
-      do: PanelGravity.Settings.get().floor_pct,
-      else: 5
-  end
-
   @doc "Maximum gravity brightness percentage (0..100) at near_dist_m."
   @spec gravity_max_pct() :: number()
   def gravity_max_pct do
@@ -980,10 +972,9 @@ defmodule Octopus.Radar do
       else: 100
   end
 
-  @spec set_gravity_levels(number(), number()) :: :ok
-  def set_gravity_levels(floor_pct, max_pct)
-      when is_number(floor_pct) and is_number(max_pct) do
-    set_panel_gravity_config(floor_pct: floor_pct, max_gravity_pct: max_pct)
+  @spec set_gravity_max(number()) :: :ok
+  def set_gravity_max(max_pct) when is_number(max_pct) do
+    set_panel_gravity_config(max_gravity_pct: max_pct)
     broadcast_panel_gravity_settings_changed()
     :ok
   end
@@ -1457,7 +1448,6 @@ defmodule Octopus.Radar do
          fuse_people: gravity_fuse_enabled?(),
          near_dist_m: gravity_near_dist_m(),
          far_dist_m: gravity_far_dist_m(),
-         floor_pct: gravity_floor_pct(),
          max_gravity_pct: gravity_max_pct()
        }}
     )

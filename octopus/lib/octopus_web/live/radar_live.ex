@@ -177,7 +177,6 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:gravity_fuse, Radar.gravity_fuse_enabled?())
      |> assign(:gravity_near_dist_m, Radar.gravity_near_dist_m())
      |> assign(:gravity_far_dist_m, Radar.gravity_far_dist_m())
-     |> assign(:gravity_floor_pct, Radar.gravity_floor_pct())
      |> assign(:gravity_max_pct, Radar.gravity_max_pct())
      |> assign(:static_bounds, world_bounds(world_radius))
      |> reset_radar_state()}
@@ -385,10 +384,9 @@ defmodule OctopusWeb.RadarLive do
   end
 
   def handle_event("set_gravity_levels", params, socket) do
-    floor = parse_float(params["floor_pct"], socket.assigns.gravity_floor_pct)
     max_g = parse_float(params["max_gravity_pct"], socket.assigns.gravity_max_pct)
-    Radar.set_gravity_levels(floor, max_g)
-    {:noreply, socket |> assign(:gravity_floor_pct, floor) |> assign(:gravity_max_pct, max_g)}
+    Radar.set_gravity_max(max_g)
+    {:noreply, assign(socket, :gravity_max_pct, max_g)}
   end
 
   def handle_event("set_track_fusion_radius", %{"radius_m" => radius_str}, socket) do
@@ -516,7 +514,6 @@ defmodule OctopusWeb.RadarLive do
       |> assign(:gravity_fuse, Map.get(settings, :fuse_people, socket.assigns.gravity_fuse))
       |> assign(:gravity_near_dist_m, Map.get(settings, :near_dist_m, socket.assigns.gravity_near_dist_m))
       |> assign(:gravity_far_dist_m, Map.get(settings, :far_dist_m, socket.assigns.gravity_far_dist_m))
-      |> assign(:gravity_floor_pct, Map.get(settings, :floor_pct, socket.assigns.gravity_floor_pct))
       |> assign(:gravity_max_pct, Map.get(settings, :max_gravity_pct, socket.assigns.gravity_max_pct))
 
     {:noreply, socket}
@@ -1623,25 +1620,8 @@ defmodule OctopusWeb.RadarLive do
                     <form
                       id="radar-gravity-levels-form"
                       phx-change="set_gravity_levels"
-                      class="grid grid-cols-2 gap-x-3 gap-y-1 items-end"
+                      class="flex flex-col gap-1"
                     >
-                      <div class="flex flex-col gap-1">
-                        <label for="radar-gravity-floor" class="text-xs opacity-70">Floor</label>
-                        <div class="flex items-center gap-1">
-                          <input
-                            id="radar-gravity-floor"
-                            name="floor_pct"
-                            type="number"
-                            min="0"
-                            max="100"
-                            step="1"
-                            value={@gravity_floor_pct}
-                            phx-debounce="400"
-                            class="input input-bordered input-xs w-16 font-mono"
-                          />
-                          <span class="text-xs opacity-60">%</span>
-                        </div>
-                      </div>
                       <div class="flex flex-col gap-1">
                         <label for="radar-gravity-max" class="text-xs opacity-70">Max</label>
                         <div class="flex items-center gap-1">

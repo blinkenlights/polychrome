@@ -220,7 +220,6 @@ defmodule Octopus.Radar.PanelGravity do
     now = now_ms()
     dt = ((now - state.last_level_ms) |> max(1)) / 1000.0 |> min(1.0)
 
-    floor  = clamp01(settings.floor_pct / 100.0)
     max_g  = clamp01(settings.max_gravity_pct / 100.0)
 
     # Linear nearest-object gravity: values are already in 0..1, no normalisation needed.
@@ -230,7 +229,7 @@ defmodule Octopus.Radar.PanelGravity do
            state.panel_positions,
            settings.near_dist_m * 1.0,
            settings.far_dist_m * 1.0,
-           floor,
+           0.0,
            max_g
          )
       |> ensure_all_panels(state.num_panels)
@@ -409,7 +408,7 @@ defmodule Octopus.Radar.PanelGravity do
       "[PanelGravity] trigger=#{trigger} source=#{people_source} " <>
         "people=#{length(people)} panels=#{state.num_panels} " <>
         "near=#{Float.round(settings.near_dist_m * 1.0, 2)}m far=#{Float.round(settings.far_dist_m * 1.0, 2)}m " <>
-        "floor=#{settings.floor_pct}% max=#{settings.max_gravity_pct}% " <>
+        "max=#{settings.max_gravity_pct}% " <>
         "easing=#{settings.easing_tau}s raw_peak=#{Float.round(raw_max, 4)} " <>
         "peak=p#{peak_panel}=#{Float.round(peak_level, 4)} " <>
         "top=[#{top_panels(target, 5)}]"

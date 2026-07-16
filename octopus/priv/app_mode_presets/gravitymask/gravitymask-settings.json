@@ -3,14 +3,29 @@
     {
       "accent_color": "#BDC3C7",
       "config": {
-        "contrast": 3.0,
         "easing_tau": 1.5,
-        "floor_brightness": 25,
-        "reach": 50,
-        "velocity_gain": 0.0
+        "min_brightness_pct": 5.0
       },
-      "name": "Gravity Mask",
-      "slug": "mask"
+      "name": "Subtle",
+      "slug": "subtle"
+    },
+    {
+      "accent_color": "#95A5A6",
+      "config": {
+        "easing_tau": 1.5,
+        "min_brightness_pct": 10.0
+      },
+      "name": "Soft",
+      "slug": "soft"
+    },
+    {
+      "accent_color": "#7F8C8D",
+      "config": {
+        "easing_tau": 1.5,
+        "min_brightness_pct": 20.0
+      },
+      "name": "Bright",
+      "slug": "bright"
     }
   ]
 }

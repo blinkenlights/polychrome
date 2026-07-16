@@ -111,8 +111,8 @@ defmodule Octopus.AppModePresets do
       key == "fire" and mode_id in ["campfire", "default"] ->
         mode_id(app, "campfire")
 
-      key == "gravitymask" and mode_id in ["mask", "default"] ->
-        mode_id(app, "mask")
+      key == "gravitymask" and mode_id in ["mask", "default", "subtle"] ->
+        mode_id(app, "subtle")
 
       true ->
         mode_id
