@@ -71,6 +71,10 @@ defmodule Octopus.InstallationTransport do
   def queue_move(index, dir) when is_integer(index),
     do: GenServer.call(__MODULE__, {:queue_move, index, dir})
 
+  def queue_set_mask(index, mask) when is_integer(index) do
+    GenServer.call(__MODULE__, {:queue_set_mask, index, normalize_mask(mask)})
+  end
+
   def set_queue(entries) when is_list(entries),
     do: GenServer.cast(__MODULE__, {:set_queue, Enum.map(entries, &normalize_entry/1)})
 
@@ -137,6 +141,30 @@ defmodule Octopus.InstallationTransport do
     {:reply, :ok, state |> move_queue(index, dir) |> broadcast()}
   end
 
+  def handle_call({:queue_set_mask, index, mask}, _from, state) do
+    case Enum.at(state.queue, index) do
+      nil ->
+        {:reply, {:error, :not_found}, state}
+
+      entry ->
+        updated = Map.put(entry, :mask, mask)
+        new_queue = List.replace_at(state.queue, index, updated)
+        state = state |> put_queue(new_queue)
+
+        state =
+          if state.live_entry && entries_match_front?(state.live_entry, entry) do
+            case apply_entry(state, updated) do
+              {:ok, s} -> s
+              {:error, _, s} -> s
+            end
+          else
+            state
+          end
+
+        {:reply, :ok, broadcast(state)}
+    end
+  end
+
   def handle_call({:set_tweakable, key, value}, _from, state) do
     {:reply, :ok, state |> apply_tweak(key, value) |> broadcast()}
   end
@@ -180,11 +208,19 @@ defmodule Octopus.InstallationTransport do
       }
       |> cancel_timer()
 
+    AppSupervisor.stop_mask_app()
+
     {:reply, :ok, broadcast(state)}
   end
 
   def handle_call({:play_now, app, mode_id}, _from, state) do
-    entry = normalize_entry(%{app: app, mode_id: mode_id})
+    base_entry = normalize_entry(%{app: app, mode_id: mode_id})
+
+    entry =
+      case find_queue_index(state.queue, base_entry) do
+        nil -> base_entry
+        index -> Enum.at(state.queue, index)
+      end
 
     result =
       if apply(app, :compatible?, []) do
@@ -252,7 +288,7 @@ defmodule Octopus.InstallationTransport do
       if adding? do
         state.queue ++ [entry]
       else
-        List.delete(state.queue, entry)
+        reject_queue_entry(state.queue, entry)
       end
 
     state = state |> put_queue(new_queue)
@@ -343,6 +379,7 @@ defmodule Octopus.InstallationTransport do
     case AppSupervisor.start_or_select_app(module) do
       {:ok, app_id} ->
         AppManager.select_app(app_id)
+        AppSupervisor.stop_mask_app()
 
         %State{} = paused = pause(state)
 
@@ -388,7 +425,7 @@ defmodule Octopus.InstallationTransport do
     index =
       case state.live_entry do
         live when is_map(live) ->
-          case Enum.find_index(queue, &(&1 == live)) do
+          case find_queue_index(queue, live) do
             nil -> clamp_index(state.cycle_index, queue)
             idx -> idx
           end
@@ -419,7 +456,7 @@ defmodule Octopus.InstallationTransport do
   end
 
   defp maybe_jump_queue_index(%State{} = state, entry) do
-    case Enum.find_index(state.queue, &(&1 == entry)) do
+    case find_queue_index(state.queue, entry) do
       nil -> state
       index -> %State{state | cycle_index: index}
     end
@@ -473,6 +510,7 @@ defmodule Octopus.InstallationTransport do
 
   defp clear_live_playback(%State{} = state) do
     state = cancel_timer(state)
+    AppSupervisor.stop_mask_app()
 
     %State{
       state
@@ -565,6 +603,7 @@ defmodule Octopus.InstallationTransport do
 
         AppManager.select_app(app_id)
         app_apply_mode(app_id, app, mode_id)
+        apply_entry_mask(entry)
 
         {:ok,
          %State{
@@ -576,8 +615,26 @@ defmodule Octopus.InstallationTransport do
          }}
 
       _ ->
+        apply_entry_mask(entry)
         {:ok, state}
     end
+  end
+
+  defp apply_entry_mask(%{mask: %{app: app, mode_id: mode_id}}) do
+    config = stored_config_for(app, mode_id)
+
+    case AppSupervisor.start_as_mask_app(app, config: config) do
+      {:ok, _id} ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning("apply_entry_mask #{inspect(app)} failed: #{inspect(reason)}")
+        AppSupervisor.stop_mask_app()
+    end
+  end
+
+  defp apply_entry_mask(_entry) do
+    AppSupervisor.stop_mask_app()
   end
 
   defp safe_update_config(app_id, config) do
@@ -999,13 +1056,27 @@ defmodule Octopus.InstallationTransport do
   defp enrich_entry(%{app: app, mode_id: mode_id} = entry) do
     mode = find_mode(app, mode_id)
 
-    Map.merge(entry, %{
-      app_name: app_name(app),
-      mode_name: mode && mode.name || mode_id,
-      accent_color: mode && mode.accent_color || "#6d7cff",
-      summary: mode && Map.get(mode, :summary) || "",
-      builtin: mode && Map.get(mode, :builtin, true)
-    })
+    base =
+      Map.merge(entry, %{
+        app_name: app_name(app),
+        mode_name: mode && mode.name || mode_id,
+        accent_color: mode && mode.accent_color || "#6d7cff",
+        summary: mode && Map.get(mode, :summary) || "",
+        builtin: mode && Map.get(mode, :builtin, true)
+      })
+
+    case Map.get(entry, :mask) do
+      %{app: mask_app, mode_id: mask_mode_id} ->
+        mask_mode = find_mode(mask_app, mask_mode_id)
+
+        Map.merge(base, %{
+          mask_app_name: app_name(mask_app),
+          mask_mode_name: mask_mode && mask_mode.name || mask_mode_id
+        })
+
+      _ ->
+        Map.put(base, :mask, nil)
+    end
   end
 
   defp find_mode(app, mode_id) do
@@ -1037,9 +1108,40 @@ defmodule Octopus.InstallationTransport do
     end
   end
 
-  defp entry_in_queue?(queue, entry), do: entry in queue
+  defp entry_in_queue?(queue, entry), do: find_queue_index(queue, entry) != nil
 
-  defp normalize_entry(%{app: app, mode_id: id}) do
+  defp find_queue_index(queue, entry) do
+    Enum.find_index(queue, &entries_match_front?(&1, entry))
+  end
+
+  defp reject_queue_entry(queue, entry) do
+    case find_queue_index(queue, entry) do
+      nil -> queue
+      index -> List.delete_at(queue, index)
+    end
+  end
+
+  defp entries_match_front?(%{app: app_a, mode_id: mode_a}, %{app: app_b, mode_id: mode_b}) do
+    app_a == app_b and mode_a == mode_b
+  end
+
+  defp normalize_entry(%{app: app, mode_id: id} = attrs) do
+    app = normalize_app(app)
+    id = to_string(id)
+
+    mode_id =
+      if preset_persistable?(app) do
+        preset_normalize_mode_id(app, id)
+      else
+        id
+      end
+
+    %{app: app, mode_id: mode_id, mask: normalize_mask(Map.get(attrs, :mask))}
+  end
+
+  defp normalize_mask(nil), do: nil
+
+  defp normalize_mask(%{app: app, mode_id: id}) do
     app = normalize_app(app)
     id = to_string(id)
 
@@ -1052,6 +1154,8 @@ defmodule Octopus.InstallationTransport do
 
     %{app: app, mode_id: mode_id}
   end
+
+  defp normalize_mask(_), do: nil
 
   defp normalize_app(app) when is_atom(app) do
     if Code.ensure_loaded?(app) and function_exported?(app, :list_modes, 0) do

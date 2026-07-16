@@ -836,4 +836,62 @@ defmodule Octopus.InstallationTransportTest do
       assert config[:background_speed] == 3.5
     end
   end
+
+  describe "per-track masks" do
+    test "play_now without mask keeps mask slot empty" do
+      InstallationTransport.set_queue([
+        %{app: PixelFun, mode_id: @classic, mask: nil}
+      ])
+
+      :ok = InstallationTransport.play_now(PixelFun, @classic)
+      _ = :sys.get_state(InstallationTransport)
+
+      assert AppManager.get_mask_app() == nil
+    end
+
+    test "queue entry with mask starts mask app" do
+      InstallationTransport.set_queue([
+        %{app: PixelFun, mode_id: @classic, mask: %{app: PerlinNoise, mode_id: @perlin}}
+      ])
+
+      :ok = InstallationTransport.play_now(PixelFun, @classic)
+      _ = :sys.get_state(InstallationTransport)
+
+      assert AppManager.get_mask_app() != nil
+      assert {:ok, _} = AppSupervisor.find_running_app(PerlinNoise)
+    end
+
+    test "switching to track without mask stops mask" do
+      InstallationTransport.set_queue([
+        %{app: PixelFun, mode_id: @classic, mask: %{app: PerlinNoise, mode_id: @perlin}},
+        %{app: PixelFun, mode_id: @cross, mask: nil}
+      ])
+
+      :ok = InstallationTransport.play_now(PixelFun, @classic)
+      _ = :sys.get_state(InstallationTransport)
+      assert AppManager.get_mask_app() != nil
+
+      InstallationTransport.next()
+      _ = :sys.get_state(InstallationTransport)
+
+      assert AppManager.get_mask_app() == nil
+      assert state().live.mode_id == @cross
+    end
+
+    test "queue_set_mask updates mask on live track" do
+      InstallationTransport.set_queue([
+        %{app: PixelFun, mode_id: @classic, mask: nil}
+      ])
+
+      :ok = InstallationTransport.play_now(PixelFun, @classic)
+      _ = :sys.get_state(InstallationTransport)
+      assert AppManager.get_mask_app() == nil
+
+      :ok = InstallationTransport.queue_set_mask(0, %{app: PerlinNoise, mode_id: @perlin})
+      _ = :sys.get_state(InstallationTransport)
+
+      assert AppManager.get_mask_app() != nil
+      assert {:ok, _} = AppSupervisor.find_running_app(PerlinNoise)
+    end
+  end
 end

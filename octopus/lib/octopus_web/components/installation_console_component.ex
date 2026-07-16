@@ -27,6 +27,8 @@ defmodule OctopusWeb.InstallationConsoleComponent do
        running_apps: [],
        front_app: nil,
        mask_app: nil,
+       mask_picker_index: nil,
+       mask_eligible_apps: mask_eligible_apps(),
        browse_apps: [],
        browse_app_count: 0,
        console_theme: "light",
@@ -87,7 +89,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       </.player_block>
 
       <section id="mode-library" class="space-y-6 pb-8 scroll-mt-4">
-        <.mode_library sections={@library_sections || []} target={@myself} transport={@transport} mask_app={@mask_app} />
+        <.mode_library sections={@library_sections || []} target={@myself} transport={@transport} />
       </section>
 
       <.running_now_panel
@@ -249,7 +251,6 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   attr :sections, :list, required: true
   attr :transport, :map, required: true
   attr :target, :any, required: true
-  attr :mask_app, :map, default: nil
 
   defp mode_library(assigns) do
     ~H"""
@@ -304,10 +305,8 @@ defmodule OctopusWeb.InstallationConsoleComponent do
               mode={tile.mode}
               app_module={tile.app}
               live?={tile.live?}
-              mask?={@mask_app != nil && @mask_app.module == tile.app}
               queued_pos={tile.queued_pos}
               queueable?={Map.get(tile, :queueable?, true)}
-              mask_eligible?={Map.get(tile, :mask_eligible?, false)}
               stop_takeover?={tile.stop_takeover?}
               play_now_title={tile.play_now_title}
               target={@target}
@@ -467,20 +466,6 @@ defmodule OctopusWeb.InstallationConsoleComponent do
                 >
                   {app.name}
                 </button>
-                <button
-                  class={[
-                    "btn btn-sm btn-square min-h-11 join-item btn-ghost border border-base-300",
-                    (!app.compatible || !app.mask_eligible?) && "btn-disabled opacity-30"
-                  ]}
-                  phx-click="launch_app_as_mask"
-                  phx-value-module={app.module}
-                  phx-target={@target}
-                  disabled={!app.compatible || !app.mask_eligible?}
-                  title={if app.mask_eligible?, do: "Als Mask-App starten", else: "Kein Greyscale-Output"}
-                  aria-label="Als Mask-App starten"
-                >
-                  <.console_icon_mask class="w-4 h-4" />
-                </button>
               </div>
             </div>
           </div>
@@ -607,6 +592,47 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   def handle_event("queue_move", %{"index" => index, "dir" => dir}, socket) do
     InstallationTransport.queue_move(String.to_integer(index), dir)
     {:noreply, refresh_transport(socket)}
+  end
+
+  def handle_event("queue_mask_open", %{"index" => index}, socket) do
+    idx = String.to_integer(index)
+
+    new_idx =
+      if socket.assigns.mask_picker_index == idx do
+        nil
+      else
+        idx
+      end
+
+    {:noreply, assign(socket, mask_picker_index: new_idx)}
+  end
+
+  def handle_event("queue_set_mask", %{"index" => index} = params, socket) do
+    idx = String.to_integer(index)
+
+    mask =
+      case params do
+        %{"mask_app" => "", "mask_mode_id" => _} ->
+          nil
+
+        %{"mask_app" => app, "mask_mode_id" => mode_id} when is_binary(app) and app != "" ->
+          %{app: parse_app_module(app), mode_id: mode_id}
+
+        _ ->
+          nil
+      end
+
+    case InstallationTransport.queue_set_mask(idx, mask) do
+      :ok ->
+        {:noreply,
+         socket
+         |> assign(mask_picker_index: nil)
+         |> refresh_transport()
+         |> assign_running()}
+
+      {:error, :not_found} ->
+        {:noreply, put_flash(socket, :error, "Track not found")}
+    end
   end
 
   def handle_event("set_interval", %{"seconds" => seconds}, socket) do
@@ -743,11 +769,6 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     {:noreply, socket}
   end
 
-  def handle_event("mask_app", %{"app-id" => app_id}, socket) do
-    AppManager.set_mask_app(app_id)
-    {:noreply, socket}
-  end
-
   def handle_event("stop_app", %{"app-id" => app_id}, socket) do
     transport = socket.assigns.transport
 
@@ -771,26 +792,6 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     {:noreply, socket}
   end
 
-  def handle_event("stop_mask_app", _params, socket) do
-    AppSupervisor.stop_mask_app()
-    {:noreply, socket}
-  end
-
-  def handle_event("start_as_mask", %{"module" => module_string}, socket) do
-    module = parse_app_module(module_string)
-
-    case AppSupervisor.start_as_mask_app(module) do
-      {:ok, _app_id} ->
-        {:noreply, assign_running(socket)}
-
-      {:error, :not_grayscale} ->
-        {:noreply, put_flash(socket, :error, "#{app_name(module)} unterstützt kein Greyscale und kann nicht als Mask genutzt werden")}
-
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Konnte #{app_name(module)} nicht als Mask starten")}
-    end
-  end
-
   def handle_event("launch_app", %{"module" => module_string}, socket) do
     InstallationTransport.launch_app(parse_app_module(module_string))
     {:noreply, refresh_transport(socket) |> assign_running()}
@@ -808,24 +809,6 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Konnte #{app_name(module)} nicht starten")}
-    end
-  end
-
-  def handle_event("launch_app_as_mask", %{"module" => module_string}, socket) do
-    module = parse_app_module(module_string)
-
-    case AppSupervisor.start_as_mask_app(module) do
-      {:ok, _app_id} ->
-        {:noreply, assign_running(socket)}
-
-      {:error, :not_grayscale} ->
-        {:noreply, put_flash(socket, :error, "#{app_name(module)} unterstützt kein Greyscale und kann nicht als Mask genutzt werden")}
-
-      {:error, :incompatible} ->
-        {:noreply, put_flash(socket, :error, "#{app_name(module)} ist nicht kompatibel mit dieser Installation")}
-
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Konnte #{app_name(module)} nicht als Mask starten")}
     end
   end
 
@@ -1095,7 +1078,6 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   defp tile_list(app, modes, transport, opts \\ []) do
     queueable? = Keyword.get(opts, :queueable?, true)
     rotating_active? = length(transport.queue) >= 2 and not transport.rotation_paused
-    mask_eligible? = AppManager.supports_grayscale_module?(app)
 
     Enum.map(modes, fn mode ->
       queued_pos = queue_position(transport.queue, app, mode.id, 1)
@@ -1106,7 +1088,6 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         live?: live?(transport, app, mode.id),
         queued_pos: queued_pos,
         queueable?: queueable?,
-        mask_eligible?: mask_eligible?,
         stop_takeover?: takeover_live?(transport, app, mode.id),
         play_now_title: play_now_title(queued_pos, rotating_active?)
       }
@@ -1281,8 +1262,25 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       up_next_index: assigns.up_next_index,
       elapsed_percent: assigns.elapsed_percent,
       countdown_label: assigns.countdown_label,
-      holding_label: assigns.holding_label
+      holding_label: assigns.holding_label,
+      mask_picker_index: assigns.mask_picker_index,
+      mask_eligible_apps: assigns.mask_eligible_apps
     }
+  end
+
+  defp mask_eligible_apps do
+    AppSupervisor.available_apps()
+    |> Enum.filter(fn app ->
+      AppManager.supports_grayscale_module?(app) and apply(app, :compatible?, [])
+    end)
+    |> Enum.map(fn app ->
+      %{
+        module: app,
+        name: app_name(app),
+        modes: app_list_modes(app)
+      }
+    end)
+    |> Enum.sort_by(& &1.name)
   end
 
   defp entry_match?(%{app: app, mode_id: mode_id}, %{app: app, mode_id: mode_id}), do: true
