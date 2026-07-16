@@ -1227,8 +1227,11 @@ defmodule OctopusWeb.RadarLive do
         </div>
         <% end %>
 
-        <div class={["min-w-0 min-h-0 flex items-center justify-center overflow-hidden bg-base-200 relative",
-                     if(@ui_mode == :developer, do: "flex-1 h-full", else: "flex-1")]}>
+        <div
+          class={["min-w-0 min-h-0 flex items-center justify-center overflow-hidden bg-base-200 relative",
+                  if(@ui_mode == :developer, do: "flex-1 h-full", else: "flex-1 w-full")]}
+          style="container-type: size;"
+        >
           <div class="absolute top-2 right-2 z-10 join shadow">
             <button
               type="button"
@@ -1245,10 +1248,7 @@ defmodule OctopusWeb.RadarLive do
               title="Live view"
             >Live</button>
           </div>
-          <div
-            class="max-h-full max-w-full"
-            style="width: min(100%, calc(100vh - 2.5rem)); aspect-ratio: 1; height: auto; max-height: 100%;"
-          >
+          <div style="width: min(100cqw, 100cqh); height: min(100cqw, 100cqh); aspect-ratio: 1; flex-shrink: 0;">
             <svg
               id="radar-map"
               viewBox="0 0 1000 1000"
