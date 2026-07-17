@@ -223,7 +223,7 @@ defmodule Octopus.Apps.Collective do
         min: 0.2,
         max: 5.0,
         step: 0.1,
-        default: 1.6,
+        default: 1.8,
         runtime: true
       },
       %{
@@ -233,7 +233,7 @@ defmodule Octopus.Apps.Collective do
         min: 0.0,
         max: 1.0,
         step: 0.05,
-        default: 0.55,
+        default: 0.3,
         runtime: true
       },
       %{
