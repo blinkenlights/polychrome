@@ -34,11 +34,7 @@ defmodule OctopusWeb.RadarDebugLive do
 
   The Copy Dump button generates a compact JSON payload covering the full
   stored history (up to one hour) for all sensors, logs it with a
-  `RADAR-DUMP[<id>]` tag, and also copies it to the clipboard. The payload
-  backing the main (non-snapshot) button is refreshed on its own slow
-  interval (`@dump_tick_ms`), independent of the 1s timeline tick, so that
-  this comparatively expensive encode of up to an hour of history does not
-  add continuous background load on every UI refresh.
+  `RADAR-DUMP[<id>]` tag, and also copies it to the clipboard.
   """
 
   use OctopusWeb, :live_view
@@ -53,13 +49,6 @@ defmodule OctopusWeb.RadarDebugLive do
   @vb_height 32
   @units_per_second div(1_000, @unit_ms)
   @tick_ms 1_000
-  # The full-history JSON dump (up to 1h, all sensors) is only ever read by
-  # the "Copy Dump" button. Rebuilding + encoding it on every 1s UI tick is
-  # unnecessary background load, so it gets its own much slower interval —
-  # kept in sync client-side (rather than fetched on click) only because the
-  # Clipboard API requires the copy to happen synchronously within the click
-  # handler's user-activation window (see assets/js/hooks/index.js).
-  @dump_tick_ms 10_000
 
   @status_colors %{
     working: "#22c55e",
@@ -79,14 +68,16 @@ defmodule OctopusWeb.RadarDebugLive do
     statuses = build_sensor_statuses(devices)
     histories = if Radar.configured?(), do: trim_histories(Radar.get_history(), @display_window_ms), else: %{}
     stats = if Radar.configured?(), do: Radar.get_stats(), else: %{}
+    udp_subscribers = if Radar.configured?(), do: Radar.get_sensor_data_subscribers(), else: %{}
+    udp_port = if Radar.configured?(), do: Radar.get_sensor_data_port(), else: 5555
 
     if connected?(socket) do
       if Radar.configured?() do
         Enum.each(devices, &Radar.subscribe_status(&1.device_id))
+        Radar.subscribe_sensor_data_forwarder()
       end
 
       :timer.send_interval(@tick_ms, :tick)
-      :timer.send_interval(@dump_tick_ms, :dump_tick)
     end
 
     {:ok,
@@ -103,12 +94,21 @@ defmodule OctopusWeb.RadarDebugLive do
        vb_width: @vb_width,
        vb_height: @vb_height,
        window_ms: @display_window_ms,
-       units_per_second: @units_per_second
+       units_per_second: @units_per_second,
+       udp_subscribers: udp_subscribers,
+       udp_port: udp_port,
+       new_subscriber_ip: "",
+       new_subscriber_timeout: 10
      )}
-  end
+   end
 
-  @impl true
-  def handle_event("take_snapshot", _, socket) do
+   @impl true
+   def handle_event("validate_subscriber", %{"ip" => ip, "timeout" => timeout}, socket) do
+     {:noreply, assign(socket, new_subscriber_ip: ip, new_subscriber_timeout: timeout)}
+   end
+
+   @impl true
+   def handle_event("take_snapshot", _, socket) do
     now = System.system_time(:millisecond)
     snap_id = generate_snap_id()
 
@@ -179,6 +179,27 @@ defmodule OctopusWeb.RadarDebugLive do
     {:noreply, socket}
   end
 
+  def handle_event("add_sensor_data_subscriber", %{"ip" => ip, "timeout" => timeout_str}, socket) do
+    timeout = String.to_integer(timeout_str)
+    Radar.add_sensor_data_subscriber(ip, timeout)
+    {:noreply, assign(socket, new_subscriber_ip: "", new_subscriber_timeout: 10)}
+  end
+
+  def handle_event("remove_sensor_data_subscriber", %{"ip" => ip}, socket) do
+    Radar.remove_sensor_data_subscriber(ip)
+    {:noreply, socket}
+  end
+
+  def handle_event("start_sensor_data_push", %{"ip" => ip}, socket) do
+    Radar.start_sensor_data_push(ip)
+    {:noreply, socket}
+  end
+
+  def handle_event("stop_sensor_data_push", %{"ip" => ip}, socket) do
+    Radar.stop_sensor_data_push(ip)
+    {:noreply, socket}
+  end
+
   @impl true
   def handle_info({:radar_sensor_status, device_id, new_status}, socket) do
     now = System.system_time(:millisecond)
@@ -206,12 +227,13 @@ defmodule OctopusWeb.RadarDebugLive do
      assign(socket,
        histories: histories,
        stats: if(socket.assigns.radar_configured, do: Radar.get_stats(), else: socket.assigns.stats),
-       now_ms: now
+       now_ms: now,
+       dump_json: generate_dump_json(generate_dump_id())
      )}
   end
 
-  def handle_info(:dump_tick, socket) do
-    {:noreply, assign(socket, dump_json: generate_dump_json(generate_dump_id()))}
+  def handle_info({:sensor_data_subscribers, subscribers}, socket) do
+    {:noreply, assign(socket, udp_subscribers: subscribers)}
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}
@@ -296,6 +318,60 @@ defmodule OctopusWeb.RadarDebugLive do
             window_ms={@window_ms}
           />
         <% end %>
+
+        <div class="mt-8 border-t pt-4">
+          <div class="flex items-baseline gap-2 mb-4">
+            <h2 class="text-lg font-bold">UDP Forwarding</h2>
+            <span class="text-xs text-gray-400 font-normal">(will send object data from the sensors via UDP, port {@udp_port})</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-gray-500 text-left border-b">
+                  <th class="px-3 py-2">IP / Hostname</th>
+                  <th class="px-3 py-2">Timeout (min)</th>
+                  <th class="px-3 py-2">Status</th>
+                  <th class="px-3 py-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <%= for {ip, sub} <- @udp_subscribers do %>
+                  <tr class="border-b last:border-0">
+                    <td class="px-3 py-2 font-mono">{ip}</td>
+                    <td class="px-3 py-2">{sub.timeout_minutes}</td>
+                    <td class="px-3 py-2">
+                      <%= if sub.active_until && DateTime.compare(sub.active_until, DateTime.utc_now()) == :gt do %>
+                        <span class="text-green-600 font-semibold">Pushing (until {DateTime.to_time(sub.active_until) |> Time.truncate(:second)})</span>
+                      <% else %>
+                        <span class="text-gray-400">Idle</span>
+                      <% end %>
+                    </td>
+                    <td class="px-3 py-2 flex gap-2">
+                      <%= if sub.active_until && DateTime.compare(sub.active_until, DateTime.utc_now()) == :gt do %>
+                        <button type="button" phx-click="stop_sensor_data_push" phx-value-ip={ip} class="btn btn-xs btn-error">Stop</button>
+                      <% else %>
+                        <button type="button" phx-click="start_sensor_data_push" phx-value-ip={ip} class="btn btn-xs btn-success">Start</button>
+                      <% end %>
+                      <button type="button" phx-click="remove_sensor_data_subscriber" phx-value-ip={ip} class="btn btn-xs btn-outline btn-error">Delete</button>
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+
+          <form phx-submit="add_sensor_data_subscriber" phx-change="validate_subscriber" class="mt-4 flex gap-2 items-end">
+            <div class="flex flex-col gap-1">
+              <label class="text-xs text-gray-500">IP / Hostname</label>
+              <input type="text" name="ip" value={@new_subscriber_ip} placeholder="127.0.0.1 or hostname" class="input input-sm input-bordered w-48" required />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs text-gray-500">Timeout (1-99 min)</label>
+              <input type="number" name="timeout" value={@new_subscriber_timeout} min="1" max="99" class="input input-sm input-bordered w-24" required />
+            </div>
+            <button type="submit" class="btn btn-sm btn-primary">Add Subscriber</button>
+          </form>
+        </div>
       <% end %>
     </div>
     """

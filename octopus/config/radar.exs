@@ -31,7 +31,9 @@ import Config
 #   * `:sensors` — maps each installation sensor id to an adapter port:
 #     `[id: :a, adapter: "65", port: :if00]`. Geographic pose keys
 #     (`:rotation_deg`, `:angle_deg`, …) belong in the installation module,
-#     not here. Direct `[id: :a, port: "..."]` paths are still supported.
+#     not here. Direct `[id: :a, port: "..."]` paths are supported, and can
+#     be provided via environment variables: `RADAR_PORT_<id>` (e.g.
+#     `RADAR_PORT_a=/dev/ttyUSB0`).
 #
 # Boot source mode (`:off`|`:live`|`:exact`|`:fuzzy`) defaults to `:off` in dev
 # and `:live` in prod; override with RADAR_SOURCE_MODE when a host needs a
@@ -46,14 +48,32 @@ deployments = %{
       [name: "65", serial: "BD6545ABCD"],
       [name: "FF", serial: "BDFFDFABCD"]
     ],
-    sensors: [
-      [id: :a, adapter: "65", port: :if00],
-      [id: :b, adapter: "65", port: :if02],
-      [id: :c, adapter: "65", port: :if04],
-      [id: :d, adapter: "FF", port: :if00],
-      [id: :e, adapter: "FF", port: :if02],
-      [id: :f, adapter: "FF", port: :if04]
-    ]
+    sensors:
+      for id <- [:a, :b, :c, :d, :e, :f] do
+        env_port = System.get_env("RADAR_PORT_#{id}")
+
+        default_binding =
+          case id do
+            :a -> [adapter: "65", port: :if00]
+            :b -> [adapter: "65", port: :if02]
+            :c -> [adapter: "65", port: :if04]
+            :d -> [adapter: "FF", port: :if00]
+            :e -> [adapter: "FF", port: :if02]
+            :f -> [adapter: "FF", port: :if04]
+          end
+
+        if env_port && env_port != "" do
+          [id: id, port: env_port]
+        else
+          id_opt = [id: id]
+          id_opt ++ default_binding
+        end
+      end
+  ],
+  macos: [
+    target: :macos,
+    sensors:
+      for(id <- [:a, :b, :c, :d, :e, :f], do: [id: id, port: System.get_env("RADAR_PORT_#{id}")])
   ]
 }
 

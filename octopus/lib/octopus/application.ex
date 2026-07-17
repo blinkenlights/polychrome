@@ -80,7 +80,10 @@ defmodule Octopus.Application do
 
   defp radar_children do
     if Octopus.Radar.configured?() do
-      [Octopus.Radar]
+      [
+        Octopus.Radar,
+        Octopus.Radar.SensorDataForwarder
+      ]
     else
       Logger.info("[radar] No :radar block in active installation — supervisor not started")
       []

@@ -40,6 +40,7 @@ config :octopus, :osc_server_port, 8000
 # See lib/octopus/installation/*.ex files
 
 # Radar (HLK-LD6001A): see config/radar.exs (loaded at runtime via runtime.exs)
+config :octopus, :radar_sensor_data_forward_interval, 100
 
 # Installation configuration (compile-time setting).
 # Override at build time via the INSTALLATION_MODULE env var (see Dockerfile ARG).

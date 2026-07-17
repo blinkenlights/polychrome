@@ -54,10 +54,22 @@ defmodule Octopus.Radar do
         ],
         macos: [
           target: :macos,
-          adapters: [[name: "dev", ports: [if00: "/dev/tty.usbserial-..."]]],
-          ...
+          sensors: [[id: :a, port: "/dev/tty.usbmodem..."]]
         ]
       }
+
+  #### Port Overrides via Environment Variables
+
+  You can override the physical port for any logical sensor ID using environment
+  variables in the format `RADAR_PORT_<id>` (e.g., `RADAR_PORT_a`).
+
+  * On **Linux**, setting `RADAR_PORT_a=/dev/ttyUSB0` bypasses the USB adapter
+    lookup for sensor `:a` and uses the provided path directly. This is useful
+    for connecting sensors to different serial ports than the production rig.
+  * On **macOS**, setting `RADAR_PORT_a` is the primary way to provide sensor
+    paths during local development.
+
+  #### Linux Adapter Discovery
 
   `:target :linux` discovers by-id port paths and sysfs `usb_path` at runtime
   (production rigs such as redlady). `:target :macos` uses explicit `:ports`
@@ -815,6 +827,14 @@ defmodule Octopus.Radar do
   @doc "Reset all sensor statistics counters."
   @spec reset_stats() :: :ok
   defdelegate reset_stats(), to: Octopus.Radar.Stats, as: :reset
+
+  defdelegate add_sensor_data_subscriber(ip, timeout_minutes), to: Octopus.Radar.SensorDataForwarder, as: :add_subscriber
+  defdelegate remove_sensor_data_subscriber(ip), to: Octopus.Radar.SensorDataForwarder, as: :remove_subscriber
+  defdelegate start_sensor_data_push(ip), to: Octopus.Radar.SensorDataForwarder, as: :start_push
+  defdelegate stop_sensor_data_push(ip), to: Octopus.Radar.SensorDataForwarder, as: :stop_push
+  defdelegate get_sensor_data_subscribers(), to: Octopus.Radar.SensorDataForwarder, as: :get_subscribers
+  defdelegate subscribe_sensor_data_forwarder(), to: Octopus.Radar.SensorDataForwarder, as: :subscribe
+  defdelegate get_sensor_data_port(), to: Octopus.Radar.SensorDataForwarder, as: :port
 
   @doc "PubSub topic for per-panel activity snapshots."
   @spec panel_activity_topic() :: String.t()

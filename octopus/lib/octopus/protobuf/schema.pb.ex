@@ -350,3 +350,59 @@ defmodule Octopus.Protobuf.RemoteLog do
 
   field :message, 1, type: :string, deprecated: false
 end
+
+defmodule Octopus.Protobuf.ForwardedSensorDataPacket do
+  @moduledoc false
+
+  use Protobuf,
+    full_name: "ForwardedSensorDataPacket",
+    protoc_gen_elixir_version: "0.17.0",
+    syntax: :proto3
+
+  field :version, 1, type: :uint32
+  field :num_sensors, 2, type: :uint32, json_name: "numSensors"
+  field :sensors, 3, repeated: true, type: Octopus.Protobuf.ForwardedSensorMetadata
+  field :data, 4, repeated: true, type: Octopus.Protobuf.ForwardedSensorData
+end
+
+defmodule Octopus.Protobuf.ForwardedSensorMetadata do
+  @moduledoc false
+
+  use Protobuf,
+    full_name: "ForwardedSensorMetadata",
+    protoc_gen_elixir_version: "0.17.0",
+    syntax: :proto3
+
+  field :device_id, 1, type: :uint32, json_name: "deviceId"
+  field :name, 2, type: :string
+  field :rotation, 3, type: :float
+end
+
+defmodule Octopus.Protobuf.ForwardedSensorData do
+  @moduledoc false
+
+  use Protobuf,
+    full_name: "ForwardedSensorData",
+    protoc_gen_elixir_version: "0.17.0",
+    syntax: :proto3
+
+  field :device_id, 1, type: :uint32, json_name: "deviceId"
+  field :tracks, 2, repeated: true, type: Octopus.Protobuf.ForwardedTrack
+end
+
+defmodule Octopus.Protobuf.ForwardedTrack do
+  @moduledoc false
+
+  use Protobuf,
+    full_name: "ForwardedTrack",
+    protoc_gen_elixir_version: "0.17.0",
+    syntax: :proto3
+
+  field :id, 1, type: :uint32
+  field :x, 2, type: :float
+  field :y, 3, type: :float
+  field :z, 4, type: :float
+  field :vx, 5, type: :float
+  field :vy, 6, type: :float
+  field :vz, 7, type: :float
+end

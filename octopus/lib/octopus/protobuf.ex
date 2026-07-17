@@ -12,7 +12,8 @@ defmodule Octopus.Protobuf do
     InputLightEvent,
     ControlEvent,
     SynthFrame,
-    SoundToLightControlEvent
+    SoundToLightControlEvent,
+    ForwardedSensorDataPacket
   }
 
   def encode(%WFrame{data: data} = wframe) when is_binary(data) do
@@ -53,6 +54,10 @@ defmodule Octopus.Protobuf do
   def encode(%ControlEvent{} = event) do
     %Packet{content: {:control_event, event}}
     |> Packet.encode()
+  end
+
+  def encode(%ForwardedSensorDataPacket{} = packet) do
+    ForwardedSensorDataPacket.encode(packet)
   end
 
   def split_and_encode(%RGBFrame{data: <<part1::binary-size(960), part2::binary>>} = rgbframe) do
@@ -153,5 +158,12 @@ defmodule Octopus.Protobuf do
     error ->
       Logger.warning("Could not decode protobuf: #{inspect(error)} Binary: #{inspect(protobuf)} ")
       {:error, :decode_error}
+  end
+
+  def decode_forwarded_packet(protobuf) when is_binary(protobuf) do
+    {:ok, ForwardedSensorDataPacket.decode(protobuf)}
+  rescue
+    error ->
+      {:error, error}
   end
 end

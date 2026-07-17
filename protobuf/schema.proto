@@ -220,3 +220,31 @@ message FirmwareInfo {
 message RemoteLog {
   string message = 1 [(nanopb).max_length = 100];
 }
+
+message ForwardedSensorDataPacket {
+  uint32 version = 1;
+  uint32 num_sensors = 2;
+  repeated ForwardedSensorMetadata sensors = 3;
+  repeated ForwardedSensorData data = 4;
+}
+
+message ForwardedTrack {
+  uint32 id = 1;
+  float x = 2;
+  float y = 3;
+  float z = 4;
+  float vx = 5;
+  float vy = 6;
+  float vz = 7;
+}
+
+message ForwardedSensorData {
+  uint32 device_id = 1;
+  repeated ForwardedTrack tracks = 2;
+}
+
+message ForwardedSensorMetadata {
+  uint32 device_id = 1;
+  string name = 2;
+  float rotation = 3;
+}
