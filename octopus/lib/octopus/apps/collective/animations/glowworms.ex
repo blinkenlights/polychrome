@@ -54,11 +54,9 @@ defmodule Octopus.Apps.Collective.Animations.Glowworms do
 
   alias Octopus.Canvas
   alias Octopus.Radar
-  alias Octopus.Radar.PanelMapping
 
   @width 96
   @height 8
-  @two_pi 2.0 * :math.pi()
 
   @palettes [
     {1.0, 1.0, 0.6}, # light yellow
@@ -105,7 +103,7 @@ defmodule Octopus.Apps.Collective.Animations.Glowworms do
   end
 
   @impl true
-  def render(canvas, _people, ctx, state) do
+  def render(%Canvas{} = canvas, _people, ctx, state) do
     dt = ctx.dt |> min(0.1)
 
     # Configuration
@@ -441,7 +439,7 @@ defmodule Octopus.Apps.Collective.Animations.Glowworms do
     end
   end
 
-  defp handle_worm_meetings(worm, all_worms, dt, stay_chance) do
+  defp handle_worm_meetings(worm, all_worms, _dt, stay_chance) do
     if worm.phase == :travel and worm.fast? == 0.0 do
       # Check for other travelers nearby
       nearby_traveler =
