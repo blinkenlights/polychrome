@@ -5,6 +5,7 @@ defmodule Octopus.PlaylistScheduler do
   alias Octopus.{AppSupervisor, AppManager, Repo}
   alias Octopus.PlaylistScheduler.Playlist
   alias Octopus.PlaylistScheduler.Playlist.Animation
+  alias Octopus.PlaylistScheduler.PersistedState
 
   @topic "playlist_scheduler"
   @default_animation %{app: "Text", config: %{text: "POLYCHROME"}, timeout: 60_000}
@@ -86,6 +87,8 @@ defmodule Octopus.PlaylistScheduler do
   end
 
   def init(:ok) do
+    persisted = PersistedState.load()
+
     case Application.fetch_env(:octopus, :default_playlist) do
       {:ok, playlist_name} ->
         case get_playlist_by_name(playlist_name) do
@@ -100,7 +103,38 @@ defmodule Octopus.PlaylistScheduler do
         Logger.info("No default playlist defined.")
     end
 
-    {:ok, %State{}}
+    {:ok, %State{}, {:continue, {:restore_playlist, persisted}}}
+  end
+
+  def handle_continue({:restore_playlist, nil}, state) do
+    {:noreply, state}
+  end
+
+  def handle_continue({:restore_playlist, %PersistedState{running: false}}, state) do
+    {:noreply, state}
+  end
+
+  def handle_continue({:restore_playlist, %PersistedState{running: true, playlist_id: id, index: index}}, %State{} = state) do
+    case get_playlist(id) do
+      %Playlist{animations: [_ | _] = animations} ->
+        safe_index = Integer.mod(index, length(animations))
+        start_index = Integer.mod(safe_index - 1, length(animations))
+
+        Logger.info("Restoring playlist #{id} at index #{safe_index}")
+
+        new_state =
+          %State{state | playlist_id: id, index: start_index}
+          |> new_run_id()
+          |> broadcast_status()
+
+        send(self(), {:next, new_state.run_id})
+
+        {:noreply, new_state}
+
+      _ ->
+        Logger.warning("PlaylistScheduler: could not restore playlist #{id} — not found or empty")
+        {:noreply, state}
+    end
   end
 
   def handle_cast({:start, id}, %State{} = state) do
@@ -116,7 +150,7 @@ defmodule Octopus.PlaylistScheduler do
 
         send(self(), {:next, state.run_id})
 
-        {:noreply, state}
+        {:noreply, persist_scheduler_state(state)}
 
       nil ->
         Logger.warning("Playlist id #{id} not found")
@@ -131,7 +165,8 @@ defmodule Octopus.PlaylistScheduler do
       AppSupervisor.stop_app(state.app_id)
     end
 
-    {:noreply, %State{state | app_id: nil, run_id: nil} |> broadcast_status()}
+    new_state = %State{state | app_id: nil, run_id: nil} |> broadcast_status()
+    {:noreply, persist_scheduler_state(new_state)}
   end
 
   def handle_cast(:resume, %State{} = state) do
@@ -145,7 +180,7 @@ defmodule Octopus.PlaylistScheduler do
       _id ->
         state = state |> new_run_id()
         send(self(), {:next, state.run_id})
-        {:noreply, state |> broadcast_status()}
+        {:noreply, state |> broadcast_status() |> persist_scheduler_state()}
     end
   end
 
@@ -163,7 +198,7 @@ defmodule Octopus.PlaylistScheduler do
     state = state |> new_run_id()
 
     send(self(), {:next, state.run_id})
-    {:noreply, state |> broadcast_status()}
+    {:noreply, state |> broadcast_status() |> persist_scheduler_state()}
   end
 
   def handle_cast(:prev_animation, %State{run_id: nil} = state), do: {:noreply, state}
@@ -177,7 +212,7 @@ defmodule Octopus.PlaylistScheduler do
 
     send(self(), {:next, state.run_id})
 
-    {:noreply, state |> broadcast_status()}
+    {:noreply, state |> broadcast_status() |> persist_scheduler_state()}
   end
 
   def handle_call(:selected_playlist, _from, %State{playlist_id: playlist_id} = state) do
@@ -208,12 +243,14 @@ defmodule Octopus.PlaylistScheduler do
 
         :timer.send_after(animation.timeout, self(), {:next, run_id})
 
-        {:noreply, %State{state | index: next_index, app_id: next_app_id} |> broadcast_status()}
+        new_state = %State{state | index: next_index, app_id: next_app_id} |> broadcast_status()
+        {:noreply, persist_scheduler_state(new_state)}
 
       {:error, _reason} ->
         Logger.warning("PlayistScheduler: Could not start app, skipping")
         send(self(), {:next, run_id})
-        {:noreply, %State{state | index: next_index} |> broadcast_status()}
+        new_state = %State{state | index: next_index} |> broadcast_status()
+        {:noreply, persist_scheduler_state(new_state)}
     end
   end
 
@@ -254,5 +291,19 @@ defmodule Octopus.PlaylistScheduler do
   defp new_run_id(%State{} = state) do
     run_id = :crypto.strong_rand_bytes(16)
     %State{state | run_id: run_id}
+  end
+
+  defp persist_scheduler_state(%State{playlist_id: nil} = state), do: state
+
+  defp persist_scheduler_state(%State{} = state) do
+    attrs = %{
+      playlist_id: state.playlist_id,
+      index: state.index || 0,
+      running: not is_nil(state.run_id)
+    }
+
+    Task.start(fn -> PersistedState.save(attrs) end)
+
+    state
   end
 end

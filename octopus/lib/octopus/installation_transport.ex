@@ -11,6 +11,7 @@ defmodule Octopus.InstallationTransport do
   require Logger
 
   alias Octopus.{AppManager, AppSupervisor, Mixer}
+  alias Octopus.InstallationTransport.PersistedState
 
   # Runtime module refs avoid compile-time cycles with AppModePresets and app modules.
   @app Module.concat(["Octopus", "App"])
@@ -108,13 +109,15 @@ defmodule Octopus.InstallationTransport do
 
   @impl true
   def init(_) do
+    persisted = PersistedState.load()
+
     state = %State{
-      queue: [],
-      cycle_interval_seconds: @default_interval_seconds,
-      transition_duration_seconds: @default_transition_duration_seconds,
-      cycle_index: 0,
+      queue: load_queue(persisted),
+      cycle_interval_seconds: (persisted && persisted.cycle_interval_seconds) || @default_interval_seconds,
+      transition_duration_seconds: (persisted && persisted.transition_duration_seconds) || @default_transition_duration_seconds,
+      cycle_index: (persisted && persisted.cycle_index) || 0,
       cycle_timer_ref: nil,
-      playing: true,
+      playing: if(persisted, do: persisted.playing, else: true),
       paused_remaining_ms: nil,
       next_change_at_ms: nil,
       live_entry: nil,
@@ -126,7 +129,27 @@ defmodule Octopus.InstallationTransport do
       now_playing_app_id: nil
     }
 
-    {:ok, state}
+    {:ok, state, {:continue, :restore_playback}}
+  end
+
+  @impl true
+  def handle_continue(:restore_playback, %State{queue: []} = state) do
+    {:noreply, state}
+  end
+
+  def handle_continue(:restore_playback, %State{playing: false} = state) do
+    {:noreply, broadcast(state)}
+  end
+
+  def handle_continue(:restore_playback, %State{} = state) do
+    entry = Enum.at(state.queue, state.cycle_index)
+
+    state =
+      %State{state | pending_entry: entry}
+      |> commit_pending_entry()
+      |> restart_countdown()
+
+    {:noreply, broadcast(state)}
   end
 
   @impl true
@@ -134,11 +157,11 @@ defmodule Octopus.InstallationTransport do
 
   def handle_call({:queue_remove, index}, _from, state) do
     new_queue = List.delete_at(state.queue, index)
-    {:reply, :ok, state |> put_queue(new_queue) |> broadcast()}
+    {:reply, :ok, state |> put_queue(new_queue) |> broadcast() |> persist_queue_state()}
   end
 
   def handle_call({:queue_move, index, dir}, _from, state) do
-    {:reply, :ok, state |> move_queue(index, dir) |> broadcast()}
+    {:reply, :ok, state |> move_queue(index, dir) |> broadcast() |> persist_queue_state()}
   end
 
   def handle_call({:queue_set_mask, index, mask}, _from, state) do
@@ -161,7 +184,7 @@ defmodule Octopus.InstallationTransport do
             state
           end
 
-        {:reply, :ok, broadcast(state)}
+        {:reply, :ok, state |> broadcast() |> persist_queue_state()}
     end
   end
 
@@ -210,7 +233,7 @@ defmodule Octopus.InstallationTransport do
 
     AppSupervisor.stop_mask_app()
 
-    {:reply, :ok, broadcast(state)}
+    {:reply, :ok, state |> broadcast() |> persist_queue_state()}
   end
 
   def handle_call({:play_now, app, mode_id}, _from, state) do
@@ -254,12 +277,12 @@ defmodule Octopus.InstallationTransport do
         {:error, reason, state} -> {{:error, reason}, state}
       end
 
-    {:reply, reply, broadcast(state)}
+    {:reply, reply, state |> broadcast() |> persist_queue_state()}
   end
 
   @impl true
   def handle_cast(:toggle_play, %State{playing: true} = state) do
-    {:noreply, state |> pause() |> broadcast()}
+    {:noreply, state |> pause() |> broadcast() |> persist_queue_state()}
   end
 
   def handle_cast(:toggle_play, %State{playing: false} = state) do
@@ -269,15 +292,15 @@ defmodule Octopus.InstallationTransport do
       |> resume()
       |> maybe_apply_live_queue_entry()
 
-    {:noreply, broadcast(state)}
+    {:noreply, state |> broadcast() |> persist_queue_state()}
   end
 
   def handle_cast(:next, state) do
-    {:noreply, state |> step(+1) |> broadcast()}
+    {:noreply, state |> step(+1) |> broadcast() |> persist_queue_state()}
   end
 
   def handle_cast(:prev, state) do
-    {:noreply, state |> step(-1) |> broadcast()}
+    {:noreply, state |> step(-1) |> broadcast() |> persist_queue_state()}
   end
 
   def handle_cast({:queue_toggle, app, mode_id}, state) do
@@ -305,7 +328,7 @@ defmodule Octopus.InstallationTransport do
         state
       end
 
-    {:noreply, broadcast(state)}
+    {:noreply, state |> broadcast() |> persist_queue_state()}
   end
 
   def handle_cast({:queue_add_all, app}, state) do
@@ -335,22 +358,23 @@ defmodule Octopus.InstallationTransport do
           state
         end
 
-      {:noreply, broadcast(state)}
+      {:noreply, state |> broadcast() |> persist_queue_state()}
     end
   end
 
   def handle_cast({:set_queue, entries}, state) do
-    {:noreply, state |> put_queue(entries) |> broadcast()}
+    {:noreply, state |> put_queue(entries) |> broadcast() |> persist_queue_state()}
   end
 
   def handle_cast({:set_interval, seconds}, %State{} = state) do
-    {:noreply, %State{state | cycle_interval_seconds: normalize_interval(seconds)} |> broadcast()}
+    {:noreply, %State{state | cycle_interval_seconds: normalize_interval(seconds)} |> broadcast() |> persist_queue_state()}
   end
 
   def handle_cast({:set_transition_duration, seconds}, %State{} = state) do
     {:noreply,
      %State{state | transition_duration_seconds: normalize_transition_duration(seconds)}
-     |> broadcast()}
+     |> broadcast()
+     |> persist_queue_state()}
   end
 
   def handle_cast(:commit_pending_entry, %State{} = state) do
@@ -415,11 +439,9 @@ defmodule Octopus.InstallationTransport do
         |> apply_entry_or_keep(entry)
         |> restart_countdown()
 
-      {:noreply, broadcast(state)}
+      {:noreply, state |> broadcast() |> persist_queue_state()}
     end
   end
-
-  # -- Queue / transport helpers ----------------------------------------------
 
   defp put_queue(%State{} = state, queue) do
     index =
@@ -1123,6 +1145,55 @@ defmodule Octopus.InstallationTransport do
 
   defp entries_match_front?(%{app: app_a, mode_id: mode_a}, %{app: app_b, mode_id: mode_b}) do
     app_a == app_b and mode_a == mode_b
+  end
+
+  defp persist_queue_state(%State{} = state) do
+    attrs = %{
+      queue: Enum.map(state.queue, &serialize_entry/1),
+      cycle_index: state.cycle_index,
+      cycle_interval_seconds: state.cycle_interval_seconds,
+      transition_duration_seconds: state.transition_duration_seconds,
+      playing: state.playing
+    }
+
+    Task.start(fn -> PersistedState.save(attrs) end)
+
+    state
+  end
+
+  defp serialize_entry(%{app: app, mode_id: mode_id, mask: mask}) do
+    %{
+      "app" => Atom.to_string(app),
+      "mode_id" => mode_id,
+      "mask" => serialize_mask(mask)
+    }
+  end
+
+  defp serialize_mask(nil), do: nil
+
+  defp serialize_mask(%{app: app, mode_id: mode_id}) do
+    %{"app" => Atom.to_string(app), "mode_id" => mode_id}
+  end
+
+  defp load_queue(nil), do: []
+
+  defp load_queue(%PersistedState{queue: queue}) when is_list(queue) do
+    queue
+    |> Enum.map(fn entry ->
+      normalize_entry(%{
+        app: Map.fetch!(entry, "app"),
+        mode_id: Map.fetch!(entry, "mode_id"),
+        mask: case Map.get(entry, "mask") do
+          nil -> nil
+          mask -> %{app: Map.fetch!(mask, "app"), mode_id: Map.fetch!(mask, "mode_id")}
+        end
+      })
+    end)
+    |> Enum.reject(fn entry ->
+      not (Code.ensure_loaded?(entry.app) and function_exported?(entry.app, :list_modes, 0))
+    end)
+  rescue
+    _ -> []
   end
 
   defp normalize_entry(%{app: app, mode_id: id} = attrs) do
