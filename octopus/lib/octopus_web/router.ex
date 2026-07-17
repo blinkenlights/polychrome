@@ -28,6 +28,7 @@ defmodule OctopusWeb.Router do
       live "/proximity", ProximityLive
       live "/radar", RadarLive
       live "/radar/debug", RadarDebugLive
+      live "/nation", NationLive
     end
 
     live_session :sim3d,

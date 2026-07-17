@@ -1,5 +1,6 @@
 import PixelsHook from "./pixels";
 import ProximityChartHook from "./proximity_chart";
+import NationHook from "./nation";
 import { TopBar } from "./topbar";
 import { CodeEditorHook } from "../../../deps/live_monaco_editor/priv/static/live_monaco_editor.esm";
 
@@ -362,5 +363,6 @@ export const Hooks = {
   NowPlayingSlider: NowPlayingSlider,
   RadarManualPointer: RadarManualPointer,
   SimResize: SimResize,
+  NationHook: NationHook,
   TopBar,
 };
