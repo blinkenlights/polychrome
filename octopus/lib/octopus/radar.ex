@@ -780,6 +780,20 @@ defmodule Octopus.Radar do
     end
   end
 
+  @doc """
+  Return the firmware version string obtained from AT+READ for a sensor,
+  or `nil` if the sensor is inactive, not yet initialised, or unreachable.
+  """
+  @spec firmware_version(pos_integer()) :: String.t() | nil
+  def firmware_version(device_id) do
+    if configured?() and Runtime.enabled?(device_id) do
+      case Sensor.get_firmware_version(device_id) do
+        {:ok, version} -> version
+        {:error, _} -> nil
+      end
+    end
+  end
+
   @doc "PubSub topic for status-change broadcasts of a single sensor."
   @spec status_topic(pos_integer()) :: String.t()
   def status_topic(device_id) when is_integer(device_id) and device_id >= 1,
@@ -797,6 +811,26 @@ defmodule Octopus.Radar do
       Octopus.PubSub,
       status_topic(device_id),
       {:radar_sensor_status, device_id, status}
+    )
+  end
+
+  @doc "PubSub topic for firmware-version broadcasts of a single sensor."
+  @spec firmware_topic(pos_integer()) :: String.t()
+  def firmware_topic(device_id) when is_integer(device_id) and device_id >= 1,
+    do: "#{topic(device_id)}:firmware"
+
+  @doc "Subscribe to firmware-version broadcasts for a single sensor."
+  @spec subscribe_firmware(pos_integer()) :: :ok | {:error, term()}
+  def subscribe_firmware(device_id),
+    do: Phoenix.PubSub.subscribe(Octopus.PubSub, firmware_topic(device_id))
+
+  @doc "Broadcast the firmware version obtained from AT+READ. Called internally by `Octopus.Radar.Sensor`."
+  @spec broadcast_firmware_version(pos_integer(), String.t()) :: :ok | {:error, term()}
+  def broadcast_firmware_version(device_id, version) do
+    Phoenix.PubSub.broadcast(
+      Octopus.PubSub,
+      firmware_topic(device_id),
+      {:radar_sensor_firmware, device_id, version}
     )
   end
 
@@ -1087,6 +1121,8 @@ defmodule Octopus.Radar do
         {:error, :not_configured}
 
       {_, config} ->
+        port = Keyword.fetch!(config, :port)
+        Logger.info("#{LogFormat.tag(device_id, port)} Sensor enabled by operator")
         # Start fresh from a clean slate so the right transport (real vs mock)
         # is used for the current mock mode.
         stop_sensor_children(device_id)
@@ -1104,6 +1140,14 @@ defmodule Octopus.Radar do
   @spec disable_sensor(pos_integer()) :: :ok | {:error, term()}
   def disable_sensor(device_id) do
     Runtime.set(device_id, false)
+
+    port =
+      case sensor_configs() |> Enum.find(fn {id, _} -> id == device_id end) do
+        {_, config} -> Keyword.fetch!(config, :port)
+        nil -> "unknown"
+      end
+
+    Logger.info("#{LogFormat.tag(device_id, port)} Sensor disabled by operator")
     stop_sensor_children(device_id)
     broadcast_status(device_id, :inactive)
     :ok
@@ -1296,10 +1340,8 @@ defmodule Octopus.Radar do
 
   defp stop_sensor_children(device_id) do
     for child_id <- [{Sensor, device_id}, {Mock.Server, device_id}] do
-      case Supervisor.terminate_child(__MODULE__, child_id) do
-        :ok -> Supervisor.delete_child(__MODULE__, child_id)
-        _ -> :ok
-      end
+      Supervisor.terminate_child(__MODULE__, child_id)
+      Supervisor.delete_child(__MODULE__, child_id)
     end
 
     :ok

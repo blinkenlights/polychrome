@@ -145,27 +145,59 @@ defmodule Octopus.Radar.Mock.Server do
   defp handle_at_line("", state), do: state
 
   defp handle_at_line(line, state) do
-    state =
-      cond do
-        String.contains?(line, "AT+START") ->
-          %{state | emitting?: true}
+    cond do
+      String.contains?(line, "AT+READ") ->
+        # Real firmware replies with a brace-delimited parameter block, not AT+OK.
+        send_to_owner(state, read_response_block(state))
+        state
 
-        String.contains?(line, "AT+STOP") ->
-          %{state | emitting?: false}
+      true ->
+        state =
+          cond do
+            String.contains?(line, "AT+START") ->
+              %{state | emitting?: true}
 
-        String.starts_with?(line, "AT+RANGE=") ->
-          case Integer.parse(String.trim_leading(line, "AT+RANGE=")) do
-            {range_cm, _} -> %{state | range_cm: range_cm}
-            :error -> state
+            String.contains?(line, "AT+STOP") ->
+              %{state | emitting?: false}
+
+            String.starts_with?(line, "AT+RANGE=") ->
+              case Integer.parse(String.trim_leading(line, "AT+RANGE=")) do
+                {range_cm, _} -> %{state | range_cm: range_cm}
+                :error -> state
+              end
+
+            true ->
+              state
           end
 
-        true ->
-          state
-      end
+        # Acknowledge every other command line, exactly like the real device.
+        send_to_owner(state, "AT+OK\r\n")
+        state
+    end
+  end
 
-    # Acknowledge every command line, exactly like the real device.
-    send_to_owner(state, "AT+OK\r\n")
-    state
+  # Minimal AT+READ response matching firmware NOP_1.07-02 field names/units
+  # so Sensor's ReadResponse parser and config verification can run in mock mode.
+  defp read_response_block(%{config: config, range_cm: range_cm}) do
+    moving_s = Keyword.get(config, :moving_decisecs, 110) / 10
+    static_s = Keyword.get(config, :static_decisecs, 100) / 10
+    exit_s = Keyword.get(config, :exit_decisecs, 5) / 10
+
+    """
+    {
+    "PeopleCntSoftVerison":MOCK_1.0,
+    "Range":#{Keyword.get(config, :range_cm, range_cm)},
+    "Sen":#{Keyword.get(config, :sensitivity, 4)},
+    "detectionHeight":#{Keyword.get(config, :height_cm, 300)},
+    "XboundaryN":#{Keyword.get(config, :x_neg_cm, -450)},
+    "XboundaryP":#{Keyword.get(config, :x_pos_cm, 450)},
+    "YboundaryN":#{Keyword.get(config, :y_neg_cm, -450)},
+    "YboundaryP":#{Keyword.get(config, :y_pos_cm, 450)},
+    "Moving target":#{:erlang.float_to_binary(moving_s * 1.0, decimals: 2)},
+    "Static target":#{:erlang.float_to_binary(static_s * 1.0, decimals: 2)},
+    "Target exit":#{:erlang.float_to_binary(exit_s * 1.0, decimals: 2)},
+    }
+    """
   end
 
   ## Frame emission

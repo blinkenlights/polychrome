@@ -233,7 +233,6 @@ A robust initialization sequence for deployed systems is:
 
 ```text
 AT+STOP\n
-AT+READ\n
 AT+DEBUG=3\n
 AT+DPKTH=4\n
 AT+HEIGHTD=300\n
@@ -245,10 +244,13 @@ AT+YNega=-450\n
 AT+Moving=110\n
 AT+Static=100\n
 AT+Exit=5\n
+AT+READ\n
 AT+START\n
 ```
 
-This is not explicitly given by the vendor as a required sequence, but it is a sensible derived sequence from the documented command set and defaults.
+`AT+READ` is placed after all configuration commands and before `AT+START` so that the response reflects the values just written. This allows the host to verify that every parameter was accepted and stored correctly, and to log the firmware version string. See §9.5 for the AT+READ response format.
+
+While the device is stopped (after `AT+STOP`, before `AT+START`) no binary tracking frames are emitted, so the `AT+READ` response arrives as a clean text block without interleaving binary data.
 
 > Vendor manual V1.2 spells the boundary commands without a trailing `D` (matching the firmware). Earlier vendor manual V1.1 included a spurious `D` (`AT+XPosiD`, etc.); firmware NOP_1.07-02 returns `AT+ERR` for those V1.1 spellings. See §9.3 and §22.5.
 
@@ -346,6 +348,72 @@ Because these parameters are specified in **100 ms units**:
 - `AT+Exit=5` = 0.5 s
 
 These values appear to control how long tracks remain before being dropped under different conditions.
+
+### 9.5 Sensor response types
+
+The module sends five distinct response types over the same UART stream. A host implementation must be prepared to encounter any of them in the receive buffer, depending on the current operational phase.
+
+| Response type | Start pattern | When encountered | Handler |
+|---|---|---|---|
+| `AT+OK\r\n` | `AT+OK` | After any accepted control command | Advance to next command |
+| `AT+OK=<value>\r\n` | `AT+OK=` | After any accepted parameter-setting command | Advance to next command |
+| `AT+ERR\r\n` | `AT+ERR` | After an unknown or out-of-range command | Hard rejection; log and do not retry |
+| `Save Para Fail\r\n` | `Save Para Fail` | After a command accepted but not persisted | Retry the same command |
+| Binary tracking frame | `01 02 03 04 05 06 07 08` | Continuously while running in `DEBUG=3` mode | Parse as detailed protocol frame (see §12) |
+| Binary count frame | `55 AA` | Continuously while running in `DEBUG=0` mode | Parse as simple protocol frame (see §11) |
+| AT+READ response block | `{` | After `AT+READ\n` | Parse as pseudo-JSON parameter block (see below) |
+
+#### AT+READ response format
+
+The `AT+READ` response is a brace-delimited block, one key-value pair per line. The format resembles JSON but is **not valid JSON**: string values (notably the firmware version tag) are unquoted.
+
+Example response from firmware NOP_1.07-02:
+
+```text
+{
+"PeopleCntSoftVerison":NOP_1.07-02,
+"RangeRes":0.055664,
+"VelRes":0.125000,
+"TIME":0,
+"PROG":0,
+"Range":450,
+"Sen":4,
+"Heart_Time":60,
+"Debug":3,
+"detectionHeight":300,
+"XboundaryN":-450,
+"XboundaryP":450,
+"YboundaryN":-450,
+"YboundaryP":450,
+"Moving target":11.00,
+"Static target":10.00,
+"Target exit":0.50,
+}
+```
+
+Key-name notes:
+
+| Response key | Corresponding command | Notes |
+|---|---|---|
+| `PeopleCntSoftVerison` | — | Firmware version string; note vendor typo (`Verison` not `Version`) |
+| `Range` | `AT+RANGE` | cm |
+| `Sen` | `AT+DPKTH` | sensitivity 1–9 |
+| `Heart_Time` | `AT+HEATIME` | heartbeat interval in seconds |
+| `Debug` | `AT+DEBUG` | protocol mode |
+| `detectionHeight` | `AT+HEIGHTD` | cm |
+| `XboundaryN` | `AT+XNega` | cm, negative |
+| `XboundaryP` | `AT+XPosi` | cm, positive |
+| `YboundaryN` | `AT+YNega` | cm, negative |
+| `YboundaryP` | `AT+YPosi` | cm, positive |
+| `Moving target` | `AT+Moving` | **seconds** (not 100 ms units) |
+| `Static target` | `AT+Static` | **seconds** (not 100 ms units) |
+| `Target exit` | `AT+Exit` | **seconds** (not 100 ms units) |
+
+**Unit mismatch:** The three timing values (`Moving target`, `Static target`, `Target exit`) are reported in **seconds** as floats, whereas the corresponding AT commands accept values in **100 ms units** (deciseconds). To compare: `round(response_seconds × 10) == command_value`.
+
+**Old firmware variant:** Some older firmware versions omit the closing `}`. A robust parser should treat the response as complete when `Target exit` has been received and a trailing value follows it (e.g. the `s,` from `"Target exit":0.50,` is the last guaranteed token).
+
+**Ordering:** The module responds to `AT+READ` only while stopped. Sending it during active tracking (`AT+START` already issued) will produce an interleaved stream of binary frames and the text block, which is significantly harder to parse. Always send `AT+READ` before `AT+START`.
 
 ---
 

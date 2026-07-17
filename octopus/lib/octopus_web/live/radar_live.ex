@@ -135,10 +135,10 @@ defmodule OctopusWeb.RadarLive do
     if connected?(socket) and Radar.configured?() do
       Radar.subscribe()
       Enum.each(devices, &Radar.subscribe_status(&1.device_id))
+      Enum.each(devices, &Radar.subscribe_firmware(&1.device_id))
       if mock_source?(source_mode), do: subscribe_world()
       # Track the Sim3D platform radius so the drawn chill zone matches the mock.
       Phoenix.PubSub.subscribe(Octopus.PubSub, Octopus.Params.Sim3d.topic())
-      Process.send_after(self(), :refresh_sensor_statuses, 2_000)
     end
 
     {:ok,
@@ -155,6 +155,7 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:sensor_installation_angles, Radar.sensor_installation_angles())
      |> assign(:north_panel, view_settings.north_panel)
      |> assign(:sensor_statuses, build_sensor_statuses(devices))
+     |> assign(:firmware_versions, build_firmware_versions(devices))
      |> assign(:sensitivity_level, Radar.sensitivity_level())
      |> assign(:source_mode, source_mode)
      |> assign(:max_people, safe_max_people())
@@ -422,12 +423,7 @@ defmodule OctopusWeb.RadarLive do
           Radar.disable_sensor(id)
         end
 
-        statuses = build_sensor_statuses(socket.assigns.devices)
-
-        {:noreply,
-         socket
-         |> assign(:sensor_statuses, statuses)
-         |> reset_radar_state()}
+        {:noreply, reset_radar_state(socket)}
 
       _ ->
         {:noreply, socket}
@@ -470,16 +466,22 @@ defmodule OctopusWeb.RadarLive do
      |> rebuild_view()}
   end
 
-  def handle_info(:refresh_sensor_statuses, socket) do
-    Process.send_after(self(), :refresh_sensor_statuses, 2_000)
-
-    {:noreply,
-     assign(socket, :sensor_statuses, build_sensor_statuses(socket.assigns.devices))}
+  def handle_info({:radar_sensor_status, device_id, new_status}, socket) do
+    if Map.get(socket.assigns.sensor_statuses, device_id) == new_status do
+      {:noreply, socket}
+    else
+      statuses = Map.put(socket.assigns.sensor_statuses, device_id, new_status)
+      {:noreply, assign(socket, :sensor_statuses, statuses)}
+    end
   end
 
-  def handle_info({:radar_sensor_status, device_id, new_status}, socket) do
-    statuses = Map.put(socket.assigns.sensor_statuses, device_id, new_status)
-    {:noreply, assign(socket, :sensor_statuses, statuses)}
+  def handle_info({:radar_sensor_firmware, device_id, version}, socket) do
+    if Map.get(socket.assigns.firmware_versions, device_id) == version do
+      {:noreply, socket}
+    else
+      firmware = Map.put(socket.assigns.firmware_versions, device_id, version)
+      {:noreply, assign(socket, :firmware_versions, firmware)}
+    end
   end
 
   def handle_info({:source_mode_changed, mode}, socket) do
@@ -641,6 +643,7 @@ defmodule OctopusWeb.RadarLive do
      |> assign(:clutter_filter, view_settings.clutter_filter)
      |> assign(:world_objects, [])
      |> assign(:sensor_statuses, build_sensor_statuses(devices))
+     |> assign(:firmware_versions, build_firmware_versions(devices))
      |> assign(:sensitivity_level, Radar.sensitivity_level())
      |> assign(:static_bounds, world_bounds(socket.assigns.world_radius))
      |> reset_radar_state()}
@@ -1106,7 +1109,7 @@ defmodule OctopusWeb.RadarLive do
                     type="button"
                     phx-click="toggle_sensor"
                     phx-value-device_id={d.device_id}
-                    title={sensor_tooltip(d, @sensor_statuses[d.device_id])}
+                    title={sensor_tooltip(d, @sensor_statuses[d.device_id], @firmware_versions[d.device_id])}
                     class={[
                       "btn btn-sm font-mono px-2",
                       sensor_status_class(@sensor_statuses[d.device_id])
@@ -1595,7 +1598,7 @@ defmodule OctopusWeb.RadarLive do
                           type="button"
                           phx-click="toggle_sensor"
                           phx-value-device_id={d.device_id}
-                          title={sensor_tooltip(d, @sensor_statuses[d.device_id])}
+                          title={sensor_tooltip(d, @sensor_statuses[d.device_id], @firmware_versions[d.device_id])}
                           class={[
                             "btn btn-sm font-mono flex-1 min-w-0 px-1",
                             sensor_status_class(@sensor_statuses[d.device_id])
@@ -2619,20 +2622,24 @@ defmodule OctopusWeb.RadarLive do
     Map.new(devices, fn d -> {d.device_id, Radar.sensor_status(d.device_id)} end)
   end
 
+  defp build_firmware_versions(devices) do
+    Map.new(devices, fn d -> {d.device_id, Radar.firmware_version(d.device_id)} end)
+  end
+
   # Multi-line hover text carrying each sensor's status and configuration
   # (the data that used to live in the now-removed stats row).
-  defp sensor_tooltip(d, status) do
-    Enum.join(
-      [
-        "Sensor #{device_letter(d.device_id)} (#{d.port})",
-        "Status: #{sensor_status_label(status)}",
-        "Pose: #{d.angle_deg}° @ #{d.distance_cm} cm · rotation #{d.rotation_deg}°",
-        "Range: #{d.range_cm} cm · Height: #{d.height_cm} cm",
-        "Sensitivity: #{d.sensitivity_level}/9 (#{Octopus.Radar.SensorType.sensitivity_level_label(d.sensitivity_level)})",
-        "Click to toggle active/inactive"
-      ],
-      "\n"
-    )
+  defp sensor_tooltip(d, status, firmware_version) do
+    lines = [
+      "Sensor #{device_letter(d.device_id)} (#{d.port})",
+      "Status: #{sensor_status_label(status)}",
+      "Firmware: #{firmware_version || "unbekannt"}",
+      "Pose: #{d.angle_deg}° @ #{d.distance_cm} cm · rotation #{d.rotation_deg}°",
+      "Range: #{d.range_cm} cm · Height: #{d.height_cm} cm",
+      "Sensitivity: #{d.sensitivity_level}/9 (#{Octopus.Radar.SensorType.sensitivity_level_label(d.sensitivity_level)})",
+      "Click to toggle active/inactive"
+    ]
+
+    lines |> Enum.reject(&is_nil/1) |> Enum.join("\n")
   end
 
   defp sensor_status_class(:inactive),

@@ -37,7 +37,7 @@ defmodule Octopus.Radar.Sensor do
   require Logger
 
   alias Octopus.Radar
-  alias Octopus.Radar.{Ack, ClutterFilter, Command, Frame, LogFormat, Protocol, Transform}
+  alias Octopus.Radar.{Ack, ClutterFilter, Command, Frame, LogFormat, Protocol, ReadResponse, Transform}
 
   @reopen_interval :timer.seconds(5)
   @ack_timeout :timer.seconds(2)
@@ -48,7 +48,7 @@ defmodule Octopus.Radar.Sensor do
   @max_ack_retries 5
   @stop_command "AT+STOP\n"
   @reset_command "AT+RESET\n"
-  @frame_timeout_ms 3_000
+  @frame_timeout_ms 10_000
   @probe_command "AT+STOP\n"
 
   defmodule State do
@@ -59,6 +59,7 @@ defmodule Octopus.Radar.Sensor do
       :baud,
       :config,
       :transport,
+      :transport_opts,
       :uart,
       :phase,
       :pending_commands,
@@ -69,6 +70,7 @@ defmodule Octopus.Radar.Sensor do
       :last_frame_at,
       :watchdog_timer,
       :last_ui_status,
+      :firmware_version,
       ack_retries: 0,
       port_unavailable: false,
       recovery_stage: :normal
@@ -138,16 +140,25 @@ defmodule Octopus.Radar.Sensor do
           {:ok, :inactive | :unavailable | :probing | :initializing | :working | :stale}
           | {:error, :no_sensor | :unavailable}
   def get_ui_status(device_id) do
-    call_sensor(device_id, :get_ui_status)
+    # Short timeout: the sensor may be blocked inside a UART open (up to ~5s).
+    # LiveViews poll this path; a default 5s call would freeze their mailbox
+    # and stall Mixer frame delivery (visible as animation jank).
+    call_sensor(device_id, :get_ui_status, 100)
+  end
+
+  @doc "Return the firmware version string obtained from AT+READ, or nil if not yet known."
+  @spec get_firmware_version(pos_integer()) :: {:ok, String.t() | nil} | {:error, :no_sensor | :unavailable}
+  def get_firmware_version(device_id) do
+    call_sensor(device_id, :get_firmware_version, 100)
   end
 
   defp via(device_id) do
     {:via, Registry, {Octopus.Radar.Registry, device_id}}
   end
 
-  defp call_sensor(device_id, message) do
+  defp call_sensor(device_id, message, timeout \\ 5_000) do
     try do
-      GenServer.call(via(device_id), message)
+      GenServer.call(via(device_id), message, timeout)
     catch
       :exit, {:noproc, _} -> {:error, :no_sensor}
       :exit, _ -> {:error, :unavailable}
@@ -158,6 +169,12 @@ defmodule Octopus.Radar.Sensor do
 
   @impl true
   def init(opts) do
+    # Trap exits so that a UART crash is delivered as a {:EXIT, pid, reason}
+    # message rather than killing this process. We handle it explicitly below.
+    # This also ensures terminate/1 is called on :shutdown so graceful_close
+    # runs and the UART's port FD is released before the UART dies with us.
+    Process.flag(:trap_exit, true)
+
     device_id = Keyword.fetch!(opts, :device_id)
     transport = Keyword.get(opts, :transport, Octopus.Radar.Transport.UART)
     transport_opts = Keyword.get(opts, :transport_opts, [])
@@ -168,6 +185,7 @@ defmodule Octopus.Radar.Sensor do
       baud: Keyword.fetch!(opts, :baud),
       config: opts,
       transport: transport,
+      transport_opts: transport_opts,
       phase: :opening,
       pending_commands: [],
       buffer: <<>>,
@@ -221,6 +239,10 @@ defmodule Octopus.Radar.Sensor do
 
   def handle_call(:get_ui_status, _from, %State{} = state) do
     {:reply, {:ok, ui_status(state)}, state}
+  end
+
+  def handle_call(:get_firmware_version, _from, %State{firmware_version: v} = state) do
+    {:reply, {:ok, v}, state}
   end
 
   @impl true
@@ -290,6 +312,11 @@ defmodule Octopus.Radar.Sensor do
     state = close_port(state)
     Process.send_after(self(), :reopen_port, @reopen_interval)
     {:noreply, state}
+  end
+
+  def handle_info(:ack_timeout, %State{phase: :configuring, current_command: "AT+READ\n"} = state) do
+    log(state, :warning, "AT+READ response not received — skipping verification")
+    {:noreply, send_next_command(%State{state | ack_timer: nil})}
   end
 
   def handle_info(:ack_timeout, %State{phase: :configuring} = state) do
@@ -372,6 +399,20 @@ defmodule Octopus.Radar.Sensor do
     {:noreply, state}
   end
 
+  # The UART process is linked. When it exits unexpectedly (e.g. :port_timed_out
+  # from Circuits.UART), trap_exit converts the signal to this message. We
+  # clear the stale pid and schedule a reopen so the sensor recovers without
+  # the supervisor restarting us (which was the old crash-loop behaviour).
+  def handle_info({:EXIT, pid, reason}, %State{uart: uart} = state) when pid == uart do
+    log(state, :warning, "UART process exited (#{inspect(reason)}) — scheduling reopen")
+    state = %State{state | uart: nil}
+    {:noreply, schedule_reopen(cancel_ack_timer(cancel_watchdog(state)))}
+  end
+
+  def handle_info({:EXIT, _pid, _reason}, %State{} = state) do
+    {:noreply, state}
+  end
+
   def handle_info(message, %State{} = state) do
     log(state, :debug, "Unhandled message: #{inspect(message)}")
     {:noreply, state}
@@ -397,7 +438,10 @@ defmodule Octopus.Radar.Sensor do
 
   ## Phase: opening
 
-  defp try_open(%State{transport: transport, uart: uart, port_name: port, baud: baud} = state) do
+  defp try_open(%State{port_name: port, baud: baud} = state) do
+    state = ensure_live_uart(state)
+    %State{transport: transport, uart: uart} = state
+
     case transport.open(uart, port,
            speed: baud,
            data_bits: 8,
@@ -423,9 +467,30 @@ defmodule Octopus.Radar.Sensor do
         }
 
       {:error, reason} ->
-        schedule_reopen(state, unavailable_reason: reason)
+        state
+        |> invalidate_uart_if_dead(reason)
+        |> schedule_reopen(unavailable_reason: reason)
     end
   end
+
+  defp ensure_live_uart(%State{transport: transport, transport_opts: opts, uart: uart} = state) do
+    if is_nil(uart) or not Process.alive?(uart) do
+      {:ok, new_uart} = transport.start_link(opts || [])
+      %State{state | uart: new_uart}
+    else
+      state
+    end
+  end
+
+  # After Circuits.UART dies mid-open (`:port_timed_out`), drop the dead pid
+  # so the next ensure_live_uart/1 starts a clean handle.
+  defp invalidate_uart_if_dead(%State{uart: uart} = state, {:uart_exit, _})
+       when is_pid(uart) do
+    if Process.alive?(uart), do: Process.exit(uart, :kill)
+    %State{state | uart: nil}
+  end
+
+  defp invalidate_uart_if_dead(state, _reason), do: state
 
   defp schedule_reopen(state, opts \\ [])
 
@@ -455,8 +520,9 @@ defmodule Octopus.Radar.Sensor do
     }
   end
 
-  defp close_port(%State{transport: transport, uart: uart} = state) when not is_nil(uart) do
-    _ = transport.close(uart)
+  defp close_port(%State{transport: transport, uart: uart} = state)
+       when not is_nil(uart) and is_pid(uart) do
+    if Process.alive?(uart), do: transport.close(uart)
     state = cancel_ack_timer(state)
     state = cancel_watchdog(state)
 
@@ -555,11 +621,14 @@ defmodule Octopus.Radar.Sensor do
   end
 
   defp enter_configuring(%State{} = state) do
+    cmds = Command.init_sequence(state.config)
+    log(state, :info, "Full re-init — sending #{length(cmds)} AT commands (incl. AT+READ)")
+
     state =
       %State{
         state
         | phase: :configuring,
-          pending_commands: Command.init_sequence(state.config),
+          pending_commands: cmds,
           current_command: nil,
           buffer: <<>>,
           ack_buffer: <<>>,
@@ -641,6 +710,22 @@ defmodule Octopus.Radar.Sensor do
         |> reset_ack_retries()
         |> then(fn %State{} = s -> %State{s | ack_buffer: buf} end)
         |> enter_configuring()
+    end
+  end
+
+  defp handle_ack_bytes_impl(data, %State{ack_buffer: buf, current_command: "AT+READ\n"} = state) do
+    case ReadResponse.parse(buf <> data) do
+      {:ok, fields, remainder} ->
+        log(state, :info, "AT+READ response received")
+
+        state
+        |> cancel_ack_timer()
+        |> log_read_response(fields)
+        |> then(fn %State{} = s -> %State{s | ack_buffer: remainder} end)
+        |> send_next_command()
+
+      {:pending, accumulated} ->
+        %State{state | ack_buffer: accumulated}
     end
   end
 
@@ -739,7 +824,7 @@ defmodule Octopus.Radar.Sensor do
   defp try_attach_from_binary(binary, %State{} = state) when is_binary(binary) and binary != <<>> do
     case Protocol.feed(<<>>, binary) do
       {[_ | _], _, leftover} ->
-        log(state, :debug, "Binary stream detected — attaching without re-init")
+        log(state, :info, "Binary stream detected — fast-attach (skipping re-init)")
         {:attach, state |> cancel_ack_timer() |> cancel_watchdog() |> enter_running_from_stream(leftover)}
 
       _ ->
@@ -792,11 +877,10 @@ defmodule Octopus.Radar.Sensor do
   ## Logging
 
   defp set_status(%State{last_ui_status: prev, device_id: device_id} = state, status) do
-    Radar.broadcast_status(device_id, status)
-
     if prev == status do
       state
     else
+      Radar.broadcast_status(device_id, status)
       state = %State{state | last_ui_status: status}
       log_status_transition(state, status)
       state
@@ -811,6 +895,31 @@ defmodule Octopus.Radar.Sensor do
       :resetting -> log(state, :debug, "Resetting")
       _ -> :ok
     end
+  end
+
+  defp log_read_response(%State{device_id: device_id} = state, fields) do
+    state =
+      case ReadResponse.firmware_version(fields) do
+        nil ->
+          state
+
+        version ->
+          log(state, :info, "Firmware version: #{version}")
+          Radar.broadcast_firmware_version(device_id, version)
+          %State{state | firmware_version: version}
+      end
+
+    case ReadResponse.verify(fields, state.config) do
+      :ok ->
+        log(state, :debug, "Config verified — all parameters match")
+
+      {:mismatch, list} ->
+        Enum.each(list, fn {key, expected, got} ->
+          log(state, :warning, "Config mismatch: #{key} expected=#{expected} got=#{got}")
+        end)
+    end
+
+    state
   end
 
   defp log(%State{device_id: id, port_name: port}, level, message) do

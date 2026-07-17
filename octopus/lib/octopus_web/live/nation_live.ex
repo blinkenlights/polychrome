@@ -37,9 +37,6 @@ defmodule OctopusWeb.NationLive do
   @render_interval_ms 66
   # Tracks whose XY speed is below this threshold are not shown.
   @velocity_min_m_s 0.05
-  # How often sensor statuses are refreshed from the GenServer.
-  @sensor_refresh_ms 2_000
-
   # Colour palette — identical to RadarLive so track colours are consistent
   # when operators compare the two views side by side.
   @hues [0, 36, 72, 108, 144, 180, 216, 252, 288, 324]
@@ -59,7 +56,6 @@ defmodule OctopusWeb.NationLive do
         if radar_configured do
           Radar.subscribe()
           Enum.each(devices, &Radar.subscribe_status(&1.device_id))
-          Process.send_after(self(), :refresh_sensor_statuses, @sensor_refresh_ms)
         end
 
         push_world_config(socket)
@@ -151,15 +147,12 @@ defmodule OctopusWeb.NationLive do
   end
 
   def handle_info({:radar_sensor_status, device_id, new_status}, socket) do
-    statuses = Map.put(socket.assigns.sensor_statuses, device_id, new_status)
-    {:noreply, assign(socket, :sensor_statuses, statuses)}
-  end
-
-  def handle_info(:refresh_sensor_statuses, socket) do
-    Process.send_after(self(), :refresh_sensor_statuses, @sensor_refresh_ms)
-
-    {:noreply,
-     assign(socket, :sensor_statuses, build_sensor_statuses(socket.assigns.devices))}
+    if Map.get(socket.assigns.sensor_statuses, device_id) == new_status do
+      {:noreply, socket}
+    else
+      statuses = Map.put(socket.assigns.sensor_statuses, device_id, new_status)
+      {:noreply, assign(socket, :sensor_statuses, statuses)}
+    end
   end
 
   def handle_info(_msg, socket), do: {:noreply, socket}

@@ -14,14 +14,28 @@ defmodule Octopus.Radar.Transport.UART do
   alias Circuits.UART
 
   @impl true
-  def start_link(_opts), do: UART.start_link()
+  def start_link(_opts) do
+    UART.start_link()
+  end
 
   @impl true
-  def open(uart, port, opts), do: UART.open(uart, port, opts)
+  def open(uart, port, opts) do
+    UART.open(uart, port, opts)
+  catch
+    :exit, reason -> {:error, {:uart_exit, reason}}
+  end
 
   @impl true
-  def write(uart, data), do: UART.write(uart, data)
+  def write(uart, data) do
+    UART.write(uart, data)
+  catch
+    :exit, _ -> {:error, :uart_dead}
+  end
 
   @impl true
-  def close(uart), do: UART.close(uart)
+  def close(uart) do
+    UART.close(uart)
+  catch
+    :exit, _ -> :ok
+  end
 end
