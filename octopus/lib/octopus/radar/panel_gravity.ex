@@ -23,8 +23,6 @@ defmodule Octopus.Radar.PanelGravity do
 
   use GenServer
 
-  require Logger
-
   alias Octopus.Radar.Frame
   alias Octopus.Radar.Mock.World
   alias Octopus.Radar.PanelGravity.{Core, Settings}
