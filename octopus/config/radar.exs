@@ -49,7 +49,7 @@ deployments = %{
     sensors: [
       [id: :a, adapter: "65", port: :if00],
       [id: :b, adapter: "65", port: :if02],
-      [id: :c, adapter: "65", port: :if04],
+      [id: :c, adapter: "65", port: :if06],
       [id: :d, adapter: "FF", port: :if00],
       [id: :e, adapter: "FF", port: :if02],
       [id: :f, adapter: "FF", port: :if04]
@@ -57,8 +57,7 @@ deployments = %{
   ]
 }
 
-config :octopus, :radar_deployment,
-       Map.get(deployments, Octopus.Radar.Deployment.host_target())
+config :octopus, :radar_deployment, Map.get(deployments, Octopus.Radar.Deployment.host_target())
 
 default_boot_source_mode =
   case config_env() do
