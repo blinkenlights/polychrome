@@ -1,16 +1,24 @@
 defmodule Octopus.Radar.Stats do
   @moduledoc """
-  In-memory operational statistics for radar sensors, accumulated from
-  process startup (not persisted across restarts).
+  Operational statistics for radar sensors, persisted across restarts.
 
   Subscribes to the per-sensor status PubSub topics — the same source used
   by `Octopus.Radar.StatusHistory` — and folds every transition into a set
   of running counters per device:
 
-    * total tracked time (since startup)
+    * total tracked time (since first ever recorded event)
     * total and average time spent in each status
     * dropouts — how many times continuous operation was lost
     * retries — how many recovery attempts were made to re-instate operation
+
+  ## Persistence
+
+  Every genuine status change is written to the `radar_sensor_transitions`
+  database table via `Octopus.Radar.SensorTransition`.  On startup the full
+  history is replayed to reconstruct lifetime counters before the current
+  session's events begin accumulating.  The time gap between the last
+  persisted event and the new session is intentionally not attributed to any
+  status (we cannot know how long the service was offline).
 
   ## Semantics (tunable)
 
@@ -26,12 +34,13 @@ defmodule Octopus.Radar.Stats do
 
   Consumers call `get_all/0` for a snapshot in which the in-progress current
   status duration is folded into the per-status totals and a `total_ms`
-  (wall-clock time since the device started being tracked) is included.
+  (wall-clock time since the device was first tracked) is included.
   """
 
   use GenServer
 
   alias Octopus.Radar
+  alias Octopus.Radar.SensorTransition
 
   @recovery_statuses [:initializing, :probing]
 
@@ -75,10 +84,15 @@ defmodule Octopus.Radar.Stats do
 
       now = System.system_time(:millisecond)
 
+      # Load all persisted transitions up-front (one DB query) and replay them
+      # per device before seeding from the current live status.
+      history = SensorTransition.list_all_grouped()
+
       stats =
         Map.new(devices, fn d ->
           status = Radar.sensor_status(d.device_id)
-          {d.device_id, new_sensor_stats(status, now)}
+          device_history = Map.get(history, d.device_id, [])
+          {d.device_id, init_stats_for_device(status, device_history, now)}
         end)
 
       {:noreply, stats}
@@ -106,7 +120,13 @@ defmodule Octopus.Radar.Stats do
   def handle_info({:radar_sensor_status, device_id, status}, stats) do
     now = System.system_time(:millisecond)
     current = Map.get(stats, device_id) || new_sensor_stats(status, now)
-    {:noreply, Map.put(stats, device_id, apply_transition(current, status, now))}
+    new_stat = apply_transition(current, status, now)
+
+    if new_stat != current do
+      SensorTransition.record(device_id, status, now)
+    end
+
+    {:noreply, Map.put(stats, device_id, new_stat)}
   end
 
   def handle_info(_msg, state) do
@@ -114,6 +134,33 @@ defmodule Octopus.Radar.Stats do
   end
 
   ## Private helpers
+
+  # Build initial stats for a device.
+  #
+  # If `history` is non-empty the accumulated DB transitions are replayed to
+  # reconstruct lifetime counters.  The `since` cursor is then reset to `now`
+  # so that the time gap introduced by the process restart is not attributed
+  # to any status.  The last known status from the replay is kept as
+  # `current_status`; the first PubSub event after subscribe will advance it
+  # to the actual sensor state via `apply_transition` when they differ.
+  #
+  # When `history` is empty (first ever run) a clean state seeded from the
+  # live sensor status is returned instead.
+  defp init_stats_for_device(current_status, [], now) do
+    new_sensor_stats(current_status, now)
+  end
+
+  defp init_stats_for_device(_current_status, [{first_status, first_ms} | rest], now) do
+    base = new_sensor_stats(first_status, first_ms)
+
+    replayed =
+      Enum.reduce(rest, base, fn {status, occurred_at_ms}, acc ->
+        apply_transition(acc, status, occurred_at_ms)
+      end)
+
+    # Reset the session cursor to now so the restart gap is invisible.
+    %{replayed | since: now}
+  end
 
   defp new_sensor_stats(status, now) do
     %{
@@ -171,8 +218,14 @@ defmodule Octopus.Radar.Stats do
     elapsed = max(now - stats.since, 0)
     durations = Map.update(stats.durations, stats.current_status, elapsed, &(&1 + elapsed))
 
+    # Sum all per-status durations so that offline gaps (restarts, downtime) are
+    # never counted.  `now - started_at` would include every period the process
+    # was not running, making it a misleading denominator for ratios.
+    total_online_ms = durations |> Map.values() |> Enum.sum()
+
     %{
-      total_ms: max(now - stats.started_at, 0),
+      total_ms: total_online_ms,
+      first_seen_at: stats.started_at,
       durations: durations,
       entries: stats.entries,
       dropouts: stats.dropouts,
