@@ -23,8 +23,6 @@ defmodule Octopus.Radar.PanelGravity do
 
   use GenServer
 
-  require Logger
-
   alias Octopus.Radar.Frame
   alias Octopus.Radar.Mock.World
   alias Octopus.Radar.PanelGravity.{Core, Settings}
@@ -403,13 +401,6 @@ defmodule Octopus.Radar.PanelGravity do
       _ = {trigger, people_source, people, state, settings, raw_max, peak_panel, peak_level, target}
   end
 
-  defp top_panels(map, n) do
-    map
-    |> Enum.sort_by(fn {_panel, value} -> -value end)
-    |> Enum.take(n)
-    |> Enum.map(fn {panel, value} -> "p#{panel}=#{Float.round(value, 4)}" end)
-    |> Enum.join(" ")
-  end
 
   defp peak_entry(map) do
     Enum.max_by(map, fn {_panel, value} -> value end, fn -> {0, 0.0} end)
