@@ -42,7 +42,7 @@ defmodule Octopus.Radar.Stats do
   alias Octopus.Radar
   alias Octopus.Radar.SensorTransition
 
-  @recovery_statuses [:initializing, :probing]
+  @recovery_statuses [:reading, :initializing, :probing]
 
   ## Client API
 

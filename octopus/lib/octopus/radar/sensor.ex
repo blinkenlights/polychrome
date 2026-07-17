@@ -73,7 +73,8 @@ defmodule Octopus.Radar.Sensor do
       :firmware_version,
       ack_retries: 0,
       port_unavailable: false,
-      recovery_stage: :normal
+      recovery_stage: :normal,
+      force_init: true
     ]
   end
 
@@ -250,6 +251,24 @@ defmodule Octopus.Radar.Sensor do
     {:noreply, try_open(state)}
   end
 
+  # Forced full initialisation on first open (startup or manual enable).
+  # Sends AT+STOP first (so the UART output is pure text), then AT+READ to
+  # capture firmware version and stored params before reconfiguring.
+  def handle_info(:force_init_start, %State{} = state) do
+    log(state, :info, "Pre-init: stopping sensor to read firmware/config (AT+READ gate)")
+
+    state = %State{
+      state
+      | phase: :reading,
+        pending_commands: ["AT+READ\n"],
+        current_command: nil,
+        ack_buffer: <<>>,
+        ack_retries: 0
+    }
+
+    {:noreply, write_command("AT+STOP\n", state)}
+  end
+
   def handle_info(:start_init, %State{} = state) do
     timer = Process.send_after(self(), :probe_window_expired, @probe_window_ms)
     state = set_status(state, :probing)
@@ -314,9 +333,24 @@ defmodule Octopus.Radar.Sensor do
     {:noreply, state}
   end
 
-  def handle_info(:ack_timeout, %State{phase: :configuring, current_command: "AT+READ\n"} = state) do
-    log(state, :warning, "AT+READ response not received — skipping verification")
-    {:noreply, send_next_command(%State{state | ack_timer: nil})}
+  # AT+READ timed out during the :reading gate — proceed to configuring anyway.
+  def handle_info(:ack_timeout, %State{phase: :reading, current_command: "AT+READ\n"} = state) do
+    log(state, :warning, "AT+READ response not received — proceeding to init")
+    {:noreply, enter_configuring(%State{state | ack_timer: nil})}
+  end
+
+  # Any other ACK timeout during :reading (e.g. AT+STOP unresponsive) — retry
+  # up to @max_ack_retries, then fall through to configuring.
+  def handle_info(:ack_timeout, %State{phase: :reading} = state) do
+    ack_retries = state.ack_retries + 1
+    state = %State{state | ack_timer: nil, ack_retries: ack_retries}
+
+    if ack_retries >= @max_ack_retries do
+      log(state, :warning, "Pre-init stop timed out after #{ack_retries} retries — proceeding to init anyway")
+      {:noreply, enter_configuring(state)}
+    else
+      {:noreply, resend_command(state)}
+    end
   end
 
   def handle_info(:ack_timeout, %State{phase: :configuring} = state) do
@@ -376,6 +410,11 @@ defmodule Octopus.Radar.Sensor do
   def handle_info({:circuits_uart, _port, data}, %State{phase: :probing} = state)
       when is_binary(data) do
     {:noreply, handle_probing_bytes(data, state)}
+  end
+
+  def handle_info({:circuits_uart, _port, data}, %State{phase: :reading} = state)
+      when is_binary(data) do
+    {:noreply, handle_ack_bytes(data, state)}
   end
 
   def handle_info({:circuits_uart, _port, data}, %State{phase: :configuring} = state)
@@ -452,7 +491,8 @@ defmodule Octopus.Radar.Sensor do
            framing: Circuits.UART.Framing.None
          ) do
       :ok ->
-        Process.send_after(self(), :start_init, @post_open_settle_ms)
+        msg = if state.force_init, do: :force_init_start, else: :start_init
+        Process.send_after(self(), msg, @post_open_settle_ms)
         state = set_status(state, :probing)
 
         %State{
@@ -539,7 +579,7 @@ defmodule Octopus.Radar.Sensor do
   defp close_port(state), do: state
 
   defp graceful_close(%State{transport: transport, uart: uart, phase: phase} = state)
-       when not is_nil(uart) and phase in [:probing, :configuring, :running, :stale] do
+       when not is_nil(uart) and phase in [:reading, :probing, :configuring, :running, :stale] do
     _ = transport.write(uart, @stop_command)
     Process.sleep(100)
     close_port(state)
@@ -589,7 +629,7 @@ defmodule Octopus.Radar.Sensor do
   # init sequence. Residual binary frames may still arrive during
   # :configuring; Ack.feed/2 scans the mixed stream for AT+OK without
   # requiring a quiet line.
-  defp port_open?(%State{phase: phase}), do: phase in [:probing, :configuring, :running, :stale]
+  defp port_open?(%State{phase: phase}), do: phase in [:reading, :probing, :configuring, :running, :stale]
 
   defp restart_init(%State{phase: :opening} = state) do
     cancel_ack_timer(%State{
@@ -622,7 +662,7 @@ defmodule Octopus.Radar.Sensor do
 
   defp enter_configuring(%State{} = state) do
     cmds = Command.init_sequence(state.config)
-    log(state, :info, "Full re-init — sending #{length(cmds)} AT commands (incl. AT+READ)")
+    log(state, :info, "Full re-init — sending #{length(cmds)} AT commands")
 
     state =
       %State{
@@ -632,7 +672,8 @@ defmodule Octopus.Radar.Sensor do
           current_command: nil,
           buffer: <<>>,
           ack_buffer: <<>>,
-          ack_retries: 0
+          ack_retries: 0,
+          force_init: false
       }
       |> set_status(:initializing)
 
@@ -683,7 +724,7 @@ defmodule Octopus.Radar.Sensor do
     end
   end
 
-  defp handle_ack_bytes(data, %State{phase: phase} = state) when phase in [:stale, :configuring] do
+  defp handle_ack_bytes(data, %State{phase: phase} = state) when phase in [:reading, :stale, :configuring] do
     handle_ack_bytes_impl(data, state)
   end
 
@@ -713,6 +754,44 @@ defmodule Octopus.Radar.Sensor do
     end
   end
 
+  # Waiting for AT+STOP ACK in the :reading gate.
+  # If binary frames arrive the sensor is still streaming — AT+READ will never
+  # respond in that state.  Skip straight to enter_configuring (which starts
+  # with its own AT+STOP) rather than burning 5 × 2 s of retries.
+  defp handle_ack_bytes_impl(
+         data,
+         %State{phase: :reading, current_command: "AT+STOP\n", ack_buffer: buf} = state
+       ) do
+    combined = buf <> data
+
+    case Protocol.feed(<<>>, combined) do
+      {[_ | _], _, _} ->
+        log(state, :info, "Binary stream detected in AT+READ gate — skipping AT+READ, proceeding to init")
+        state |> cancel_ack_timer() |> enter_configuring()
+
+      _ ->
+        case Ack.feed(buf, data) do
+          {:pending, new_buf} ->
+            %State{state | ack_buffer: new_buf}
+
+          {:ok, remainder} ->
+            # Sensor confirmed stopped — send AT+READ
+            state
+            |> cancel_ack_timer()
+            |> reset_ack_retries()
+            |> then(fn %State{} = s -> %State{s | ack_buffer: remainder} end)
+            |> send_next_command()
+
+          {:retry, remainder} ->
+            state
+            |> cancel_ack_timer()
+            |> reset_ack_retries()
+            |> then(fn %State{} = s -> %State{s | ack_buffer: remainder} end)
+            |> send_next_command()
+        end
+    end
+  end
+
   defp handle_ack_bytes_impl(data, %State{ack_buffer: buf, current_command: "AT+READ\n"} = state) do
     case ReadResponse.parse(buf <> data) do
       {:ok, fields, remainder} ->
@@ -722,7 +801,7 @@ defmodule Octopus.Radar.Sensor do
         |> cancel_ack_timer()
         |> log_read_response(fields)
         |> then(fn %State{} = s -> %State{s | ack_buffer: remainder} end)
-        |> send_next_command()
+        |> proceed_after_read()
 
       {:pending, accumulated} ->
         %State{state | ack_buffer: accumulated}
@@ -758,6 +837,11 @@ defmodule Octopus.Radar.Sensor do
         write_command(state.current_command, state)
     end
   end
+
+  # After a successful AT+READ: in :reading phase, move on to full reconfiguration;
+  # in :configuring phase (stale recovery), continue with the remaining commands.
+  defp proceed_after_read(%State{phase: :reading} = state), do: enter_configuring(state)
+  defp proceed_after_read(%State{} = state), do: send_next_command(state)
 
   defp reset_ack_retries(%State{} = state), do: %State{state | ack_retries: 0}
 
@@ -839,6 +923,7 @@ defmodule Octopus.Radar.Sensor do
   defp ui_status(%State{phase: :running}), do: :working
   defp ui_status(%State{phase: :stale}), do: :stale
   defp ui_status(%State{phase: :probing}), do: :probing
+  defp ui_status(%State{phase: :reading}), do: :reading
   defp ui_status(%State{phase: :configuring}), do: :initializing
 
   ## Phase: running

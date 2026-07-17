@@ -46,7 +46,6 @@ defmodule Octopus.Radar.Command do
       "AT+Moving=#{Keyword.fetch!(config, :moving_decisecs)}",
       "AT+Static=#{Keyword.fetch!(config, :static_decisecs)}",
       "AT+Exit=#{Keyword.fetch!(config, :exit_decisecs)}",
-      "AT+READ",
       "AT+START"
     ]
     |> Enum.map(&(&1 <> "\n"))

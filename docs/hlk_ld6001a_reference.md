@@ -233,6 +233,7 @@ A robust initialization sequence for deployed systems is:
 
 ```text
 AT+STOP\n
+AT+READ\n
 AT+DEBUG=3\n
 AT+DPKTH=4\n
 AT+HEIGHTD=300\n
@@ -244,11 +245,10 @@ AT+YNega=-450\n
 AT+Moving=110\n
 AT+Static=100\n
 AT+Exit=5\n
-AT+READ\n
 AT+START\n
 ```
 
-`AT+READ` is placed after all configuration commands and before `AT+START` so that the response reflects the values just written. This allows the host to verify that every parameter was accepted and stored correctly, and to log the firmware version string. See §9.5 for the AT+READ response format.
+`AT+READ` is placed directly after `AT+STOP` and before any configuration commands. At this point the device is stopped and its UART output is purely text, so the response arrives as a clean block without interleaved binary frames. Reading before reconfiguring also captures the firmware version and the previously stored parameter values before any writes occur. This allows the host to verify that every parameter was accepted and stored correctly, and to log the firmware version string. See §9.5 for the AT+READ response format.
 
 While the device is stopped (after `AT+STOP`, before `AT+START`) no binary tracking frames are emitted, so the `AT+READ` response arrives as a clean text block without interleaving binary data.
 
