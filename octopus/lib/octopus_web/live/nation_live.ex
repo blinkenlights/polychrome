@@ -25,7 +25,7 @@ defmodule OctopusWeb.NationLive do
   import Phoenix.LiveView, only: [connected?: 1, push_event: 3]
 
   alias Octopus.{Installation, Mixer, Radar}
-  alias Octopus.Radar.Frame
+  alias Octopus.Radar.{Frame, TrackMerge}
 
   @id_prefix "nation"
 
@@ -37,6 +37,8 @@ defmodule OctopusWeb.NationLive do
   @render_interval_ms 66
   # Tracks whose XY speed is below this threshold are not shown.
   @velocity_min_m_s 0.05
+  # How often sensor statuses are refreshed from the GenServer.
+  @sensor_refresh_ms 2_000
 
   # Colour palette — identical to RadarLive so track colours are consistent
   # when operators compare the two views side by side.
@@ -48,6 +50,7 @@ defmodule OctopusWeb.NationLive do
   def mount(_params, _session, socket) do
     radar_configured = Radar.configured?()
     clutter_filter = if radar_configured, do: Radar.view_settings().clutter_filter, else: false
+    devices = if radar_configured, do: Radar.devices(), else: []
 
     socket =
       if connected?(socket) do
@@ -55,6 +58,8 @@ defmodule OctopusWeb.NationLive do
 
         if radar_configured do
           Radar.subscribe()
+          Enum.each(devices, &Radar.subscribe_status(&1.device_id))
+          Process.send_after(self(), :refresh_sensor_statuses, @sensor_refresh_ms)
         end
 
         push_world_config(socket)
@@ -65,8 +70,11 @@ defmodule OctopusWeb.NationLive do
     {:ok,
      socket
      |> assign(:id, socket.id)
+     |> assign(:id_prefix, @id_prefix)
      |> assign(:radar_configured, radar_configured)
      |> assign(:clutter_filter, clutter_filter)
+     |> assign(:devices, devices)
+     |> assign(:sensor_statuses, build_sensor_statuses(devices))
      |> assign(:tracks_now, %{})
      |> assign(:render_scheduled, false)}
   end
@@ -74,10 +82,20 @@ defmodule OctopusWeb.NationLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="flex flex-col w-full h-screen bg-black">
+    <div class="flex flex-col w-full h-screen bg-base-200">
       <div class="shrink-0 flex items-center gap-4 px-4 py-2 border-b border-base-300 bg-base-100">
         <p class="text-xs font-semibold opacity-70">Nation 2026</p>
         <%= if @radar_configured do %>
+          <div class="flex items-center gap-1">
+            <%= for d <- @devices do %>
+              <span
+                class={["font-mono text-xs px-1.5 py-0.5 rounded border", sensor_status_class(@sensor_statuses[d.device_id])]}
+                title={"Sensor #{device_letter(d.device_id)} · #{sensor_status_label(@sensor_statuses[d.device_id])}"}
+              >
+                {device_letter(d.device_id)}
+              </span>
+            <% end %>
+          </div>
           <div class="flex items-center gap-2">
             <label for="nation-clutter-filter" class="text-xs font-semibold opacity-70">
               Clutter Filter
@@ -132,6 +150,18 @@ defmodule OctopusWeb.NationLive do
     {:noreply, assign(socket, :clutter_filter, settings.clutter_filter)}
   end
 
+  def handle_info({:radar_sensor_status, device_id, new_status}, socket) do
+    statuses = Map.put(socket.assigns.sensor_statuses, device_id, new_status)
+    {:noreply, assign(socket, :sensor_statuses, statuses)}
+  end
+
+  def handle_info(:refresh_sensor_statuses, socket) do
+    Process.send_after(self(), :refresh_sensor_statuses, @sensor_refresh_ms)
+
+    {:noreply,
+     assign(socket, :sensor_statuses, build_sensor_statuses(socket.assigns.devices))}
+  end
+
   def handle_info(_msg, socket), do: {:noreply, socket}
 
   ## Private helpers
@@ -140,14 +170,23 @@ defmodule OctopusWeb.NationLive do
     {grid_w, grid_h} = Installation.panel_layout()
 
     panels =
-      Installation.panel_positions_m(reference: :body_center)
+      Installation.panel_positions_m(reference: :inner_face)
       |> Enum.map(&%{x: &1.x, y: &1.y, theta_deg: &1.theta_deg})
+
+    # The face height (vertical extent of the pixel face) comes from the second
+    # component of outer_dimensions_cm.  Fall back to panel_width_m (square
+    # assumption) when the dimension is not available.
+    panel_height_m =
+      case Installation.panel_outer_dimensions_cm() do
+        {_w, h, _d} -> h / 100.0
+        _ -> Installation.panel_width_m()
+      end
 
     push_event(socket, "world:#{@id_prefix}-#{socket.id}", %{
       world_radius_m: Installation.ring_radius_m(),
       platform_radius_m: Installation.platform_radius_m(),
       panel_width_m: Installation.panel_width_m(),
-      panel_depth_m: Installation.panel_depth_m(),
+      panel_height_m: panel_height_m,
       panel_grid_w: grid_w,
       panel_grid_h: grid_h,
       panels: panels
@@ -165,19 +204,87 @@ defmodule OctopusWeb.NationLive do
   end
 
   defp build_track_list(tracks_now, now) do
-    Enum.map(tracks_now, fn {{device_id, _id}, t} ->
-      age = now - t.last_seen
-      opacity = max(0.0, 1.0 - age / @fade_ms)
+    fusion_clusters = build_fusion_clusters(tracks_now)
 
-      %{
-        x: t.x,
-        y: t.y,
-        vx: t.vx,
-        vy: t.vy,
-        opacity: Float.round(opacity, 3),
-        color: sensor_color(device_id)
-      }
-    end)
+    # Split into singleton tracks and per-cluster groups of merged tracks.
+    {cluster_groups, singletons} =
+      Enum.reduce(tracks_now, {%{}, []}, fn {{device_id, _} = key, t}, {clusters, singles} ->
+        case Map.get(fusion_clusters, key) do
+          %{cluster_id: cid, sensor_ids: sids} ->
+            {Map.update(clusters, cid, [{t, device_id, sids}], &[{t, device_id, sids} | &1]),
+             singles}
+
+          nil ->
+            {clusters, [{t, device_id} | singles]}
+        end
+      end)
+
+    single_entries =
+      Enum.map(singletons, fn {t, device_id} ->
+        age = now - t.last_seen
+        opacity = max(0.0, 1.0 - age / @fade_ms)
+
+        %{
+          x: t.x,
+          y: t.y,
+          vx: t.vx,
+          vy: t.vy,
+          opacity: Float.round(opacity, 3),
+          color: sensor_color(device_id),
+          merged: false,
+          sensor_colors: [sensor_color(device_id)]
+        }
+      end)
+
+    # Each cluster becomes one entry: averaged position + velocity, opacity
+    # from the most recently seen member, pie colours from all sensor ids.
+    merged_entries =
+      Enum.map(cluster_groups, fn {_cid, members} ->
+        n = length(members)
+        avg = fn key -> Enum.sum(Enum.map(members, fn {t, _, _} -> Map.get(t, key) end)) / n end
+        last_seen = Enum.max(Enum.map(members, fn {t, _, _} -> t.last_seen end))
+        age = now - last_seen
+        opacity = max(0.0, 1.0 - age / @fade_ms)
+        {_, _, sensor_ids} = hd(members)
+
+        %{
+          x: Float.round(avg.(:x), 4),
+          y: Float.round(avg.(:y), 4),
+          vx: Float.round(avg.(:vx), 4),
+          vy: Float.round(avg.(:vy), 4),
+          opacity: Float.round(opacity, 3),
+          color: sensor_color(elem(hd(members), 1)),
+          merged: true,
+          sensor_colors: Enum.map(sensor_ids, &sensor_color/1)
+        }
+      end)
+
+    single_entries ++ merged_entries
+  end
+
+  # Mirrors `build_fusion_clusters/1` from RadarLive: returns a map of
+  # track key → %{cluster_id, sensor_ids} for all fused tracks.
+  defp build_fusion_clusters(tracks_now) do
+    if Radar.track_fusion_enabled?() do
+      tracks_now
+      |> Enum.map(fn {{device_id, id} = key, t} ->
+        %{id: TrackMerge.encode_id(device_id, id), key: key, x: t.x, y: t.y, vx: t.vx, vy: t.vy}
+      end)
+      |> Radar.fuse_groups()
+      |> Enum.filter(& &1.merged?)
+      |> Enum.with_index()
+      |> Enum.flat_map(fn {%{sources: sources}, cluster_id} ->
+        sensor_ids =
+          sources |> Enum.map(&TrackMerge.device_id/1) |> Enum.uniq() |> Enum.sort()
+
+        Enum.map(sources, fn source ->
+          {source.key, %{cluster_id: cluster_id, sensor_ids: sensor_ids}}
+        end)
+      end)
+      |> Map.new()
+    else
+      %{}
+    end
   end
 
   defp ingest_frame(socket, device_id, %Frame{tracks: tracks}) do
@@ -219,8 +326,46 @@ defmodule OctopusWeb.NationLive do
     assign(socket, :render_scheduled, true)
   end
 
+  defp build_sensor_statuses(devices) do
+    Map.new(devices, fn d -> {d.device_id, Radar.sensor_status(d.device_id)} end)
+  end
+
   defp sensor_hue(device_id), do: Enum.at(@hues, rem(device_id * 7, length(@hues)))
 
   defp sensor_color(device_id),
     do: "hsl(#{sensor_hue(device_id)}, #{@body_saturation}%, #{@body_lightness}%)"
+
+  defp device_letter(device_id), do: <<(?A + rem(device_id - 1, 26))>>
+
+  defp sensor_status_class(:inactive),
+    do: "text-gray-400 border-gray-300 bg-transparent"
+
+  defp sensor_status_class(:unavailable),
+    do: "bg-red-500 text-white border-red-600"
+
+  defp sensor_status_class(:initializing),
+    do: "bg-amber-400 text-white border-amber-500"
+
+  defp sensor_status_class(:probing),
+    do: "bg-cyan-500 text-white border-cyan-600"
+
+  defp sensor_status_class(:working),
+    do: "bg-green-500 text-white border-green-600"
+
+  defp sensor_status_class(:stale),
+    do: "bg-orange-500 text-white border-orange-600"
+
+  defp sensor_status_class(:resetting),
+    do: "bg-gray-900 text-white border-gray-700"
+
+  defp sensor_status_class(_), do: sensor_status_class(:unavailable)
+
+  defp sensor_status_label(:inactive), do: "Inactive"
+  defp sensor_status_label(:unavailable), do: "Unavailable"
+  defp sensor_status_label(:initializing), do: "Initializing"
+  defp sensor_status_label(:probing), do: "Probing"
+  defp sensor_status_label(:working), do: "Working"
+  defp sensor_status_label(:stale), do: "No Data"
+  defp sensor_status_label(:resetting), do: "Resetting"
+  defp sensor_status_label(_), do: "Unknown"
 end
