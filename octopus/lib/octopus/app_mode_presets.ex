@@ -1,7 +1,8 @@
 defmodule Octopus.AppModePresets do
   @moduledoc """
   Compile-time JSON mode presets for foyer apps (Pixel Fun, Pixel Fun 3D, Collective,
-  Matrix, Perlin Noise, Ocean, Sand, Sparkle Mist, Wood, Fire, Gravity Mask).
+  Matrix, Perlin Noise, Ocean, Sand, Sparkle Mist, Wood, Fire, Gravity Mask,
+  World Cup Final).
 
   Presets live under `priv/app_mode_presets/{app_key}/{app_key}-settings.json` and are
   embedded at compile time via `Octopus.AppModePresets.Loader`.
@@ -28,7 +29,8 @@ defmodule Octopus.AppModePresets do
     "Elixir.Octopus.Apps.Wood" => "wood",
     "Elixir.Octopus.Apps.Fire" => "fire",
     "Elixir.Octopus.Apps.GravityMask" => "gravitymask",
-    "Elixir.Octopus.Apps.ShapeShifter" => "shapeshifter"
+    "Elixir.Octopus.Apps.ShapeShifter" => "shapeshifter",
+    "Elixir.Octopus.Apps.WorldCupFinal" => "worldcupfinal"
   }
 
   @formula_app_keys ~w(pixelfun pixelfun3d)
@@ -113,6 +115,9 @@ defmodule Octopus.AppModePresets do
 
       key == "gravitymask" and mode_id in ["mask", "default", "subtle"] ->
         mode_id(app, "subtle")
+
+      key == "worldcupfinal" and mode_id in ["world_cup_final", "default"] ->
+        mode_id(app, "world_cup_final")
 
       true ->
         mode_id

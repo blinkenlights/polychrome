@@ -17,7 +17,8 @@ defmodule Octopus.AppModePresets.Loader do
     "Elixir.Octopus.Apps.Wood" => "wood",
     "Elixir.Octopus.Apps.Fire" => "fire",
     "Elixir.Octopus.Apps.GravityMask" => "gravitymask",
-    "Elixir.Octopus.Apps.ShapeShifter" => "shapeshifter"
+    "Elixir.Octopus.Apps.ShapeShifter" => "shapeshifter",
+    "Elixir.Octopus.Apps.WorldCupFinal" => "worldcupfinal"
   }
 
   @doc false

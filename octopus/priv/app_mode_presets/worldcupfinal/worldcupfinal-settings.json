@@ -1,0 +1,26 @@
+{
+  "presets": [
+    {
+      "slug": "world_cup_final",
+      "name": "World Cup Final",
+      "accent_color": "#75AADB",
+      "config": {
+        "flag_a": "argentina",
+        "flag_b": "spain",
+        "hold_s": 12.0,
+        "crossfade_s": 0.6
+      }
+    },
+    {
+      "slug": "world_cup_half_final",
+      "name": "World Cup Half Final",
+      "accent_color": "#75AADB",
+      "config": {
+        "flag_a": "england",
+        "flag_b": "france",
+        "hold_s": 12.0,
+        "crossfade_s": 0.6
+      }
+    }
+  ]
+}
