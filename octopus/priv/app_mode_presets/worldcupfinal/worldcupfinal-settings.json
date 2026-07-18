@@ -8,18 +8,35 @@
         "flag_a": "argentina",
         "flag_b": "spain",
         "hold_s": 12.0,
-        "crossfade_s": 0.6
+        "crossfade_s": 0.6,
+        "dual_sided": true,
+        "floor": 8
       }
     },
     {
-      "slug": "world_cup_half_final",
-      "name": "World Cup Half Final",
+      "slug": "world_cup_3rd_place_final",
+      "name": "World Cup 3rd Place Final",
       "accent_color": "#75AADB",
       "config": {
         "flag_a": "england",
         "flag_b": "france",
         "hold_s": 12.0,
-        "crossfade_s": 0.6
+        "crossfade_s": 0.6,
+        "dual_sided": true,
+        "floor": 8
+      }
+    },
+    {
+      "slug": "pixie",
+      "name": "Pixie",
+      "accent_color": "#75AADB",
+      "config": {
+        "flag_a": "england",
+        "flag_b": "france",
+        "hold_s": 12.0,
+        "crossfade_s": 0.6,
+        "dual_sided": false,
+        "floor": 0
       }
     }
   ]
