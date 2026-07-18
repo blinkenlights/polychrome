@@ -615,9 +615,6 @@ defmodule OctopusWeb.ConsoleComponents do
           />
         </div>
 
-        <p :if={@count == 1} class="text-xs opacity-60 pt-0.5 leading-tight">
-          One mode holds steady — add another to start rotating.
-        </p>
       </div>
     </div>
     """

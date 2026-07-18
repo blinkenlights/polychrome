@@ -20,8 +20,13 @@ defmodule Octopus.Boot do
   def start_configured_app do
     case Application.get_env(:octopus, :boot_app) do
       name when is_binary(name) and name != "" ->
-        mode = Application.get_env(:octopus, :boot_app_mode)
-        start_app(name, mode)
+        if restored_queue_playing?() do
+          Logger.info("[boot] skipping BOOT_APP; restored installation queue is playing")
+          :ok
+        else
+          mode = Application.get_env(:octopus, :boot_app_mode)
+          start_app(name, mode)
+        end
 
       _ ->
         :ok
@@ -112,6 +117,13 @@ defmodule Octopus.Boot do
       end
     else
       nil
+    end
+  end
+
+  defp restored_queue_playing? do
+    case InstallationTransport.get_state() do
+      %{queue: [_ | _], playing: true, live_entry: live} when not is_nil(live) -> true
+      _ -> false
     end
   end
 end

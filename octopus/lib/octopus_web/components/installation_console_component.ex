@@ -896,7 +896,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     transport = socket.assigns.transport
     now = socket.assigns.now_ms
     count = length(transport.queue)
-    rotating? = count >= 2 and not transport.rotation_paused
+    rotating? = count >= 1 and not transport.rotation_paused
     playing = transport.playing and not transport.rotation_paused
     interval_seconds = trunc(transport.cycle_interval_seconds || 300)
     transition_seconds = transport.transition_duration_seconds || 1.0
@@ -942,18 +942,18 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         count == 0 && is_nil(live) ->
           :idle
 
-        count >= 2 && !transport.playing ->
+        count >= 1 && !transport.playing ->
           :paused
 
-        count >= 2 && transport.playing ->
+        count >= 1 && transport.playing ->
           :rotating
 
         true ->
-          :hold
+          :idle
       end
 
     next_entry =
-      if rotating? do
+      if rotating? and count >= 2 do
         next_index = rem(transport.cycle_index + 1, count)
         Enum.at(transport.queue, next_index)
       end
@@ -967,23 +967,24 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         transport_mode == :paused ->
           "Rotation paused."
 
+        transport_mode == :rotating && count == 1 ->
+          "Restarts every #{interval_label(interval_seconds)}."
+
         transport_mode == :rotating && next_entry ->
-          "Next: #{next_entry.app_name} · #{next_entry.mode_name} · item #{transport.cycle_index + 2} of #{count}"
+          next_item = rem(transport.cycle_index + 1, count) + 1
+          "Next: #{next_entry.app_name} · #{next_entry.mode_name} · item #{next_item} of #{count}"
 
         transport_mode == :idle ->
           "Nothing queued — pick a mode."
 
-        transport_mode == :hold ->
-          "Single mode — add another to rotate."
-
         true ->
-          "Holding this mode — add more to rotate."
+          ""
       end
 
     live_index = if live, do: Enum.find_index(transport.queue, &entry_match?(&1, live)), else: nil
 
     up_next_index =
-      if rotating? do
+      if rotating? and count >= 2 do
         rem(transport.cycle_index + 1, count)
       end
 

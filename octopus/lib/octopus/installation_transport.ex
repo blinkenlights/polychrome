@@ -110,12 +110,13 @@ defmodule Octopus.InstallationTransport do
   @impl true
   def init(_) do
     persisted = PersistedState.load()
+    queue = load_queue(persisted)
 
     state = %State{
-      queue: load_queue(persisted),
+      queue: queue,
       cycle_interval_seconds: (persisted && persisted.cycle_interval_seconds) || @default_interval_seconds,
       transition_duration_seconds: (persisted && persisted.transition_duration_seconds) || @default_transition_duration_seconds,
-      cycle_index: (persisted && persisted.cycle_index) || 0,
+      cycle_index: clamp_index((persisted && persisted.cycle_index) || 0, queue),
       cycle_timer_ref: nil,
       playing: if(persisted, do: persisted.playing, else: true),
       paused_remaining_ms: nil,
@@ -134,22 +135,27 @@ defmodule Octopus.InstallationTransport do
 
   @impl true
   def handle_continue(:restore_playback, %State{queue: []} = state) do
-    {:noreply, state}
-  end
-
-  def handle_continue(:restore_playback, %State{playing: false} = state) do
+    AppSupervisor.subscribe()
     {:noreply, broadcast(state)}
   end
 
   def handle_continue(:restore_playback, %State{} = state) do
-    entry = Enum.at(state.queue, state.cycle_index)
+    AppSupervisor.subscribe()
 
     state =
-      %State{state | pending_entry: entry}
-      |> commit_pending_entry()
-      |> restart_countdown()
+      state
+      |> clear_manual_takeover()
+      |> Map.put(:playing, true)
+      |> restore_queue_playback()
 
-    {:noreply, broadcast(state)}
+    {:noreply, state |> broadcast() |> persist_queue_state()}
+  end
+
+  @impl true
+  def terminate(reason, %State{} = state) do
+    Logger.info("InstallationTransport terminating: #{inspect(reason)}")
+    persist_queue_state_sync(state)
+    :ok
   end
 
   @impl true
@@ -426,8 +432,18 @@ defmodule Octopus.InstallationTransport do
   end
 
   @impl true
+  def handle_info({:apps, {:stopped, app_id}}, %State{} = state) do
+    if live_playback_interrupted?(state, app_id) do
+      {:noreply, state |> restart_live_from_queue() |> broadcast() |> persist_queue_state()}
+    else
+      {:noreply, state}
+    end
+  end
+
+  def handle_info({:apps, _event}, %State{} = state), do: {:noreply, state}
+
   def handle_info(:cycle_tick, state) do
-    if state.rotation_paused or length(state.queue) < 2 do
+    if state.rotation_paused or state.queue == [] do
       {:noreply, state}
     else
       next_index = rem(state.cycle_index + 1, length(state.queue))
@@ -515,6 +531,32 @@ defmodule Octopus.InstallationTransport do
     apply_entry_or_keep(state, entry)
   end
 
+  defp restart_live_from_queue(%State{} = state) do
+    entry = Enum.at(state.queue, state.cycle_index)
+
+    %State{state | now_playing_app_id: nil, pending_entry: entry}
+    |> commit_pending_entry()
+    |> restart_countdown()
+  end
+
+  defp live_playback_interrupted?(%State{} = state, stopped_app_id) do
+    state.playing and
+      not state.rotation_paused and
+      state.live_entry != nil and
+      state.queue != [] and
+      (state.now_playing_app_id == stopped_app_id or not live_app_running?(state))
+  end
+
+  defp live_app_running?(%State{now_playing_app_id: app_id}) when is_binary(app_id) do
+    app_running?(app_id)
+  end
+
+  defp live_app_running?(%State{live_entry: %{app: app}}) do
+    AppSupervisor.find_running_app(app) != :not_found
+  end
+
+  defp live_app_running?(_), do: false
+
   defp resume_after_takeover(%State{queue: []} = state) do
     state
     |> deselect_now_playing_app()
@@ -545,7 +587,7 @@ defmodule Octopus.InstallationTransport do
     }
   end
 
-  defp step(%State{queue: queue} = state, _dir) when length(queue) < 2, do: state
+  defp step(%State{queue: []} = state, _dir), do: state
 
   defp step(%State{queue: queue, cycle_index: index} = state, dir) do
     next_index = Integer.mod(index + dir, length(queue))
@@ -978,7 +1020,7 @@ defmodule Octopus.InstallationTransport do
   defp schedule_change(%State{rotation_paused: true} = state), do: cancel_timer(state)
   defp schedule_change(%State{playing: false} = state), do: cancel_timer(state)
 
-  defp schedule_change(%State{queue: queue} = state) when length(queue) < 2 do
+  defp schedule_change(%State{queue: []} = state) do
     %State{cancel_timer(state) | next_change_at_ms: nil}
   end
 
@@ -990,7 +1032,7 @@ defmodule Octopus.InstallationTransport do
 
   defp schedule_change(%State{} = state), do: restart_countdown(state)
 
-  defp restart_countdown(%State{queue: queue} = state) when length(queue) < 2 do
+  defp restart_countdown(%State{queue: []} = state) do
     %State{cancel_timer(state) | next_change_at_ms: nil}
   end
 
@@ -1033,10 +1075,6 @@ defmodule Octopus.InstallationTransport do
         paused_remaining_ms: remaining,
         next_change_at_ms: nil
     }
-  end
-
-  defp resume(%State{queue: queue} = state) when length(queue) < 2 do
-    %State{state | playing: true, paused_remaining_ms: nil, next_change_at_ms: nil}
   end
 
   defp resume(%State{paused_remaining_ms: remaining} = state) when is_integer(remaining) do
@@ -1148,6 +1186,11 @@ defmodule Octopus.InstallationTransport do
   end
 
   defp persist_queue_state(%State{} = state) do
+    Task.start(fn -> persist_queue_state_sync(state) end)
+    state
+  end
+
+  defp persist_queue_state_sync(%State{} = state) do
     attrs = %{
       queue: Enum.map(state.queue, &serialize_entry/1),
       cycle_index: state.cycle_index,
@@ -1156,9 +1199,44 @@ defmodule Octopus.InstallationTransport do
       playing: state.playing
     }
 
-    Task.start(fn -> PersistedState.save(attrs) end)
+    PersistedState.save(attrs)
+    state
+  end
+
+  @doc false
+  def restore_queue_playback(%State{queue: []} = state), do: state
+
+  def restore_queue_playback(%State{} = state) do
+    index = clamp_index(state.cycle_index, state.queue)
 
     state
+    |> Map.put(:playing, true)
+    |> Map.put(:paused_remaining_ms, nil)
+    |> Map.put(:cycle_index, index)
+    |> commit_queue_entry_at_cycle_index()
+    |> finalize_restore(index)
+  end
+
+  defp finalize_restore(%{live_entry: nil} = failed, index) when index != 0 do
+    failed
+    |> Map.put(:cycle_index, 0)
+    |> commit_queue_entry_at_cycle_index()
+    |> finalize_restore(0)
+  end
+
+  defp finalize_restore(%{live_entry: nil} = failed, index) do
+    Logger.warning("InstallationTransport: could not restore queue playback at index #{index}")
+    failed
+  end
+
+  defp finalize_restore(restored, _index), do: restart_countdown(restored)
+
+  defp commit_queue_entry_at_cycle_index(%State{queue: queue, cycle_index: index} = state) do
+    entry = Enum.at(queue, index)
+
+    state
+    |> Map.put(:pending_entry, entry)
+    |> commit_pending_entry()
   end
 
   defp serialize_entry(%{app: app, mode_id: mode_id, mask: mask}) do

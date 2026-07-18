@@ -171,24 +171,56 @@ defmodule Octopus.InstallationTransportTest do
     end
   end
 
-  describe "holding" do
-    test "no countdown with 0 or 1 queued" do
+  describe "single-item playlist" do
+    test "empty queue has no countdown" do
+      assert state().next_change_at_ms == nil
+    end
+
+    test "single queue entry runs countdown and restarts on next" do
       InstallationTransport.set_queue([%{app: PixelFun, mode_id: @classic}])
       InstallationTransport.play_now(PixelFun, @classic)
 
-      assert state().next_change_at_ms == nil
+      assert is_integer(state().next_change_at_ms)
 
       InstallationTransport.next()
       assert state().cycle_index == 0
+      assert state().live.mode_id == @classic
     end
 
-    test "second queue entry starts countdown" do
+    test "pause and resume work with a single queue entry" do
       InstallationTransport.set_queue([%{app: PixelFun, mode_id: @classic}])
       InstallationTransport.play_now(PixelFun, @classic)
 
-      InstallationTransport.queue_toggle(PixelFun, @cross)
-
       assert is_integer(state().next_change_at_ms)
+
+      InstallationTransport.toggle_play()
+      paused = state()
+      assert paused.playing == false
+      assert paused.next_change_at_ms == nil
+      assert is_integer(paused.paused_remaining_ms)
+
+      InstallationTransport.toggle_play()
+      resumed = state()
+      assert resumed.playing
+      assert is_integer(resumed.next_change_at_ms)
+    end
+
+    test "restarts live queue entry when the running app stops" do
+      InstallationTransport.set_queue([%{app: PixelFun, mode_id: @classic}])
+      InstallationTransport.play_now(PixelFun, @classic)
+
+      dead_id = state().now_playing.app_id
+      assert AppManager.get_selected_app() == dead_id
+
+      AppSupervisor.stop_app(dead_id)
+      _ = :sys.get_state(InstallationTransport)
+
+      s = state()
+      assert s.live.mode_id == @classic
+      assert is_binary(s.now_playing.app_id)
+      assert s.now_playing.app_id != dead_id
+      assert AppManager.get_selected_app() == s.now_playing.app_id
+      assert is_integer(s.next_change_at_ms)
     end
   end
 
@@ -893,5 +925,81 @@ defmodule Octopus.InstallationTransportTest do
       assert AppManager.get_mask_app() != nil
       assert {:ok, _} = AppSupervisor.find_running_app(PerlinNoise)
     end
+  end
+
+  describe "restore_playback" do
+    test "restore_queue_playback starts the clamped queue entry" do
+      state = base_restore_state([
+        %{app: PixelFun, mode_id: @classic},
+        %{app: PixelFun, mode_id: @cross}
+      ])
+
+      restored = InstallationTransport.restore_queue_playback(state)
+
+      assert restored.playing
+      assert restored.cycle_index == 1
+      assert restored.live_entry.mode_id == @cross
+      assert is_binary(restored.now_playing_app_id)
+      assert is_integer(restored.next_change_at_ms)
+    end
+
+    test "restore_queue_playback auto-resumes when playing was false" do
+      state =
+        base_restore_state([%{app: PixelFun, mode_id: @classic}])
+        |> Map.put(:playing, false)
+
+      restored = InstallationTransport.restore_queue_playback(state)
+
+      assert restored.live_entry.mode_id == @classic
+      assert is_integer(restored.next_change_at_ms)
+    end
+
+    test "restore_queue_playback clamps out-of-bounds cycle_index" do
+      state =
+        base_restore_state([
+          %{app: PixelFun, mode_id: @classic},
+          %{app: PixelFun, mode_id: @cross}
+        ])
+        |> Map.put(:cycle_index, 99)
+
+      restored = InstallationTransport.restore_queue_playback(state)
+
+      assert restored.cycle_index == 1
+      assert restored.live_entry.mode_id == @cross
+      assert is_integer(restored.next_change_at_ms)
+    end
+  end
+
+  defp base_restore_state(entries) do
+    queue = Enum.map(entries, &normalize_restore_entry/1)
+
+    %InstallationTransport.State{
+      queue: queue,
+      cycle_interval_seconds: 300.0,
+      transition_duration_seconds: 0.0,
+      cycle_index: length(queue) - 1,
+      cycle_timer_ref: nil,
+      playing: true,
+      paused_remaining_ms: nil,
+      next_change_at_ms: nil,
+      live_entry: nil,
+      pending_entry: nil,
+      rotation_paused: false,
+      takeover_app_id: nil,
+      now_playing_stored_config: %{},
+      now_playing_overrides: %{},
+      now_playing_app_id: nil
+    }
+  end
+
+  defp normalize_restore_entry(%{app: app, mode_id: mode_id}) do
+    app =
+      if is_atom(app) and function_exported?(app, :list_modes, 0) do
+        app
+      else
+        Module.concat(Octopus.Apps, app)
+      end
+
+    %{app: app, mode_id: to_string(mode_id), mask: nil}
   end
 end
