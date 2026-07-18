@@ -33,7 +33,6 @@ services:
     environment:
       PORT: "4000"
       INSTALLATION_MODULE: Octopus.Installation.Woodstock
-      BOOT_APP: Fire
       DATABASE_PATH: /data/woodstock.db
       PHX_URL_PORT: "8443"
       PHX_URL_SCHEME: https

@@ -14,6 +14,19 @@
       "slug": "campfire"
     },
     {
+      "accent_color": "#E67E22",
+      "config": {
+        "cooling": 75,
+        "ember_rate": 0.08,
+        "floor": 8,
+        "intensity": 0.8,
+        "sparking": 120,
+        "speed": 1.5
+      },
+      "name": "Nation",
+      "slug": "nation"
+    },
+    {
       "accent_color": "#E74C3C",
       "config": {
         "cooling": 35,
