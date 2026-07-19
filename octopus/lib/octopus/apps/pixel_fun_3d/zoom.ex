@@ -1,13 +1,18 @@
 defmodule Octopus.Apps.PixelFun3D.Zoom do
   @moduledoc """
   Combined zoom: integer octave chart scaling (seam-free densification) plus
-  bounded Möbius residual magnification at the pivot.
+  a bounded residual magnification at the pivot.
+
+  Residual modes (`:zoom_mode`):
+  - `:mobius` — conformal Möbius dilation with `σ = log(r)`
+  - `:merlin` — great-circle angle remapping with `k = 1/r`
 
   Any zoom factor `z` decomposes as `z = m * r` where `m = 2^n` (n ∈ 0..3)
   and `r ∈ [1/√2, √2)` under steady-state rounding; hysteresis may push r
   slightly past √2 harmlessly.
   """
 
+  alias Octopus.Apps.PixelFun3D.MerlinZoom
   alias Octopus.Sphere
 
   @mobius_neutral_eps 1.0e-9
@@ -50,6 +55,19 @@ defmodule Octopus.Apps.PixelFun3D.Zoom do
       0.0
     else
       @mobius_residual_sign * :math.log(r)
+    end
+  end
+
+  @doc """
+  Merlin residual factor `k = 1/r`. Returns `1` when `r ≈ 1` (identity skip).
+  `r > 1` (zoom in) → `k < 1` compresses toward the pivot.
+  """
+  @spec merlin_k(float()) :: float()
+  def merlin_k(r) when is_number(r) and r > 0 do
+    if abs(r - 1.0) < @mobius_neutral_eps do
+      1.0
+    else
+      1.0 / r
     end
   end
 
@@ -115,30 +133,44 @@ defmodule Octopus.Apps.PixelFun3D.Zoom do
   end
 
   @doc """
-  Full per-pixel sample with octave chart multiplier and Möbius residual.
+  Full per-pixel sample with octave chart multiplier and residual zoom.
 
-  Returns `{xs', ys', direction}` where direction is post-Möbius (for nx/ny/nz).
+  Returns `{xs', ys', direction}` where direction is post-residual (for nx/ny/nz).
+  `params.zoom_mode` selects `:mobius` (default) or `:merlin`.
   """
   @spec sample_pixel(Sphere.vec3(), map(), float(), float(), float()) ::
           {float(), float(), Sphere.vec3()}
   def sample_pixel(d, params, m, r, x_p) do
     %{
       matrix: matrix,
-      mobius_basis: basis,
       elev_rad: elev_rad,
       alpha: alpha
     } = params
 
-    sigma = mobius_sigma(r)
+    zoom_mode = Map.get(params, :zoom_mode, :mobius)
 
     d =
       d
       |> then(&Sphere.transform(matrix, &1))
-      |> Sphere.dilate(sigma, basis)
+      |> apply_residual(zoom_mode, r, params)
       |> Sphere.apply_elevation(elev_rad, alpha)
 
     {xs, ys} = Sphere.to_chart(d, alpha)
     apply_chart_octave(xs, ys, m, x_p) |> then(fn {xs, ys} -> {xs, ys, d} end)
+  end
+
+  defp apply_residual(d, :merlin, r, %{zoom_center: center}) do
+    k = merlin_k(r)
+
+    if k == 1.0 do
+      d
+    else
+      MerlinZoom.zoom(d, center, k)
+    end
+  end
+
+  defp apply_residual(d, _mobius, r, %{mobius_basis: basis}) do
+    Sphere.dilate(d, mobius_sigma(r), basis)
   end
 
   defp base_n(z) when z < 1.0, do: 0

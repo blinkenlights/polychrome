@@ -169,9 +169,13 @@ defmodule Octopus.Apps.PixelFun3D.ZoomRenderTest do
         r_from = z / m_from
         r_to = z / m_to
 
+        phi_a = (pivot_x - cx) * alpha
+
         motion = %{
           matrix: Octopus.Sphere.identity(),
-          mobius_basis: Octopus.Sphere.mobius_basis((pivot_x - cx) * alpha),
+          mobius_basis: Octopus.Sphere.mobius_basis(phi_a),
+          zoom_center: {:math.cos(phi_a), :math.sin(phi_a), 0.0},
+          zoom_mode: :mobius,
           elev_rad: 0.0,
           alpha: alpha,
           x_p: x_p

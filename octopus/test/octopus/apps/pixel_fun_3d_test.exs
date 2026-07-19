@@ -220,8 +220,8 @@ defmodule Octopus.Apps.PixelFun3DTest do
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
-      sunset = pixel_fun_build_canvas(%State{base | gradient_palette: :sunset})
-      ocean = pixel_fun_build_canvas(%State{base | gradient_palette: :ocean})
+      sunset = pixel_fun_build_canvas(struct(State, Map.put(base, :gradient_palette, :sunset)))
+      ocean = pixel_fun_build_canvas(struct(State, Map.put(base, :gradient_palette, :ocean)))
 
       assert Canvas.get_pixel(sunset, {0, 0}) != Canvas.get_pixel(sunset, {63, 0})
       assert Canvas.get_pixel(ocean, {0, 0}) != Canvas.get_pixel(ocean, {63, 0})

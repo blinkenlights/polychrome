@@ -91,6 +91,7 @@ defmodule Octopus.Apps.PixelFun3D do
     tilt_mode: :wobble,
     elev_base: 0.0,
     zoom_base: 1.0,
+    zoom_mode: :mobius,
     zoom_pivot: 0,
     pattern_speed: 1.0,
     time_direction: :forward,
@@ -122,6 +123,7 @@ defmodule Octopus.Apps.PixelFun3D do
                        :tilt_mode,
                        :elev_base,
                        :zoom_base,
+                       :zoom_mode,
                        :zoom_pivot,
                        :pattern_speed
                      ] ++ Map.keys(@auto_defaults))
@@ -149,6 +151,7 @@ defmodule Octopus.Apps.PixelFun3D do
       :tilt_mode,
       :elev_base,
       :zoom_base,
+      :zoom_mode,
       :zoom_pivot,
       :pattern_speed,
       :trans_auto,
@@ -239,6 +242,12 @@ defmodule Octopus.Apps.PixelFun3D do
       elev_base: {"Translate Y (px)", :float, %{default: 0.0, min: -4, max: 4, step: 0.1}},
       roll_rate: {"Rotation (°/s)", :float, %{default: 0.0, min: -180, max: 180, step: 1}},
       zoom_base: {"Zoom (×)", :float, %{default: 1.0, min: 0.7, max: 11, step: 0.05}},
+      zoom_mode:
+        {"Zoom mode", :select,
+         %{
+           default: 0,
+           options: [{"Möbius", :mobius}, {"Merlin", :merlin}]
+         }},
       tilt_scale: {"Sway (px)", :float, %{default: 0.0, min: 0, max: 4, step: 0.1}},
       trans_auto: {"Translate Auto", :boolean, %{default: false}},
       trans_auto_range_x: {"Translate Range X (px)", :float, %{default: 80.0, min: 0, max: 156, step: 2}},
@@ -321,6 +330,7 @@ defmodule Octopus.Apps.PixelFun3D do
         tilt_mode: state.tilt_mode,
         elev_base: state.elev_base,
         zoom_base: state.zoom_base,
+        zoom_mode: state.zoom_mode || :mobius,
         zoom_pivot: state.zoom_pivot,
         pattern_speed: state.pattern_speed || 1.0,
         time_direction: state.time_direction
@@ -748,6 +758,14 @@ defmodule Octopus.Apps.PixelFun3D do
         visible_when: {:show_advanced, [true]}
       },
       %{
+        key: :zoom_mode,
+        label: "Zoom mode",
+        type: :select,
+        options: [{"Möbius", :mobius}, {"Merlin", :merlin}],
+        default: :mobius,
+        visible_when: {:show_advanced, [true]}
+      },
+      %{
         key: :zoom_pivot,
         label: "Zoom pivot",
         type: :slider,
@@ -855,6 +873,7 @@ defmodule Octopus.Apps.PixelFun3D do
       tilt_mode: config |> Map.get(:tilt_mode, @tilt_defaults.tilt_mode) |> Octopus.Sway.normalize_mode(),
       elev_base: config.elev_base,
       zoom_base: config.zoom_base,
+      zoom_mode: Map.get(config, :zoom_mode, :mobius) |> coerce_zoom_mode(),
       zoom_pivot: config.zoom_pivot,
       pattern_speed: Map.get(config, :pattern_speed, 1.0),
       time_direction: config |> Map.get(:time_direction, :forward) |> coerce_time_direction(),
@@ -975,6 +994,10 @@ defmodule Octopus.Apps.PixelFun3D do
           |> Octopus.Sway.normalize_mode(),
         elev_base: Map.get(config, :elev_base, state.elev_base),
         zoom_base: Map.get(config, :zoom_base, state.zoom_base),
+        zoom_mode:
+          config
+          |> Map.get(:zoom_mode, state.zoom_mode || :mobius)
+          |> coerce_zoom_mode(),
         zoom_pivot: Map.get(config, :zoom_pivot, state.zoom_pivot),
         pattern_speed: Map.get(config, :pattern_speed, state.pattern_speed || 1.0),
         time_direction:
@@ -1088,6 +1111,7 @@ defmodule Octopus.Apps.PixelFun3D do
       {:sat_auto_min, value} -> {:sat_auto_min, coerce_saturation_percent(value) * 1.0}
       {:sat_auto_max, value} -> {:sat_auto_max, coerce_saturation_percent(value) * 1.0}
       {:tilt_mode, value} -> {:tilt_mode, Octopus.Sway.normalize_mode(value)}
+      {:zoom_mode, value} -> {:zoom_mode, coerce_zoom_mode(value)}
       {key, value} -> {key, value}
     end)
     |> normalize_color_config()
@@ -1517,6 +1541,11 @@ defmodule Octopus.Apps.PixelFun3D do
   defp coerce_time_direction("forward"), do: :forward
   defp coerce_time_direction("backward"), do: :backward
   defp coerce_time_direction(_), do: :forward
+
+  defp coerce_zoom_mode(value) when value in [:mobius, :merlin], do: value
+  defp coerce_zoom_mode("mobius"), do: :mobius
+  defp coerce_zoom_mode("merlin"), do: :merlin
+  defp coerce_zoom_mode(_), do: :mobius
 
   defp coerce_boolean(value) when value in [true, false], do: value
   defp coerce_boolean("true"), do: true
@@ -2064,6 +2093,8 @@ defmodule Octopus.Apps.PixelFun3D do
         neutral?: false,
         matrix: matrix,
         mobius_basis: Sphere.mobius_basis(zoom_pivot_phi),
+        zoom_center: {:math.cos(zoom_pivot_phi), :math.sin(zoom_pivot_phi), 0.0},
+        zoom_mode: coerce_zoom_mode(state.zoom_mode || :mobius),
         elev_rad: Sphere.elev_offset(elev_base, alpha),
         alpha: alpha,
         center_x: cx,
@@ -2278,6 +2309,7 @@ defmodule Octopus.Apps.PixelFun3D do
       tilt_mode: :wobble,
       elev_base: 0.0,
       zoom_base: 1.0,
+      zoom_mode: :mobius,
       zoom_pivot: 0,
       zoom_octave_n: 0,
       octave_fade: nil,

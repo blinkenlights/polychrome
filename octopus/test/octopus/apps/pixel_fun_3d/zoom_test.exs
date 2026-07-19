@@ -73,6 +73,85 @@ defmodule Octopus.Apps.PixelFun3D.ZoomTest do
     end
   end
 
+  describe "merlin_k/1" do
+    test "neutral at r=1" do
+      assert Zoom.merlin_k(1.0) == 1.0
+    end
+
+    test "r > 1 compresses (k < 1)" do
+      assert Zoom.merlin_k(2.0) == 0.5
+    end
+
+    test "r < 1 expands (k > 1)" do
+      assert Zoom.merlin_k(0.5) == 2.0
+    end
+  end
+
+  describe "sample_pixel modes" do
+    test "mobius and merlin both keep unit direction and differ at same r" do
+      w = 312
+      h = 8
+      alpha = Sphere.alpha(w)
+      cx = w / 2 - 0.5
+      pivot_x = 50.0
+      phi_a = (pivot_x - cx) * alpha
+      center = {:math.cos(phi_a), :math.sin(phi_a), 0.0}
+      x_p = phi_a / alpha
+      d = Sphere.direction(100, 3, w, h)
+      r = 1.4
+      m = 1.0
+
+      base = %{
+        matrix: Sphere.identity(),
+        mobius_basis: Sphere.mobius_basis(phi_a),
+        zoom_center: center,
+        elev_rad: 0.0,
+        alpha: alpha
+      }
+
+      {xs_m, ys_m, dir_m} =
+        Zoom.sample_pixel(d, Map.put(base, :zoom_mode, :mobius), m, r, x_p)
+
+      {xs_e, ys_e, dir_e} =
+        Zoom.sample_pixel(d, Map.put(base, :zoom_mode, :merlin), m, r, x_p)
+
+      assert_in_delta Sphere.norm(dir_m), 1.0, 1.0e-9
+      assert_in_delta Sphere.norm(dir_e), 1.0, 1.0e-9
+
+      # Same inputs, different residual geometry.
+      refute abs(xs_m - xs_e) < 1.0e-6 and abs(ys_m - ys_e) < 1.0e-6
+    end
+
+    test "both modes fix the pivot direction" do
+      w = 312
+      alpha = Sphere.alpha(w)
+      cx = w / 2 - 0.5
+      pivot_x = 50.0
+      phi_a = (pivot_x - cx) * alpha
+      center = {:math.cos(phi_a), :math.sin(phi_a), 0.0}
+      x_p = phi_a / alpha
+      r = 1.5
+      m = 1.0
+
+      base = %{
+        matrix: Sphere.identity(),
+        mobius_basis: Sphere.mobius_basis(phi_a),
+        zoom_center: center,
+        elev_rad: 0.0,
+        alpha: alpha
+      }
+
+      for mode <- [:mobius, :merlin] do
+        {_xs, _ys, dir} =
+          Zoom.sample_pixel(center, Map.put(base, :zoom_mode, mode), m, r, x_p)
+
+        assert_in_delta elem(dir, 0), elem(center, 0), 1.0e-9
+        assert_in_delta elem(dir, 1), elem(center, 1), 1.0e-9
+        assert_in_delta elem(dir, 2), elem(center, 2), 1.0e-9
+      end
+    end
+  end
+
   describe "apply_chart_octave/4" do
     test "anchors at pivot" do
       x_p = 10.0

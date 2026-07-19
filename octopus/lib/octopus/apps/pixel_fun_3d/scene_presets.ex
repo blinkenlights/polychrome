@@ -22,6 +22,7 @@ defmodule Octopus.Apps.PixelFun3D.ScenePresets do
     tilt_mode: :wobble,
     elev_base: 0.0,
     zoom_base: 1.0,
+    zoom_mode: :mobius,
     zoom_pivot: 0,
     pattern_speed: 1.0,
     trans_auto: false,
