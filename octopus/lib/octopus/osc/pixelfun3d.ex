@@ -3,12 +3,14 @@ defmodule Octopus.Osc.Pixelfun3D do
   OSC ingress for Pixel Fun 3D performance controls.
 
   Routes `/pixelfun3d/<tweakable>` through `InstallationTransport.set_tweakable/2`
-  (same path as the installation console). Legacy Params keys
-  (`time_scale`, `easing_interval`, `value_percent`) stay on `Octopus.Params`.
+  (same path as the installation console). Scene fire and panic use transport
+  `play_now` / tweakables. Legacy Params keys (`time_scale`, `easing_interval`,
+  `value_percent`) stay on `Octopus.Params`.
   """
 
   require Logger
 
+  alias Octopus.AppModePresets
   alias Octopus.Apps.PixelFun3D
   alias Octopus.InstallationTransport
 
@@ -30,14 +32,42 @@ defmodule Octopus.Osc.Pixelfun3D do
 
   @integer_sliders MapSet.new(~w(brightness_percent saturation_percent))
 
+  # Curated TouchOSC bank (Phase 1); server accepts any known pixelfun3d slug.
+  @live_bank ~w(
+    classic_ripple
+    nordlicht
+    doppelhelix
+    leuchtplankton
+    sternenhimmel
+    marmor
+    strudel
+    nebelringe
+  )
+
+  @autos_off %{
+    trans_auto: false,
+    rot_auto: false,
+    zoom_auto: false,
+    sway_auto: false,
+    sat_auto: false
+  }
+
+  @panic_motion %{
+    time_frozen: true,
+    roll_rate: 0.0,
+    orbit_rate: 0.0,
+    elev_base: 0.0,
+    tilt_scale: 0.0
+  }
+
   @doc """
   Handle OSC path segments after `/pixelfun3d`.
 
   Returns:
-  - `:handled` — tweakable applied via InstallationTransport
+  - `:handled` — action applied
   - `:legacy` — fall through to Params.put
-  - `:ignored` — PixelFun3D not now-playing (or empty args)
-  - `:unknown` — not a Slice-1 address
+  - `:ignored` — not applicable / bad trigger / unknown slug
+  - `:unknown` — not a supported address
   """
   def handle([key], args) when key in @legacy_params and is_list(args) do
     :legacy
@@ -62,6 +92,23 @@ defmodule Octopus.Osc.Pixelfun3D do
     end
   end
 
+  def handle(["panic"], args) when is_list(args) do
+    if trigger?(args) do
+      panic()
+    else
+      :ignored
+    end
+  end
+
+  def handle(["scenes", slug, "fire"], args)
+      when is_binary(slug) and is_list(args) do
+    if trigger?(args) do
+      fire_scene(slug)
+    else
+      :ignored
+    end
+  end
+
   def handle(_rest, _args), do: :unknown
 
   @doc false
@@ -69,6 +116,9 @@ defmodule Octopus.Osc.Pixelfun3D do
 
   @doc false
   def legacy_params, do: @legacy_params
+
+  @doc false
+  def live_bank, do: @live_bank
 
   @doc """
   Normalize a raw OSC argument list into a transport-friendly value.
@@ -114,6 +164,52 @@ defmodule Octopus.Osc.Pixelfun3D do
 
       _ ->
         :error
+    end
+  end
+
+  defp fire_scene(slug) do
+    mode_id = AppModePresets.mode_id(PixelFun3D, slug)
+
+    if known_mode?(mode_id) do
+      case InstallationTransport.play_now(PixelFun3D, mode_id) do
+        :ok ->
+          # Re-fire same scene clears live overrides; new scene is already clean.
+          InstallationTransport.discard_now_playing_overrides()
+          # Force motion/sat autos off; palette_auto stays as in the preset.
+          InstallationTransport.set_tweakables(@autos_off)
+          :handled
+
+        {:error, reason} ->
+          Logger.warning("OSC scene fire #{mode_id} failed: #{inspect(reason)}")
+          :ignored
+      end
+    else
+      Logger.warning("OSC scene fire unknown slug: #{inspect(slug)}")
+      :ignored
+    end
+  end
+
+  defp panic do
+    if pixelfun3d_live?() do
+      InstallationTransport.set_tweakables(Map.merge(@panic_motion, @autos_off))
+      :handled
+    else
+      Logger.debug("OSC /pixelfun3d/panic ignored: PixelFun3D is not now-playing")
+      :ignored
+    end
+  end
+
+  defp known_mode?(mode_id) do
+    config = PixelFun3D.mode_config(mode_id)
+    is_map(config) and map_size(config) > 0
+  end
+
+  defp trigger?([]), do: true
+
+  defp trigger?(args) do
+    case unwrap(args) do
+      v when v in [true, "true", "1", 1, 1.0] -> true
+      _ -> false
     end
   end
 

@@ -59,9 +59,8 @@ defmodule Octopus.Osc.Pixelfun3DTest do
     end
 
     test "rejects unknown paths" do
-      assert OscPixelfun3D.handle(["scenes", "classic_ripple", "fire"], [1.0]) == :unknown
-      assert OscPixelfun3D.handle(["panic"], [1.0]) == :unknown
       assert OscPixelfun3D.handle(["nope"], [1.0]) == :unknown
+      assert OscPixelfun3D.handle(["scenes", "classic_ripple"], [1.0]) == :unknown
     end
 
     test "ignores tweakables when PixelFun3D is not live" do
@@ -113,6 +112,78 @@ defmodule Octopus.Osc.Pixelfun3DTest do
 
       np = InstallationTransport.get_state().now_playing
       refute Map.get(np.effective, :zoom_base) == 3.0
+    end
+  end
+
+  describe "scene fire" do
+    test "fires known slug, hard-cuts, and forces motion autos off" do
+      assert :ok = InstallationTransport.play_now(PixelFun3D, @classic_3d)
+
+      # classic_ripple builtin has trans_auto true in preset JSON
+      assert OscPixelfun3D.handle(["scenes", "classic_ripple", "fire"], [1.0]) == :handled
+
+      np = InstallationTransport.get_state().now_playing
+      assert np.mode_id == @classic_3d
+      assert np.effective[:trans_auto] == false
+      assert np.effective[:rot_auto] == false
+      assert np.effective[:zoom_auto] == false
+      assert np.effective[:sway_auto] == false
+      assert np.effective[:sat_auto] == false
+      # palette_auto stays as in preset (classic_ripple: true)
+      assert np.effective[:palette_auto] == true
+    end
+
+    test "switches to another curated scene" do
+      assert :ok = InstallationTransport.play_now(PixelFun3D, @classic_3d)
+      assert OscPixelfun3D.handle(["scenes", "marmor", "fire"], [1.0]) == :handled
+
+      np = InstallationTransport.get_state().now_playing
+      assert np.mode_id == "pixelfun3d:marmor"
+      assert np.app == PixelFun3D
+    end
+
+    test "can start PixelFun3D from another live app" do
+      assert :ok = InstallationTransport.play_now(PixelFun, "pixelfun:classic_ripple")
+      assert OscPixelfun3D.handle(["scenes", "nordlicht", "fire"], [1.0]) == :handled
+
+      np = InstallationTransport.get_state().now_playing
+      assert np.app == PixelFun3D
+      assert np.mode_id == "pixelfun3d:nordlicht"
+    end
+
+    test "ignores button release and unknown slugs" do
+      assert :ok = InstallationTransport.play_now(PixelFun3D, @classic_3d)
+      assert OscPixelfun3D.handle(["scenes", "classic_ripple", "fire"], [0.0]) == :ignored
+      assert OscPixelfun3D.handle(["scenes", "does_not_exist", "fire"], [1.0]) == :ignored
+    end
+  end
+
+  describe "panic" do
+    test "freezes time and zeros motion without touching brightness" do
+      assert :ok = InstallationTransport.play_now(PixelFun3D, @classic_3d)
+      InstallationTransport.set_tweakable(:brightness_percent, 77)
+      InstallationTransport.set_tweakable(:roll_rate, 40.0)
+      InstallationTransport.set_tweakable(:orbit_rate, 12.0)
+
+      assert OscPixelfun3D.handle(["panic"], [1.0]) == :handled
+
+      np = InstallationTransport.get_state().now_playing
+      assert np.effective[:time_frozen] == true
+      assert np.effective[:roll_rate] == 0.0
+      assert np.effective[:orbit_rate] == 0.0
+      assert np.effective[:elev_base] == 0.0
+      assert np.effective[:tilt_scale] == 0.0
+      assert np.effective[:brightness_percent] == 77
+      assert np.effective[:trans_auto] == false
+    end
+
+    test "ignores panic when PixelFun3D is not live" do
+      assert OscPixelfun3D.handle(["panic"], [1.0]) == :ignored
+    end
+
+    test "ignores panic button release" do
+      assert :ok = InstallationTransport.play_now(PixelFun3D, @classic_3d)
+      assert OscPixelfun3D.handle(["panic"], [0.0]) == :ignored
     end
   end
 end

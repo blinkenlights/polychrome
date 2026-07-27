@@ -105,11 +105,13 @@ Desk v1 nutzt nur **Global.speed** und **brightness_percent**.
 | Scheibe | Inhalt | Status |
 |--------:|--------|--------|
 | 1 | OSC → Tweakables/Globals (Primary Fader/Toggles, Console-Pfad) | **done** |
-| 2 | Scene-Fire + Panic | pending |
+| 2 | Scene-Fire + Panic | **done** |
 | 3 | Soft takeover + UI-Sync | pending |
 | 4 | TouchOSC-Layout + Operator-Notiz | pending |
 
 **Scheibe 1 geliefert:** `Octopus.Osc.Pixelfun3D` + Routing in `Osc.Server`. Continuous/Toggles gehen über `InstallationTransport.set_tweakable/2`. Legacy Params bleiben `Params.put`. `/global/speed` unverändert.
+
+**Scheibe 2 geliefert:** `/pixelfun3d/scenes/<slug>/fire` → `play_now` + discard overrides + Motion/Sat-Autos forciert aus (`palette_auto` aus Preset). `/pixelfun3d/panic` → Freeze + Motion 0, Brightness unverändert. Trigger nur auf Press (`1`/`1.0`), Release ignoriert.
 
 ### Ziel
 
