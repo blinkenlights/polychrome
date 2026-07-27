@@ -115,7 +115,7 @@ Desk v1 nutzt nur **Global.speed** und **brightness_percent**.
 
 **Scheibe 3 geliefert:** `Octopus.Osc.SoftTakeover` (Pickup pro Client+Param), `Octopus.Osc.UiSync` (Performance-Bank inkl. `/global/speed`). Osc.Server subscribed `installation_transport` + `global_params`, pusht Bundles an Clients und markiert sie matched. Neuer Client / `/pixelfun3d/config` triggert Sync. Continuous ohne Pickup → `:held`.
 
-**Scheibe 4 geliefert:** Operator-Guide `docs/pixelfun3d-touchosc.md`, Blueprint `octopus/priv/touchosc/pixelfun3d-v1.json`, Mk1-Layout `octopus/priv/touchosc/pixelfun3d-v1.touchosc` (+ Builder-Script). `time_direction` akzeptiert zusätzlich Toggle-Floats `0`/`1`.
+**Scheibe 4 geliefert:** Operator-Guide `docs/pixelfun3d-touchosc.md`, Blueprint `octopus/priv/touchosc/pixelfun3d-v1.json`, **Mk2** Layout `pixelfun3d-v1.xml` + `pixelfun3d-v1.tosc` (Builder `build_mk2_layout.py`). `time_direction` akzeptiert Toggle-Floats `0`/`1`.
 
 ### Ziel
 
