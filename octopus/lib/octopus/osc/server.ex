@@ -85,6 +85,27 @@ defmodule Octopus.Osc.Server do
     put_param_and_reply("sim_3d_aframe", key, args, state)
   end
 
+  defp handle_message(["pixelfun3d" | rest], args, state) do
+    case Octopus.Osc.Pixelfun3D.handle(rest, args) do
+      :handled ->
+        echo_osc(["pixelfun3d" | rest], args, state)
+
+      :legacy ->
+        case rest do
+          [key] -> put_param_and_reply("pixelfun3d", key, args, state)
+          _ -> Logger.warning("Unknown legacy OSC /pixelfun3d/#{Enum.join(rest, "/")}")
+        end
+
+      :ignored ->
+        nil
+
+      :unknown ->
+        Logger.warning(
+          "Unknown OSC message: #{inspect(["pixelfun3d" | rest])} with args: #{inspect(args)}"
+        )
+    end
+  end
+
   defp handle_message(["config"], [1.0], state) do
     messages =
       Octopus.Params.all()
@@ -114,12 +135,15 @@ defmodule Octopus.Osc.Server do
         _ -> args
       end
 
-    message = OSCx.encode(%Message{address: "/#{prefix}/#{key}", arguments: args})
+    echo_osc([prefix, key], args, state)
+    Octopus.Params.put(prefix, key, arg)
+  end
+
+  defp echo_osc(parts, args, state) do
+    message = OSCx.encode(%Message{address: "/" <> Enum.join(parts, "/"), arguments: args})
 
     state.clients
     |> Map.keys()
     |> Enum.each(fn {ip, port} -> :gen_udp.send(state.socket, ip, port, message) end)
-
-    Octopus.Params.put(prefix, key, arg)
   end
 end
