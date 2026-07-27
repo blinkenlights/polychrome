@@ -57,7 +57,7 @@ defmodule Octopus.Application do
       ] ++
         case System.get_env("OSC_SERVER_ENABLED", "true") do
           "false" -> []
-          _ -> [Octopus.Osc.Server]
+          _ -> [Octopus.Osc.SoftTakeover, Octopus.Osc.Server]
         end ++
         case System.get_env("TELEGRAM_BOT_SECRET") do
           nil -> []

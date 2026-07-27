@@ -3,9 +3,9 @@ defmodule Octopus.Osc.Pixelfun3D do
   OSC ingress for Pixel Fun 3D performance controls.
 
   Routes `/pixelfun3d/<tweakable>` through `InstallationTransport.set_tweakable/2`
-  (same path as the installation console). Scene fire and panic use transport
-  `play_now` / tweakables. Legacy Params keys (`time_scale`, `easing_interval`,
-  `value_percent`) stay on `Octopus.Params`.
+  (same path as the installation console). Continuous controls use soft takeover.
+  Scene fire and panic use transport `play_now` / tweakables. Legacy Params keys
+  (`time_scale`, `easing_interval`, `value_percent`) stay on `Octopus.Params`.
   """
 
   require Logger
@@ -13,10 +13,11 @@ defmodule Octopus.Osc.Pixelfun3D do
   alias Octopus.AppModePresets
   alias Octopus.Apps.PixelFun3D
   alias Octopus.InstallationTransport
+  alias Octopus.Osc.SoftTakeover
 
   @legacy_params ~w(time_scale easing_interval value_percent)
 
-  @tweakables ~w(
+  @continuous ~w(
     brightness_percent
     zoom_base
     roll_rate
@@ -26,9 +27,11 @@ defmodule Octopus.Osc.Pixelfun3D do
     saturation_percent
     color_interval
     bleeding
-    time_frozen
-    time_direction
   )
+
+  @discrete ~w(time_frozen time_direction)
+
+  @tweakables @continuous ++ @discrete
 
   @integer_sliders MapSet.new(~w(brightness_percent saturation_percent))
 
@@ -63,22 +66,55 @@ defmodule Octopus.Osc.Pixelfun3D do
   @doc """
   Handle OSC path segments after `/pixelfun3d`.
 
+  `client` identifies the OSC peer for soft-takeover state (`{ip, port}` or `:local`).
+
   Returns:
   - `:handled` — action applied
+  - `:held` — soft takeover waiting for pickup
   - `:legacy` — fall through to Params.put
   - `:ignored` — not applicable / bad trigger / unknown slug
   - `:unknown` — not a supported address
   """
-  def handle([key], args) when key in @legacy_params and is_list(args) do
+  def handle(rest, args, client \\ :local)
+
+  def handle([key], args, _client) when key in @legacy_params and is_list(args) do
     :legacy
   end
 
-  def handle([key], args) when key in @tweakables and is_list(args) do
+  def handle([key], args, client) when key in @continuous and is_list(args) do
     case pixelfun3d_live?() do
       true ->
         case normalize_arg(key, args) do
           {:ok, value} ->
-            InstallationTransport.set_tweakable(String.to_existing_atom(key), value)
+            atom = String.to_existing_atom(key)
+            actual = current_tweakable(atom)
+
+            if SoftTakeover.accept?(client, atom, value, actual) do
+              InstallationTransport.set_tweakable(atom, value)
+              :handled
+            else
+              :held
+            end
+
+          :error ->
+            Logger.warning("OSC /pixelfun3d/#{key} bad args: #{inspect(args)}")
+            :ignored
+        end
+
+      false ->
+        Logger.debug("OSC /pixelfun3d/#{key} ignored: PixelFun3D is not now-playing")
+        :ignored
+    end
+  end
+
+  def handle([key], args, client) when key in @discrete and is_list(args) do
+    case pixelfun3d_live?() do
+      true ->
+        case normalize_arg(key, args) do
+          {:ok, value} ->
+            atom = String.to_existing_atom(key)
+            SoftTakeover.mark_matched(client, atom)
+            InstallationTransport.set_tweakable(atom, value)
             :handled
 
           :error ->
@@ -92,7 +128,7 @@ defmodule Octopus.Osc.Pixelfun3D do
     end
   end
 
-  def handle(["panic"], args) when is_list(args) do
+  def handle(["panic"], args, _client) when is_list(args) do
     if trigger?(args) do
       panic()
     else
@@ -100,7 +136,7 @@ defmodule Octopus.Osc.Pixelfun3D do
     end
   end
 
-  def handle(["scenes", slug, "fire"], args)
+  def handle(["scenes", slug, "fire"], args, _client)
       when is_binary(slug) and is_list(args) do
     if trigger?(args) do
       fire_scene(slug)
@@ -109,10 +145,17 @@ defmodule Octopus.Osc.Pixelfun3D do
     end
   end
 
-  def handle(_rest, _args), do: :unknown
+  def handle(["config"], args, _client) when is_list(args) do
+    if trigger?(args), do: :sync, else: :ignored
+  end
+
+  def handle(_rest, _args, _client), do: :unknown
 
   @doc false
   def tweakables, do: @tweakables
+
+  @doc false
+  def continuous, do: @continuous
 
   @doc false
   def legacy_params, do: @legacy_params
@@ -196,6 +239,16 @@ defmodule Octopus.Osc.Pixelfun3D do
     else
       Logger.debug("OSC /pixelfun3d/panic ignored: PixelFun3D is not now-playing")
       :ignored
+    end
+  end
+
+  defp current_tweakable(key) do
+    case InstallationTransport.get_state() do
+      %{now_playing: %{app: PixelFun3D, effective: eff}} when is_map(eff) ->
+        Map.get(eff, key)
+
+      _ ->
+        nil
     end
   end
 

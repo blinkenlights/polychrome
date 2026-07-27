@@ -4,8 +4,10 @@ defmodule Octopus.Osc.Pixelfun3DTest do
   alias Octopus.{AppSupervisor, InstallationTransport}
   alias Octopus.Apps.{PixelFun, PixelFun3D}
   alias Octopus.Osc.Pixelfun3D, as: OscPixelfun3D
+  alias Octopus.Osc.{SoftTakeover, UiSync}
 
   @classic_3d "pixelfun3d:classic_ripple"
+  @client :local
 
   setup do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Octopus.Repo, shared: true)
@@ -14,6 +16,9 @@ defmodule Octopus.Osc.Pixelfun3DTest do
     if transport_pid = Process.whereis(Octopus.InstallationTransport) do
       Ecto.Adapters.SQL.Sandbox.allow(Octopus.Repo, self(), transport_pid)
     end
+
+    ensure_soft_takeover!()
+    SoftTakeover.reset!()
 
     for {_, app_id} <- AppSupervisor.running_apps(), do: AppSupervisor.stop_app(app_id)
 
@@ -24,9 +29,21 @@ defmodule Octopus.Osc.Pixelfun3DTest do
     on_exit(fn ->
       for {_, app_id} <- AppSupervisor.running_apps(), do: AppSupervisor.stop_app(app_id)
       InstallationTransport.reset!()
+      SoftTakeover.reset!()
     end)
 
     :ok
+  end
+
+  defp ensure_soft_takeover! do
+    case Process.whereis(SoftTakeover) do
+      nil -> start_supervised!(SoftTakeover)
+      _pid -> :ok
+    end
+  end
+
+  defp sync_client! do
+    SoftTakeover.mark_matched_many(@client, UiSync.takeover_keys())
   end
 
   describe "normalize_arg/2" do
@@ -51,29 +68,29 @@ defmodule Octopus.Osc.Pixelfun3DTest do
     end
   end
 
-  describe "handle/2" do
+  describe "handle/3" do
     test "marks legacy params for Params fallthrough" do
-      assert OscPixelfun3D.handle(["time_scale"], [1.5]) == :legacy
-      assert OscPixelfun3D.handle(["value_percent"], [80.0]) == :legacy
-      assert OscPixelfun3D.handle(["easing_interval"], [200.0]) == :legacy
+      assert OscPixelfun3D.handle(["time_scale"], [1.5], @client) == :legacy
+      assert OscPixelfun3D.handle(["value_percent"], [80.0], @client) == :legacy
+      assert OscPixelfun3D.handle(["easing_interval"], [200.0], @client) == :legacy
     end
 
     test "rejects unknown paths" do
-      assert OscPixelfun3D.handle(["nope"], [1.0]) == :unknown
-      assert OscPixelfun3D.handle(["scenes", "classic_ripple"], [1.0]) == :unknown
+      assert OscPixelfun3D.handle(["nope"], [1.0], @client) == :unknown
+      assert OscPixelfun3D.handle(["scenes", "classic_ripple"], [1.0], @client) == :unknown
     end
 
     test "ignores tweakables when PixelFun3D is not live" do
-      assert OscPixelfun3D.handle(["zoom_base"], [2.0]) == :ignored
+      assert OscPixelfun3D.handle(["zoom_base"], [2.0], @client) == :ignored
     end
 
-    test "applies continuous tweakables via InstallationTransport" do
+    test "applies continuous tweakables when matched (UI-synced)" do
       assert :ok = InstallationTransport.play_now(PixelFun3D, @classic_3d)
-      assert InstallationTransport.get_state().live.app == PixelFun3D
+      sync_client!()
 
-      assert OscPixelfun3D.handle(["zoom_base"], [2.5]) == :handled
-      assert OscPixelfun3D.handle(["brightness_percent"], [70.0]) == :handled
-      assert OscPixelfun3D.handle(["roll_rate"], [-15.0]) == :handled
+      assert OscPixelfun3D.handle(["zoom_base"], [2.5], @client) == :handled
+      assert OscPixelfun3D.handle(["brightness_percent"], [70.0], @client) == :handled
+      assert OscPixelfun3D.handle(["roll_rate"], [-15.0], @client) == :handled
 
       np = InstallationTransport.get_state().now_playing
       assert np.effective[:zoom_base] == 2.5
@@ -88,11 +105,28 @@ defmodule Octopus.Osc.Pixelfun3DTest do
       assert config[:roll_rate] == -15.0
     end
 
+    test "holds continuous values until soft takeover pickup" do
+      assert :ok = InstallationTransport.play_now(PixelFun3D, @classic_3d)
+      SoftTakeover.reset!()
+
+      actual = InstallationTransport.get_state().now_playing.effective[:zoom_base]
+      refute actual == 2.5
+
+      assert OscPixelfun3D.handle(["zoom_base"], [2.5], @client) == :held
+      assert InstallationTransport.get_state().now_playing.effective[:zoom_base] == actual
+
+      assert OscPixelfun3D.handle(["zoom_base"], [actual], @client) == :handled
+      assert SoftTakeover.matched?(@client, :zoom_base)
+
+      assert OscPixelfun3D.handle(["zoom_base"], [2.5], @client) == :handled
+      assert InstallationTransport.get_state().now_playing.effective[:zoom_base] == 2.5
+    end
+
     test "applies toggles and time_direction including TouchOSC floats" do
       assert :ok = InstallationTransport.play_now(PixelFun3D, @classic_3d)
 
-      assert OscPixelfun3D.handle(["time_frozen"], [1.0]) == :handled
-      assert OscPixelfun3D.handle(["time_direction"], ["backward"]) == :handled
+      assert OscPixelfun3D.handle(["time_frozen"], [1.0], @client) == :handled
+      assert OscPixelfun3D.handle(["time_direction"], ["backward"], @client) == :handled
 
       np = InstallationTransport.get_state().now_playing
       assert np.effective[:time_frozen] == true
@@ -108,10 +142,15 @@ defmodule Octopus.Osc.Pixelfun3DTest do
       assert :ok = InstallationTransport.play_now(PixelFun, "pixelfun:classic_ripple")
       assert InstallationTransport.get_state().live.app == PixelFun
 
-      assert OscPixelfun3D.handle(["zoom_base"], [3.0]) == :ignored
+      assert OscPixelfun3D.handle(["zoom_base"], [3.0], @client) == :ignored
 
       np = InstallationTransport.get_state().now_playing
       refute Map.get(np.effective, :zoom_base) == 3.0
+    end
+
+    test "config trigger requests sync" do
+      assert OscPixelfun3D.handle(["config"], [1.0], @client) == :sync
+      assert OscPixelfun3D.handle(["config"], [0.0], @client) == :ignored
     end
   end
 
@@ -120,7 +159,8 @@ defmodule Octopus.Osc.Pixelfun3DTest do
       assert :ok = InstallationTransport.play_now(PixelFun3D, @classic_3d)
 
       # classic_ripple builtin has trans_auto true in preset JSON
-      assert OscPixelfun3D.handle(["scenes", "classic_ripple", "fire"], [1.0]) == :handled
+      assert OscPixelfun3D.handle(["scenes", "classic_ripple", "fire"], [1.0], @client) ==
+               :handled
 
       np = InstallationTransport.get_state().now_playing
       assert np.mode_id == @classic_3d
@@ -135,7 +175,7 @@ defmodule Octopus.Osc.Pixelfun3DTest do
 
     test "switches to another curated scene" do
       assert :ok = InstallationTransport.play_now(PixelFun3D, @classic_3d)
-      assert OscPixelfun3D.handle(["scenes", "marmor", "fire"], [1.0]) == :handled
+      assert OscPixelfun3D.handle(["scenes", "marmor", "fire"], [1.0], @client) == :handled
 
       np = InstallationTransport.get_state().now_playing
       assert np.mode_id == "pixelfun3d:marmor"
@@ -144,7 +184,7 @@ defmodule Octopus.Osc.Pixelfun3DTest do
 
     test "can start PixelFun3D from another live app" do
       assert :ok = InstallationTransport.play_now(PixelFun, "pixelfun:classic_ripple")
-      assert OscPixelfun3D.handle(["scenes", "nordlicht", "fire"], [1.0]) == :handled
+      assert OscPixelfun3D.handle(["scenes", "nordlicht", "fire"], [1.0], @client) == :handled
 
       np = InstallationTransport.get_state().now_playing
       assert np.app == PixelFun3D
@@ -153,8 +193,8 @@ defmodule Octopus.Osc.Pixelfun3DTest do
 
     test "ignores button release and unknown slugs" do
       assert :ok = InstallationTransport.play_now(PixelFun3D, @classic_3d)
-      assert OscPixelfun3D.handle(["scenes", "classic_ripple", "fire"], [0.0]) == :ignored
-      assert OscPixelfun3D.handle(["scenes", "does_not_exist", "fire"], [1.0]) == :ignored
+      assert OscPixelfun3D.handle(["scenes", "classic_ripple", "fire"], [0.0], @client) == :ignored
+      assert OscPixelfun3D.handle(["scenes", "does_not_exist", "fire"], [1.0], @client) == :ignored
     end
   end
 
@@ -165,7 +205,7 @@ defmodule Octopus.Osc.Pixelfun3DTest do
       InstallationTransport.set_tweakable(:roll_rate, 40.0)
       InstallationTransport.set_tweakable(:orbit_rate, 12.0)
 
-      assert OscPixelfun3D.handle(["panic"], [1.0]) == :handled
+      assert OscPixelfun3D.handle(["panic"], [1.0], @client) == :handled
 
       np = InstallationTransport.get_state().now_playing
       assert np.effective[:time_frozen] == true
@@ -178,12 +218,12 @@ defmodule Octopus.Osc.Pixelfun3DTest do
     end
 
     test "ignores panic when PixelFun3D is not live" do
-      assert OscPixelfun3D.handle(["panic"], [1.0]) == :ignored
+      assert OscPixelfun3D.handle(["panic"], [1.0], @client) == :ignored
     end
 
     test "ignores panic button release" do
       assert :ok = InstallationTransport.play_now(PixelFun3D, @classic_3d)
-      assert OscPixelfun3D.handle(["panic"], [0.0]) == :ignored
+      assert OscPixelfun3D.handle(["panic"], [0.0], @client) == :ignored
     end
   end
 end
