@@ -179,6 +179,9 @@ defmodule Octopus.Osc.Pixelfun3D do
       dir when dir in ["forward", "backward"] -> {:ok, dir}
       :forward -> {:ok, "forward"}
       :backward -> {:ok, "backward"}
+      # TouchOSC toggles typically send 0.0 / 1.0
+      v when v in [0, 0.0, false, "0"] -> {:ok, "forward"}
+      v when v in [1, 1.0, true, "1"] -> {:ok, "backward"}
       _ -> :error
     end
   end

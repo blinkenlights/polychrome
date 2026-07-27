@@ -52,9 +52,11 @@ defmodule Octopus.Osc.Pixelfun3DTest do
       assert OscPixelfun3D.normalize_arg("time_frozen", [0.0]) == {:ok, 0}
     end
 
-    test "accepts time_direction strings" do
+    test "accepts time_direction strings and toggle floats" do
       assert OscPixelfun3D.normalize_arg("time_direction", ["backward"]) == {:ok, "backward"}
       assert OscPixelfun3D.normalize_arg("time_direction", ["forward"]) == {:ok, "forward"}
+      assert OscPixelfun3D.normalize_arg("time_direction", [0.0]) == {:ok, "forward"}
+      assert OscPixelfun3D.normalize_arg("time_direction", [1.0]) == {:ok, "backward"}
     end
 
     test "truncates integer sliders" do

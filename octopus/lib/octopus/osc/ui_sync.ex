@@ -91,7 +91,7 @@ defmodule Octopus.Osc.UiSync do
   defp osc_bool(false), do: 0.0
   defp osc_bool(_), do: 0.0
 
-  defp osc_direction(:backward), do: "backward"
-  defp osc_direction("backward"), do: "backward"
-  defp osc_direction(_), do: "forward"
+  defp osc_direction(:backward), do: 1.0
+  defp osc_direction("backward"), do: 1.0
+  defp osc_direction(_), do: 0.0
 end

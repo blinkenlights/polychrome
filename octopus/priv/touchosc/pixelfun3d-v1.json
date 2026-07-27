@@ -1,0 +1,45 @@
+{
+  "name": "pixelfun3d-v1",
+  "version": 1,
+  "osc": {
+    "protocol": "udp",
+    "port": 8000,
+    "value_space": "app_units"
+  },
+  "pages": [
+    {
+      "id": "performance",
+      "title": "Performance",
+      "controls": [
+        {"type": "fader", "label": "Speed", "address": "/global/speed", "min": 0.01, "max": 10.0, "soft_takeover": true},
+        {"type": "fader", "label": "Brightness", "address": "/pixelfun3d/brightness_percent", "min": 0, "max": 100, "soft_takeover": true},
+        {"type": "fader", "label": "Zoom", "address": "/pixelfun3d/zoom_base", "min": 0.7, "max": 11.0, "soft_takeover": true},
+        {"type": "fader", "label": "Rotation", "address": "/pixelfun3d/roll_rate", "min": -180, "max": 180, "soft_takeover": true},
+        {"type": "fader", "label": "Translate X", "address": "/pixelfun3d/orbit_rate", "min": -30, "max": 30, "soft_takeover": true},
+        {"type": "fader", "label": "Translate Y", "address": "/pixelfun3d/elev_base", "min": -4, "max": 4, "soft_takeover": true},
+        {"type": "fader", "label": "Sway", "address": "/pixelfun3d/tilt_scale", "min": 0, "max": 4, "soft_takeover": true},
+        {"type": "fader", "label": "Saturation", "address": "/pixelfun3d/saturation_percent", "min": 0, "max": 100, "soft_takeover": true},
+        {"type": "fader", "label": "Color tempo", "address": "/pixelfun3d/color_interval", "min": 1, "max": 120, "soft_takeover": true},
+        {"type": "fader", "label": "Bleeding", "address": "/pixelfun3d/bleeding", "min": 0, "max": 100, "soft_takeover": true},
+        {"type": "toggle", "label": "Freeze", "address": "/pixelfun3d/time_frozen", "off": 0, "on": 1},
+        {"type": "toggle", "label": "Direction", "address": "/pixelfun3d/time_direction", "off": 0, "on": 1, "off_means": "forward", "on_means": "backward"},
+        {"type": "button", "label": "Panic", "address": "/pixelfun3d/panic", "press": 1},
+        {"type": "button", "label": "Sync", "address": "/pixelfun3d/config", "press": 1}
+      ]
+    },
+    {
+      "id": "scenes",
+      "title": "Scenes",
+      "controls": [
+        {"type": "button", "label": "Classic ripple", "address": "/pixelfun3d/scenes/classic_ripple/fire", "press": 1},
+        {"type": "button", "label": "Nordlicht", "address": "/pixelfun3d/scenes/nordlicht/fire", "press": 1},
+        {"type": "button", "label": "Doppelhelix", "address": "/pixelfun3d/scenes/doppelhelix/fire", "press": 1},
+        {"type": "button", "label": "Leuchtplankton", "address": "/pixelfun3d/scenes/leuchtplankton/fire", "press": 1},
+        {"type": "button", "label": "Sternenhimmel", "address": "/pixelfun3d/scenes/sternenhimmel/fire", "press": 1},
+        {"type": "button", "label": "Marmor", "address": "/pixelfun3d/scenes/marmor/fire", "press": 1},
+        {"type": "button", "label": "Strudel", "address": "/pixelfun3d/scenes/strudel/fire", "press": 1},
+        {"type": "button", "label": "Nebelringe", "address": "/pixelfun3d/scenes/nebelringe/fire", "press": 1}
+      ]
+    }
+  ]
+}

@@ -107,13 +107,15 @@ Desk v1 nutzt nur **Global.speed** und **brightness_percent**.
 | 1 | OSC → Tweakables/Globals (Primary Fader/Toggles, Console-Pfad) | **done** |
 | 2 | Scene-Fire + Panic | **done** |
 | 3 | Soft takeover + UI-Sync | **done** |
-| 4 | TouchOSC-Layout + Operator-Notiz | pending |
+| 4 | TouchOSC-Layout + Operator-Notiz | **done** |
 
 **Scheibe 1 geliefert:** `Octopus.Osc.Pixelfun3D` + Routing in `Osc.Server`. Continuous/Toggles gehen über `InstallationTransport.set_tweakable/2`. Legacy Params bleiben `Params.put`. `/global/speed` unverändert.
 
 **Scheibe 2 geliefert:** `/pixelfun3d/scenes/<slug>/fire` → `play_now` + discard overrides + Motion/Sat-Autos forciert aus (`palette_auto` aus Preset). `/pixelfun3d/panic` → Freeze + Motion 0, Brightness unverändert. Trigger nur auf Press (`1`/`1.0`), Release ignoriert.
 
 **Scheibe 3 geliefert:** `Octopus.Osc.SoftTakeover` (Pickup pro Client+Param), `Octopus.Osc.UiSync` (Performance-Bank inkl. `/global/speed`). Osc.Server subscribed `installation_transport` + `global_params`, pusht Bundles an Clients und markiert sie matched. Neuer Client / `/pixelfun3d/config` triggert Sync. Continuous ohne Pickup → `:held`.
+
+**Scheibe 4 geliefert:** Operator-Guide `docs/pixelfun3d-touchosc.md`, Blueprint `octopus/priv/touchosc/pixelfun3d-v1.json`, Mk1-Layout `octopus/priv/touchosc/pixelfun3d-v1.touchosc` (+ Builder-Script). `time_direction` akzeptiert zusätzlich Toggle-Floats `0`/`1`.
 
 ### Ziel
 
@@ -154,7 +156,7 @@ Pixel Fun 3D über TouchOSC live spielbar: Continuous Controls, Toggles, kuratie
 | Adresse | Verhalten |
 |---------|-----------|
 | `/pixelfun3d/time_frozen` | Toggle/Set (0/1 oder bool) |
-| `/pixelfun3d/time_direction` | String-Argument `"forward"` oder `"backward"` |
+| `/pixelfun3d/time_direction` | `0`/`"forward"` oder `1`/`"backward"` |
 | `/pixelfun3d/panic` | Panic auslösen (Trigger, z. B. Arg `1`) |
 | `/pixelfun3d/scenes/<slug>/fire` | Scene harter Cut |
 
