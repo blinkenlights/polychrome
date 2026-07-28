@@ -93,7 +93,8 @@ defmodule Octopus.MixProject do
       {:oscx, "~> 0.1.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:igniter, "~> 0.7", only: [:dev]},
-      {:circuits_uart, "~> 1.5"}
+      {:circuits_uart, "~> 1.5"},
+      {:midiex, "~> 0.6.4"}
     ]
   end
 

@@ -29,6 +29,7 @@ defmodule OctopusWeb.Router do
       live "/radar", RadarLive
       live "/radar/debug", RadarDebugLive
       live "/nation", NationLive
+      live "/launchpad", LaunchpadLive
     end
 
     live_session :sim3d,

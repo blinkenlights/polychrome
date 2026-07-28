@@ -88,6 +88,14 @@ defmodule OctopusWeb.TopBarComponent do
       {"/", "Foyer"},
       {"/radar", "Radar"},
       {"/radar/debug", "Radar Debug"}
-    ]
+    ] ++ launchpad_nav_link()
+  end
+
+  defp launchpad_nav_link do
+    if Octopus.Installation.num_panels() == 1 and Octopus.Installation.panel_layout() == {8, 8} do
+      [{"/launchpad", "Launchpad"}]
+    else
+      []
+    end
   end
 end
