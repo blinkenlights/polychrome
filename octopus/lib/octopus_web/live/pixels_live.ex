@@ -4,7 +4,8 @@ defmodule OctopusWeb.PixelsLive do
   import Phoenix.LiveView, only: [push_event: 3, connected?: 1]
   import OctopusWeb.PanelStatusComponent
 
-  alias Octopus.{Broadcaster, Events, Mixer}
+  alias Octopus.{Broadcaster, Events, InstallationTransport, Mixer}
+  alias Octopus.Apps.PixieDebug
   alias Octopus.Hardware.PanelStatus
   alias Octopus.Protobuf.{FirmwareConfig, RGBFrame}
   alias Octopus.Events.Event.Input, as: InputEvent
@@ -34,16 +35,16 @@ defmodule OctopusWeb.PixelsLive do
 
   # Will be set to the first layout key dynamically
 
-  defp get_key_map() do
-    num_buttons = Installation.num_buttons()
+  defp get_key_map(num_buttons, fade_step_active?) do
+    button_count = sim_button_count(num_buttons, fade_step_active?)
 
     # Base button mappings for number keys and function keys
     button_mappings =
-      for i <- 1..min(num_buttons, 10)//1 do
+      for i <- 1..min(button_count, 10)//1 do
         key = if i == 10, do: "0", else: to_string(i)
         {key, i}
       end ++
-        for i <- 1..min(num_buttons, 12)//1 do
+        for i <- 1..min(button_count, 12)//1 do
           key = "F#{i}"
           {key, i}
         end
@@ -74,6 +75,20 @@ defmodule OctopusWeb.PixelsLive do
     (button_mappings ++ joystick_mappings) |> Enum.into(%{})
   end
 
+  defp sim_button_count(num_buttons, true), do: max(num_buttons, 2)
+  defp sim_button_count(num_buttons, false), do: num_buttons
+
+  defp sim_button_specs(num_buttons, fade_step_active?) do
+    if fade_step_active? do
+      [{2, "←"}, {1, "→"}]
+    else
+      for i <- 1..num_buttons//1, do: {i, to_string(i)}
+    end
+  end
+
+  defp fade_step_active?(%{live: %{app: PixieDebug, mode_id: "fade_step"}}), do: true
+  defp fade_step_active?(_), do: false
+
   def mount(_params, session, socket) do
     embedded = session["embedded"] in [true, "true"]
     views = get_views()
@@ -85,6 +100,7 @@ defmodule OctopusWeb.PixelsLive do
     socket =
       if connected?(socket) do
         Mixer.subscribe()
+        InstallationTransport.subscribe()
 
         frame = %RGBFrame{
           data:
@@ -121,6 +137,8 @@ defmodule OctopusWeb.PixelsLive do
     view_options = Enum.map(views, fn {k, v} -> [key: v.name, value: k] end)
     max_windows = Installation.num_panels()
     num_buttons = Installation.num_buttons()
+    transport = InstallationTransport.get_state()
+    fade_step_active? = fade_step_active?(transport)
 
     {:ok,
      socket
@@ -136,7 +154,9 @@ defmodule OctopusWeb.PixelsLive do
        max_windows: max_windows,
        window: 1,
        num_buttons: num_buttons,
-       key_map: get_key_map(),
+       fade_step_active?: fade_step_active?,
+       sim_button_specs: sim_button_specs(num_buttons, fade_step_active?),
+       key_map: get_key_map(num_buttons, fade_step_active?),
        pressed_buttons: MapSet.new(),
        panel_status_visible: panel_status_visible,
        sending_to_panels: sending_to_panels,
@@ -239,7 +259,11 @@ defmodule OctopusWeb.PixelsLive do
             style={"background-image: url(#{@pixel_layout.background_image});"}
           />
         </div>
-        <.button_panel num_buttons={@num_buttons} pressed_buttons={@pressed_buttons} class="shrink-0 pb-3 pt-1" />
+        <.button_panel
+          sim_button_specs={@sim_button_specs}
+          pressed_buttons={@pressed_buttons}
+          class="shrink-0 pb-3 pt-1"
+        />
       <% else %>
         <div class="w-full h-full float-left relative">
           <canvas
@@ -250,7 +274,7 @@ defmodule OctopusWeb.PixelsLive do
             style={"background-image: url(#{@pixel_layout.background_image});"}
           />
           <.button_panel
-            num_buttons={@num_buttons}
+            sim_button_specs={@sim_button_specs}
             pressed_buttons={@pressed_buttons}
             class="absolute bottom-4 left-1/2 -translate-x-1/2 z-10"
           />
@@ -260,7 +284,7 @@ defmodule OctopusWeb.PixelsLive do
     """
   end
 
-  attr :num_buttons, :integer, required: true
+  attr :sim_button_specs, :list, required: true
   attr :pressed_buttons, :any, required: true
   attr :class, :string, default: nil
 
@@ -269,12 +293,12 @@ defmodule OctopusWeb.PixelsLive do
     <div class={["flex justify-center", @class]}>
       <div class="flex gap-2 justify-center">
         <button
-          :for={i <- 1..@num_buttons//1}
+          :for={{button_num, label} <- @sim_button_specs}
           phx-click="button-click"
-          phx-value-button={i}
+          phx-value-button={button_num}
           class={[
             "btn btn-sm font-mono min-w-[2.5rem]",
-            if MapSet.member?(@pressed_buttons, i) do
+            if MapSet.member?(@pressed_buttons, button_num) do
               "btn-success"
             else
               "btn-neutral"
@@ -282,7 +306,7 @@ defmodule OctopusWeb.PixelsLive do
           ]}
           type="button"
         >
-          {i}
+          {label}
         </button>
       </div>
     </div>
@@ -579,6 +603,18 @@ defmodule OctopusWeb.PixelsLive do
     |> Events.handle_event()
 
     {:noreply, socket}
+  end
+
+  def handle_info({:installation_transport, transport}, socket) do
+    fade_step_active? = fade_step_active?(transport)
+
+    {:noreply,
+     socket
+     |> assign(
+       fade_step_active?: fade_step_active?,
+       sim_button_specs: sim_button_specs(socket.assigns.num_buttons, fade_step_active?),
+       key_map: get_key_map(socket.assigns.num_buttons, fade_step_active?)
+     )}
   end
 
   def handle_info({:mixer, {:frame, frame}}, socket) do

@@ -107,11 +107,74 @@ defmodule Octopus.Apps.PixieDebugTest do
              })
   end
 
-  test "list_modes/0 exposes pixel_walk and full_panel" do
+  test "list_modes/0 exposes all debug modes" do
     mode_ids = pixie_list_modes() |> Enum.map(& &1.id)
-    assert mode_ids == ["pixel_walk", "full_panel"]
+
+    assert mode_ids == ["pixel_walk", "full_panel", "fade_loop", "fade_step"]
     assert pixie_mode_tweakables("pixel_walk") != []
     assert pixie_mode_tweakables("full_panel") != []
+    assert pixie_mode_tweakables("fade_loop") != []
+    assert pixie_mode_tweakables("fade_step") != []
+  end
+
+  test "fade_loop_brightness/2 triangle wave" do
+    assert pixie_fade_loop_brightness(0, 1000) == 0.0
+    assert pixie_fade_loop_brightness(500, 1000) == 0.5
+    assert pixie_fade_loop_brightness(1000, 1000) == 1.0
+    assert pixie_fade_loop_brightness(1500, 1000) == 0.5
+    assert pixie_fade_loop_brightness(2000, 1000) == 0.0
+  end
+
+  test "fade_step_brightness/2 linear steps" do
+    assert pixie_fade_step_brightness(0, 30) == 0.0
+    assert pixie_fade_step_brightness(29, 30) == 1.0
+    assert pixie_fade_step_brightness(0, 1) == 1.0
+  end
+
+  test "fade_step canvas at index 0 is black and at max is peak" do
+    with_installation(Octopus.Installation.Pixie, fn ->
+      dark =
+        pixie_build_canvas(
+          base_state(%{
+            mode_id: "fade_step",
+            color_channel: :white,
+            peak_brightness: 255,
+            frame_count: 30,
+            frame_index: 0
+          })
+        )
+
+      bright =
+        pixie_build_canvas(
+          base_state(%{
+            mode_id: "fade_step",
+            color_channel: :white,
+            peak_brightness: 255,
+            frame_count: 30,
+            frame_index: 29
+          })
+        )
+
+      assert Canvas.get_pixel(dark, {0, 0}) == 0
+      assert Canvas.get_pixel(bright, {0, 0}) == 255
+    end)
+  end
+
+  test "fade_loop canvas follows phase brightness" do
+    with_installation(Octopus.Installation.Pixie, fn ->
+      canvas =
+        pixie_build_canvas(
+          base_state(%{
+            mode_id: "fade_loop",
+            color_channel: :white,
+            peak_brightness: 200,
+            fade_half_duration_ms: 1000,
+            phase_ms: 500
+          })
+        )
+
+      assert Canvas.get_pixel(canvas, {0, 0}) == 100
+    end)
   end
 
   test "full_panel white fills grayscale canvas" do
@@ -162,4 +225,9 @@ defmodule Octopus.Apps.PixieDebugTest do
   defp pixie_mode_tweakables(mode_id), do: apply(@pixie_debug, :mode_tweakables, [mode_id])
   defp pixie_build_canvas(state), do: apply(@pixie_debug, :build_canvas, [state])
   defp pixie_apply_mode(app_id, mode_id), do: apply(@pixie_debug, :apply_mode, [app_id, mode_id])
+  defp pixie_fade_loop_brightness(phase_ms, half_ms),
+    do: apply(@pixie_debug, :fade_loop_brightness, [phase_ms, half_ms])
+
+  defp pixie_fade_step_brightness(frame_index, frame_count),
+    do: apply(@pixie_debug, :fade_step_brightness, [frame_index, frame_count])
 end

@@ -1053,12 +1053,19 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
     pixel_section = library_section(PixelFun3D, "Pixel Fun 3D", transport, new_scene?: true)
 
+    debug_sections =
+      if apply(PixieDebug, :compatible?, []) do
+        [library_section(PixieDebug, "Pixie Debug", transport)]
+      else
+        []
+      end
+
     more_sections =
       for app <- persistable_apps(), app not in [PixelFun3D | @foyer_hidden_apps] do
         library_section(app, app_name(app), transport)
       end
 
-    assign(socket, library_sections: [pixel_section | more_sections])
+    assign(socket, library_sections: [pixel_section | debug_sections ++ more_sections])
   end
 
   defp library_section(app, title, transport, opts \\ []) do
