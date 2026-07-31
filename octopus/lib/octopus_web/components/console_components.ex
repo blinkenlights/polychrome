@@ -95,7 +95,7 @@ defmodule OctopusWeb.ConsoleComponents do
   def player_block(assigns) do
     ~H"""
     <div id="installation-player" class="card bg-base-200 border border-base-300 shadow-sm">
-      <div class="sticky top-0 z-20 bg-base-200 border-b border-base-300 shadow-sm">
+      <div class="max-[699px]:static min-[700px]:sticky min-[700px]:top-0 z-20 bg-base-200 border-b border-base-300 shadow-sm">
         <div class="p-3 min-[700px]:p-4 space-y-3">
           <.transport_status_row {assigns} />
           <div class="border-t border-base-300/60 pt-3">
@@ -814,7 +814,7 @@ defmodule OctopusWeb.ConsoleComponents do
           <h3 class="font-semibold text-sm leading-tight truncate min-w-0 flex-1">{@mode.name}</h3>
           <div class="flex items-center gap-1 shrink-0">
             <.live_badge :if={@live?} />
-            <span :if={@queued_pos} class="badge badge-outline badge-xs">Nr. {@queued_pos}</span>
+            <span :if={@queued_pos} class="badge badge-outline badge-xs max-[699px]:hidden min-[700px]:inline-flex">Nr. {@queued_pos}</span>
             <span :if={Map.get(@mode, :builtin) == false} class="badge badge-outline badge-xs opacity-70">
               yours
             </span>

@@ -39,13 +39,15 @@ defmodule Octopus.Application do
         {Registry, keys: :unique, name: Octopus.Animator},
         Octopus.AppSupervisor,
         Octopus.AppManager,
+        # Apps call Mixer.create_display_buffers on start; must be up before
+        # PlaylistScheduler / InstallationTransport restore playback.
+        Octopus.Mixer,
         Octopus.Events.Router,
         Octopus.Events.Event.Proximity.Processor,
         Octopus.InputAdapter,
         Octopus.PlaylistScheduler,
         Octopus.InstallationTransport,
         Octopus.KioskModeManager,
-        Octopus.Mixer,
         Octopus.ButtonServer,
         Octopus.Sunlight,
 

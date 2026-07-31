@@ -622,6 +622,56 @@ defmodule Octopus.InstallationTransportTest do
       assert config[:color] == "#00ff00"
     end
 
+    test "pixie debug fade step tweak applies frame_index live" do
+      original_installation = Application.get_env(:octopus, :installation)
+      Application.put_env(:octopus, :installation, Octopus.Installation.Pixie)
+
+      on_exit(fn ->
+        Application.put_env(:octopus, :installation, original_installation)
+      end)
+
+      InstallationTransport.play_now(PixieDebug, "fade_step")
+
+      playing = state().now_playing
+      assert playing.effective[:mode_id] == "fade_step"
+      assert playing.effective[:frame_index] == 0
+      assert Enum.any?(playing.meta, &String.contains?(&1, "Frame 0"))
+
+      InstallationTransport.set_tweakable(:frame_index, 15)
+
+      tweaked = state().now_playing
+      assert tweaked.dirty == true
+      assert tweaked.effective[:frame_index] == 15
+      assert Enum.any?(tweaked.meta, &String.contains?(&1, "Frame 15"))
+
+      {:ok, app_id} = AppSupervisor.find_running_app(PixieDebug)
+      assert AppSupervisor.config(app_id)[:frame_index] == 15
+    end
+
+    test "pixie debug fade loop tweak applies fade_half_duration_ms live" do
+      original_installation = Application.get_env(:octopus, :installation)
+      Application.put_env(:octopus, :installation, Octopus.Installation.Pixie)
+
+      on_exit(fn ->
+        Application.put_env(:octopus, :installation, original_installation)
+      end)
+
+      InstallationTransport.play_now(PixieDebug, "fade_loop")
+
+      playing = state().now_playing
+      assert playing.effective[:mode_id] == "fade_loop"
+      assert playing.effective[:fade_half_duration_ms] == 3000
+
+      InstallationTransport.set_tweakable(:fade_half_duration_ms, 5000)
+
+      tweaked = state().now_playing
+      assert tweaked.dirty == true
+      assert tweaked.effective[:fade_half_duration_ms] == 5000
+
+      {:ok, app_id} = AppSupervisor.find_running_app(PixieDebug)
+      assert AppSupervisor.config(app_id)[:fade_half_duration_ms] == 5000
+    end
+
     test "collective storm tweak applies sensitivity live" do
       InstallationTransport.play_now(Collective, "collective:storm")
 

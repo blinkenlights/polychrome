@@ -148,7 +148,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     ~H"""
     <div
       id="pf3d-drawer"
-      class="fixed top-10 right-0 bottom-0 z-50 w-full max-w-xl bg-base-100 border-l border-base-300 shadow-2xl overflow-y-auto"
+      class="fixed top-10 z-50 bg-base-100 overflow-y-auto max-[699px]:inset-x-0 max-[699px]:bottom-0 max-[699px]:max-w-none min-[700px]:right-0 min-[700px]:bottom-0 min-[700px]:w-full min-[700px]:max-w-xl border-l border-base-300 shadow-2xl"
     >
       <div class="sticky top-0 z-10 flex items-center justify-between gap-2 px-4 py-3 bg-base-100 border-b border-base-300">
         <h2 class="text-lg font-semibold">
@@ -184,7 +184,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     ~H"""
     <div
       id="now-playing-sheet"
-      class="fixed inset-x-0 bottom-0 z-50 flex max-h-[min(55vh,28rem)] flex-col border-t border-base-300 bg-base-100 shadow-[0_-10px_40px_rgba(0,0,0,0.15)]"
+      class="fixed z-50 border-t border-base-300 bg-base-100 max-[699px]:inset-0 max-[699px]:top-10 max-[699px]:overflow-y-auto max-[699px]:max-h-none min-[700px]:inset-x-0 min-[700px]:bottom-0 min-[700px]:flex min-[700px]:max-h-[min(55vh,28rem)] min-[700px]:flex-col min-[700px]:shadow-[0_-10px_40px_rgba(0,0,0,0.15)]"
       role="dialog"
       aria-modal="false"
     >
@@ -200,7 +200,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
           <.console_icon_x class="w-5 h-5" />
         </button>
       </div>
-      <div class="min-h-0 flex-1 overflow-y-auto p-4">
+      <div class="p-4 max-[699px]:overflow-visible min-[700px]:min-h-0 min-[700px]:flex-1 min-[700px]:overflow-y-auto">
         <.now_playing_card {assigns} id_suffix="sheet" embedded />
       </div>
     </div>
@@ -260,7 +260,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
         class={[
           "card bg-base-200 border border-base-300 min-w-0 w-full",
           section_compact?(section) && "max-w-full",
-          !section_compact?(section) && "max-w-[65%]",
+          !section_compact?(section) && "max-w-full min-[700px]:max-w-[65%]",
           !section_compact?(section) && "min-[700px]:col-span-2 min-[1100px]:col-span-3"
         ]}
       >
@@ -1053,12 +1053,19 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
     pixel_section = library_section(PixelFun3D, "Pixel Fun 3D", transport, new_scene?: true)
 
+    debug_sections =
+      if apply(PixieDebug, :compatible?, []) do
+        [library_section(PixieDebug, "Pixie Debug", transport)]
+      else
+        []
+      end
+
     more_sections =
       for app <- persistable_apps(), app not in [PixelFun3D | @foyer_hidden_apps] do
         library_section(app, app_name(app), transport)
       end
 
-    assign(socket, library_sections: [pixel_section | more_sections])
+    assign(socket, library_sections: [pixel_section | debug_sections ++ more_sections])
   end
 
   defp library_section(app, title, transport, opts \\ []) do

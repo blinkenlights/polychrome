@@ -160,7 +160,8 @@ defmodule Octopus.Mixer do
       rgb_buffer: rgb_buffer,
       grayscale_buffer: grayscale_buffer,
       config: config,
-      display_info: display_info
+      display_info: display_info,
+      last_output_mode: nil
     }
 
     new_app_displays = Map.put(state.app_displays, app_id, app_display)
@@ -193,7 +194,7 @@ defmodule Octopus.Mixer do
         {:noreply, state}
 
       app_display ->
-        updated_display = %{app_display | rgb_buffer: canvas}
+        updated_display = %{app_display | rgb_buffer: canvas, last_output_mode: :rgb}
         new_state = update_app_displays(state, app_id, updated_display)
 
         new_state =
@@ -221,7 +222,7 @@ defmodule Octopus.Mixer do
         {:noreply, state}
 
       app_display ->
-        updated_display = %{app_display | grayscale_buffer: canvas}
+        updated_display = %{app_display | grayscale_buffer: canvas, last_output_mode: :grayscale}
         new_state = update_app_displays(state, app_id, updated_display)
 
         new_state =
@@ -911,16 +912,24 @@ defmodule Octopus.Mixer do
   end
 
   defp get_best_rendered_canvas(rendered_display) do
-    # Try RGB buffer first (most common), then grayscale
-    cond do
-      rendered_display.rgb_buffer ->
-        {rendered_display.rgb_buffer, :rgb}
-
-      rendered_display.grayscale_buffer ->
+    case Map.get(rendered_display, :last_output_mode) do
+      :grayscale when not is_nil(rendered_display.grayscale_buffer) ->
         {rendered_display.grayscale_buffer, :grayscale}
 
-      true ->
-        {nil, nil}
+      :rgb when not is_nil(rendered_display.rgb_buffer) ->
+        {rendered_display.rgb_buffer, :rgb}
+
+      _ ->
+        cond do
+          rendered_display.rgb_buffer ->
+            {rendered_display.rgb_buffer, :rgb}
+
+          rendered_display.grayscale_buffer ->
+            {rendered_display.grayscale_buffer, :grayscale}
+
+          true ->
+            {nil, nil}
+        end
     end
   end
 

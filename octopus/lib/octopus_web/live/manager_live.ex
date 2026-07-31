@@ -74,7 +74,8 @@ defmodule OctopusWeb.ManagerLive do
       data-sim-layout={@sim_layout}
       class={[
         "w-full",
-        @show_sim_preview && "fixed inset-x-0 bottom-0 top-10 z-20 flex flex-col overflow-hidden",
+        @show_sim_preview &&
+          "min-[700px]:fixed min-[700px]:inset-x-0 min-[700px]:bottom-0 min-[700px]:top-10 min-[700px]:z-20 min-[700px]:flex min-[700px]:flex-col min-[700px]:overflow-hidden",
         @show_sim_preview && @sim_layout == "left" && "sim-layout-left",
         !@show_sim_preview && "relative"
       ]}
@@ -104,7 +105,7 @@ defmodule OctopusWeb.ManagerLive do
           phx-hook="SimResize"
           data-direction="vertical"
           title="Drag to resize"
-          class="group shrink-0 h-2 cursor-row-resize touch-none select-none z-40 bg-base-300 hover:bg-primary/40 active:bg-primary/60 transition-colors flex items-center justify-center"
+          class="group max-[699px]:hidden shrink-0 h-2 cursor-row-resize touch-none select-none z-40 bg-base-300 hover:bg-primary/40 active:bg-primary/60 transition-colors flex items-center justify-center"
         >
           <span class="w-8 h-0.5 rounded-full bg-base-content/25 group-hover:bg-primary/70 transition-colors" />
         </div>
@@ -114,7 +115,8 @@ defmodule OctopusWeb.ManagerLive do
         data-theme={@console_theme}
         class={[
           "min-h-0",
-          @show_sim_preview && "flex-1 overflow-y-auto overscroll-y-contain",
+          @show_sim_preview &&
+            "min-[700px]:flex-1 min-[700px]:overflow-y-auto min-[700px]:overscroll-y-contain",
           @console_theme == "dark" && "bg-[#0f1318] text-base-content",
           @console_theme == "light" && "bg-base-200 text-base-content"
         ]}
@@ -122,9 +124,12 @@ defmodule OctopusWeb.ManagerLive do
         <style>
           .console-root{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif}
           .console-mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,monospace}
-          #sim-preview{height:42dvh}
+          #sim-preview{height:25dvh}
+          #sim-resize-handle{display:none}
           #sim-resize-handle-vert{display:none}
           @media (min-width:700px){
+            #sim-preview{height:42dvh}
+            #sim-resize-handle{display:flex}
             #console-page.sim-layout-left{flex-direction:row}
             #console-page.sim-layout-left #sim-preview{
               width:min(42dvw,28rem);
