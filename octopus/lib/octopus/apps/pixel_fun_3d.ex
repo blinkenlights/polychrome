@@ -131,6 +131,8 @@ defmodule Octopus.Apps.PixelFun3D do
 
   @fps 30
   @frame_time_ms trunc(1000 / @fps)
+  # Match hardware ease duration to frame period so each ease completes before the next target arrives.
+  @hardware_easing_ms @frame_time_ms
   @transform_live_interval_ms 250
   @min_white_level_gap 30
   @min_white_level 32
@@ -200,7 +202,8 @@ defmodule Octopus.Apps.PixelFun3D do
       :formula_seconds,
       :transform_live_last_ms,
       :zoom_octave_n,
-      :octave_fade
+      :octave_fade,
+      :next_tick_at
     ]
   end
 
@@ -819,7 +822,12 @@ defmodule Octopus.Apps.PixelFun3D do
   end
 
   def app_init(config) do
-    Octopus.App.configure_display(layout: :gapped_panels, supports_grayscale: true)
+    Octopus.App.configure_display(
+      layout: :gapped_panels,
+      supports_grayscale: true,
+      easing_interval: @hardware_easing_ms
+    )
+
     Octopus.App.subscribe_to_button_events()
     Octopus.Params.Global.subscribe()
 
@@ -828,6 +836,7 @@ defmodule Octopus.Apps.PixelFun3D do
 
     {:ok, program} = config.program |> Program.parse()
 
+    next_tick_at = System.monotonic_time(:millisecond) + @frame_time_ms
     Process.send_after(self(), :tick, @frame_time_ms)
     color_mode = Map.get(config, :color_mode, :random)
     saturation_percent = Map.get(config, :saturation_percent, 70)
@@ -891,7 +900,8 @@ defmodule Octopus.Apps.PixelFun3D do
       yaw_angle: 0.0,
       roll_angle: 0.0,
       zoom_octave_n: 0,
-      octave_fade: nil
+      octave_fade: nil,
+      next_tick_at: next_tick_at
     }
 
     state =
@@ -1638,6 +1648,10 @@ defmodule Octopus.Apps.PixelFun3D do
 
   def handle_info(:tick, %State{} = state) do
     tick_start = System.monotonic_time(:millisecond)
+    base = state.next_tick_at || tick_start
+    next_tick_at = base + @frame_time_ms
+    delay = max(next_tick_at - tick_start, 1)
+    Process.send_after(self(), :tick, delay)
 
     state =
       if state.time_frozen do
@@ -1656,9 +1670,7 @@ defmodule Octopus.Apps.PixelFun3D do
       end
 
     state = push_frame(state)
-    elapsed = System.monotonic_time(:millisecond) - tick_start
-    Process.send_after(self(), :tick, max(@frame_time_ms - elapsed, 1))
-    {:noreply, state}
+    {:noreply, %{state | next_tick_at: next_tick_at}}
   end
 
   defp maybe_broadcast_transform_live(%State{} = state, now_ms) do
@@ -1935,14 +1947,10 @@ defmodule Octopus.Apps.PixelFun3D do
 
   defp push_frame(%State{} = state) do
     canvas = render(state)
-    easing_interval = trunc(param(:easing_interval, 200))
 
     case state.color_mode do
-      :white ->
-        Octopus.App.update_display(canvas, :grayscale, easing_interval: easing_interval)
-
-      _ ->
-        Octopus.App.update_display(canvas, :rgb, easing_interval: easing_interval)
+      :white -> Octopus.App.update_display(canvas, :grayscale)
+      _ -> Octopus.App.update_display(canvas, :rgb)
     end
 
     state
