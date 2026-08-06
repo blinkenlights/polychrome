@@ -66,7 +66,7 @@ defmodule Octopus.MixProject do
       {:ecto_sqlite3, ">= 0.22.0"},
       {:ecto_sqlite3_extras, "~> 1.2.0"},
       {:phoenix_html, "~> 4.3"},
-      {:phoenix_live_reload, "~> 1.6.2", only: :dev},
+      {:phoenix_live_reload, "~> 1.7", only: :dev},
       {:phoenix_live_view, "~> 1.1"},
       {:floki, ">= 0.38.0", only: :test},
       {:phoenix_live_dashboard, "~> 0.8.7"},
