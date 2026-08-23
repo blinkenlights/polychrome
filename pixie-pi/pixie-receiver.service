@@ -1,0 +1,20 @@
+[Unit]
+Description=Pixie: empfaengt Octopus-Frames per UDP und treibt die WS2812-Panels
+Documentation=https://github.com/polychrome
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# root noetig: rpi_ws281x greift ueber /dev/mem direkt auf PWM und DMA zu
+User=root
+WorkingDirectory=/home/michi/pixie-pi
+ExecStart=/home/michi/pixie-venv/bin/python /home/michi/pixie-pi/pixie_receiver.py
+Restart=always
+RestartSec=2
+# Logs gehen ins Journal: journalctl -u pixie-receiver -f
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
