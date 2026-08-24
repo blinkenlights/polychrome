@@ -69,11 +69,10 @@ defmodule Octopus.Params.Global do
         _ -> :ignore
       end
 
-      # Also store in params system
+      # Also store in params system. The {:param_updated, ...} broadcast for UI
+      # sync is done by handle_param/2 (with the clamped value), so it is not
+      # repeated here.
       Octopus.Params.put("global", Atom.to_string(key), value)
-
-      # Broadcast parameter change for UI updates
-      Phoenix.PubSub.broadcast(Octopus.PubSub, "global_params", {:param_updated, key, value})
     end)
   end
 
