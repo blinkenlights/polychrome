@@ -2759,16 +2759,27 @@ defmodule Octopus.Apps.PixelFun3D do
 
   # Interpolate in RGB space then return HSV so the render path (which expects
   # %Chameleon.HSV{}) keeps working for both hue pairs and white levels.
+  #
+  # Chameleon's RGB->HSV conversion can yield h: 360, which its HSV->RGB path
+  # cannot handle (only sectors 0..5 exist), so hue is normalised into 0..359
+  # both on the way in and on the way out.
   defp lerp_hsv(a, b, value) do
-    a_rgb = Chameleon.convert(a, Chameleon.RGB)
-    b_rgb = Chameleon.convert(b, Chameleon.RGB)
+    a_rgb = a |> normalize_hue() |> Chameleon.convert(Chameleon.RGB)
+    b_rgb = b |> normalize_hue() |> Chameleon.convert(Chameleon.RGB)
 
     r = lerp(a_rgb.r, b_rgb.r, value) |> trunc()
     g = lerp(a_rgb.g, b_rgb.g, value) |> trunc()
     bl = lerp(a_rgb.b, b_rgb.b, value) |> trunc()
 
-    Chameleon.RGB.new(r, g, bl) |> Chameleon.convert(Chameleon.HSV)
+    Chameleon.RGB.new(r, g, bl)
+    |> Chameleon.convert(Chameleon.HSV)
+    |> normalize_hue()
   end
+
+  defp normalize_hue(%Chameleon.HSV{h: h} = hsv) when is_number(h),
+    do: %Chameleon.HSV{hsv | h: Integer.mod(trunc(h), 360)}
+
+  defp normalize_hue(%Chameleon.HSV{} = hsv), do: %Chameleon.HSV{hsv | h: 0}
 
   defp generate_random_palette(:white, _saturation_percent), do: generate_random_white_levels()
 

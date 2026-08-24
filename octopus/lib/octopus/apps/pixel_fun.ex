@@ -1033,9 +1033,12 @@ defmodule Octopus.Apps.PixelFun do
 
   defp lerp_toward_target_colors(%State{} = state), do: state
 
+  # Chameleon's RGB->HSV conversion can yield h: 360, which its HSV->RGB path
+  # cannot handle (only sectors 0..5 exist), so hue is normalised into 0..359
+  # both on the way in and on the way out.
   defp lerp_rgb(a, b, value) do
-    a_rgb = Chameleon.convert(a, Chameleon.RGB)
-    b_rgb = Chameleon.convert(b, Chameleon.RGB)
+    a_rgb = a |> normalize_hue() |> Chameleon.convert(Chameleon.RGB)
+    b_rgb = b |> normalize_hue() |> Chameleon.convert(Chameleon.RGB)
 
     r = lerp(a_rgb.r, b_rgb.r, value) |> trunc()
     g = lerp(a_rgb.g, b_rgb.g, value) |> trunc()
@@ -1043,7 +1046,13 @@ defmodule Octopus.Apps.PixelFun do
 
     Chameleon.RGB.new(r, g, b)
     |> Chameleon.convert(Chameleon.HSV)
+    |> normalize_hue()
   end
+
+  defp normalize_hue(%Chameleon.HSV{h: h} = hsv) when is_number(h),
+    do: %Chameleon.HSV{hsv | h: Integer.mod(trunc(h), 360)}
+
+  defp normalize_hue(%Chameleon.HSV{} = hsv), do: %Chameleon.HSV{hsv | h: 0}
 
   defp lerp(a, b, t) do
     (1 - t) * a + t * b
