@@ -16,9 +16,18 @@ defmodule Octopus.Apps.PixelFun.FlatTransformTest do
     :ok
   end
 
-  defp with_installation(installation, fun) do
+  # The installation is global process state that async tests elsewhere read
+  # (num_panels, width). Restore it as soon as this test is done with it rather
+  # than leaving a foreign installation standing until on_exit.
+  defp reading_installation(installation, fun) do
+    previous = Application.get_env(:octopus, :installation)
     Application.put_env(:octopus, :installation, installation)
-    fun.()
+
+    try do
+      fun.()
+    after
+      Application.put_env(:octopus, :installation, previous)
+    end
   end
 
   # Minimal renderable state for the current (flat) installation.
@@ -66,13 +75,13 @@ defmodule Octopus.Apps.PixelFun.FlatTransformTest do
 
   describe "transform_backend/0" do
     test "linear installs use flat" do
-      with_installation(Octopus.Installation.Pixie, fn ->
+      reading_installation(Octopus.Installation.Pixie, fn ->
         assert PixelFun.transform_backend() == :flat
       end)
     end
 
     test "circular installs use sphere" do
-      with_installation(Octopus.Installation.Nation2026, fn ->
+      reading_installation(Octopus.Installation.Nation2026, fn ->
         assert PixelFun.transform_backend() == :sphere
       end)
     end
@@ -80,7 +89,7 @@ defmodule Octopus.Apps.PixelFun.FlatTransformTest do
 
   describe "mode_tweakables/1 on flat" do
     test "exposes zoom + rotation autos; sway pairs with tilt_scale" do
-      with_installation(Octopus.Installation.Pixie, fn ->
+      reading_installation(Octopus.Installation.Pixie, fn ->
         tweaks = PixelFun.mode_tweakables("classic_ripple")
 
         rotate = Enum.find(tweaks, &(&1.key == :roll_rate))
@@ -103,12 +112,12 @@ defmodule Octopus.Apps.PixelFun.FlatTransformTest do
 
     test "rot_auto_range keeps its degree sweep meaning on flat" do
       sphere_range =
-        with_installation(Octopus.Installation.Nation2026, fn ->
+        reading_installation(Octopus.Installation.Nation2026, fn ->
           Enum.find(PixelFun.mode_tweakables("classic_ripple"), &(&1.key == :rot_auto_range))
         end)
 
       flat_range =
-        with_installation(Octopus.Installation.Pixie, fn ->
+        reading_installation(Octopus.Installation.Pixie, fn ->
           Enum.find(PixelFun.mode_tweakables("classic_ripple"), &(&1.key == :rot_auto_range))
         end)
 
@@ -124,7 +133,7 @@ defmodule Octopus.Apps.PixelFun.FlatTransformTest do
   describe "trans_auto on flat" do
     test "pan range scales with the installation instead of the ring" do
       range_max = fn installation ->
-        with_installation(installation, fn ->
+        reading_installation(installation, fn ->
           PixelFun.mode_tweakables("classic_ripple")
           |> Enum.find(&(&1.key == :trans_auto_range_x))
           |> Map.fetch!(:max)
@@ -139,7 +148,7 @@ defmodule Octopus.Apps.PixelFun.FlatTransformTest do
     end
 
     test "the wandered offset actually reaches the rendered frame" do
-      with_installation(Octopus.Installation.Pixie, fn ->
+      reading_installation(Octopus.Installation.Pixie, fn ->
         frame = fn offset ->
           flat_render_state(%{
             trans_auto: true,
@@ -154,7 +163,7 @@ defmodule Octopus.Apps.PixelFun.FlatTransformTest do
     end
 
     test "the same offset renders the same frame while auto is off" do
-      with_installation(Octopus.Installation.Pixie, fn ->
+      reading_installation(Octopus.Installation.Pixie, fn ->
         frame = fn offset ->
           flat_render_state(%{
             trans_auto: false,
@@ -186,7 +195,7 @@ defmodule Octopus.Apps.PixelFun.FlatTransformTest do
 
     test "sliders are bounded per axis by the installation" do
       maxima = fn installation ->
-        with_installation(installation, fn ->
+        reading_installation(installation, fn ->
           tweaks = PixelFun.mode_tweakables("classic_ripple")
 
           {Enum.find(tweaks, &(&1.key == :translate_scale_x)).max,
@@ -220,7 +229,7 @@ defmodule Octopus.Apps.PixelFun.FlatTransformTest do
 
   describe "Flat.transform_pixel_coords/3" do
     test "uniform zoom scales x and y equally" do
-      with_installation(Octopus.Installation.Pixie, fn ->
+      reading_installation(Octopus.Installation.Pixie, fn ->
         params = %{
           offset_x: 0.0,
           offset_y: 0.0,
@@ -245,7 +254,7 @@ defmodule Octopus.Apps.PixelFun.FlatTransformTest do
     end
 
     test "PixelFun.dispatch uses flat params on Pixie" do
-      with_installation(Octopus.Installation.Pixie, fn ->
+      reading_installation(Octopus.Installation.Pixie, fn ->
         params = %{
           backend: :flat,
           offset_x: 0.0,
