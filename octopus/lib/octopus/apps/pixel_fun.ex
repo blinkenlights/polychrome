@@ -44,10 +44,6 @@ defmodule Octopus.Apps.PixelFun do
   }
 
   @channel_bounds %{
-    # trans_x is now a horizontal position offset (px, pan) up to ~half the ring;
-    # yaw wraps so this only bounds the wander target range.
-    trans_x: {-156.0, 156.0},
-    trans_y: {-4.0, 4.0},
     rot: {-180.0, 180.0},
     sway: {0.0, 4.0},
     sat: {0.0, 100.0}
@@ -499,14 +495,12 @@ defmodule Octopus.Apps.PixelFun do
   defp flat_tweakables do
     sphere_tweakables()
     |> Enum.reject(fn t ->
+      # orbit/elev are ring positions on a sphere; flat pans via translate_scale.
+      # trans_auto and roll_rate are shared: a position offset in px and a
+      # rotation in °/s mean the same thing on a wall as on a ring.
       t.key in [
         :orbit_rate,
         :elev_base,
-        :trans_auto,
-        :trans_auto_range_x,
-        :trans_auto_range_y,
-        :trans_auto_interval,
-        :roll_rate,
         :roll_pivot,
         :zoom_mode,
         :zoom_pivot
@@ -516,45 +510,41 @@ defmodule Octopus.Apps.PixelFun do
     |> retarget_flat_zoom_range()
   end
 
+  @flat_trans_auto_keys [
+    :trans_auto,
+    :trans_auto_range_x,
+    :trans_auto_range_y,
+    :trans_auto_interval
+  ]
+
   defp inject_flat_transform_tweakables(tweakables) do
-    flat = [
-      %{
-        key: :translate_scale,
-        label: "Translate",
-        type: :slider,
-        min: 0.0,
-        max: 20.0,
-        step: 0.5,
-        default: 0.0
-      },
-      %{
-        key: :rotate_scale,
-        label: "Rotation",
-        type: :slider,
-        min: -4.0,
-        max: 4.0,
-        step: 0.05,
-        default: 0.0,
-        auto_key: :rot_auto,
-        disabled_when: {:rot_auto, [true]}
-      }
-    ]
+    translate = %{
+      key: :translate_scale,
+      label: "Translate",
+      type: :slider,
+      min: 0.0,
+      max: 20.0,
+      step: 0.5,
+      default: 0.0,
+      auto_key: :trans_auto,
+      disabled_when: {:trans_auto, [true]}
+    }
 
-    # Pull rot_auto* out (they sat next to rejected roll_rate) and reattach after
-    # flat rotate_scale so the companion Auto groups correctly.
-    {rot_auto_specs, rest} =
-      Enum.split_with(tweakables, fn t ->
-        t.key in [:rot_auto, :rot_auto_range, :rot_auto_interval]
-      end)
+    # The trans_auto group sat next to orbit_rate, which flat rejects, so pull it
+    # out and reattach it below translate_scale. rot_auto still follows roll_rate,
+    # which flat keeps, so that group stays where the sphere put it.
+    {trans_auto_specs, rest} =
+      Enum.split_with(tweakables, &(&1.key in @flat_trans_auto_keys))
 
-    rot_auto_specs =
-      Enum.map(rot_auto_specs, fn
-        %{key: :rot_auto} = t -> Map.put(t, :companion_of, :rotate_scale)
+    trans_auto_specs =
+      Enum.map(trans_auto_specs, fn
+        %{key: :trans_auto} = t -> Map.put(t, :companion_of, :translate_scale)
         t -> t
       end)
 
-    {before, after_} = Enum.split_while(rest, fn t -> t.key != :zoom_base end)
-    before ++ flat ++ rot_auto_specs ++ after_
+    {before, after_} = Enum.split_while(rest, fn t -> t.key != :roll_rate end)
+
+    before ++ [translate] ++ trans_auto_specs ++ after_
   end
 
   defp retarget_flat_zoom_range(tweakables) do
@@ -725,7 +715,7 @@ defmodule Octopus.Apps.PixelFun do
         label: "Range X",
         type: :slider,
         min: 0.0,
-        max: 156.0,
+        max: trans_range_max_x(),
         step: 2.0,
         default: 80.0,
         unit: "px",
@@ -736,7 +726,7 @@ defmodule Octopus.Apps.PixelFun do
         label: "Range Y",
         type: :slider,
         min: 0.0,
-        max: 4.0,
+        max: trans_range_max_y(),
         step: 0.1,
         default: 3.0,
         unit: "px",
@@ -1364,15 +1354,26 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   defp maybe_migrate_rotate(config) do
-    # Modern configs keep rotate_scale for the Flat backend; only map legacy → roll_rate.
-    if Map.get(config, :pixel_fun_units) == 2 do
-      config
-    else
-      if Map.has_key?(config, :rotate_scale) and not Map.has_key?(config, :roll_rate) do
-        Map.put(config, :roll_rate, Map.get(config, :rotate_scale, 0.0))
-      else
+    modern? = Map.get(config, :pixel_fun_units) == 2
+    stray_rotate? = Map.has_key?(config, :rotate_scale) and not Map.has_key?(config, :roll_rate)
+
+    cond do
+      # rotate_scale was the flat backend's own rotation key in rad/s, before both
+      # backends settled on roll_rate in °/s. Modern configs carrying it predate
+      # that and need the unit conversion here — legacy ones get it downstream
+      # from convert_roll_to_deg_s.
+      modern? and stray_rotate? ->
+        deg_s = (Map.get(config, :rotate_scale) || 0.0) * 180.0 / :math.pi()
+        Map.put(config, :roll_rate, deg_s)
+
+      modern? ->
         config
-      end
+
+      stray_rotate? ->
+        Map.put(config, :roll_rate, Map.get(config, :rotate_scale, 0.0))
+
+      true ->
+        config
     end
   end
 
@@ -1840,10 +1841,7 @@ defmodule Octopus.Apps.PixelFun do
               elev_base: eff.elev_base,
               roll_rate: eff.roll_rate,
               zoom_factor: eff.zoom_base,
-              tilt_scale: eff.tilt_scale,
-              # Rot auto sweeps the absolute angle, so the manual rate is
-              # suppressed while it runs — mirrors roll_rate on the sphere.
-              rotate_scale: if(state.rot_auto, do: 0.0, else: state.rotate_scale || 0.0)
+              tilt_scale: eff.tilt_scale
             }
 
           live =
@@ -2017,11 +2015,23 @@ defmodule Octopus.Apps.PixelFun do
     Wander.new(Map.get(state, @channel_base_key[ch]) || 0.0)
   end
 
+  # Pan reaches half the installation in each direction. On the ring that is the
+  # ±156 px / ±4 px this used to hardcode (312/2, 8/2); on a narrow wall it
+  # shrinks with the wall instead of panning the pattern clean off the edge.
+  defp trans_bounds do
+    w = Installation.width() / 2.0
+    h = Installation.height() / 2.0
+    {{-w, w}, {-h, h}}
+  end
+
+  defp trans_range_max_x, do: Installation.width() / 2.0
+  defp trans_range_max_y, do: Installation.height() / 2.0
+
   # Sweeps start from wherever the manual rotation currently sits, so switching
   # Auto on never jumps the image.
   defp rot_sweep_baseline(%State{} = state) do
     case transform_backend() do
-      :flat -> FlatTransform.rotation_angle(state.rotate_scale || 0.0, state.seconds || 0.0)
+      :flat -> FlatTransform.rotation_angle(state.roll_rate || 0.0, state.seconds || 0.0)
       :sphere -> state.roll_angle || 0.0
     end
   end
@@ -2031,8 +2041,7 @@ defmodule Octopus.Apps.PixelFun do
     ey = state.elev_base || 0.0
     rx = Map.get(state, :trans_auto_range_x) || @auto_defaults.trans_auto_range_x
     ry = Map.get(state, :trans_auto_range_y) || @auto_defaults.trans_auto_range_y
-    {lox, hix} = @channel_bounds.trans_x
-    {loy, hiy} = @channel_bounds.trans_y
+    {{lox, hix}, {loy, hiy}} = trans_bounds()
 
     Wander.step(w, now, %{
       mins: {max(-rx, lox), max(ey - ry, loy)},
@@ -2170,8 +2179,7 @@ defmodule Octopus.Apps.PixelFun do
     eff = effective_transform_values(state)
     z = clamp_zoom_factor(eff.zoom_base || 1.0)
 
-    {offset_x, offset_y} =
-      FlatTransform.translate_offset(state.translate_scale || 0.0, seconds)
+    {offset_x, offset_y} = flat_translate_offset(state, eff, seconds)
 
     transform_params = %{
       offset_x: offset_x,
@@ -2700,10 +2708,20 @@ defmodule Octopus.Apps.PixelFun do
     end
   end
 
+  # Trans auto pans an absolute position offset (px) and suppresses the manual
+  # drift while it runs — the same swap the sphere makes for orbit_rate.
+  defp flat_translate_offset(%State{trans_auto: true}, eff, seconds) do
+    FlatTransform.translate_offset(0.0, seconds, {eff.yaw_offset, eff.elev_base})
+  end
+
+  defp flat_translate_offset(%State{} = state, _eff, seconds) do
+    FlatTransform.translate_offset(state.translate_scale || 0.0, seconds)
+  end
+
   # Absolute canvas rotation (rad). Rot auto replaces the integrated manual rate
   # with the eased sweep angle, exactly as roll does on the sphere.
   defp effective_flat_rotation(%State{} = state, seconds) do
-    manual = FlatTransform.rotation_angle(state.rotate_scale || 0.0, seconds)
+    manual = FlatTransform.rotation_angle(state.roll_rate || 0.0, seconds)
 
     if state.rot_auto do
       case state.auto_wanderers do

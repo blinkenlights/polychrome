@@ -51,13 +51,13 @@ defmodule Octopus.Apps.PixelFun.Transform.Flat do
   end
 
   @doc """
-  Absolute rotation angle (rad) produced by the manual `rotate_scale` rate.
+  Absolute rotation angle (rad) produced by the manual `roll_rate` in °/s.
 
   Rot auto bypasses this and supplies an eased sweep angle instead, so that a
   preset sweeps by the same number of degrees here as it does on a ring.
   """
-  def rotation_angle(rotate_scale, seconds) when is_number(rotate_scale) and is_number(seconds),
-    do: seconds * rotate_scale
+  def rotation_angle(roll_rate, seconds) when is_number(roll_rate) and is_number(seconds),
+    do: seconds * roll_rate * :math.pi() / 180.0
 
   @doc "Animated translate offset from `translate_scale` plus optional base `{ox, oy}`."
   def translate_offset(translate_scale, seconds, offset \\ {0.0, 0.0})
