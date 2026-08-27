@@ -513,7 +513,6 @@ defmodule Octopus.Apps.PixelFun do
       ]
     end)
     |> inject_flat_transform_tweakables()
-    |> retarget_flat_rot_auto_range()
     |> retarget_flat_zoom_range()
   end
 
@@ -556,16 +555,6 @@ defmodule Octopus.Apps.PixelFun do
 
     {before, after_} = Enum.split_while(rest, fn t -> t.key != :zoom_base end)
     before ++ flat ++ rot_auto_specs ++ after_
-  end
-
-  defp retarget_flat_rot_auto_range(tweakables) do
-    Enum.map(tweakables, fn
-      %{key: :rot_auto_range} = t ->
-        %{t | label: "Range", min: 0.0, max: 4.0, step: 0.05, default: 2.0, unit: nil}
-
-      t ->
-        t
-    end)
   end
 
   defp retarget_flat_zoom_range(tweakables) do
@@ -1852,7 +1841,9 @@ defmodule Octopus.Apps.PixelFun do
               roll_rate: eff.roll_rate,
               zoom_factor: eff.zoom_base,
               tilt_scale: eff.tilt_scale,
-              rotate_scale: effective_flat_rotate(state)
+              # Rot auto sweeps the absolute angle, so the manual rate is
+              # suppressed while it runs — mirrors roll_rate on the sphere.
+              rotate_scale: if(state.rot_auto, do: 0.0, else: state.rotate_scale || 0.0)
             }
 
           live =
@@ -1999,34 +1990,40 @@ defmodule Octopus.Apps.PixelFun do
   end
 
   defp new_channel_wanderer(%State{} = state, :rot) do
-    case transform_backend() do
-      :flat ->
-        # Flat: wander rotate_scale amplitude directly (no sphere sweep / pivot).
-        Wander.new((state.rotate_scale || 0.0) * 1.0)
+    # Rot auto runs out-and-back sweeps: ease from baseline by ±θ and exactly back,
+    # so each cycle returns to the start (no drift, no jump). A short pause upright
+    # follows, then a new cycle rerolls θ/direction/pivot/duration/easing. Pivot is
+    # rerolled at the neutral point so it never jumps visibly (sphere only — flat
+    # has no panel pivot and ignores it). First step (:pending) rolls the initial
+    # sweep.
+    #
+    # Both backends sweep the absolute angle, so rot_auto_range means the same
+    # number of degrees on a ring and on a wall.
+    base = rot_sweep_baseline(state)
 
-      :sphere ->
-        # Rot auto runs out-and-back sweeps: ease from baseline by ±θ and exactly back,
-        # so each cycle returns to the start (no drift, no jump). A short pause upright
-        # follows, then a new cycle rerolls θ/direction/pivot/duration/easing. Pivot is
-        # rerolled at the neutral point so it never jumps visibly. First step (:pending)
-        # rolls the initial sweep.
-        base = state.roll_angle || 0.0
-
-        %{
-          baseline: base,
-          amp: 0.0,
-          pivot: nil,
-          phase: :sweep,
-          start: :pending,
-          dur: 0.0,
-          easing: :sine_in_out,
-          value: base
-        }
-    end
+    %{
+      baseline: base,
+      amp: 0.0,
+      pivot: nil,
+      phase: :sweep,
+      start: :pending,
+      dur: 0.0,
+      easing: :sine_in_out,
+      value: base
+    }
   end
 
   defp new_channel_wanderer(%State{} = state, ch) do
     Wander.new(Map.get(state, @channel_base_key[ch]) || 0.0)
+  end
+
+  # Sweeps start from wherever the manual rotation currently sits, so switching
+  # Auto on never jumps the image.
+  defp rot_sweep_baseline(%State{} = state) do
+    case transform_backend() do
+      :flat -> FlatTransform.rotation_angle(state.rotate_scale || 0.0, state.seconds || 0.0)
+      :sphere -> state.roll_angle || 0.0
+    end
   end
 
   defp step_channel_wanderer(w, now, state, :trans, interval) do
@@ -2059,16 +2056,8 @@ defmodule Octopus.Apps.PixelFun do
     Wander.step(w, now, %{min: lo, max: hi, interval: interval})
   end
 
-  defp step_channel_wanderer(%Wander{} = w, now, state, :rot, interval) do
-    # Flat rotate_scale wander (± Range, clamped to slider bounds).
-    r = Map.get(state, :rot_auto_range) || 2.0
-    lo = max(-4.0, -r)
-    hi = min(4.0, r)
-    Wander.step(w, now, %{min: lo, max: hi, interval: interval, bias: :pingpong})
-  end
-
   defp step_channel_wanderer(w, now, state, :rot, interval) when is_map(w) do
-    # Sphere out-and-back cycle: :sweep eases baseline -> baseline±amp -> baseline
+    # Out-and-back cycle: :sweep eases baseline -> baseline±amp -> baseline
     # (equal halves, mirrored easing), then a new sweep is rolled immediately.
     # Value stays at baseline across boundaries -> seamless pivot changes.
     range_deg = Map.get(state, :rot_auto_range) || @auto_defaults.rot_auto_range
@@ -2189,7 +2178,7 @@ defmodule Octopus.Apps.PixelFun do
       offset_y: offset_y,
       zoom: z,
       seconds: seconds,
-      rotate_scale: effective_flat_rotate(state),
+      rotation: effective_flat_rotation(state, seconds),
       sway_scale: eff.tilt_scale || 0.0,
       sway_speed: state.tilt_speed || @tilt_defaults.tilt_speed,
       sway_mode: state.tilt_mode || @tilt_defaults.tilt_mode
@@ -2711,16 +2700,18 @@ defmodule Octopus.Apps.PixelFun do
     end
   end
 
-  defp effective_flat_rotate(%State{} = state) do
-    base = state.rotate_scale || 0.0
+  # Absolute canvas rotation (rad). Rot auto replaces the integrated manual rate
+  # with the eased sweep angle, exactly as roll does on the sphere.
+  defp effective_flat_rotation(%State{} = state, seconds) do
+    manual = FlatTransform.rotation_angle(state.rotate_scale || 0.0, seconds)
 
     if state.rot_auto do
       case state.auto_wanderers do
-        %{rot: %Wander{value: {v}}} when is_number(v) -> v
-        _ -> base
+        %{rot: %{value: v}} when is_number(v) -> v
+        _ -> manual
       end
     else
-      base
+      manual
     end
   end
 

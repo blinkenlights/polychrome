@@ -19,7 +19,13 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
       Application.put_env(:octopus, :installation, original_installation)
     end)
 
-    {:ok, _} = Registry.register(Octopus.AppRegistry, "test-#{System.unique_integer([:positive])}", @pixel_fun)
+    {:ok, _} =
+      Registry.register(
+        Octopus.AppRegistry,
+        "test-#{System.unique_integer([:positive])}",
+        @pixel_fun
+      )
+
     :ok
   end
 
@@ -189,7 +195,10 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
       state = base_state(%{live_scene_id: @classic})
 
       {:noreply, updated} =
-        pixel_fun_handle_config(%{translate_scale: 4.0, rotate_scale: 2.0, zoom_scale: 5.0}, state)
+        pixel_fun_handle_config(
+          %{translate_scale: 4.0, rotate_scale: 2.0, zoom_scale: 5.0},
+          state
+        )
 
       assert updated.trans_auto == true
       assert_in_delta updated.trans_auto_range_y, 4.0, 0.0001
@@ -386,7 +395,10 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
       {:noreply, scrubbed} = pixel_fun_handle_config(%{orbit_rate: 10.0, roll_rate: 40.0}, frozen)
 
       {:noreply, resumed} =
-        pixel_fun_handle_config(%{time_frozen: false, orbit_rate: 10.0, roll_rate: 40.0}, scrubbed)
+        pixel_fun_handle_config(
+          %{time_frozen: false, orbit_rate: 10.0, roll_rate: 40.0},
+          scrubbed
+        )
 
       assert resumed.frozen_orbit_ref == nil
       assert resumed.frozen_roll_ref == nil
@@ -526,6 +538,7 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
       assert still.auto_wanderers[:trans] == w1
       assert still.seconds == running.seconds
     end
+
     test "toggle-off resets translate to base (no pan offset baked in)" do
       state =
         base_state(%{
@@ -701,6 +714,45 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
       assert zeros > 5
     end
 
+    test "rot_auto sweeps the same degrees on flat as on sphere" do
+      original_installation = Application.get_env(:octopus, :installation)
+      Application.put_env(:octopus, :installation, Octopus.Installation.Pixie)
+
+      try do
+        :rand.seed(:exsss, {7, 8, 9})
+
+        range_rad = 60.0 * :math.pi() / 180.0
+
+        state =
+          base_state(%{
+            rot_auto: true,
+            rotate_scale: 0.0,
+            rot_auto_range: 60.0,
+            rot_auto_interval: 1.0,
+            seconds: 1.0,
+            auto_wanderers: %{}
+          })
+
+        {_final, angles} =
+          Enum.reduce(1..900, {state, []}, fn _, {s, acc} ->
+            {:noreply, next} = pixel_fun_handle_info(:tick, s)
+            {next, [next.auto_wanderers[:rot].value | acc]}
+          end)
+
+        # rot_auto_range is a sweep in degrees on both backends. Read as a
+        # rotate_scale rate instead, this clamped to ±4 rad/s — a wall spinning
+        # at ~229°/s where the preset asked for a ±60° sweep.
+        assert Enum.all?(angles, fn a -> abs(a) <= range_rad + 1.0e-6 end)
+
+        # Out-and-back, both directions, returning exactly to baseline.
+        assert Enum.min(angles) < -1.0e-3
+        assert Enum.max(angles) > 1.0e-3
+        assert Enum.count(angles, fn a -> abs(a) < 1.0e-9 end) > 5
+      after
+        Application.put_env(:octopus, :installation, original_installation)
+      end
+    end
+
     test "rot_auto toggle-off resets roll angle to zero and clears pivot" do
       state =
         base_state(%{
@@ -740,7 +792,8 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
     end
 
     test "formula_seconds reverses continuously without jump" do
-      state = base_state(%{time_direction: :forward, seconds: 10.0, formula_seconds: 10.0, speed: 1.0})
+      state =
+        base_state(%{time_direction: :forward, seconds: 10.0, formula_seconds: 10.0, speed: 1.0})
 
       state =
         Enum.reduce(1..100, state, fn _, s ->
@@ -763,9 +816,15 @@ defmodule Octopus.Apps.PixelFun.CycleTest do
   defp pixel_fun_config_schema, do: apply(@pixel_fun, :config_schema, [])
   defp pixel_fun_get_config(state), do: apply(@pixel_fun, :get_config, [state])
   defp pixel_fun_mode_config(mode_id), do: apply(@pixel_fun, :mode_config, [mode_id])
-  defp pixel_fun_handle_cast(message, state), do: apply(@pixel_fun, :handle_cast, [message, state])
-  defp pixel_fun_handle_config(config, state), do: apply(@pixel_fun, :handle_config, [config, state])
-  defp pixel_fun_handle_info(message, state), do: apply(@pixel_fun, :handle_info, [message, state])
+
+  defp pixel_fun_handle_cast(message, state),
+    do: apply(@pixel_fun, :handle_cast, [message, state])
+
+  defp pixel_fun_handle_config(config, state),
+    do: apply(@pixel_fun, :handle_config, [config, state])
+
+  defp pixel_fun_handle_info(message, state),
+    do: apply(@pixel_fun, :handle_info, [message, state])
 
   defp pixel_fun_frozen_scrub_angles(state, yaw, roll, alpha),
     do: apply(@pixel_fun, :frozen_scrub_angles, [state, yaw, roll, alpha])

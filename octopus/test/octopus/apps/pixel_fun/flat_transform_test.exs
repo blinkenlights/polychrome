@@ -54,6 +54,34 @@ defmodule Octopus.Apps.PixelFun.FlatTransformTest do
         refute Enum.any?(tweaks, &(&1.key == :roll_rate))
       end)
     end
+
+    test "rot_auto_range keeps its degree sweep meaning on flat" do
+      sphere_range =
+        with_installation(Octopus.Installation.Nation2026, fn ->
+          Enum.find(PixelFun.mode_tweakables("classic_ripple"), &(&1.key == :rot_auto_range))
+        end)
+
+      flat_range =
+        with_installation(Octopus.Installation.Pixie, fn ->
+          Enum.find(PixelFun.mode_tweakables("classic_ripple"), &(&1.key == :rot_auto_range))
+        end)
+
+      # One key, one unit. Rescaling this slider per backend (without converting
+      # the stored value) is what made preset sweeps run away on flat installs.
+      assert flat_range.unit == "°"
+      assert flat_range.min == sphere_range.min
+      assert flat_range.max == sphere_range.max
+      assert flat_range.default == sphere_range.default
+    end
+  end
+
+  describe "Flat.rotation_angle/2" do
+    test "integrates the manual rate into an absolute angle" do
+      assert_in_delta Flat.rotation_angle(0.5, 4.0), 2.0, 1.0e-9
+      assert_in_delta Flat.rotation_angle(0.0, 4.0), 0.0, 1.0e-9
+      # Backward time unwinds the rotation rather than advancing it.
+      assert_in_delta Flat.rotation_angle(0.5, -4.0), -2.0, 1.0e-9
+    end
   end
 
   describe "Flat.transform_pixel_coords/3" do
@@ -64,7 +92,7 @@ defmodule Octopus.Apps.PixelFun.FlatTransformTest do
           offset_y: 0.0,
           zoom: 2.0,
           seconds: 0.0,
-          rotate_scale: 0.0,
+          rotation: 0.0,
           sway_scale: 0.0,
           sway_speed: 0.5,
           sway_mode: :wobble
@@ -90,7 +118,7 @@ defmodule Octopus.Apps.PixelFun.FlatTransformTest do
           offset_y: 0.0,
           zoom: 1.0,
           seconds: 0.0,
-          rotate_scale: 0.0,
+          rotation: 0.0,
           sway_scale: 0.0,
           sway_speed: 0.5,
           sway_mode: :wobble

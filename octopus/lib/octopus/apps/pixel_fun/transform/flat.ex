@@ -14,7 +14,8 @@ defmodule Octopus.Apps.PixelFun.Transform.Flat do
   - `:offset_x` / `:offset_y` — pan including animated translate
   - `:zoom` — uniform scale factor (1.0 = identity)
   - `:seconds` — signed formula clock
-  - `:rotate_scale` — rotation rate (rad/s-ish, matches classic Pixel Fun)
+  - `:rotation` — absolute canvas rotation in radians. The caller integrates the
+    manual `rotate_scale` rate, or substitutes the rot-auto sweep angle.
   - `:sway_scale` / `:sway_speed` / `:sway_mode` — `Octopus.Sway` on Y
   """
   def transform_pixel_coords(x, y, params) do
@@ -23,7 +24,7 @@ defmodule Octopus.Apps.PixelFun.Transform.Flat do
       offset_y: offset_y,
       zoom: zoom,
       seconds: seconds,
-      rotate_scale: rotate_scale,
+      rotation: rotation,
       sway_scale: sway_scale,
       sway_speed: sway_speed,
       sway_mode: sway_mode
@@ -34,7 +35,7 @@ defmodule Octopus.Apps.PixelFun.Transform.Flat do
     center_y = Installation.height() / 2 - 0.5
 
     {x_scaled, y_scaled} =
-      rotate_and_zoom(x, y, offset_x, offset_y, center_x, center_y, seconds, rotate_scale, zoom)
+      rotate_and_zoom(x, y, offset_x, offset_y, center_x, center_y, rotation, zoom)
 
     y_final =
       if sway_scale == 0.0 do
@@ -49,6 +50,15 @@ defmodule Octopus.Apps.PixelFun.Transform.Flat do
     {x_scaled, y_final}
   end
 
+  @doc """
+  Absolute rotation angle (rad) produced by the manual `rotate_scale` rate.
+
+  Rot auto bypasses this and supplies an eased sweep angle instead, so that a
+  preset sweeps by the same number of degrees here as it does on a ring.
+  """
+  def rotation_angle(rotate_scale, seconds) when is_number(rotate_scale) and is_number(seconds),
+    do: seconds * rotate_scale
+
   @doc "Animated translate offset from `translate_scale` plus optional base `{ox, oy}`."
   def translate_offset(translate_scale, seconds, offset \\ {0.0, 0.0})
 
@@ -58,8 +68,7 @@ defmodule Octopus.Apps.PixelFun.Transform.Flat do
     {ox + anim_x, oy + anim_y}
   end
 
-  defp rotate_and_zoom(x, y, offset_x, offset_y, center_x, center_y, seconds, rotate_scale, zoom) do
-    rotation = seconds * rotate_scale
+  defp rotate_and_zoom(x, y, offset_x, offset_y, center_x, center_y, rotation, zoom) do
     x_translated = x - offset_x - center_x
     y_translated = y - offset_y - center_y
 
