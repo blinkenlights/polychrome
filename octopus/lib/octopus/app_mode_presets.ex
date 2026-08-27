@@ -161,7 +161,8 @@ defmodule Octopus.AppModePresets do
   end
 
   @doc false
-  def filter_queue(queue, app, mode_id) when is_list(queue) and is_atom(app) and is_binary(mode_id) do
+  def filter_queue(queue, app, mode_id)
+      when is_list(queue) and is_atom(app) and is_binary(mode_id) do
     normalized = normalize_mode_id(app, mode_id)
 
     Enum.reject(queue, fn entry ->
@@ -299,8 +300,8 @@ defmodule Octopus.AppModePresets do
         key =
           cond do
             is_atom(k) -> k
-            k == "true" -> :true
-            k == "false" -> :false
+            k == "true" -> true
+            k == "false" -> false
             true -> String.to_atom(k)
           end
 
@@ -326,7 +327,8 @@ defmodule Octopus.AppModePresets do
       :program,
       :color_interval,
       :palette_auto,
-      :translate_scale,
+      :translate_scale_x,
+      :translate_scale_y,
       :rotate_scale,
       :orbit_rate,
       :roll_rate,
@@ -360,9 +362,15 @@ defmodule Octopus.AppModePresets do
 
     Enum.all?(keys, fn key ->
       case key do
-        :program -> left.program == right.program
-        :tilt_mode -> left.tilt_mode == right.tilt_mode
-        :time_direction -> left.time_direction == right.time_direction
+        :program ->
+          left.program == right.program
+
+        :tilt_mode ->
+          left.tilt_mode == right.tilt_mode
+
+        :time_direction ->
+          left.time_direction == right.time_direction
+
         k when k in [:trans_auto, :rot_auto, :zoom_auto, :sway_auto, :sat_auto, :palette_auto] ->
           Map.get(left, k) == Map.get(right, k)
 
@@ -379,7 +387,8 @@ defmodule Octopus.AppModePresets do
       program: Map.get(config, :program),
       color_interval: Map.get(config, :color_interval, 5.0),
       palette_auto: Map.get(config, :palette_auto, true),
-      translate_scale: Map.get(config, :translate_scale, 0.0),
+      translate_scale_x: Map.get(config, :translate_scale_x, 0.0),
+      translate_scale_y: Map.get(config, :translate_scale_y, 0.0),
       rotate_scale: Map.get(config, :rotate_scale, 0.0),
       orbit_rate: Map.get(config, :orbit_rate, 0.0),
       roll_rate: Map.get(config, :roll_rate, 0.0),

@@ -494,32 +494,32 @@ defmodule Octopus.InstallationTransportTest do
 
       before = state().now_playing
       assert before.dirty == false
-      stored_drift = before.stored[:translate_scale]
+      stored_drift = before.stored[:translate_scale_x]
 
-      InstallationTransport.set_tweakable(:translate_scale, 4.0)
+      InstallationTransport.set_tweakable(:translate_scale_x, 4.0)
 
       tweaked = state().now_playing
       assert tweaked.dirty == true
-      assert tweaked.stored[:translate_scale] == stored_drift
-      assert tweaked.effective[:translate_scale] == 4.0
+      assert tweaked.stored[:translate_scale_x] == stored_drift
+      assert tweaked.effective[:translate_scale_x] == 4.0
 
       {:ok, app_id} = AppSupervisor.find_running_app(PixelFun)
-      assert AppSupervisor.config(app_id)[:translate_scale] == 4.0
+      assert AppSupervisor.config(app_id)[:translate_scale_x] == 4.0
     end
 
     test "discard restores stored values" do
       InstallationTransport.play_now(PixelFun, @classic)
-      stored = state().now_playing.stored[:translate_scale]
+      stored = state().now_playing.stored[:translate_scale_x]
 
-      InstallationTransport.set_tweakable(:translate_scale, 4.0)
+      InstallationTransport.set_tweakable(:translate_scale_x, 4.0)
       InstallationTransport.discard_now_playing_overrides()
 
       after_discard = state().now_playing
       assert after_discard.dirty == false
-      assert after_discard.effective[:translate_scale] == stored
+      assert after_discard.effective[:translate_scale_x] == stored
 
       {:ok, app_id} = AppSupervisor.find_running_app(PixelFun)
-      assert AppSupervisor.config(app_id)[:translate_scale] == stored
+      assert AppSupervisor.config(app_id)[:translate_scale_x] == stored
     end
 
     test "queue advance drops overrides" do
@@ -529,7 +529,7 @@ defmodule Octopus.InstallationTransportTest do
       ])
 
       InstallationTransport.play_now(PixelFun, @classic)
-      InstallationTransport.set_tweakable(:translate_scale, 4.0)
+      InstallationTransport.set_tweakable(:translate_scale_x, 4.0)
       InstallationTransport.next()
 
       advanced = state().now_playing

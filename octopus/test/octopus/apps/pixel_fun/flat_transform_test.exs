@@ -40,7 +40,8 @@ defmodule Octopus.Apps.PixelFun.FlatTransformTest do
       tilt_scale: 0.0,
       elev_base: 0.0,
       zoom_base: 1.0,
-      translate_scale: 0.0,
+      translate_scale_x: 0.0,
+      translate_scale_y: 0.0,
       pattern_speed: 1.0,
       color_mode: :random,
       saturation_percent: 70,
@@ -166,6 +167,44 @@ defmodule Octopus.Apps.PixelFun.FlatTransformTest do
         # without this the test above could pass on noise alone.
         assert max_pixel_diff(frame.(0.0), frame.(3.0)) == 0
       end)
+    end
+  end
+
+  describe "per-axis translate drift" do
+    test "each axis drifts on its own" do
+      seconds = 3.7
+
+      {x_only, y_only} =
+        {Flat.translate_offset({5.0, 0.0}, seconds), Flat.translate_offset({0.0, 5.0}, seconds)}
+
+      # A single shared amplitude could not express either of these.
+      assert elem(x_only, 0) != 0.0
+      assert_in_delta elem(x_only, 1), 0.0, 1.0e-9
+      assert_in_delta elem(y_only, 0), 0.0, 1.0e-9
+      assert elem(y_only, 1) != 0.0
+    end
+
+    test "sliders are bounded per axis by the installation" do
+      maxima = fn installation ->
+        with_installation(installation, fn ->
+          tweaks = PixelFun.mode_tweakables("classic_ripple")
+
+          {Enum.find(tweaks, &(&1.key == :translate_scale_x)).max,
+           Enum.find(tweaks, &(&1.key == :translate_scale_y)).max}
+        end)
+      end
+
+      # Pixie is square, so both axes match. Nation2024 is 233x8: a wide X and a
+      # shallow Y, which one shared slider could never offer.
+      assert maxima.(Octopus.Installation.Pixie) == {4.0, 4.0}
+      assert maxima.(Octopus.Installation.Nation2024) == {116.5, 4.0}
+    end
+
+    test "a preset written before the split seeds both axes" do
+      migrated = PixelFun.migrate_legacy_config(%{translate_scale: 6.0, pixel_fun_units: 2})
+
+      assert_in_delta migrated.translate_scale_x, 6.0, 1.0e-9
+      assert_in_delta migrated.translate_scale_y, 6.0, 1.0e-9
     end
   end
 

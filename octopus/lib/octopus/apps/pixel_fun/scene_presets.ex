@@ -14,7 +14,8 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
 
   @sphere_defaults %{
     brightness_percent: 100,
-    translate_scale: 0.0,
+    translate_scale_x: 0.0,
+    translate_scale_y: 0.0,
     rotate_scale: 0.0,
     orbit_rate: 0.0,
     roll_rate: 0.0,
@@ -142,7 +143,10 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
   end
 
   defp legacy_id(%{origin: :builtin, slug: slug}), do: "builtin:#{slug}"
-  defp legacy_id(%{slug: "user_" <> _ = slug}), do: "user:" <> String.replace_prefix(slug, "user_", "")
+
+  defp legacy_id(%{slug: "user_" <> _ = slug}),
+    do: "user:" <> String.replace_prefix(slug, "user_", "")
+
   defp legacy_id(%{id: id}), do: id
 
   defp normalize_time_direction(:forward), do: :forward

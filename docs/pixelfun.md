@@ -30,7 +30,9 @@ sin(x*y*0.06+sin(t)*x*0.2-t*2)*cos(hypot(x,y)*2+t)
 | `sin(hypot(x,y) - t)` | radial pulse | usually fine |
 | mixed `+t` / `-t` | often net one-way | use same \|t\| on both axes |
 
-On **Flat** installs, **Rotation** (−4…+4) and **Translate** drive classic canvas transforms; **Zoom** is a uniform × scale. On **Sphere**, use Translate X/Y, Rotation °/s, and Möbius/Merlin zoom. **Time direction** reverses formula animation and manual motion together.
+Both backends share **Rotation** (°/s) and its **Auto** sweep, which swings ±*Sweep*° out and back — the same number of degrees on a wall as on a ring. **Translate Auto** likewise pans a position offset in px on both, bounded by half the installation.
+
+The manual translate differs: **Flat** has **Translate X** and **Translate Y** as separate drift amplitudes (each capped at half the installation's width/height, so a 233×8 wall gets a wide X and a shallow Y), and **Zoom** is a uniform × scale. **Sphere** drives position through orbit/elevation instead, and zooms via Möbius/Merlin. **Time direction** reverses formula animation and manual motion together.
 
 ## Translate/rotate auto immunity (Sphere)
 

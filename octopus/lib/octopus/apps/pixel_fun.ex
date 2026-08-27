@@ -85,7 +85,8 @@ defmodule Octopus.Apps.PixelFun do
                    brightness_percent: 100,
                    color_interval: 5.0,
                    palette_auto: true,
-                   translate_scale: 0.0,
+                   translate_scale_x: 0.0,
+                   translate_scale_y: 0.0,
                    rotate_scale: 0.0,
                    orbit_rate: 0.0,
                    roll_rate: 0.0,
@@ -119,7 +120,8 @@ defmodule Octopus.Apps.PixelFun do
 
   @sphere_scene_keys ([
                         :brightness_percent,
-                        :translate_scale,
+                        :translate_scale_x,
+                        :translate_scale_y,
                         :rotate_scale,
                         :orbit_rate,
                         :roll_rate,
@@ -151,7 +153,8 @@ defmodule Octopus.Apps.PixelFun do
       :last_colors,
       :target_colors,
       :lerp_time,
-      :translate_scale,
+      :translate_scale_x,
+      :translate_scale_y,
       :rotate_scale,
       :orbit_rate,
       :roll_rate,
@@ -258,7 +261,8 @@ defmodule Octopus.Apps.PixelFun do
         {"Saturation Interval", :float, %{default: 30.0, min: 4, max: 60, step: 1}},
       color_interval: {"Palette tempo (s)", :float, %{default: 5, min: 1, max: 120, step: 0.5}},
       palette_auto: {"Palette Auto", :boolean, %{default: true}},
-      translate_scale: {"Translate", :float, %{default: 0.0, min: 0, max: 20, step: 0.5}},
+      translate_scale_x: {"Translate X", :float, %{default: 0.0, min: 0, max: 20, step: 0.5}},
+      translate_scale_y: {"Translate Y", :float, %{default: 0.0, min: 0, max: 20, step: 0.5}},
       rotate_scale: {"Rotation", :float, %{default: 0.0, min: -4, max: 4, step: 0.05}},
       orbit_rate: {"Translate X (px/s)", :float, %{default: 0.0, min: -30, max: 30, step: 0.5}},
       elev_base: {"Translate Y (px)", :float, %{default: 0.0, min: -4, max: 4, step: 0.1}},
@@ -350,7 +354,8 @@ defmodule Octopus.Apps.PixelFun do
         brightness_percent: state.brightness_percent || 100,
         color_interval: state.color_interval,
         palette_auto: state.palette_auto != false,
-        translate_scale: state.translate_scale || 0.0,
+        translate_scale_x: state.translate_scale_x || 0.0,
+        translate_scale_y: state.translate_scale_y || 0.0,
         rotate_scale: state.rotate_scale || 0.0,
         orbit_rate: state.orbit_rate,
         roll_rate: state.roll_rate,
@@ -518,14 +523,30 @@ defmodule Octopus.Apps.PixelFun do
   ]
 
   defp inject_flat_transform_tweakables(tweakables) do
-    translate = %{
-      key: :translate_scale,
-      label: "Translate",
+    # Per-axis drift, each bounded by its own half of the installation: a 233x8
+    # wall gets a wide X and a shallow Y instead of one amplitude for both.
+    translate_x = %{
+      key: :translate_scale_x,
+      label: "Translate X",
       type: :slider,
       min: 0.0,
-      max: 20.0,
+      max: trans_range_max_x(),
       step: 0.5,
       default: 0.0,
+      unit: "px",
+      auto_key: :trans_auto,
+      disabled_when: {:trans_auto, [true]}
+    }
+
+    translate_y = %{
+      key: :translate_scale_y,
+      label: "Translate Y",
+      type: :slider,
+      min: 0.0,
+      max: trans_range_max_y(),
+      step: 0.5,
+      default: 0.0,
+      unit: "px",
       auto_key: :trans_auto,
       disabled_when: {:trans_auto, [true]}
     }
@@ -538,13 +559,13 @@ defmodule Octopus.Apps.PixelFun do
 
     trans_auto_specs =
       Enum.map(trans_auto_specs, fn
-        %{key: :trans_auto} = t -> Map.put(t, :companion_of, :translate_scale)
+        %{key: :trans_auto} = t -> Map.put(t, :companion_of, :translate_scale_x)
         t -> t
       end)
 
     {before, after_} = Enum.split_while(rest, fn t -> t.key != :roll_rate end)
 
-    before ++ [translate] ++ trans_auto_specs ++ after_
+    before ++ [translate_x, translate_y] ++ trans_auto_specs ++ after_
   end
 
   defp retarget_flat_zoom_range(tweakables) do
@@ -994,7 +1015,8 @@ defmodule Octopus.Apps.PixelFun do
       brightness_percent: brightness_percent,
       color_interval: config.color_interval,
       palette_auto: palette_auto,
-      translate_scale: Map.get(config, :translate_scale, 0.0),
+      translate_scale_x: Map.get(config, :translate_scale_x, 0.0),
+      translate_scale_y: Map.get(config, :translate_scale_y, 0.0),
       rotate_scale: Map.get(config, :rotate_scale, 0.0),
       orbit_rate: config.orbit_rate,
       roll_rate: config.roll_rate,
@@ -1119,7 +1141,8 @@ defmodule Octopus.Apps.PixelFun do
       state
       | program: program,
         source: program_source,
-        translate_scale: Map.get(config, :translate_scale, state.translate_scale || 0.0),
+        translate_scale_x: Map.get(config, :translate_scale_x, state.translate_scale_x || 0.0),
+        translate_scale_y: Map.get(config, :translate_scale_y, state.translate_scale_y || 0.0),
         rotate_scale: Map.get(config, :rotate_scale, state.rotate_scale || 0.0),
         orbit_rate: Map.get(config, :orbit_rate, state.orbit_rate),
         roll_rate: Map.get(config, :roll_rate, state.roll_rate),
@@ -1266,6 +1289,7 @@ defmodule Octopus.Apps.PixelFun do
       |> maybe_migrate_sway()
       |> maybe_migrate_rotate()
       |> maybe_migrate_translate()
+      |> split_translate_axes()
       |> maybe_migrate_zoom()
       |> maybe_migrate_elev_drift()
       |> maybe_migrate_trans_auto()
@@ -1390,6 +1414,23 @@ defmodule Octopus.Apps.PixelFun do
       else
         config
       end
+    end
+  end
+
+  # Translate used to be a single amplitude driving both axes. Presets that
+  # predate the split seed both from it, so a saved drift keeps its shape.
+  defp split_translate_axes(config) do
+    has_axis? =
+      Map.has_key?(config, :translate_scale_x) or Map.has_key?(config, :translate_scale_y)
+
+    if Map.has_key?(config, :translate_scale) and not has_axis? do
+      v = Map.get(config, :translate_scale) || 0.0
+
+      config
+      |> Map.put(:translate_scale_x, v)
+      |> Map.put(:translate_scale_y, v)
+    else
+      config
     end
   end
 
@@ -2026,6 +2067,14 @@ defmodule Octopus.Apps.PixelFun do
 
   defp trans_range_max_x, do: Installation.width() / 2.0
   defp trans_range_max_y, do: Installation.height() / 2.0
+
+  # A preset written for a wide wall keeps its drift on a narrow one, just no
+  # further than that wall reaches.
+  defp clamp_translate_x(v), do: clamp_translate(v, trans_range_max_x())
+  defp clamp_translate_y(v), do: clamp_translate(v, trans_range_max_y())
+
+  defp clamp_translate(v, limit) when is_number(v), do: v |> max(-limit) |> min(limit)
+  defp clamp_translate(_v, _limit), do: 0.0
 
   # Sweeps start from wherever the manual rotation currently sits, so switching
   # Auto on never jumps the image.
@@ -2711,11 +2760,14 @@ defmodule Octopus.Apps.PixelFun do
   # Trans auto pans an absolute position offset (px) and suppresses the manual
   # drift while it runs — the same swap the sphere makes for orbit_rate.
   defp flat_translate_offset(%State{trans_auto: true}, eff, seconds) do
-    FlatTransform.translate_offset(0.0, seconds, {eff.yaw_offset, eff.elev_base})
+    FlatTransform.translate_offset({0.0, 0.0}, seconds, {eff.yaw_offset, eff.elev_base})
   end
 
   defp flat_translate_offset(%State{} = state, _eff, seconds) do
-    FlatTransform.translate_offset(state.translate_scale || 0.0, seconds)
+    FlatTransform.translate_offset(
+      {clamp_translate_x(state.translate_scale_x), clamp_translate_y(state.translate_scale_y)},
+      seconds
+    )
   end
 
   # Absolute canvas rotation (rad). Rot auto replaces the integrated manual rate

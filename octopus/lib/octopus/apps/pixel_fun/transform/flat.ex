@@ -59,12 +59,19 @@ defmodule Octopus.Apps.PixelFun.Transform.Flat do
   def rotation_angle(roll_rate, seconds) when is_number(roll_rate) and is_number(seconds),
     do: seconds * roll_rate * :math.pi() / 180.0
 
-  @doc "Animated translate offset from `translate_scale` plus optional base `{ox, oy}`."
-  def translate_offset(translate_scale, seconds, offset \\ {0.0, 0.0})
+  @doc """
+  Animated translate offset from per-axis drift amplitudes plus optional base
+  `{ox, oy}`.
 
-  def translate_offset(scale, seconds, {ox, oy}) when is_number(scale) and is_number(seconds) do
-    anim_x = :math.sin(0.3 + seconds * 0.17) * scale
-    anim_y = :math.cos(0.7 + seconds * 0.05) * scale
+  X and Y are scaled separately because linear installations are not remotely
+  square — 233x8 and 2x32 both exist, and one shared amplitude cannot suit both
+  axes of either.
+  """
+  def translate_offset(scale, seconds, offset \\ {0.0, 0.0})
+
+  def translate_offset({sx, sy}, seconds, {ox, oy}) when is_number(seconds) do
+    anim_x = :math.sin(0.3 + seconds * 0.17) * sx
+    anim_y = :math.cos(0.7 + seconds * 0.05) * sy
     {ox + anim_x, oy + anim_y}
   end
 
