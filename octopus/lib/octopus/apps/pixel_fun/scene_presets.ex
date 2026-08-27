@@ -6,12 +6,47 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
   full editor and existing tests.
   """
 
+  alias Octopus.Apps.PixelFun
   alias Octopus.Apps.PixelFun.Program
 
   @app_mode_presets "Elixir.Octopus.AppModePresets"
   @pixel_fun "Elixir.Octopus.Apps.PixelFun"
 
-  @sway_defaults %{sway_scale: 0.0, sway_speed: 0.5, sway_mode: :wobble}
+  @sphere_defaults %{
+    brightness_percent: 100,
+    translate_scale: 0.0,
+    rotate_scale: 0.0,
+    orbit_rate: 0.0,
+    roll_rate: 0.0,
+    roll_pivot: 0,
+    tilt_scale: 0.0,
+    tilt_speed: 0.5,
+    tilt_mode: :wobble,
+    elev_base: 0.0,
+    zoom_base: 1.0,
+    zoom_mode: :mobius,
+    zoom_pivot: 0,
+    pattern_speed: 1.0,
+    trans_auto: false,
+    trans_auto_range_x: 6.0,
+    trans_auto_range_y: 2.0,
+    trans_auto_interval: 30.0,
+    rot_auto: false,
+    rot_auto_range: 30.0,
+    rot_auto_interval: 30.0,
+    zoom_auto: false,
+    zoom_auto_range: 1.5,
+    zoom_auto_interval: 30.0,
+    sway_auto: false,
+    sway_auto_range: 2.0,
+    sway_auto_interval: 30.0,
+    sat_auto: false,
+    sat_auto_min: 20.0,
+    sat_auto_max: 100.0,
+    sat_auto_interval: 30.0
+  }
+
+  @sphere_keys Map.keys(@sphere_defaults)
 
   @type preset :: map()
 
@@ -47,15 +82,15 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
   def to_config(%{} = preset) do
     %{
       program: preset.formula,
+      palette_phase: Map.get(preset, :palette_phase, 0.0),
       color_interval: preset.color_interval,
-      translate_scale: preset.translate_scale,
-      rotate_scale: preset.rotate_scale,
-      zoom_scale: preset.zoom_scale,
-      sway_scale: Map.get(preset, :sway_scale, @sway_defaults.sway_scale),
-      sway_speed: Map.get(preset, :sway_speed, @sway_defaults.sway_speed),
-      sway_mode: normalize_sway_mode(Map.get(preset, :sway_mode, @sway_defaults.sway_mode)),
+      palette_auto: Map.get(preset, :palette_auto, true),
       time_direction: normalize_time_direction(Map.get(preset, :time_direction, :forward))
     }
+    |> Map.merge(Map.take(preset, @sphere_keys))
+    |> PixelFun.migrate_legacy_config()
+    |> Map.update!(:time_direction, &normalize_time_direction/1)
+    |> Map.update!(:tilt_mode, &Octopus.Sway.normalize_mode/1)
   end
 
   @spec config_matches?(map(), map()) :: boolean()
@@ -90,34 +125,25 @@ defmodule Octopus.Apps.PixelFun.ScenePresets do
   defp pixel_fun, do: String.to_existing_atom(@pixel_fun)
 
   defp to_legacy(%{} = preset) do
-    config = preset.config
+    config = PixelFun.migrate_legacy_config(preset.config)
 
     %{
       id: legacy_id(preset),
       name: preset.name,
       formula: config[:program],
+      palette_phase: Map.get(config, :palette_phase, 0.0),
       color_interval: config[:color_interval],
-      translate_scale: config[:translate_scale],
-      rotate_scale: config[:rotate_scale],
-      zoom_scale: config[:zoom_scale],
-      sway_scale: Map.get(config, :sway_scale, @sway_defaults.sway_scale),
-      sway_speed: Map.get(config, :sway_speed, @sway_defaults.sway_speed),
-      sway_mode: normalize_sway_mode(Map.get(config, :sway_mode, @sway_defaults.sway_mode)),
-      time_direction: normalize_time_direction(Map.get(config, :time_direction, :forward)),
+      time_direction: Map.get(config, :time_direction, :forward),
       accent_color: preset.accent_color,
-      builtin: preset.builtin
+      builtin: preset.builtin,
+      palette_auto: Map.get(config, :palette_auto, true)
     }
+    |> Map.merge(Map.take(config, @sphere_keys))
   end
 
   defp legacy_id(%{origin: :builtin, slug: slug}), do: "builtin:#{slug}"
   defp legacy_id(%{slug: "user_" <> _ = slug}), do: "user:" <> String.replace_prefix(slug, "user_", "")
   defp legacy_id(%{id: id}), do: id
-
-  defp normalize_sway_mode(:wobble), do: :wobble
-  defp normalize_sway_mode(:pendulum), do: :pendulum
-  defp normalize_sway_mode("wobble"), do: :wobble
-  defp normalize_sway_mode("pendulum"), do: :pendulum
-  defp normalize_sway_mode(_), do: :wobble
 
   defp normalize_time_direction(:forward), do: :forward
   defp normalize_time_direction(:backward), do: :backward

@@ -7,7 +7,6 @@ defmodule Octopus.AppModePresets.Loader do
 
   @app_modules %{
     "Elixir.Octopus.Apps.PixelFun" => "pixelfun",
-    "Elixir.Octopus.Apps.PixelFun3D" => "pixelfun3d",
     "Elixir.Octopus.Apps.Collective" => "collective",
     "Elixir.Octopus.Apps.Matrix" => "matrix",
     "Elixir.Octopus.Apps.PerlinNoise" => "perlinnoise",
