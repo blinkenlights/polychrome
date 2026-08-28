@@ -3,12 +3,12 @@ defmodule OctopusWeb.AppLive do
 
   alias Octopus.AppSupervisor
   alias Octopus.InstallationTransport
-  alias Octopus.Apps.{PixelFun, PixelFun3D, Wood}
+  alias Octopus.Apps.{PixelFun, Wood}
 
   def mount(%{"id" => app_id}, _session, socket) do
     case AppSupervisor.lookup_app(app_id) do
-      {_pid, PixelFun3D} ->
-        # PixelFun3D is edited via the foyer drawer now; keep old links working.
+      {_pid, PixelFun} ->
+        # PixelFun is edited via the foyer drawer; keep old /app links working.
         {:ok, redirect(socket, to: ~p"/")}
 
       {_pid, module} ->

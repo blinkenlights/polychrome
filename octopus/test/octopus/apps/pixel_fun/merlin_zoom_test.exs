@@ -1,9 +1,9 @@
-defmodule Octopus.Apps.PixelFun3D.MerlinZoomTest do
+defmodule Octopus.Apps.PixelFun.MerlinZoomTest do
   use ExUnit.Case, async: true
 
   import :math, only: [sqrt: 1]
 
-  alias Octopus.Apps.PixelFun3D.MerlinZoom
+  alias Octopus.Apps.PixelFun.MerlinZoom
 
   @eps 1.0e-5
 

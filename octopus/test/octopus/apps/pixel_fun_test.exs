@@ -1,4 +1,4 @@
-defmodule Octopus.TestInstallations.HorizontalStrip64 do
+defmodule Octopus.TestInstallations.HorizontalStrip64PixelFun do
   use Octopus.Installation,
     arrangement: :linear,
     panels: [
@@ -28,6 +28,8 @@ defmodule Octopus.Apps.PixelFunTest do
   use ExUnit.Case, async: false
 
   alias Octopus.Apps.PixelFun.Program
+  alias Octopus.Apps.PixelFun
+  alias Octopus.Apps.PixelFun.GradientPalettes
   alias Octopus.Apps.PixelFun.State
   alias Octopus.Canvas
   alias Octopus.Installation
@@ -62,7 +64,7 @@ defmodule Octopus.Apps.PixelFunTest do
   end
 
   test "compatible?/0 for horizontal strip 64x1", _context do
-    with_installation(Octopus.TestInstallations.HorizontalStrip64, fn ->
+    with_installation(Octopus.TestInstallations.HorizontalStrip64PixelFun, fn ->
       assert pixel_fun_compatible?()
     end)
   end
@@ -81,13 +83,11 @@ defmodule Octopus.Apps.PixelFunTest do
         program: program,
         display_info: %{width: Installation.width(), height: Installation.height()},
         colors: {Chameleon.HSV.new(0, 70, 100), Chameleon.HSV.new(180, 70, 100)},
-        panel_proximities: %{0 => 0.0},
-        panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        translate_scale: 0.0,
-        rotate_scale: 0.0,
-        zoom_scale: 0.0,
-        offset: {0, 0},
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_base: 1.0,
+        panel_interaction_factors: %{},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -109,13 +109,11 @@ defmodule Octopus.Apps.PixelFunTest do
         program: program,
         display_info: %{width: Installation.width(), height: Installation.height()},
         colors: {Chameleon.HSV.new(0, 70, 100), Chameleon.HSV.new(180, 70, 100)},
-        panel_proximities: %{0 => 0.0, 1 => 0.0},
-        panel_interaction_factors: %{0 => 0.0, 1 => 0.0},
         seconds: 0.0,
-        translate_scale: 0.0,
-        rotate_scale: 0.0,
-        zoom_scale: 0.0,
-        offset: {0, 0},
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_base: 1.0,
+        panel_interaction_factors: %{},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -130,7 +128,7 @@ defmodule Octopus.Apps.PixelFunTest do
   end
 
   test "build_canvas/1 fills all horizontal strip pixels on 64x1", _context do
-    with_installation(Octopus.TestInstallations.HorizontalStrip64, fn ->
+    with_installation(Octopus.TestInstallations.HorizontalStrip64PixelFun, fn ->
       {:ok, program} = Program.parse("1")
 
       state = %State{
@@ -138,13 +136,11 @@ defmodule Octopus.Apps.PixelFunTest do
         display_info: %{width: Installation.width(), height: Installation.height()},
         colors: {Chameleon.HSV.new(0, 70, 100), Chameleon.HSV.new(180, 70, 100)},
         color_mode: :random,
-        panel_proximities: %{0 => 0.0},
-        panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        translate_scale: 0.0,
-        rotate_scale: 0.0,
-        zoom_scale: 0.0,
-        offset: {0, 0},
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_base: 1.0,
+        panel_interaction_factors: %{},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -158,21 +154,20 @@ defmodule Octopus.Apps.PixelFunTest do
     end)
   end
 
-  test "build_canvas/1 rainbow mode spreads hues across horizontal strip", _context do
-    with_installation(Octopus.TestInstallations.HorizontalStrip64, fn ->
+  test "build_canvas/1 gradient mode spreads hues across horizontal strip", _context do
+    with_installation(Octopus.TestInstallations.HorizontalStrip64PixelFun, fn ->
       {:ok, program} = Program.parse("1")
 
       state = %State{
         program: program,
         display_info: %{width: Installation.width(), height: Installation.height()},
-        color_mode: :rainbow,
-        panel_proximities: %{0 => 0.0},
-        panel_interaction_factors: %{0 => 0.0},
+        color_mode: :gradient,
+        gradient_palette: :rainbow,
         seconds: 0.0,
-        translate_scale: 0.0,
-        rotate_scale: 0.0,
-        zoom_scale: 0.0,
-        offset: {0, 0},
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_base: 1.0,
+        panel_interaction_factors: %{},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -184,21 +179,20 @@ defmodule Octopus.Apps.PixelFunTest do
     end)
   end
 
-  test "build_canvas/1 rainbow mode keeps formula zero black", _context do
-    with_installation(Octopus.TestInstallations.HorizontalStrip64, fn ->
+  test "build_canvas/1 gradient mode keeps formula zero black", _context do
+    with_installation(Octopus.TestInstallations.HorizontalStrip64PixelFun, fn ->
       {:ok, program} = Program.parse("0")
 
       state = %State{
         program: program,
         display_info: %{width: Installation.width(), height: Installation.height()},
-        color_mode: :rainbow,
-        panel_proximities: %{0 => 0.0},
-        panel_interaction_factors: %{0 => 0.0},
+        color_mode: :gradient,
+        gradient_palette: :rainbow,
         seconds: 0.0,
-        translate_scale: 0.0,
-        rotate_scale: 0.0,
-        zoom_scale: 0.0,
-        offset: {0, 0},
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_base: 1.0,
+        panel_interaction_factors: %{},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -210,8 +204,34 @@ defmodule Octopus.Apps.PixelFunTest do
     end)
   end
 
+  test "build_canvas/1 sunset and ocean palettes differ across horizontal strip", _context do
+    with_installation(Octopus.TestInstallations.HorizontalStrip64PixelFun, fn ->
+      {:ok, program} = Program.parse("1")
+
+      base = %{
+        program: program,
+        display_info: %{width: Installation.width(), height: Installation.height()},
+        color_mode: :gradient,
+        seconds: 0.0,
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_base: 1.0,
+        panel_interaction_factors: %{},
+        audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
+      }
+
+      sunset = pixel_fun_build_canvas(struct(State, Map.put(base, :gradient_palette, :sunset)))
+      ocean = pixel_fun_build_canvas(struct(State, Map.put(base, :gradient_palette, :ocean)))
+
+      assert Canvas.get_pixel(sunset, {0, 0}) != Canvas.get_pixel(sunset, {63, 0})
+      assert Canvas.get_pixel(ocean, {0, 0}) != Canvas.get_pixel(ocean, {63, 0})
+      assert Canvas.get_pixel(sunset, {0, 0}) != Canvas.get_pixel(ocean, {0, 0})
+      assert Canvas.get_pixel(sunset, {63, 0}) != Canvas.get_pixel(ocean, {63, 0})
+    end)
+  end
+
   test "build_canvas/1 white mode outputs grayscale integers", _context do
-    with_installation(Octopus.TestInstallations.HorizontalStrip64, fn ->
+    with_installation(Octopus.TestInstallations.HorizontalStrip64PixelFun, fn ->
       {:ok, program} = Program.parse("1")
 
       state = %State{
@@ -219,13 +239,11 @@ defmodule Octopus.Apps.PixelFunTest do
         display_info: %{width: Installation.width(), height: Installation.height()},
         color_mode: :white,
         colors: white_levels(100, 50),
-        panel_proximities: %{0 => 0.0},
-        panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        translate_scale: 0.0,
-        rotate_scale: 0.0,
-        zoom_scale: 0.0,
-        offset: {0, 0},
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_base: 1.0,
+        panel_interaction_factors: %{},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -241,7 +259,7 @@ defmodule Octopus.Apps.PixelFunTest do
   end
 
   test "build_canvas/1 white mode keeps formula zero black", _context do
-    with_installation(Octopus.TestInstallations.HorizontalStrip64, fn ->
+    with_installation(Octopus.TestInstallations.HorizontalStrip64PixelFun, fn ->
       {:ok, program} = Program.parse("0")
 
       state = %State{
@@ -249,13 +267,11 @@ defmodule Octopus.Apps.PixelFunTest do
         display_info: %{width: Installation.width(), height: Installation.height()},
         color_mode: :white,
         colors: white_levels(100, 50),
-        panel_proximities: %{0 => 0.0},
-        panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        translate_scale: 0.0,
-        rotate_scale: 0.0,
-        zoom_scale: 0.0,
-        offset: {0, 0},
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_base: 1.0,
+        panel_interaction_factors: %{},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -268,7 +284,7 @@ defmodule Octopus.Apps.PixelFunTest do
   end
 
   test "build_canvas/1 time_direction backward reverses formula time", _context do
-    with_installation(Octopus.TestInstallations.HorizontalStrip64, fn ->
+    with_installation(Octopus.TestInstallations.HorizontalStrip64PixelFun, fn ->
       {:ok, program} = Program.parse("sin(x-t)")
 
       base = %{
@@ -276,21 +292,20 @@ defmodule Octopus.Apps.PixelFunTest do
         display_info: %{width: Installation.width(), height: Installation.height()},
         color_mode: :white,
         colors: white_levels(100, 50),
-        panel_proximities: %{0 => 0.0},
-        panel_interaction_factors: %{0 => 0.0},
         seconds: 5.0,
-        translate_scale: 0.0,
-        rotate_scale: 0.0,
-        zoom_scale: 0.0,
-        offset: {0, 0},
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_base: 1.0,
+        panel_interaction_factors: %{},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
+      # Continuous clock: same wall seconds, opposite formula_seconds after running each way.
       forward =
-        struct(State, Map.put(base, :time_direction, :forward))
+        struct(State, Map.merge(base, %{time_direction: :forward, formula_seconds: 5.0}))
 
       backward =
-        struct(State, Map.put(base, :time_direction, :backward))
+        struct(State, Map.merge(base, %{time_direction: :backward, formula_seconds: -5.0}))
 
       forward_canvas = pixel_fun_build_canvas(forward)
       backward_canvas = pixel_fun_build_canvas(backward)
@@ -301,7 +316,7 @@ defmodule Octopus.Apps.PixelFunTest do
   end
 
   test "build_canvas/1 white mode maps negative lobe to level_b", _context do
-    with_installation(Octopus.TestInstallations.HorizontalStrip64, fn ->
+    with_installation(Octopus.TestInstallations.HorizontalStrip64PixelFun, fn ->
       {:ok, program} = Program.parse("-1")
 
       state = %State{
@@ -309,13 +324,11 @@ defmodule Octopus.Apps.PixelFunTest do
         display_info: %{width: Installation.width(), height: Installation.height()},
         color_mode: :white,
         colors: white_levels(100, 40),
-        panel_proximities: %{0 => 0.0},
-        panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        translate_scale: 0.0,
-        rotate_scale: 0.0,
-        zoom_scale: 0.0,
-        offset: {0, 0},
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_base: 1.0,
+        panel_interaction_factors: %{},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -327,13 +340,53 @@ defmodule Octopus.Apps.PixelFunTest do
     end)
   end
 
-  test "generate_random_white_levels/0 respects min gap and min level", _context do
-    for _ <- 1..100 do
+  test "generate_random_colors/1 keeps a minimum 60° hue gap", _context do
+    for _ <- 1..500 do
+      {a, b} = pixel_fun_generate_random_colors(70)
+      offset = Integer.mod(b.h - a.h, 360)
+      circular = min(offset, 360 - offset)
+      assert circular >= 60
+      assert a.s == 70
+      assert b.s == 70
+    end
+  end
+
+  test "generate_random_white_levels/0 keeps brightness gap and floor", _context do
+    for _ <- 1..500 do
       {a, b} = pixel_fun_generate_random_white_levels()
       assert abs(a.v - b.v) >= 30
       assert a.v >= 32
       assert b.v >= 32
+      assert a.s == 0
+      assert b.s == 0
     end
+  end
+
+  test "mode_tweakables/1 exposes palette auto toggle and tempo, no phase slider" do
+    tweaks = pixel_fun_mode_tweakables("classic_ripple")
+
+    auto = Enum.find(tweaks, &(&1.key == :palette_auto))
+    assert auto.label == "Cycle colors"
+    assert auto.type == :toggle
+    assert auto.visible_when == {:color_mode, [:random, :white]}
+
+    tempo = Enum.find(tweaks, &(&1.key == :color_interval))
+    assert tempo.label == "Tempo"
+    assert tempo.visible_when == {:palette_auto, [true]}
+
+    refute Enum.any?(tweaks, &(&1.key == :palette_phase))
+  end
+
+  test "mode_tweakables/1 exposes disabled_when on transform sliders" do
+    with_installation(Octopus.Installation.Nation2026, fn ->
+      tweaks = pixel_fun_mode_tweakables("classic_ripple")
+
+      assert Enum.find(tweaks, &(&1.key == :orbit_rate)).disabled_when == {:trans_auto, [true]}
+      assert Enum.find(tweaks, &(&1.key == :elev_base)).disabled_when == {:trans_auto, [true]}
+      assert Enum.find(tweaks, &(&1.key == :roll_rate)).disabled_when == {:rot_auto, [true]}
+      assert Enum.find(tweaks, &(&1.key == :zoom_base)).disabled_when == {:zoom_auto, [true]}
+      assert Enum.find(tweaks, &(&1.key == :tilt_scale)).disabled_when == {:sway_auto, [true]}
+    end)
   end
 
   test "mode_tweakables/1 exposes saturation with color_mode visibility" do
@@ -342,8 +395,32 @@ defmodule Octopus.Apps.PixelFunTest do
       |> Enum.find(&(&1.key == :saturation_percent))
 
     assert spec.label == "Saturation"
-    assert spec.visible_when == {:color_mode, [:random, :rainbow]}
+    assert spec.visible_when == {:color_mode, [:random, :gradient]}
     assert spec.default == 70
+  end
+
+  test "mode_tweakables/1 exposes gradient palette picker for gradient mode" do
+    spec =
+      pixel_fun_mode_tweakables("classic_ripple")
+      |> Enum.find(&(&1.key == :gradient_palette))
+
+    assert spec.label == "Palette"
+    assert spec.visible_when == {:color_mode, [:gradient]}
+    assert spec.default == :rainbow
+    assert length(spec.options) == 6
+  end
+
+  test "GradientPalettes.apply_tone/4 handles sunset greens without Chameleon HSV crash" do
+    # Regression: RGB→HSV→RGB round-trip blew up on h=360 (sector 6) for some stops.
+    assert GradientPalettes.apply_tone({79, 196, 79}, 1.0, 60, 80) == {85, 141, 85}
+    assert GradientPalettes.pixel_color(0, 0, :sunset, 1.0, 60, 80) != {0, 0, 0}
+  end
+
+  test "normalize_config/1 migrates legacy rainbow color_mode" do
+    assert PixelFun.normalize_config(%{color_mode: "rainbow"})[:color_mode] == :gradient
+    assert PixelFun.normalize_config(%{color_mode: "rainbow"})[:gradient_palette] == :rainbow
+    assert PixelFun.normalize_config(%{color_mode: :sunset})[:color_mode] == :gradient
+    assert PixelFun.normalize_config(%{color_mode: :sunset})[:gradient_palette] == :sunset
   end
 
   test "mode_tweakables/1 exposes runtime freeze toggle" do
@@ -369,7 +446,7 @@ defmodule Octopus.Apps.PixelFunTest do
   end
 
   test "build_canvas/1 lower saturation produces less vivid colours on random dual", _context do
-    with_installation(Octopus.TestInstallations.HorizontalStrip64, fn ->
+    with_installation(Octopus.TestInstallations.HorizontalStrip64PixelFun, fn ->
       {:ok, program} = Program.parse("1")
 
       base = %{
@@ -377,13 +454,11 @@ defmodule Octopus.Apps.PixelFunTest do
         display_info: %{width: Installation.width(), height: Installation.height()},
         color_mode: :random,
         colors: {Chameleon.HSV.new(0, 70, 100), Chameleon.HSV.new(180, 70, 100)},
-        panel_proximities: %{0 => 0.0},
-        panel_interaction_factors: %{0 => 0.0},
         seconds: 0.0,
-        translate_scale: 0.0,
-        rotate_scale: 0.0,
-        zoom_scale: 0.0,
-        offset: {0, 0},
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        zoom_base: 1.0,
+        panel_interaction_factors: %{},
         audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
       }
 
@@ -406,6 +481,55 @@ defmodule Octopus.Apps.PixelFunTest do
   defp pixel_fun_build_canvas(state), do: apply(@pixel_fun, :build_canvas, [state])
   defp pixel_fun_mode_tweakables(mode_id), do: apply(@pixel_fun, :mode_tweakables, [mode_id])
 
+  defp pixel_fun_generate_random_colors(sat),
+    do: apply(@pixel_fun, :generate_random_colors, [sat])
+
   defp pixel_fun_generate_random_white_levels,
     do: apply(@pixel_fun, :generate_random_white_levels, [])
+
+  test "nx ny nz are available and unit length in formulas", _context do
+    with_installation(Octopus.Installation.Nation2026, fn ->
+      {:ok, program} = Program.parse("nx*nx+ny*ny+nz*nz")
+
+      state = %State{
+        program: program,
+        display_info: %{width: Installation.width(), height: Installation.height()},
+        colors: {Chameleon.HSV.new(0, 70, 100), Chameleon.HSV.new(180, 70, 100)},
+        color_mode: :random,
+        seconds: 0.0,
+        orbit_rate: 0.0,
+        roll_rate: 0.0,
+        tilt_scale: 0.0,
+        elev_base: 0.0,
+        zoom_base: 1.0,
+        panel_interaction_factors: %{},
+        audio_input: %{low: 0.0, mid: 0.0, high: 0.0}
+      }
+
+      # Formula returns ~1.0 everywhere → positive lobe → non-black pixels
+      canvas = pixel_fun_build_canvas(state)
+      {x, y} = hd(List.flatten(Installation.virtual_pixel_positions_per_panel()))
+      refute Canvas.get_pixel(canvas, {x, y}) == {0, 0, 0}
+    end)
+  end
+
+  test "migrate_legacy_config maps old preset keys", _context do
+    migrated =
+      apply(@pixel_fun, :migrate_legacy_config, [
+        %{
+          program: "sin(x)",
+          sway_scale: 2.0,
+          rotate_scale: 1.0,
+          translate_scale: 3.0,
+          zoom_scale: 1.0
+        }
+      ])
+
+    assert migrated.tilt_scale == 2.0
+    assert_in_delta migrated.roll_rate, 1.0 * 180 / :math.pi(), 0.1
+    assert migrated.trans_auto == true
+    assert_in_delta migrated.trans_auto_range_y, 3.0, 0.0001
+    refute Map.has_key?(migrated, :elev_amp)
+    refute Map.has_key?(migrated, :zoom_pulse)
+  end
 end

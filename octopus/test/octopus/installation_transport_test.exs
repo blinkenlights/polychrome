@@ -2,7 +2,7 @@ defmodule Octopus.InstallationTransportTest do
   use ExUnit.Case, async: false
 
   alias Octopus.{AppManager, AppSupervisor, InstallationTransport}
-  alias Octopus.Apps.{CanvasTest, Collective, Matrix, Ocean, PerlinNoise, PixelFun, PixelFun3D, PixieDebug, Sand, SparkleMist, Wood}
+  alias Octopus.Apps.{CanvasTest, Collective, Matrix, Ocean, PerlinNoise, PixelFun, PixieDebug, Sand, SparkleMist, Wood}
   alias Octopus.Apps.PixelFun.Program
 
   @classic "pixelfun:classic_ripple"
@@ -13,8 +13,8 @@ defmodule Octopus.InstallationTransportTest do
   @sand "sand:sand"
   @sparkle_mist "sparklemist:mist"
   @dots "collective:dots"
-  @classic_3d "pixelfun3d:classic_ripple"
-  @marmor "pixelfun3d:marmor"
+  @classic_pf "pixelfun:classic_ripple"
+  @marmor "pixelfun:marmor"
 
   setup do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(Octopus.Repo, shared: true)
@@ -123,21 +123,21 @@ defmodule Octopus.InstallationTransportTest do
     test "play_now with fade defers commit until black" do
       InstallationTransport.set_transition_duration(1)
 
-      assert :ok = InstallationTransport.play_now(PixelFun3D, @classic_3d)
+      assert :ok = InstallationTransport.play_now(PixelFun, @classic_pf)
 
       s = state()
-      assert s.pending_entry == %{app: PixelFun3D, mode_id: @classic_3d}
-      assert s.live == nil or s.live.mode_id != @classic_3d
+      assert s.pending_entry == %{app: PixelFun, mode_id: @classic_pf, mask: nil}
+      assert s.live == nil or s.live.mode_id != @classic_pf
     end
 
     test "play_now with fade off commits immediately" do
       InstallationTransport.set_transition_duration(0)
 
-      assert :ok = InstallationTransport.play_now(PixelFun3D, @classic_3d)
+      assert :ok = InstallationTransport.play_now(PixelFun, @classic_pf)
 
       s = state()
       assert s.pending_entry == nil
-      assert s.live.mode_id == @classic_3d
+      assert s.live.mode_id == @classic_pf
     end
   end
 
@@ -329,16 +329,16 @@ defmodule Octopus.InstallationTransportTest do
       assert state().live.mode_id == @cross
     end
 
-    test "play_now while PixelFun3D is ticking switches mode" do
-      assert :ok = InstallationTransport.play_now(PixelFun3D, @classic_3d)
-      assert state().live.mode_id == @classic_3d
+    test "play_now while PixelFun is ticking switches mode" do
+      assert :ok = InstallationTransport.play_now(PixelFun, @classic_pf)
+      assert state().live.mode_id == @classic_pf
 
       Process.sleep(100)
 
-      assert :ok = InstallationTransport.play_now(PixelFun3D, @marmor)
+      assert :ok = InstallationTransport.play_now(PixelFun, @marmor)
 
       s = state()
-      assert s.live.app == PixelFun3D
+      assert s.live.app == PixelFun
       assert s.live.mode_id == @marmor
     end
 
@@ -494,32 +494,32 @@ defmodule Octopus.InstallationTransportTest do
 
       before = state().now_playing
       assert before.dirty == false
-      stored_drift = before.stored[:translate_scale]
+      stored_drift = before.stored[:translate_scale_x]
 
-      InstallationTransport.set_tweakable(:translate_scale, 4.0)
+      InstallationTransport.set_tweakable(:translate_scale_x, 4.0)
 
       tweaked = state().now_playing
       assert tweaked.dirty == true
-      assert tweaked.stored[:translate_scale] == stored_drift
-      assert tweaked.effective[:translate_scale] == 4.0
+      assert tweaked.stored[:translate_scale_x] == stored_drift
+      assert tweaked.effective[:translate_scale_x] == 4.0
 
       {:ok, app_id} = AppSupervisor.find_running_app(PixelFun)
-      assert AppSupervisor.config(app_id)[:translate_scale] == 4.0
+      assert AppSupervisor.config(app_id)[:translate_scale_x] == 4.0
     end
 
     test "discard restores stored values" do
       InstallationTransport.play_now(PixelFun, @classic)
-      stored = state().now_playing.stored[:translate_scale]
+      stored = state().now_playing.stored[:translate_scale_x]
 
-      InstallationTransport.set_tweakable(:translate_scale, 4.0)
+      InstallationTransport.set_tweakable(:translate_scale_x, 4.0)
       InstallationTransport.discard_now_playing_overrides()
 
       after_discard = state().now_playing
       assert after_discard.dirty == false
-      assert after_discard.effective[:translate_scale] == stored
+      assert after_discard.effective[:translate_scale_x] == stored
 
       {:ok, app_id} = AppSupervisor.find_running_app(PixelFun)
-      assert AppSupervisor.config(app_id)[:translate_scale] == stored
+      assert AppSupervisor.config(app_id)[:translate_scale_x] == stored
     end
 
     test "queue advance drops overrides" do
@@ -529,7 +529,7 @@ defmodule Octopus.InstallationTransportTest do
       ])
 
       InstallationTransport.play_now(PixelFun, @classic)
-      InstallationTransport.set_tweakable(:translate_scale, 4.0)
+      InstallationTransport.set_tweakable(:translate_scale_x, 4.0)
       InstallationTransport.next()
 
       advanced = state().now_playing
@@ -764,7 +764,7 @@ defmodule Octopus.InstallationTransportTest do
       playing = state().now_playing
       assert length(playing.tweakables) == length(PixelFun.mode_tweakables(@classic))
       assert Enum.any?(playing.tweakables, &(&1.key == :program and &1.type == :formula))
-      assert playing.effective[:program] == "sin(10*t-hypot(x,y))"
+      assert playing.effective[:program] == "sin(0.4*t-hypot(x,y))"
     end
 
     test "pixel fun formula tweak applies live and marks dirty" do
@@ -783,7 +783,7 @@ defmodule Octopus.InstallationTransportTest do
     end
 
     test "pixel fun invalid formula keeps last valid program on the wall" do
-      {:ok, original_ast} = Program.parse("sin(10*t-hypot(x,y))")
+      {:ok, original_ast} = Program.parse("sin(0.4*t-hypot(x,y))")
 
       InstallationTransport.play_now(PixelFun, @classic)
       InstallationTransport.set_tweakable(:program, "sin(+")
@@ -803,16 +803,16 @@ defmodule Octopus.InstallationTransportTest do
       stale_id = state().now_playing.app_id
       AppSupervisor.stop_app(stale_id)
 
-      InstallationTransport.set_tweakable(:zoom_scale, 3.5)
+      InstallationTransport.set_tweakable(:zoom_base, 3.5)
 
       s = state().now_playing
-      assert s.effective[:zoom_scale] == 3.5
+      assert s.effective[:zoom_base] == 3.5
       assert is_binary(s.app_id)
       assert s.app_id != stale_id
 
       {:ok, app_id} = AppSupervisor.find_running_app(PixelFun)
       assert app_id == s.app_id
-      assert AppSupervisor.config(app_id)[:zoom_scale] == 3.5
+      assert AppSupervisor.config(app_id)[:zoom_base] == 3.5
     end
 
     test "perlin noise tweak applies scale and speed live" do

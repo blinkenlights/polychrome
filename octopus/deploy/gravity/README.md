@@ -4,7 +4,7 @@ Deploys octopus to `gravity` (`gravity.crested-frog.ts.net`) via Tailscale.
 The stack runs four Docker containers in `network_mode: host`:
 
 - **polychrome-woodstock** — Installation Woodstock, Boot App Fire (HTTP port 4000)
-- **polychrome-pixie** — Installation Pixie, Boot App PixelFun3d / Seegras (HTTP port 4001)
+- **polychrome-pixie** — Installation Pixie, Boot App PixelFun / Seegras (HTTP port 4001)
 - **caddy** — reverse proxy that terminates TLS using Tailscale certificates
 
 Both app instances use host networking so UDP broadcast to ESP32 LED panels works
@@ -121,7 +121,7 @@ so no separate image build is needed.
 
 | Service | Installation | Boot App | Boot Mode | HTTP-Port | HTTPS-Port |
 |---------|-------------|----------|-----------|-----------|------------|
-| `polychrome-pixie` | `Octopus.Installation.Pixie` | `PixelFun3d` | `seegras` | 4001 | 443 |
+| `polychrome-pixie` | `Octopus.Installation.Pixie` | `PixelFun` | `pixelfun:seegras` | 4001 | 443 |
 | `polychrome-woodstock` | `Octopus.Installation.Woodstock` | `Fire` | — | 4000 | 8443 |
 
 To change the boot app or preset, edit `docker-compose.yml` and redeploy.

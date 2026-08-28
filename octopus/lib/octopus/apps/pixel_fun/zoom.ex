@@ -1,4 +1,4 @@
-defmodule Octopus.Apps.PixelFun3D.Zoom do
+defmodule Octopus.Apps.PixelFun.Zoom do
   @moduledoc """
   Combined zoom: integer octave chart scaling (seam-free densification) plus
   a bounded residual magnification at the pivot.
@@ -12,7 +12,7 @@ defmodule Octopus.Apps.PixelFun3D.Zoom do
   slightly past √2 harmlessly.
   """
 
-  alias Octopus.Apps.PixelFun3D.MerlinZoom
+  alias Octopus.Apps.PixelFun.MerlinZoom
   alias Octopus.Sphere
 
   @mobius_neutral_eps 1.0e-9

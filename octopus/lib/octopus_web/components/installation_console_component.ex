@@ -5,13 +5,13 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   import OctopusWeb.ConsoleComponents
 
   alias Octopus.{AppManager, AppSupervisor, InstallationTransport}
-  alias Octopus.Apps.{PixelFun, PixelFun3D, PixieDebug, SparkleMist}
+  alias Octopus.Apps.{PixelFun, PixieDebug, SparkleMist}
 
   @app Module.concat(["Octopus", "App"])
   @app_mode_presets Module.concat(["Octopus", "AppModePresets"])
 
   @debug_apps [PixieDebug]
-  @foyer_hidden_apps [PixelFun, SparkleMist]
+  @foyer_hidden_apps [SparkleMist]
 
   def mount(socket) do
     {:ok,
@@ -34,14 +34,14 @@ defmodule OctopusWeb.InstallationConsoleComponent do
        console_theme: "light",
        library_sections: nil,
        transform_live: nil,
-       editing_pf3d: nil,
-       pf3d_app_id: nil,
+       editing_pf: nil,
+       pf_app_id: nil,
        show_discard_new_modal: false
      )}
   end
 
-  def update(%{close_pf3d: true}, socket) do
-    {:ok, assign(socket, editing_pf3d: nil, pf3d_app_id: nil, show_discard_new_modal: false)}
+  def update(%{close_pf: true}, socket) do
+    {:ok, assign(socket, editing_pf: nil, pf_app_id: nil, show_discard_new_modal: false)}
   end
 
   def update(assigns, socket) do
@@ -119,10 +119,10 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       <.custom_interval_modal show={@show_custom_interval} target={@myself} />
       <.custom_transition_modal show={@show_custom_transition} target={@myself} />
 
-      <.pf3d_drawer
-        :if={@editing_pf3d}
-        app_id={@pf3d_app_id}
-        mode={@editing_pf3d}
+      <.pf_drawer
+        :if={@editing_pf}
+        app_id={@pf_app_id}
+        mode={@editing_pf}
         target={@myself}
       />
       <.discard_new_scene_modal show={@show_discard_new_modal} target={@myself} />
@@ -144,20 +144,20 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   attr :mode, :any, required: true
   attr :target, :any, required: true
 
-  defp pf3d_drawer(assigns) do
+  defp pf_drawer(assigns) do
     ~H"""
     <div
-      id="pf3d-drawer"
+      id="pf-drawer"
       class="fixed top-10 z-50 bg-base-100 overflow-y-auto max-[699px]:inset-x-0 max-[699px]:bottom-0 max-[699px]:max-w-none min-[700px]:right-0 min-[700px]:bottom-0 min-[700px]:w-full min-[700px]:max-w-xl border-l border-base-300 shadow-2xl"
     >
       <div class="sticky top-0 z-10 flex items-center justify-between gap-2 px-4 py-3 bg-base-100 border-b border-base-300">
         <h2 class="text-lg font-semibold">
-          {if @mode == :new, do: "Pixel Fun 3D · New scene", else: "Pixel Fun 3D · Scene editor"}
+          {if @mode == :new, do: "Pixel Fun · New scene", else: "Pixel Fun · Scene editor"}
         </h2>
         <button
           type="button"
           class="btn btn-ghost btn-sm btn-square min-h-10 min-w-10"
-          phx-click="close_pf3d_editor"
+          phx-click="close_pf_editor"
           phx-target={@target}
           aria-label="Close editor"
         >
@@ -167,10 +167,10 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       <div class="p-4">
         <.live_component
           :if={@app_id}
-          id="pf3d-drawer-editor"
-          module={OctopusWeb.PixelFun3DConfigComponent}
+          id="pf-drawer-editor"
+          module={OctopusWeb.PixelFunConfigComponent}
           app_id={@app_id}
-          app_module={PixelFun3D}
+          app_module={PixelFun}
         />
       </div>
     </div>
@@ -482,8 +482,8 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
     case AppSupervisor.start_or_select_app(module) do
       {:ok, app_id} ->
-        if module == PixelFun3D do
-          {:noreply, assign(socket, editing_pf3d: :existing, pf3d_app_id: app_id)}
+        if module == PixelFun do
+          {:noreply, assign(socket, editing_pf: :existing, pf_app_id: app_id)}
         else
           {:noreply, push_navigate(socket, to: ~p"/app/#{app_id}")}
         end
@@ -494,22 +494,22 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   end
 
   def handle_event("new_scene", _params, socket) do
-    case AppSupervisor.start_or_select_app(PixelFun3D) do
+    case AppSupervisor.start_or_select_app(PixelFun) do
       {:ok, app_id} ->
-        InstallationTransport.play_now(PixelFun3D, default_scene_mode_id())
+        InstallationTransport.play_now(PixelFun, default_scene_mode_id())
 
         {:noreply,
          socket
          |> refresh_transport()
-         |> assign(editing_pf3d: :new, pf3d_app_id: app_id)}
+         |> assign(editing_pf: :new, pf_app_id: app_id)}
 
       {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Could not start #{app_name(PixelFun3D)}")}
+        {:noreply, put_flash(socket, :error, "Could not start #{app_name(PixelFun)}")}
     end
   end
 
-  def handle_event("close_pf3d_editor", _params, socket) do
-    {:noreply, close_pf3d_editor(socket)}
+  def handle_event("close_pf_editor", _params, socket) do
+    {:noreply, close_pf_editor(socket)}
   end
 
   def handle_event("close_discard_new_modal", _params, socket) do
@@ -522,7 +522,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
     {:noreply,
      socket
-     |> assign(show_discard_new_modal: false, editing_pf3d: nil, pf3d_app_id: nil)
+     |> assign(show_discard_new_modal: false, editing_pf: nil, pf_app_id: nil)
      |> refresh_transport(refresh_library: true)}
   end
 
@@ -753,8 +753,8 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
   def handle_event("now_playing_full_editor", _params, socket) do
     case socket.assigns.transport.now_playing do
-      %{app: PixelFun3D, app_id: app_id} when is_binary(app_id) ->
-        {:noreply, assign(socket, editing_pf3d: :existing, pf3d_app_id: app_id)}
+      %{app: PixelFun, app_id: app_id} when is_binary(app_id) ->
+        {:noreply, assign(socket, editing_pf: :existing, pf_app_id: app_id)}
 
       %{app_id: app_id} when is_binary(app_id) ->
         {:noreply, push_navigate(socket, to: ~p"/app/#{app_id}")}
@@ -827,7 +827,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
 
   # Closing a brand-new scene with unsaved edits prompts to save/discard;
   # otherwise the scratch takeover is dropped and rotation resumes.
-  defp close_pf3d_editor(%{assigns: %{editing_pf3d: :new}} = socket) do
+  defp close_pf_editor(%{assigns: %{editing_pf: :new}} = socket) do
     if now_playing_dirty?(socket) do
       assign(socket, show_discard_new_modal: true)
     else
@@ -835,13 +835,13 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       InstallationTransport.resume_rotation_after_takeover()
 
       socket
-      |> assign(editing_pf3d: nil, pf3d_app_id: nil)
+      |> assign(editing_pf: nil, pf_app_id: nil)
       |> refresh_transport(refresh_library: true)
     end
   end
 
-  defp close_pf3d_editor(socket) do
-    assign(socket, editing_pf3d: nil, pf3d_app_id: nil)
+  defp close_pf_editor(socket) do
+    assign(socket, editing_pf: nil, pf_app_id: nil)
   end
 
   defp now_playing_dirty?(socket) do
@@ -849,7 +849,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   end
 
   defp blocking_new_scene?(socket) do
-    socket.assigns.editing_pf3d == :new and now_playing_dirty?(socket)
+    socket.assigns.editing_pf == :new and now_playing_dirty?(socket)
   end
 
   defp run_play_now(socket, app, mode_id) do
@@ -873,7 +873,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
     {:noreply, socket}
   end
 
-  defp default_scene_mode_id, do: "pixelfun3d:classic_ripple"
+  defp default_scene_mode_id, do: "pixelfun:classic_ripple"
 
   defp parse_app_module(str) when is_binary(str) do
     cond do
@@ -1051,7 +1051,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
   defp assign_library(socket) do
     transport = socket.assigns.transport
 
-    pixel_section = library_section(PixelFun3D, "Pixel Fun 3D", transport, new_scene?: true)
+    pixel_section = library_section(PixelFun, "Pixel Fun", transport, new_scene?: true)
 
     debug_sections =
       if apply(PixieDebug, :compatible?, []) do
@@ -1061,7 +1061,7 @@ defmodule OctopusWeb.InstallationConsoleComponent do
       end
 
     more_sections =
-      for app <- persistable_apps(), app not in [PixelFun3D | @foyer_hidden_apps] do
+      for app <- persistable_apps(), app not in [PixelFun | @foyer_hidden_apps] do
         library_section(app, app_name(app), transport)
       end
 

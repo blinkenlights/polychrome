@@ -1,7 +1,7 @@
-defmodule Octopus.Apps.PixelFun3D.ZoomTest do
+defmodule Octopus.Apps.PixelFun.ZoomTest do
   use ExUnit.Case, async: true
 
-  alias Octopus.Apps.PixelFun3D.Zoom
+  alias Octopus.Apps.PixelFun.Zoom
   alias Octopus.Sphere
 
   @r_max 1.47

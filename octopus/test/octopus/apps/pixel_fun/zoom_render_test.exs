@@ -1,13 +1,13 @@
-defmodule Octopus.Apps.PixelFun3D.ZoomRenderTest do
+defmodule Octopus.Apps.PixelFun.ZoomRenderTest do
   use ExUnit.Case, async: false
 
   alias Octopus.Apps.PixelFun.Program
-  alias Octopus.Apps.PixelFun3D
-  alias Octopus.Apps.PixelFun3D.State
+  alias Octopus.Apps.PixelFun
+  alias Octopus.Apps.PixelFun.State
   alias Octopus.Canvas
   alias Octopus.Installation
 
-  @pixel_fun Module.concat(["Octopus", "Apps", "PixelFun3D"])
+  @pixel_fun Module.concat(["Octopus", "Apps", "PixelFun"])
 
   setup do
     original_installation = Application.get_env(:octopus, :installation)
@@ -115,7 +115,7 @@ defmodule Octopus.Apps.PixelFun3D.ZoomRenderTest do
       with_installation(Octopus.Installation.Nation2026, fn ->
         z = 2.0
         seconds = 10.0
-        dur = Octopus.Apps.PixelFun3D.Zoom.octave_fade_dur()
+        dur = Octopus.Apps.PixelFun.Zoom.octave_fade_dur()
 
         fading =
           base_state(%{
@@ -126,7 +126,7 @@ defmodule Octopus.Apps.PixelFun3D.ZoomRenderTest do
           })
 
         {updates, committed_n, fade} =
-          Octopus.Apps.PixelFun3D.Zoom.advance_octave_state(
+          Octopus.Apps.PixelFun.Zoom.advance_octave_state(
             Map.from_struct(fading),
             z,
             seconds
@@ -185,10 +185,10 @@ defmodule Octopus.Apps.PixelFun3D.ZoomRenderTest do
         d = Octopus.Sphere.direction(trunc(pivot_x), y, w, Installation.height())
 
         {xs_f, _ys_f, _} =
-          Octopus.Apps.PixelFun3D.Zoom.sample_pixel(d, motion, m_from, r_from, x_p)
+          Octopus.Apps.PixelFun.Zoom.sample_pixel(d, motion, m_from, r_from, x_p)
 
         {xs_t, _ys_t, _} =
-          Octopus.Apps.PixelFun3D.Zoom.sample_pixel(d, motion, m_to, r_to, x_p)
+          Octopus.Apps.PixelFun.Zoom.sample_pixel(d, motion, m_to, r_to, x_p)
 
         assert_in_delta xs_f, xs_t, 1.0e-4
       end)
@@ -221,7 +221,7 @@ defmodule Octopus.Apps.PixelFun3D.ZoomRenderTest do
 
       log =
         capture_log(fn ->
-          migrated = PixelFun3D.migrate_legacy_config(%{zoom_base: 0.25, program: "sin(x)"})
+          migrated = PixelFun.migrate_legacy_config(%{zoom_base: 0.25, program: "sin(x)"})
           assert migrated.zoom_base == 0.7
         end)
 
@@ -230,8 +230,8 @@ defmodule Octopus.Apps.PixelFun3D.ZoomRenderTest do
 
     test "config_matches? compares via clamped zoom_base" do
       legacy = %{program: "sin(x)", zoom_base: 0.25, pixel_fun_units: 2}
-      live = PixelFun3D.migrate_legacy_config(legacy)
-      assert Octopus.Apps.PixelFun3D.ScenePresets.config_matches?(live, legacy)
+      live = PixelFun.migrate_legacy_config(legacy)
+      assert Octopus.Apps.PixelFun.ScenePresets.config_matches?(live, legacy)
     end
   end
 
@@ -255,8 +255,8 @@ defmodule Octopus.Apps.PixelFun3D.ZoomRenderTest do
         formula = fn xs -> :math.sin(xs * :math.pi() * 6 / 156 - 2.5) end
 
         for x <- [0, 10, 50, 100, 200] do
-          {xs0, _y0} = PixelFun3D.transform_pixel_coords(x, 3, params)
-          {xs1, _y1} = PixelFun3D.transform_pixel_coords(x + w, 3, params)
+          {xs0, _y0} = PixelFun.transform_pixel_coords(x, 3, params)
+          {xs1, _y1} = PixelFun.transform_pixel_coords(x + w, 3, params)
           assert_in_delta formula.(xs0), formula.(xs1), 1.0e-6
         end
       end)

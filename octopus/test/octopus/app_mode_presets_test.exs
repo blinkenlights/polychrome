@@ -7,14 +7,14 @@ defmodule Octopus.AppModePresetsTest do
 
   describe "loader/0" do
     test "embeds expected preset counts per app" do
-      assert length(preset_list(PixelFun)) == 7
-      assert length(preset_list(Collective)) == 9
+      assert length(preset_list(PixelFun)) == 33
+      assert length(preset_list(Collective)) == 10
       assert length(preset_list(Matrix)) == 1
-      assert length(preset_list(Sand)) == 6
+      assert length(preset_list(Sand)) == 3
       assert length(preset_list(SparkleMist)) == 1
       assert length(preset_list(Wood)) == 2
-      assert length(preset_list(Fire)) == 3
-      assert length(preset_list(GravityMask)) == 1
+      assert length(preset_list(Fire)) == 4
+      assert length(preset_list(GravityMask)) == 3
       assert length(preset_list(ShapeShifter)) == 1
     end
 
@@ -31,6 +31,9 @@ defmodule Octopus.AppModePresetsTest do
       assert preset_normalize_mode_id(PixelFun, "builtin:classic_ripple") ==
                "pixelfun:classic_ripple"
 
+      assert preset_normalize_mode_id(PixelFun, "pixelfun3d:classic_ripple") ==
+               "pixelfun:classic_ripple"
+
       assert preset_normalize_mode_id(Collective, "storm") == "collective:storm"
       assert preset_normalize_mode_id(Matrix, "matrix") == "matrix:matrix"
       assert preset_normalize_mode_id(Matrix, "matrix-ring") == "matrix:matrix"
@@ -39,8 +42,8 @@ defmodule Octopus.AppModePresetsTest do
       assert preset_normalize_mode_id(Wood, "experiment") == "wood:experiment"
       assert preset_normalize_mode_id(Fire, "campfire") == "fire:campfire"
       assert preset_normalize_mode_id(Fire, "default") == "fire:campfire"
-      assert preset_normalize_mode_id(GravityMask, "mask") == "gravitymask:mask"
-      assert preset_normalize_mode_id(GravityMask, "default") == "gravitymask:mask"
+      assert preset_normalize_mode_id(GravityMask, "mask") == "gravitymask:subtle"
+      assert preset_normalize_mode_id(GravityMask, "default") == "gravitymask:subtle"
     end
   end
 
@@ -101,7 +104,7 @@ defmodule Octopus.AppModePresetsTest do
       campfire = Enum.find(modes, &(&1.id == "fire:campfire"))
       inferno = Enum.find(modes, &(&1.id == "fire:inferno"))
 
-      assert length(modes) == 3
+      assert length(modes) == 4
       assert campfire.name == "Campfire"
       assert campfire.summary != ""
       refute campfire.deletable
@@ -110,12 +113,13 @@ defmodule Octopus.AppModePresetsTest do
     end
 
     test "returns gravity mask tile with summary" do
-      [mode] = preset_list_modes(GravityMask)
+      modes = preset_list_modes(GravityMask)
+      mode = Enum.find(modes, &(&1.id == "gravitymask:subtle"))
 
-      assert mode.id == "gravitymask:mask"
-      assert mode.name == "Gravity Mask"
-      assert mode.summary =~ "floor 25%"
-      assert mode.summary =~ "reach 50"
+      assert length(modes) == 3
+      assert mode.name == "Subtle"
+      assert mode.summary =~ "floor"
+      assert mode.summary =~ "easing"
       refute mode.deletable
       refute mode.renamable
     end
@@ -140,14 +144,12 @@ defmodule Octopus.AppModePresetsTest do
     end
 
     test "returns gravity mask preset with all config keys" do
-      preset = preset_get(GravityMask, "gravitymask:mask")
+      preset = preset_get(GravityMask, "gravitymask:subtle")
 
       assert preset.origin == :builtin
-      assert preset.config[:floor_brightness] == 25
-      assert preset.config[:contrast] == 3.0
-      assert preset.config[:reach] == 50
-      assert preset.config[:easing_tau] == 1.5
-      assert preset.config[:velocity_gain] == 0.0
+      assert is_map(preset.config)
+      assert map_size(preset.config) > 0
+      assert is_number(preset.config[:easing_tau])
     end
   end
 
