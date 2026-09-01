@@ -73,13 +73,22 @@ Gespielte Noten laufen dafür über ein eigenes PubSub-Thema — Noten sind selt
 für eine Nachricht pro Stück, anders als Frames. Probe-Werte kommen mit jedem Frame und
 werden auf zehn pro Sekunde gedrosselt.
 
-## M5 · Grid und Kompositionen
+## M5 · Grid und Kompositionen ✅
 
-Step-Grid inkl. Panel je Step. `Composition` als Ecto-Schema, gespeichert im
-vorhandenen App-Mode-Preset-System. Speichern/Laden, A/B, Take.
+**Fertig.** Step-Grid mit **Panel je Schritt**, acht Slots, Playhead, A/B, Speichern,
+Laden, Take. Nachgemessen im Browser: ein Muster aus Panel 1/3/3/3 und 7/7 spielt mit
+Pegelmetern genau auf den Kanälen 1, 3 und 7, während der Playhead durch die Spalten
+läuft — und nach einem kompletten Serverneustart kommt die gespeicherte Komposition
+mit jedem Schritt und Panel zurück.
 
-**Fertig, wenn:** eine gebaute Komposition einen Neustart überlebt und sich per
-Auswahl zurückholen lässt.
+**Abweichung vom ursprünglichen Plan:** Kompositionen liegen in einer eigenen
+Tabelle, nicht im App-Mode-Preset-System. Die Presets unter `priv/app_mode_presets`
+werden zur *Compilezeit* eingelesen und lassen sich zur Laufzeit gar nicht schreiben —
+eine Komposition entsteht aber beim Hören. Die Einreihung in die Rotation bleibt
+davon unberührt und gehört ohnehin nach M7.
+
+Nebenbei repariert: Das Metronom saß in derselben Quelle wie das Muster, ein Klick
+auf „Metronom" hätte das Muster ersetzt. Es sitzt jetzt daneben.
 
 ## M6 · Matrix und Quellen
 
@@ -149,6 +158,14 @@ Octopus.Sound.configure_ring_chase(synth: "pc_pluck", duration_ms: 900)
 Er braucht **keinen** Transport — das Bild ist die Uhr. Wer ihn im Takt will, bindet die
 Szene an Beats (`time_source: :beats`, M4).
 
+Ein Muster aus dem Kopf:
+
+```elixir
+alias Octopus.Sound.Pattern
+Octopus.Sound.update_pattern(&(&1 |> Pattern.put_step(1, 0, 1) |> Pattern.put_step(1, 4, 4)))
+Octopus.Sound.play()
+```
+
 Alles davon geht seit M4 auch ohne IEx: **`/studio`** im Menü. Der Ring-Chase braucht
 dort nur eine laufende Pixelfun-Szene und einen Klick.
 
@@ -164,7 +181,7 @@ Installation läuft mit `:direct` — ein Ausgang pro Panel.
 ## Reihenfolge auf einen Blick
 
 ```
-M0 Ton ✅ ► M1 Uhr ✅ ► M2 Probes ✅ ► M3 Ring-Chase ✅ ► M4 Studio ✅ ► M5 Grid
+M0 Ton ✅ ► M1 Uhr ✅ ► M2 Probes ✅ ► M3 Ring-Chase ✅ ► M4 Studio ✅ ► M5 Grid ✅
                                           │                            │
                                     „hört man das Bild?" ✅     M6 Matrix ──► M7 Programm
                                                                              │
