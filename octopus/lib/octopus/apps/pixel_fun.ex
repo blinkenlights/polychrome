@@ -1863,7 +1863,9 @@ defmodule Octopus.Apps.PixelFun do
       end
 
     state = push_frame(state)
-    broadcast_probes(state)
+    # `base` is this frame's slot on the 30 fps grid, not the moment rendering
+    # happened to finish — see `Octopus.Sound.Probes.broadcast/3`.
+    broadcast_probes(state, base)
     {:noreply, %{state | next_tick_at: next_tick_at}}
   end
 
@@ -2384,8 +2386,8 @@ defmodule Octopus.Apps.PixelFun do
   # panel instead of at every pixel. Twelve evaluations against ~768 for the
   # frame, so this runs unconditionally — and it is the only bridge the sound
   # side needs into the image.
-  defp broadcast_probes(%State{} = state) do
-    Probes.broadcast(probe_values(state), state.formula_seconds || state.seconds)
+  defp broadcast_probes(%State{} = state, at_ms) do
+    Probes.broadcast(probe_values(state), state.formula_seconds || state.seconds, at_ms)
   end
 
   @doc """

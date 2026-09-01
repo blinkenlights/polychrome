@@ -25,13 +25,26 @@ defmodule Octopus.Sound.Probes do
   def topic, do: @topic
 
   @doc """
-  Publishes one frame of probe values. Silently does nothing when PubSub is
-  not running, so a renderer in a bare test process stays unaffected.
+  Publishes one frame of probe values.
+
+  `at_ms` should be the frame's **scheduled** time, not the moment the frame
+  finished rendering. Rendering takes a varying number of milliseconds, and a
+  listener that places events between two readings would turn that variance
+  into audible stumble. The render loop knows its own grid; it is the honest
+  clock here.
+
+  Silently does nothing when PubSub is not running, so a renderer in a bare
+  test process stays unaffected.
   """
-  @spec broadcast([float()], number()) :: :ok
-  def broadcast(values, seconds) when is_list(values) do
+  @spec broadcast([float()], number(), integer() | nil) :: :ok
+  def broadcast(values, seconds, at_ms \\ nil) when is_list(values) do
     if Process.whereis(Octopus.PubSub) do
-      reading = %{values: values, seconds: seconds, at_ms: Octopus.Sound.Time.now()}
+      reading = %{
+        values: values,
+        seconds: seconds,
+        at_ms: at_ms || Octopus.Sound.Time.now()
+      }
+
       PubSub.broadcast(Octopus.PubSub, @topic, {:pixel_probes, reading})
     end
 

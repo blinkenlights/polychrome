@@ -104,15 +104,27 @@ defmodule Octopus.Apps.PixelFun.ProbesTest do
     end
   end
 
-  describe "broadcast/2" do
-    test "reaches subscribers with the frame's values" do
+  describe "broadcast/3" do
+    setup do
       Probes.subscribe()
       on_exit(&Probes.unsubscribe/0)
+      :ok
+    end
 
+    test "reaches subscribers with the frame's values" do
       Probes.broadcast([0.1, -0.2], 1.5)
 
       assert_receive {:pixel_probes, %{values: [0.1, -0.2], seconds: 1.5, at_ms: at_ms}}
       assert is_integer(at_ms)
+    end
+
+    test "carries the frame's own timestamp when given one" do
+      # The render loop passes its slot on the frame grid rather than the
+      # moment rendering finished — otherwise the varying render duration
+      # lands in the rhythm of everything that listens.
+      Probes.broadcast([0.0], 2.0, 1_234_567)
+
+      assert_receive {:pixel_probes, %{at_ms: 1_234_567}}
     end
   end
 end
