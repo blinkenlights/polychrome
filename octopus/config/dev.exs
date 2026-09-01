@@ -95,4 +95,4 @@ config :octopus, Octopus.Sound,
   enabled: true,
   engine: Octopus.Sound.Engine.SuperCollider,
   channels: 2,
-  super_collider: [auto_start: true, port: 57_110]
+  super_collider: [auto_start: true, port: 57_110, mapping: :fold]

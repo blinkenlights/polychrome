@@ -14,6 +14,7 @@ defmodule Octopus.Apps.PixelFun do
   alias Octopus.Apps.PixelFun.Transform.Flat, as: FlatTransform
   alias Octopus.Apps.PixelFun.Transform.Sphere, as: SphereTransform
   alias Octopus.Installation
+  alias Octopus.Sound.Probes
   alias Octopus.Sphere
   alias Octopus.Wander
 
@@ -1862,6 +1863,7 @@ defmodule Octopus.Apps.PixelFun do
       end
 
     state = push_frame(state)
+    broadcast_probes(state)
     {:noreply, %{state | next_tick_at: next_tick_at}}
   end
 
@@ -2225,21 +2227,7 @@ defmodule Octopus.Apps.PixelFun do
 
   defp render_canvas_flat(%State{display_info: display_info} = state) do
     seconds = state.formula_seconds || state.seconds
-    eff = effective_transform_values(state)
-    z = clamp_zoom_factor(eff.zoom_base || 1.0)
-
-    {offset_x, offset_y} = flat_translate_offset(state, eff, seconds)
-
-    transform_params = %{
-      offset_x: offset_x,
-      offset_y: offset_y,
-      zoom: z,
-      seconds: seconds,
-      rotation: effective_flat_rotation(state, seconds),
-      sway_scale: eff.tilt_scale || 0.0,
-      sway_speed: state.tilt_speed || @tilt_defaults.tilt_speed,
-      sway_mode: state.tilt_mode || @tilt_defaults.tilt_mode
-    }
+    transform_params = flat_transform_params(state, seconds)
 
     canvas_mode = if state.color_mode == :white, do: :grayscale, else: :rgb
     canvas = Canvas.new(display_info.width, display_info.height, canvas_mode)
@@ -2276,6 +2264,22 @@ defmodule Octopus.Apps.PixelFun do
         Canvas.put_pixel(canvas, {x, y}, pixel)
       end)
     end)
+  end
+
+  defp flat_transform_params(%State{} = state, seconds) do
+    eff = effective_transform_values(state)
+    {offset_x, offset_y} = flat_translate_offset(state, eff, seconds)
+
+    %{
+      offset_x: offset_x,
+      offset_y: offset_y,
+      zoom: clamp_zoom_factor(eff.zoom_base || 1.0),
+      seconds: seconds,
+      rotation: effective_flat_rotation(state, seconds),
+      sway_scale: eff.tilt_scale || 0.0,
+      sway_speed: state.tilt_speed || @tilt_defaults.tilt_speed,
+      sway_mode: state.tilt_mode || @tilt_defaults.tilt_mode
+    }
   end
 
   defp render_canvas_sphere(%State{display_info: display_info} = state) do
@@ -2374,6 +2378,85 @@ defmodule Octopus.Apps.PixelFun do
           {:fade, fade.from_n, fade.to_n, u}
         end
     end
+  end
+
+  # Probes: the same formula the picture uses, asked at the centre of each
+  # panel instead of at every pixel. Twelve evaluations against ~768 for the
+  # frame, so this runs unconditionally — and it is the only bridge the sound
+  # side needs into the image.
+  defp broadcast_probes(%State{} = state) do
+    Probes.broadcast(probe_values(state), state.formula_seconds || state.seconds)
+  end
+
+  @doc """
+  Formula value at the centre of each panel, in panel order.
+
+  Same evaluation as the picture, sampled at twelve points instead of ~768.
+  Public so it can be exercised directly, like `build_canvas/1`.
+  """
+  def probe_values(%State{} = state) do
+    case transform_backend() do
+      :flat -> probe_values_flat(state)
+      :sphere -> probe_values_sphere(state)
+    end
+  end
+
+  defp probe_values_flat(%State{} = state) do
+    seconds = state.formula_seconds || state.seconds
+    params = flat_transform_params(state, seconds)
+    center = Probes.center_pixel_index()
+
+    Installation.virtual_pixel_positions_per_panel()
+    |> Enum.with_index()
+    |> Enum.map(fn {panel, panel_index} ->
+      {x, y} = Enum.at(panel, center)
+      {x_scaled, y_scaled} = FlatTransform.transform_pixel_coords(x, y, params)
+
+      eval_probe(state, {x_scaled, y_scaled, {0.0, 0.0, 0.0}}, center, panel_index, seconds)
+    end)
+  end
+
+  defp probe_values_sphere(%State{} = state) do
+    seconds = state.formula_seconds || state.seconds
+    eff = effective_transform_values(state)
+    z = max(eff.zoom_base || 1.0, @zoom_factor_min)
+    motion_params = build_motion_params(state, seconds)
+    branch = steady_branch(resolve_zoom_branches(state, z, seconds))
+    center = Probes.center_pixel_index()
+
+    (state.pixel_dirs || SphereTransform.precompute_pixel_dirs())
+    |> Enum.with_index()
+    |> Enum.map(fn {panel, panel_index} ->
+      {x, y, d} = Enum.at(panel, center)
+      sample = sample_zoom_branch({motion_params, z, x, y, d}, branch)
+
+      eval_probe(state, sample, center, panel_index, seconds)
+    end)
+  end
+
+  # A probe is a single reading, so the octave crossfade has nothing to blend —
+  # the branch the frame is settling into is the honest one to report.
+  defp steady_branch({:steady, n}), do: n
+  defp steady_branch({:fade, from_n, _to_n, _u}), do: from_n
+
+  defp eval_probe(%State{} = state, {x, y, {nx, ny, nz}}, i, panel_index, seconds) do
+    interaction = Map.get(state.panel_interaction_factors, panel_index, 0.0)
+    audio = state.audio_input
+    pixel_time = seconds * (state.pattern_speed || 1.0) + interaction * 5
+
+    eval_pixel_value(
+      state.program,
+      x,
+      y,
+      nx,
+      ny,
+      nz,
+      i,
+      pixel_time,
+      audio.low,
+      audio.mid,
+      audio.high
+    )
   end
 
   defp render_pixel(

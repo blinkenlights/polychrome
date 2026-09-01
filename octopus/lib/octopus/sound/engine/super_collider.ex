@@ -65,6 +65,7 @@ defmodule Octopus.Sound.Engine.SuperCollider do
       host: Keyword.get(config, :host, @default_host),
       port: port,
       channels: channels,
+      mapping: Keyword.get(config, :mapping, :direct),
       socket: nil,
       os_port: nil,
       defs_loaded?: false
@@ -109,7 +110,7 @@ defmodule Octopus.Sound.Engine.SuperCollider do
         0,
         0,
         "out",
-        (channel - 1) / 1,
+        output_bus(channel, state) / 1,
         "freq",
         Engine.frequency(note),
         "amp",
@@ -185,6 +186,15 @@ defmodule Octopus.Sound.Engine.SuperCollider do
   end
 
   defp handle_reply(_address, state), do: state
+
+  # A ring of twelve panels on a stereo laptop would leave ten of them
+  # inaudible. Folding wraps them onto the outputs that exist, so movement
+  # around the ring is still audible while prototyping — the installation
+  # itself runs `:direct`, one output per panel.
+  defp output_bus(channel, %{mapping: :fold, channels: channels}),
+    do: rem(channel - 1, channels)
+
+  defp output_bus(channel, _state), do: channel - 1
 
   defp send_at(state, messages, at_ms) do
     if at_ms - Time.now() > 1 do

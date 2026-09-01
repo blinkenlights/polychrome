@@ -14,7 +14,7 @@ defmodule Octopus.Sound do
   Channels are 1-based and mean panels.
   """
 
-  alias Octopus.Sound.{Clock, Engine, Scheduler}
+  alias Octopus.Sound.{Clock, Engine, RingChase, Scheduler}
 
   @doc "Plays one note now, or at `:at_ms` (monotonic, see `Octopus.Sound.Time`)."
   def note(params \\ [])
@@ -38,6 +38,16 @@ defmodule Octopus.Sound do
 
   @doc "Sets the event source: `(step, timeline) -> [note params]`."
   defdelegate set_source(source), to: Scheduler
+
+  @doc """
+  The ring chase: every panel whose formula value rises through zero sounds a
+  note on its own speaker. Needs a running Pixel Fun; no transport required,
+  because the picture is the clock.
+  """
+  def ring_chase(on?) when is_boolean(on?), do: RingChase.enable(on?)
+
+  @doc "Adjusts the chase — `:threshold`, `:synth`, `:duration_ms`, `:scale`."
+  defdelegate configure_ring_chase(opts), to: RingChase, as: :configure
 
   @doc "Everything off, right now."
   def panic do
