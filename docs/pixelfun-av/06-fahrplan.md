@@ -5,7 +5,7 @@ Oberfläche danach.** Die ersten drei Schritte haben kein UI und liefern trotzde
 Moment, an dem das Projekt real wird. Andersherum baut man zwei Wochen an einer
 Oberfläche und merkt dann, dass sich die Kopplung anders anfühlt als gedacht.
 
-## M0 · Ton aus dem Server
+## M0 · Ton aus dem Server ✅
 
 `Octopus.Sound`-Supervisor, das `Sound.Engine`-Behaviour und ein erstes Backend.
 Bedienbar aus IEx, sonst nichts.
@@ -13,8 +13,8 @@ Bedienbar aus IEx, sonst nichts.
 - `Sound.Engine` (Behaviour), `Sound.Engine.Beak` bzw. `Sound.Engine.SuperCollider`
 - `Sound.panic/0`
 
-**Fertig, wenn:** aus IEx ein Ton auf einem wählbaren Kanal erklingt und Panic ihn
-sofort beendet.
+**Fertig.** `Octopus.Sound` ist aus IEx bedienbar, `Octopus.Sound.Engine` hat drei
+Backends (Null, Beak, SuperCollider), SynthDefs liegen in `priv/synthdefs`.
 
 > Welches Backend zuerst, ist eine reine Praxisfrage: Auf dem Zielrechner ist beak
 > gesetzt (läuft schon). Auf einem Mac zum Entwickeln ist SuperCollider vermutlich
@@ -22,14 +22,14 @@ sofort beendet.
 > werden muss — das CMake-Setup ist auf Apple vorbereitet, aber ungetestet. Das
 > Behaviour macht daraus eine Konfigurationszeile, keine Weggabelung.
 
-## M1 · Die Uhr
+## M1 · Die Uhr ✅
 
 `Sound.Clock` (BPM, Play/Stop, Position, PubSub-Broadcast der Beat-Phase) und
 `Sound.Scheduler` mit Look-ahead-Fenster.
 
-**Fertig, wenn:** ein Metronom über Minuten stabil läuft, ohne zu driften, und
-`mix test` die Uhr-Mathematik prüft (Takt/Beat/Step aus monotoner Zeit, Loop-Umbruch,
-Tempowechsel).
+**Fertig.** `Sound.Timeline` (rein, getestet), `Sound.Clock` und `Sound.Scheduler`
+mit 200-ms-Vorlauf. Gemessen: nach vier Sekunden bei 120 BPM steht der Transport auf
+8,002 Beats. 28 Tests decken Uhr, Scheduler und OSC-Kodierung ab.
 
 ## M2 · Probes in Pixelfun
 
@@ -90,10 +90,47 @@ hörbar präziser sitzt als mit beak.
 
 ---
 
+## Ausprobieren (Stand M1)
+
+Einmalig, nach dem Installieren von SuperCollider:
+
+```bash
+mix sound.synthdefs
+```
+
+Dann in `iex -S mix phx.server` (dev startet scsynth selbst, Stereo):
+
+```elixir
+Octopus.Sound.engine()                          # welches Backend, welches Timing
+Octopus.Sound.note(channel: 1, synth: "pc_ping", note: 72)
+Octopus.Sound.metronome(true)
+Octopus.Sound.set_bpm(96)
+Octopus.Sound.play()
+Octopus.Sound.position()
+Octopus.Sound.panic()
+```
+
+Eigene Ereignisquelle statt Metronom — so wird daraus in M3 der Ring-Chase:
+
+```elixir
+Octopus.Sound.set_source(fn step, _timeline ->
+  if rem(step.index, 4) == 0 do
+    [%{channel: rem(div(step.index, 4), 12) + 1, note: 72, synth: "pc_ping"}]
+  else
+    []
+  end
+end)
+```
+
+Umschalten auf beak: in `config/dev.exs` `engine: Octopus.Sound.Engine.Beak`. Oben
+ändert sich nichts, nur der Timing-Modus meldet dann `:immediate`.
+
+---
+
 ## Reihenfolge auf einen Blick
 
 ```
-M0 Ton ──► M1 Uhr ──► M2 Probes ──► M3 Ring-Chase ──► M4 Studio ──► M5 Grid
+M0 Ton ✅ ► M1 Uhr ✅ ► M2 Probes ──► M3 Ring-Chase ──► M4 Studio ──► M5 Grid
                                           │                            │
                                     „hört man das Bild?"        M6 Matrix ──► M7 Programm
                                                                              │
