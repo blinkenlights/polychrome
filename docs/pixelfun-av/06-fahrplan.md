@@ -90,13 +90,31 @@ davon unberührt und gehört ohnehin nach M7.
 Nebenbei repariert: Das Metronom saß in derselben Quelle wie das Muster, ein Klick
 auf „Metronom" hätte das Muster ersetzt. Es sitzt jetzt daneben.
 
-## M6 · Matrix und Quellen
+## M6 · Matrix und Quellen ✅
 
-Modulationsmatrix mit Richtungsfilter, Quellen-Reiter (Probes · Features · LFOs ·
-MIDI). Ab hier sind alle drei Kopplungsrichtungen bedienbar.
+**Fertig.** Beide Zielbilder lassen sich ohne Code bauen.
 
-**Fertig, wenn:** die Zielbilder 2 (Voicing-Drone) und 5 (Onset-Blitz) ohne Code
-gebaut werden können.
+**Zielbild 5** ist genau eine Matrixzeile: *Klang · Onsets → Szene · Sättigung*.
+Nachgemessen im Browser: die Sättigung springt mit jedem Anschlag von 65 auf bis zu
+77 und fällt zurück.
+
+**Zielbild 2** ist ein Schalter: der **Drone** hält eine Stimme je Panel, deren
+Lautstärke dem Formelwert dort folgt. Nur die positive Hälfte klingt — mit dem
+Betrag wäre jedes Panel auf beiden Hälften einer Welle hörbar, und genau die
+Bewegung, um die es geht, wäre platt.
+
+Die drei Kopplungsrichtungen sind **kein** dreifacher Mechanismus. Eine Matrixzeile
+ist ein Satz — *diese Quelle bewegt dieses Ziel um diesen Betrag* — und die Richtung
+ergibt sich daraus, in welcher Welt ihre beiden Enden liegen. Das Studio zeigt sie
+als zwei Farbpunkte je Zeile und filtert danach.
+
+Neu in der Engine sind **gehaltene Stimmen** (starten unter einer Id, verändern,
+loslassen), weil ein Bild nur steuern kann, was weiterklingt. SuperCollider macht das
+sauber über einen SynthDef mit Gate; beak startet und stoppt die Note und sagt
+ehrlich, dass es nichts dazwischen kann.
+
+**Features** misst die eigenen Noten der Engine statt eines Mikrofons — deshalb kann
+das Bild exakt auf den Schlag reagieren statt hinterher.
 
 ## M7 · Programm-Ebene
 
@@ -106,13 +124,14 @@ mit Tonüberblendung auf der Taktgrenze, „Übernehmen".
 **Fertig, wenn:** die Installation eine Nacht lang allein durch drei Kompositionen
 rotiert und die Übergänge sitzen.
 
-## M8 · SuperCollider (falls nicht schon in M0)
+## M8 · SuperCollider ✅ (vorgezogen nach M0)
 
 `Engine.SuperCollider` mit SynthDef-Set, Buffers, Timetag-Scheduling und
 Feature-Rückkanal. Die Oberfläche ändert sich dabei nicht.
 
-**Fertig, wenn:** der Timing-Modus im Transport „taktgenau" zeigt und Perkussion
-hörbar präziser sitzt als mit beak.
+**Fertig.** Läuft seit M0 als Standard-Engine in dev; der Transport zeigt
+„taktgenau". Offen bleibt daraus nur der Feature-Rückkanal per `SendReply` — die
+Features kommen derzeit aus den geplanten Noten, was für Onsets sogar genauer ist.
 
 ---
 
@@ -158,6 +177,14 @@ Octopus.Sound.configure_ring_chase(synth: "pc_pluck", duration_ms: 900)
 Er braucht **keinen** Transport — das Bild ist die Uhr. Wer ihn im Takt will, bindet die
 Szene an Beats (`time_source: :beats`, M4).
 
+Drone und Matrix:
+
+```elixir
+Octopus.Sound.Drone.enable(true)
+Octopus.Sound.Matrix.add({:feature, :onset}, {:scene, :saturation_percent}, amount: 0.6)
+Octopus.Sound.Matrix.add({:phase, 8}, {:scene, :zoom_base}, amount: 0.4)
+```
+
 Ein Muster aus dem Kopf:
 
 ```elixir
@@ -185,7 +212,7 @@ M0 Ton ✅ ► M1 Uhr ✅ ► M2 Probes ✅ ► M3 Ring-Chase ✅ ► M4 Studio 
                                           │                            │
                                     „hört man das Bild?" ✅     M6 Matrix ──► M7 Programm
                                                                              │
-                                                                       M8 SuperCollider
+                                    M6 Matrix ✅                            M8 SuperCollider ✅
 ```
 
 M0–M3 sind klein und liefern das Erlebnis. Alles ab M4 ist Ausbau, der sich am
