@@ -27,5 +27,14 @@ defmodule Octopus.Sound.Engine.Null do
   end
 
   @impl true
+  def voice(_id, _params), do: :ok
+
+  @impl true
+  def set_voice(_id, _params), do: :ok
+
+  @impl true
+  def release(_id), do: :ok
+
+  @impl true
   def panic, do: :ok
 end

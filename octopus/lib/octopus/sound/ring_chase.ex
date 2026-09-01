@@ -37,6 +37,9 @@ defmodule Octopus.Sound.RingChase do
 
   def enabled?, do: GenServer.call(__MODULE__, :enabled?)
 
+  @doc "Current settings, for the studio and the matrix."
+  def state, do: GenServer.call(__MODULE__, :state)
+
   @doc "Adjusts `:min_rise`, `:synth`, `:duration_ms`, `:scale`, `:min_interval_ms`."
   def configure(opts) when is_list(opts), do: GenServer.call(__MODULE__, {:configure, opts})
 
@@ -85,6 +88,9 @@ defmodule Octopus.Sound.RingChase do
   end
 
   def handle_call(:enabled?, _from, state), do: {:reply, state.enabled?, state}
+
+  def handle_call(:state, _from, state),
+    do: {:reply, Map.drop(state, [:previous, :last_trigger]), state}
 
   def handle_call({:configure, opts}, _from, state) do
     state = Enum.reduce(opts, state, fn {key, value}, state -> Map.replace(state, key, value) end)

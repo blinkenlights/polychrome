@@ -44,6 +44,16 @@ SynthDef(\pc_drone, { |out = 0, freq = 110, amp = 0.2, dur = 8|
     Out.ar(out, RLPF.ar(sig, cutoff.clip(60, 8000), 0.4) * env * 0.5);
 }).writeDefFile(dir);
 
-("[synthdefs] wrote pc_ping, pc_click, pc_pluck, pc_drone to " ++ dir).postln;
+// Sustained voice with a gate: started once, then steered by /n_set and let go
+// with gate 0. The amp lag is what makes a picture drive a voice without
+// zipper noise — probe values arrive at 30 fps, the ear wants a slope.
+SynthDef(\pc_voice, { |out = 0, freq = 220, amp = 0, cutoff = 2000, gate = 1|
+    var env = EnvGen.kr(Env.asr(1.5, 1, 2.5), gate, doneAction: 2);
+    var sig = Saw.ar(freq) + Saw.ar(freq * 1.004) + SinOsc.ar(freq / 2, 0, 0.4);
+    var filtered = RLPF.ar(sig, Lag.kr(cutoff, 0.5).clip(60, 12000), 0.5);
+    Out.ar(out, filtered * Lag.kr(amp, 0.25) * env * 0.25);
+}).writeDefFile(dir);
+
+("[synthdefs] wrote pc_ping, pc_click, pc_pluck, pc_drone, pc_voice to " ++ dir).postln;
 0.exit;
 )

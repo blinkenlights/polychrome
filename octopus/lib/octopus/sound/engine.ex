@@ -26,10 +26,25 @@ defmodule Octopus.Sound.Engine do
           synth: binary()
         }
 
+  @typedoc "Identifies a sustained voice for the lifetime of its sound."
+  @type voice :: term()
+
   @callback start_link(keyword()) :: GenServer.on_start()
   @callback capabilities() ::
               %{scheduling: :timestamped | :immediate | :none, channels: pos_integer()}
   @callback note(note()) :: :ok
+
+  @doc """
+  Starts a sustained voice under `id`, replacing one already sounding there.
+
+  Sustained voices are what a picture can steer: the drone holds one per panel
+  and moves its amplitude with the formula. Engines that cannot change a
+  sounding note (beak) may ignore `set_voice/2` — the note still starts and
+  stops, it just cannot breathe.
+  """
+  @callback voice(voice(), map()) :: :ok
+  @callback set_voice(voice(), map()) :: :ok
+  @callback release(voice()) :: :ok
   @callback panic() :: :ok
 
   @default_note %{
@@ -87,6 +102,22 @@ defmodule Octopus.Sound.Engine do
 
   @spec capabilities() :: map()
   def capabilities, do: module().capabilities()
+
+  @default_voice %{synth: "pc_voice", channel: 1, note: 48, amp: 0.0, cutoff: 2000.0}
+
+  @doc "Starts (or restarts) a sustained voice."
+  @spec voice(term(), map()) :: :ok
+  def voice(id, params \\ %{}) do
+    module().voice(id, Map.merge(@default_voice, Map.new(params)))
+  end
+
+  @doc "Changes a sounding voice — amplitude, cutoff, pitch."
+  @spec set_voice(term(), map()) :: :ok
+  def set_voice(id, params), do: module().set_voice(id, Map.new(params))
+
+  @doc "Lets a sustained voice go; it fades out with its own release."
+  @spec release(term()) :: :ok
+  def release(id), do: module().release(id)
 
   @doc "Stops everything that is sounding, right now."
   @spec panic() :: :ok

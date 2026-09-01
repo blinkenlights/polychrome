@@ -51,6 +51,38 @@ defmodule Octopus.Sound.Engine.Beak do
     |> send_frame()
   end
 
+  # beak has no handle on a sounding note, so a voice is a long note here and
+  # `set_voice/2` is honestly a no-op rather than a silent approximation.
+  @impl true
+  def voice(id, %{channel: channel, note: note} = params) do
+    :persistent_term.put({__MODULE__, :voice, id}, {channel, trunc(note)})
+
+    %SynthFrame{
+      event_type: :NOTE_ON,
+      channel: channel,
+      note: trunc(note),
+      velocity: Map.get(params, :amp, 0.5) / 1,
+      duration_ms: 0.0,
+      config: @synth_config
+    }
+    |> send_frame()
+  end
+
+  @impl true
+  def set_voice(_id, _params), do: :ok
+
+  @impl true
+  def release(id) do
+    case :persistent_term.get({__MODULE__, :voice, id}, nil) do
+      nil ->
+        :ok
+
+      {channel, note} ->
+        :persistent_term.erase({__MODULE__, :voice, id})
+        send_frame(%SynthFrame{event_type: :NOTE_OFF, channel: channel, note: note})
+    end
+  end
+
   @impl true
   def panic do
     for channel <- 1..Octopus.Sound.Engine.channels() do

@@ -16,7 +16,21 @@ defmodule OctopusWeb.StudioLive do
   alias Octopus.Apps.PixelFun
   alias Octopus.Installation
   alias Octopus.Sound
-  alias Octopus.Sound.{Clock, Composition, Engine, Patch, Pattern, Probes, RingChase, Scheduler}
+
+  alias Octopus.Sound.{
+    Clock,
+    Composition,
+    Drone,
+    Engine,
+    Features,
+    Matrix,
+    Patch,
+    Pattern,
+    Probes,
+    RingChase,
+    Scheduler
+  }
+
   alias OctopusWeb.PixelsLive
 
   # A meter that falls to silence in about half a second reads as a level
@@ -34,6 +48,8 @@ defmodule OctopusWeb.StudioLive do
       Probes.subscribe()
       Engine.subscribe_notes()
       Patch.subscribe()
+      Matrix.subscribe()
+      Features.subscribe()
       :timer.send_interval(@tick_ms, :tick)
     end
 
@@ -59,7 +75,13 @@ defmodule OctopusWeb.StudioLive do
        brush: 1,
        synths: Pattern.synths(),
        compositions: safe(&Composition.list/0, []),
-       composition_name: ""
+       composition_name: "",
+       drone: drone_state(),
+       features: %{level: 0.0, onset: 0.0},
+       bindings: safe(&Matrix.list/0, []),
+       matrix_filter: :all,
+       new_source: nil,
+       new_target: nil
      )}
   end
 
@@ -102,6 +124,53 @@ defmodule OctopusWeb.StudioLive do
 
     if opts != [], do: RingChase.configure(opts)
     {:noreply, assign(socket, chase: chase_state())}
+  end
+
+  def handle_event("toggle_drone", _params, socket) do
+    Drone.enable(not socket.assigns.drone.enabled?)
+    {:noreply, assign(socket, drone: drone_state())}
+  end
+
+  def handle_event("matrix_filter", %{"filter" => filter}, socket) do
+    {:noreply, assign(socket, matrix_filter: String.to_existing_atom(filter))}
+  end
+
+  def handle_event("matrix_pick", params, socket) do
+    {:noreply,
+     socket
+     |> assign(new_source: parse_key(params["source"]) || socket.assigns.new_source)
+     |> assign(new_target: parse_key(params["target"]) || socket.assigns.new_target)}
+  end
+
+  def handle_event("matrix_add", _params, socket) do
+    source = socket.assigns.new_source || default_source()
+    target = socket.assigns.new_target || default_target()
+    Matrix.add(source, target)
+
+    {:noreply, socket}
+  end
+
+  def handle_event("matrix_amount", %{"binding" => id, "amount" => amount}, socket) do
+    with {amount, _} <- Float.parse(to_string(amount)) do
+      Matrix.set_amount(String.to_integer(id), amount)
+    end
+
+    {:noreply, socket}
+  end
+
+  def handle_event("matrix_curve", %{"binding" => id, "curve" => curve}, socket) do
+    Matrix.set_curve(String.to_integer(id), String.to_existing_atom(curve))
+    {:noreply, socket}
+  end
+
+  def handle_event("matrix_toggle", %{"id" => id}, socket) do
+    Matrix.toggle(String.to_integer(id))
+    {:noreply, socket}
+  end
+
+  def handle_event("matrix_remove", %{"id" => id}, socket) do
+    Matrix.remove(String.to_integer(id))
+    {:noreply, socket}
   end
 
   def handle_event("set_brush", %{"panel" => panel}, socket) do
@@ -225,11 +294,20 @@ defmodule OctopusWeb.StudioLive do
     {:noreply, assign(socket, pattern: pattern, patch_slot: slot)}
   end
 
+  def handle_info({:sound_matrix, bindings}, socket) do
+    {:noreply, assign(socket, bindings: bindings)}
+  end
+
+  def handle_info({:sound_features, features}, socket) do
+    {:noreply, assign(socket, features: features)}
+  end
+
   def handle_info(:tick, socket) do
     {:noreply,
      socket
      |> assign(levels: decay(socket.assigns.levels))
-     |> assign(scene: scene())}
+     |> assign(scene: scene())
+     |> assign(drone: drone_state())}
   end
 
   def handle_info(_message, socket), do: {:noreply, socket}
@@ -259,7 +337,7 @@ defmodule OctopusWeb.StudioLive do
 
         <div class="space-y-3">
           <.scene_card scene={@scene} />
-          <.sound_card chase={@chase} metronome?={@metronome?} synths={@synths} />
+          <.sound_card chase={@chase} drone={@drone} metronome?={@metronome?} synths={@synths} />
         </div>
       </div>
 
@@ -269,6 +347,17 @@ defmodule OctopusWeb.StudioLive do
         brush={@brush}
         synths={@synths}
         playhead={playhead(@position, @pattern)}
+      />
+
+      <.matrix
+        bindings={@bindings}
+        filter={@matrix_filter}
+        new_source={@new_source || default_source()}
+        new_target={@new_target || default_target()}
+        probes={@probes}
+        features={@features}
+        drone={@drone}
+        chase={@chase}
       />
     </div>
     """
@@ -542,6 +631,12 @@ defmodule OctopusWeb.StudioLive do
         <%= if @scene do %>
           <div class="text-sm">{@scene.name}</div>
           <code class="text-xs bg-base-300 rounded p-2 block break-all">{@scene.program}</code>
+          <div class="grid grid-cols-3 gap-2 text-[11px]">
+            <div :for={{label, value} <- @scene.values} class="bg-base-300/50 rounded p-1.5">
+              <div class="opacity-60">{label}</div>
+              <div class="font-mono tabular-nums">{value}</div>
+            </div>
+          </div>
           <.link navigate={~p"/"} class="btn btn-xs btn-ghost self-start">
             Im Foyer bearbeiten →
           </.link>
@@ -557,6 +652,7 @@ defmodule OctopusWeb.StudioLive do
   end
 
   attr :chase, :map, required: true
+  attr :drone, :map, required: true
   attr :metronome?, :boolean, required: true
   attr :synths, :list, required: true
 
@@ -575,6 +671,22 @@ defmodule OctopusWeb.StudioLive do
             phx-click="toggle_metronome"
           />
         </label>
+
+        <div class="divider my-0" />
+
+        <label class="flex items-center justify-between gap-2 cursor-pointer">
+          <span class="text-sm font-medium">Drone</span>
+          <input
+            type="checkbox"
+            class="toggle toggle-sm toggle-info"
+            checked={@drone.enabled?}
+            phx-click="toggle_drone"
+          />
+        </label>
+        <p class="text-[11px] opacity-60 -mt-1">
+          Eine gehaltene Stimme je Panel, ihre Lautstärke folgt dem Formelwert dort.
+          Der Akkord ändert sich, weil sich das Bild ändert.
+        </p>
 
         <div class="divider my-0" />
 
@@ -630,6 +742,205 @@ defmodule OctopusWeb.StudioLive do
             />
           </label>
         </form>
+      </div>
+    </div>
+    """
+  end
+
+  attr :bindings, :list, required: true
+  attr :filter, :atom, required: true
+  attr :new_source, :any, required: true
+  attr :new_target, :any, required: true
+  attr :probes, :list, required: true
+  attr :features, :map, required: true
+  attr :drone, :map, required: true
+  attr :chase, :map, required: true
+
+  defp matrix(assigns) do
+    ~H"""
+    <div class="card bg-base-200 border border-base-300">
+      <div class="card-body p-3 gap-3">
+        <div class="flex items-center gap-3 flex-wrap">
+          <h2 class="text-sm font-semibold uppercase tracking-wider">Matrix</h2>
+          <span class="text-[11px] opacity-60">
+            Das Grid sagt, wann etwas klingt — die Matrix, was sich langsam verändert.
+          </span>
+          <div class="join ml-auto">
+            <button
+              :for={
+                {filter, label} <- [
+                  {:all, "Alle"},
+                  {:sound_to_light, "Sound → Licht"},
+                  {:light_to_sound, "Licht → Sound"},
+                  {:score, "Partitur → beides"}
+                ]
+              }
+              class={["btn btn-xs join-item", @filter == filter && "btn-active"]}
+              phx-click="matrix_filter"
+              phx-value-filter={filter}
+            >
+              {label}
+            </button>
+          </div>
+        </div>
+
+        <form phx-change="matrix_pick" class="flex items-end gap-2 flex-wrap">
+          <label class="form-control">
+            <span class="label-text text-xs">Quelle</span>
+            <select name="source" class="select select-bordered select-sm">
+              <option
+                :for={{key, source} <- Enum.sort_by(Matrix.sources(), fn {_k, s} -> s.label end)}
+                value={key_to_param(key)}
+                selected={key == @new_source}
+              >
+                {source.label}
+              </option>
+            </select>
+          </label>
+          <span class="pb-2 opacity-50">→</span>
+          <label class="form-control">
+            <span class="label-text text-xs">Ziel</span>
+            <select name="target" class="select select-bordered select-sm">
+              <option
+                :for={{key, target} <- Enum.sort_by(Matrix.targets(), fn {_k, t} -> t.label end)}
+                value={key_to_param(key)}
+                selected={key == @new_target}
+              >
+                {target.label}
+              </option>
+            </select>
+          </label>
+          <button type="button" class="btn btn-sm mb-0" phx-click="matrix_add">＋ Zeile</button>
+        </form>
+
+        <div :if={@bindings == []} class="text-sm opacity-60">
+          Noch keine Kopplung. Zielbild 5 in einer Zeile: „Klang · Onsets" → „Szene ·
+          Sättigung" — dann setzt jeder Anschlag einen Farbakzent.
+        </div>
+
+        <div :if={@bindings != []} class="overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th class="w-32">Richtung</th>
+                <th>Quelle</th>
+                <th>Ziel</th>
+                <th class="w-56">Betrag</th>
+                <th class="w-28">Kurve</th>
+                <th class="w-20"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                :for={binding <- filtered_bindings(@bindings, @filter)}
+                class={!binding.enabled? && "opacity-40"}
+              >
+                <td>
+                  <span
+                    class="inline-flex items-center gap-1"
+                    title={direction_label(binding_direction(binding))}
+                  >
+                    <span
+                      :for={{_role, class} <- direction_dots(binding_direction(binding))}
+                      class={["w-2 h-2 rounded-sm inline-block", class]}
+                    />
+                    <span class="text-[10px] opacity-60 ml-1">
+                      {direction_label(binding_direction(binding))}
+                    </span>
+                  </span>
+                </td>
+                <td class="text-sm">{source_label(binding.source)}</td>
+                <td class="text-sm">{target_label(binding.target)}</td>
+                <td>
+                  <form phx-change="matrix_amount" class="flex items-center gap-2">
+                    <input type="hidden" name="binding" value={binding.id} />
+                    <input
+                      type="range"
+                      name="amount"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={binding.amount}
+                      class="range range-xs flex-1"
+                    />
+                    <span class="font-mono text-xs tabular-nums w-10 text-right">
+                      {:erlang.float_to_binary(binding.amount * 1.0, decimals: 2)}
+                    </span>
+                  </form>
+                </td>
+                <td>
+                  <form phx-change="matrix_curve">
+                    <input type="hidden" name="binding" value={binding.id} />
+                    <select name="curve" class="select select-bordered select-xs">
+                      <option
+                        :for={curve <- Matrix.curves()}
+                        value={curve}
+                        selected={curve == binding.curve}
+                      >
+                        {curve}
+                      </option>
+                    </select>
+                  </form>
+                </td>
+                <td class="text-right">
+                  <button
+                    class="btn btn-xs btn-ghost"
+                    phx-click="matrix_toggle"
+                    phx-value-id={binding.id}
+                  >
+                    {if binding.enabled?, do: "◼", else: "▶"}
+                  </button>
+                  <button
+                    class="btn btn-xs btn-ghost"
+                    phx-click="matrix_remove"
+                    phx-value-id={binding.id}
+                  >
+                    ×
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="divider my-0 text-xs opacity-60">Quellen — was sich gerade bewegt</div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <.source_card label="Probes · Mittel" domain={:light} value={probe_mean(@probes)} />
+          <.source_card label="Probes · Maximum" domain={:light} value={probe_max(@probes)} />
+          <.source_card label="Klang · Pegel" domain={:sound} value={@features.level} />
+          <.source_card label="Klang · Onsets" domain={:sound} value={@features.onset} />
+        </div>
+
+        <p class="text-[11px] opacity-60">
+          Licht → Sound läuft außerdem fest über die Instrumente:
+          Drone {if @drone.enabled?, do: "an", else: "aus"} ·
+          Ring-Chase {if @chase.enabled?, do: "an", else: "aus"}.
+          Beide lesen die Probes direkt, deshalb brauchen sie keine Zeile.
+        </p>
+      </div>
+    </div>
+    """
+  end
+
+  attr :label, :string, required: true
+  attr :domain, :atom, required: true
+  attr :value, :float, required: true
+
+  defp source_card(assigns) do
+    ~H"""
+    <div class="bg-base-300/50 rounded-lg p-2">
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-[11px] opacity-70">{@label}</span>
+        <span class="font-mono text-[11px] tabular-nums opacity-60">
+          {:erlang.float_to_binary(@value * 1.0, decimals: 2)}
+        </span>
+      </div>
+      <div class="h-1.5 bg-base-100 rounded mt-1 overflow-hidden">
+        <div
+          class={["h-full", @domain == :light && "bg-warning", @domain == :sound && "bg-info"]}
+          style={"width: #{round(min(max(@value, 0.0), 1.0) * 100)}%"}
+        />
       </div>
     </div>
     """
@@ -712,6 +1023,60 @@ defmodule OctopusWeb.StudioLive do
     safe(&Scheduler.metronome?/0, false)
   end
 
+  # Source and target keys are tuples; the DOM needs a string, so they travel
+  # as "kind:arg" and come back through a whitelist rather than String.to_atom.
+  defp format_value(nil), do: "—"
+  defp format_value(value) when is_float(value), do: :erlang.float_to_binary(value, decimals: 1)
+  defp format_value(value), do: to_string(value)
+
+  defp probe_mean([]), do: 0.5
+  defp probe_mean(probes), do: (Enum.sum(probes) / length(probes) + 1) / 2
+
+  defp probe_max([]), do: 0.5
+  defp probe_max(probes), do: (Enum.max(probes) + 1) / 2
+
+  defp key_to_param({kind, arg}) when is_atom(arg), do: "#{kind}:#{arg}"
+  defp key_to_param({kind, arg}), do: "#{kind}:#{arg}"
+
+  defp parse_key(nil), do: nil
+  defp parse_key(""), do: nil
+
+  defp parse_key(param) do
+    known = Map.keys(Matrix.sources()) ++ Map.keys(Matrix.targets())
+    Enum.find(known, &(key_to_param(&1) == param))
+  end
+
+  defp default_source, do: {:phase, 8}
+  defp default_target, do: {:scene, :zoom_base}
+
+  defp source_label(key), do: get_in(Matrix.sources(), [key, :label]) || inspect(key)
+  defp target_label(key), do: get_in(Matrix.targets(), [key, :label]) || inspect(key)
+
+  defp binding_direction(binding), do: Matrix.direction(binding.source, binding.target)
+
+  defp direction_dots(direction) do
+    case direction do
+      :sound_to_light -> [{:sound, "bg-info"}, {:light, "bg-warning"}]
+      :light_to_sound -> [{:light, "bg-warning"}, {:sound, "bg-info"}]
+      :score -> [{:score, "bg-base-content/40"}, {:both, "bg-gradient-to-r from-warning to-info"}]
+      _ -> [{:a, "bg-base-content/40"}, {:b, "bg-base-content/40"}]
+    end
+  end
+
+  defp direction_label(:sound_to_light), do: "Sound → Licht"
+  defp direction_label(:light_to_sound), do: "Licht → Sound"
+  defp direction_label(:score), do: "Partitur → beides"
+  defp direction_label(_), do: "—"
+
+  defp filtered_bindings(bindings, :all), do: bindings
+
+  defp filtered_bindings(bindings, filter),
+    do: Enum.filter(bindings, &(binding_direction(&1) == filter))
+
+  defp drone_state do
+    safe(&Drone.state/0, %{enabled?: false, gain: 0.7, cutoff: 1800, scale: []})
+  end
+
   defp chase_state do
     safe(
       fn ->
@@ -736,7 +1101,13 @@ defmodule OctopusWeb.StudioLive do
         %{
           app_id: app_id,
           name: config[:live_scene_name] || "Pixel Fun",
-          program: config[:program]
+          program: config[:program],
+          # Shown live, so a matrix row can be watched doing its work.
+          values: [
+            {"Zoom", format_value(config[:zoom_base])},
+            {"Sättigung", format_value(config[:saturation_percent])},
+            {"Helligkeit", format_value(config[:brightness_percent])}
+          ]
         }
 
       _other ->

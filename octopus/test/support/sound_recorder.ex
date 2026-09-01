@@ -23,14 +23,25 @@ defmodule Octopus.Sound.Engine.Recorder do
   def capabilities, do: %{scheduling: :timestamped, channels: 12}
 
   @impl true
-  def note(params) do
+  def note(params), do: tell({:note, params})
+
+  defp tell(message) do
     case :persistent_term.get(@key, nil) do
       nil -> :ok
-      pid -> send(pid, {:note, params})
+      pid -> send(pid, message)
     end
 
     :ok
   end
+
+  @impl true
+  def voice(id, params), do: tell({:voice, id, params})
+
+  @impl true
+  def set_voice(id, params), do: tell({:set_voice, id, params})
+
+  @impl true
+  def release(id), do: tell({:release, id})
 
   @impl true
   def panic do

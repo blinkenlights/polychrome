@@ -43,6 +43,15 @@ defmodule Octopus.Sound.Engine.SuperCollider do
   def note(params), do: GenServer.cast(__MODULE__, {:note, params})
 
   @impl Octopus.Sound.Engine
+  def voice(id, params), do: GenServer.cast(__MODULE__, {:voice, id, params})
+
+  @impl Octopus.Sound.Engine
+  def set_voice(id, params), do: GenServer.cast(__MODULE__, {:set_voice, id, params})
+
+  @impl Octopus.Sound.Engine
+  def release(id), do: GenServer.cast(__MODULE__, {:release, id})
+
+  @impl Octopus.Sound.Engine
   def panic, do: GenServer.cast(__MODULE__, :panic)
 
   @doc "Path of the `scsynth` binary, or `nil` when SuperCollider is not installed."
@@ -68,7 +77,10 @@ defmodule Octopus.Sound.Engine.SuperCollider do
       mapping: Keyword.get(config, :mapping, :direct),
       socket: nil,
       os_port: nil,
-      defs_loaded?: false
+      defs_loaded?: false,
+      # Sustained voices need their node id kept, so they can be changed and
+      # let go later. One-shot notes free themselves and are forgotten.
+      voices: %{}
     }
 
     {:ok, state, {:continue, {:boot, Keyword.get(config, :auto_start, false)}}}
@@ -123,9 +135,49 @@ defmodule Octopus.Sound.Engine.SuperCollider do
     {:noreply, state}
   end
 
+  def handle_cast({:voice, id, params}, state) do
+    state = release_voice(state, id)
+    node_id = next_node_id()
+
+    message =
+      OSC.message("/s_new", [
+        Map.get(params, :synth, "pc_voice"),
+        node_id,
+        0,
+        0,
+        "out",
+        output_bus(params.channel, state) / 1,
+        "freq",
+        Engine.frequency(params.note),
+        "amp",
+        params.amp / 1,
+        "cutoff",
+        Map.get(params, :cutoff, 2000) / 1
+      ])
+
+    send_now(state, [message])
+    {:noreply, %{state | voices: Map.put(state.voices, id, node_id)}}
+  end
+
+  def handle_cast({:set_voice, id, params}, state) do
+    case Map.fetch(state.voices, id) do
+      {:ok, node_id} ->
+        send_now(state, [OSC.message("/n_set", [node_id] ++ controls(params))])
+
+      :error ->
+        :ok
+    end
+
+    {:noreply, state}
+  end
+
+  def handle_cast({:release, id}, state) do
+    {:noreply, release_voice(state, id)}
+  end
+
   def handle_cast(:panic, state) do
     send_now(state, [OSC.message("/clearSched"), OSC.message("/g_freeAll", [0])])
-    {:noreply, state}
+    {:noreply, %{state | voices: %{}}}
   end
 
   @impl GenServer
@@ -186,6 +238,24 @@ defmodule Octopus.Sound.Engine.SuperCollider do
   end
 
   defp handle_reply(_address, state), do: state
+
+  # Gate 0 lets the envelope release; the synth frees its own node afterwards.
+  defp release_voice(state, id) do
+    case Map.pop(state.voices, id) do
+      {nil, _voices} ->
+        state
+
+      {node_id, voices} ->
+        send_now(state, [OSC.message("/n_set", [node_id, "gate", 0.0])])
+        %{state | voices: voices}
+    end
+  end
+
+  defp controls(params) do
+    params
+    |> Map.take([:amp, :cutoff, :freq])
+    |> Enum.flat_map(fn {key, value} -> [to_string(key), value / 1] end)
+  end
 
   # A ring of twelve panels on a stereo laptop would leave ten of them
   # inaudible. Folding wraps them onto the outputs that exist, so movement
