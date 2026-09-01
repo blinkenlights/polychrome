@@ -14,7 +14,7 @@ defmodule Octopus.Sound do
   Channels are 1-based and mean panels.
   """
 
-  alias Octopus.Sound.{Clock, Engine, RingChase, Scheduler}
+  alias Octopus.Sound.{Clock, Engine, Patch, RingChase, Scheduler}
 
   @doc "Plays one note now, or at `:at_ms` (monotonic, see `Octopus.Sound.Time`)."
   def note(params \\ [])
@@ -51,6 +51,15 @@ defmodule Octopus.Sound do
 
   @doc "Adjusts the chase — `:threshold`, `:synth`, `:duration_ms`, `:scale`."
   defdelegate configure_ring_chase(opts), to: RingChase, as: :configure
+
+  @doc "The pattern that is playing."
+  defdelegate pattern(), to: Patch
+
+  @doc "Applies a function to the live pattern, e.g. `&Pattern.put_step(&1, 1, 0, 3)`."
+  defdelegate update_pattern(fun), to: Patch, as: :update
+
+  @doc "Switches between the A and B pattern."
+  defdelegate switch_pattern(), to: Patch, as: :switch
 
   @doc "Everything off, right now."
   def panic do

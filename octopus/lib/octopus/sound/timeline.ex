@@ -110,6 +110,7 @@ defmodule Octopus.Sound.Timeline do
       bar: div(whole, timeline.beats_per_bar) + 1,
       beat: rem(whole, timeline.beats_per_bar) + 1,
       step: floor((in_loop - whole) * timeline.steps_per_beat) + 1,
+      steps_per_beat: timeline.steps_per_beat,
       playing?: timeline.playing?,
       bpm: timeline.bpm
     }

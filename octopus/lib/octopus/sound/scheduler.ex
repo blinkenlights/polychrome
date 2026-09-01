@@ -12,8 +12,9 @@ defmodule Octopus.Sound.Scheduler do
   delivered just in time instead — same source, worse precision, no change
   anywhere above.
 
-  The event source is a function `(step, timeline) -> [note]`. M1 ships a
-  metronome; the step grid will be the next one.
+  The event source is a function `(step, timeline) -> [note]` — the step grid
+  installs one. The metronome sits beside it rather than in it, so switching
+  the click on never costs you the pattern you were building.
   """
 
   use GenServer
@@ -41,6 +42,9 @@ defmodule Octopus.Sound.Scheduler do
 
   @doc "Drops everything scheduled but not yet sent."
   def clear, do: GenServer.call(__MODULE__, :clear)
+
+  @doc "Whether the built-in metronome is running."
+  def metronome?, do: GenServer.call(__MODULE__, :metronome?)
 
   @doc "A click on channel 1, accented on the first beat of the bar."
   def metronome_source(%{beats: beats}, %Timeline{} = timeline) do
@@ -71,16 +75,16 @@ defmodule Octopus.Sound.Scheduler do
      %{
        lookahead_ms: Keyword.get(opts, :lookahead_ms, lookahead_from_config()),
        source: Keyword.get(opts, :source),
+       metronome?: Keyword.get(opts, :metronome, false),
        last_beats: nil,
        pending: []
      }}
   end
 
   @impl true
-  def handle_call({:metronome, true}, _from, state),
-    do: {:reply, :ok, %{state | source: &__MODULE__.metronome_source/2}}
+  def handle_call({:metronome, on?}, _from, state), do: {:reply, :ok, %{state | metronome?: on?}}
 
-  def handle_call({:metronome, false}, _from, state), do: {:reply, :ok, %{state | source: nil}}
+  def handle_call(:metronome?, _from, state), do: {:reply, state.metronome?, state}
   def handle_call({:source, source}, _from, state), do: {:reply, :ok, %{state | source: source}}
 
   def handle_call(:clear, _from, state) do
@@ -89,7 +93,8 @@ defmodule Octopus.Sound.Scheduler do
   end
 
   @impl true
-  def handle_info(:tick, %{source: nil} = state), do: {:noreply, %{state | last_beats: nil}}
+  def handle_info(:tick, %{source: nil, metronome?: false} = state),
+    do: {:noreply, %{state | last_beats: nil}}
 
   def handle_info(:tick, state) do
     timeline = Clock.timeline()
@@ -140,9 +145,15 @@ defmodule Octopus.Sound.Scheduler do
   defp emit_step(step, state, timeline) do
     at_ms = round(Timeline.ms_at(timeline, step.beats))
 
-    state.source.(step, timeline)
+    (metronome_notes(state, step, timeline) ++ source_notes(state, step, timeline))
     |> Enum.reduce(state, fn note, state -> emit(Map.put(note, :at_ms, at_ms), state) end)
   end
+
+  defp metronome_notes(%{metronome?: true}, step, timeline), do: metronome_source(step, timeline)
+  defp metronome_notes(_state, _step, _timeline), do: []
+
+  defp source_notes(%{source: nil}, _step, _timeline), do: []
+  defp source_notes(%{source: source}, step, timeline), do: source.(step, timeline)
 
   defp emit(note, state) do
     case Engine.capabilities() do

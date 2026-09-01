@@ -16,7 +16,7 @@ defmodule OctopusWeb.StudioLive do
   alias Octopus.Apps.PixelFun
   alias Octopus.Installation
   alias Octopus.Sound
-  alias Octopus.Sound.{Clock, Engine, Probes, RingChase, Scheduler}
+  alias Octopus.Sound.{Clock, Composition, Engine, Patch, Pattern, Probes, RingChase, Scheduler}
   alias OctopusWeb.PixelsLive
 
   # A meter that falls to silence in about half a second reads as a level
@@ -33,6 +33,7 @@ defmodule OctopusWeb.StudioLive do
       Clock.subscribe()
       Probes.subscribe()
       Engine.subscribe_notes()
+      Patch.subscribe()
       :timer.send_interval(@tick_ms, :tick)
     end
 
@@ -52,7 +53,13 @@ defmodule OctopusWeb.StudioLive do
        engine: safe(&Sound.engine/0, nil),
        chase: chase_state(),
        metronome?: metronome_running?(),
-       scene: scene()
+       scene: scene(),
+       pattern: safe(&Patch.pattern/0, Pattern.new()),
+       patch_slot: safe(&Patch.slot/0, :a),
+       brush: 1,
+       synths: Pattern.synths(),
+       compositions: safe(&Composition.list/0, []),
+       composition_name: ""
      )}
   end
 
@@ -97,6 +104,99 @@ defmodule OctopusWeb.StudioLive do
     {:noreply, assign(socket, chase: chase_state())}
   end
 
+  def handle_event("set_brush", %{"panel" => panel}, socket) do
+    {:noreply, assign(socket, brush: String.to_integer(panel))}
+  end
+
+  def handle_event("cell", %{"slot" => slot, "step" => step}, socket) do
+    slot_id = String.to_integer(slot)
+    step = String.to_integer(step)
+    brush = socket.assigns.brush
+
+    Patch.update(&Pattern.put_step(&1, slot_id, step, brush))
+    {:noreply, socket}
+  end
+
+  def handle_event("toggle_mute", %{"slot" => slot}, socket) do
+    Patch.update(&Pattern.toggle_mute(&1, String.to_integer(slot)))
+    {:noreply, socket}
+  end
+
+  def handle_event("clear_slot", %{"slot" => slot}, socket) do
+    Patch.update(&Pattern.clear_slot(&1, String.to_integer(slot)))
+    {:noreply, socket}
+  end
+
+  def handle_event("slot_synth", %{"slot" => slot, "synth" => synth}, socket) do
+    if synth in socket.assigns.synths do
+      Patch.update(&Pattern.configure_slot(&1, String.to_integer(slot), %{synth: synth}))
+    end
+
+    {:noreply, socket}
+  end
+
+  def handle_event("switch_ab", _params, socket) do
+    Patch.switch()
+    {:noreply, socket}
+  end
+
+  def handle_event("copy_ab", _params, socket) do
+    Patch.copy_to_other()
+    {:noreply, socket}
+  end
+
+  def handle_event("composition_name", %{"name" => name}, socket) do
+    {:noreply, assign(socket, composition_name: name)}
+  end
+
+  def handle_event("save", _params, socket) do
+    name = String.trim(socket.assigns.composition_name)
+
+    if name == "" do
+      {:noreply, put_flash(socket, :error, "Die Komposition braucht einen Namen.")}
+    else
+      case Composition.save(name, socket.assigns.pattern, save_opts(socket)) do
+        {:ok, _composition} ->
+          {:noreply,
+           socket
+           |> assign(compositions: Composition.list())
+           |> put_flash(:info, "„#{name}\" gespeichert.")}
+
+        {:error, _changeset} ->
+          {:noreply, put_flash(socket, :error, "Speichern fehlgeschlagen.")}
+      end
+    end
+  end
+
+  def handle_event("take", _params, socket) do
+    {:ok, composition} = Composition.take(socket.assigns.pattern, save_opts(socket))
+
+    {:noreply,
+     socket
+     |> assign(compositions: Composition.list())
+     |> put_flash(:info, "Festgehalten als „#{composition.name}\".")}
+  end
+
+  def handle_event("load", %{"id" => id}, socket) do
+    case Composition.load(String.to_integer(id)) do
+      {:ok, composition} ->
+        Clock.set_bpm(composition.bpm)
+
+        {:noreply,
+         socket
+         |> assign(composition_name: composition.name)
+         |> put_flash(:info, "„#{composition.name}\" geladen.")}
+
+      :error ->
+        {:noreply, put_flash(socket, :error, "Komposition nicht gefunden.")}
+    end
+  end
+
+  def handle_event("delete", %{"id" => id}, socket) do
+    Composition.delete(String.to_integer(id))
+    {:noreply, assign(socket, compositions: Composition.list())}
+  end
+
   # -- Messages -------------------------------------------------------------
 
   @impl true
@@ -121,6 +221,10 @@ defmodule OctopusWeb.StudioLive do
     {:noreply, assign(socket, levels: levels)}
   end
 
+  def handle_info({:sound_patch, %{pattern: pattern, slot: slot}}, socket) do
+    {:noreply, assign(socket, pattern: pattern, patch_slot: slot)}
+  end
+
   def handle_info(:tick, socket) do
     {:noreply,
      socket
@@ -138,6 +242,12 @@ defmodule OctopusWeb.StudioLive do
     <div class="p-3 space-y-3 max-w-[1400px] mx-auto">
       <.transport position={@position} engine={@engine} />
 
+      <.library
+        compositions={@compositions}
+        composition_name={@composition_name}
+        patch_slot={@patch_slot}
+      />
+
       <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-3">
         <.stage
           panels={@panels}
@@ -150,6 +260,181 @@ defmodule OctopusWeb.StudioLive do
         <div class="space-y-3">
           <.scene_card scene={@scene} />
           <.sound_card chase={@chase} metronome?={@metronome?} synths={@synths} />
+        </div>
+      </div>
+
+      <.grid
+        pattern={@pattern}
+        panels={@panels}
+        brush={@brush}
+        synths={@synths}
+        playhead={playhead(@position, @pattern)}
+      />
+    </div>
+    """
+  end
+
+  attr :compositions, :list, required: true
+  attr :composition_name, :string, required: true
+  attr :patch_slot, :atom, required: true
+
+  defp library(assigns) do
+    ~H"""
+    <div class="card bg-base-200 border border-base-300">
+      <div class="card-body p-3 flex-row flex-wrap items-center gap-2">
+        <form phx-change="composition_name" class="contents">
+          <input
+            type="text"
+            name="name"
+            value={@composition_name}
+            placeholder="Name der Komposition"
+            class="input input-bordered input-sm w-56"
+          />
+        </form>
+        <button class="btn btn-sm" phx-click="save">Speichern</button>
+        <button class="btn btn-sm btn-ghost" phx-click="take" title="Moment festhalten">
+          Take
+        </button>
+
+        <div class="join">
+          <button
+            class={["btn btn-sm join-item", @patch_slot == :a && "btn-active"]}
+            phx-click="switch_ab"
+            disabled={@patch_slot == :a}
+          >
+            A
+          </button>
+          <button
+            class={["btn btn-sm join-item", @patch_slot == :b && "btn-active"]}
+            phx-click="switch_ab"
+            disabled={@patch_slot == :b}
+          >
+            B
+          </button>
+        </div>
+        <button
+          class="btn btn-sm btn-ghost"
+          phx-click="copy_ab"
+          title="Live-Muster in die andere Seite kopieren"
+        >
+          A→B kopieren
+        </button>
+
+        <div :if={@compositions != []} class="flex items-center gap-1 flex-wrap ml-auto">
+          <span class="text-xs uppercase tracking-wider opacity-60">Laden</span>
+          <span :for={composition <- @compositions} class="join">
+            <button class="btn btn-xs join-item" phx-click="load" phx-value-id={composition.id}>
+              {composition.name}
+            </button>
+            <button
+              class="btn btn-xs join-item btn-ghost"
+              phx-click="delete"
+              phx-value-id={composition.id}
+              data-confirm={"„#{composition.name}\" löschen?"}
+            >
+              ×
+            </button>
+          </span>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  attr :pattern, :map, required: true
+  attr :panels, :integer, required: true
+  attr :brush, :integer, required: true
+  attr :synths, :list, required: true
+  attr :playhead, :integer, required: true
+
+  defp grid(assigns) do
+    ~H"""
+    <div class="card bg-base-200 border border-base-300">
+      <div class="card-body p-3 gap-3">
+        <div class="flex items-center gap-3 flex-wrap">
+          <h2 class="text-sm font-semibold uppercase tracking-wider">Grid</h2>
+          <div class="flex items-center gap-1 flex-wrap">
+            <span class="text-xs opacity-60 mr-1">Panel</span>
+            <button
+              :for={panel <- 1..@panels}
+              class={[
+                "btn btn-xs w-8",
+                panel == @brush && "btn-warning",
+                panel != @brush && "btn-ghost"
+              ]}
+              phx-click="set_brush"
+              phx-value-panel={panel}
+            >
+              {panel}
+            </button>
+          </div>
+          <span class="text-[11px] opacity-60">
+            Klick setzt den Schritt auf das gewählte Panel — nochmal derselbe Klick löscht ihn.
+          </span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="border-separate border-spacing-1">
+            <thead>
+              <tr>
+                <th class="w-56"></th>
+                <th
+                  :for={step <- 0..(@pattern.steps - 1)}
+                  class="w-7 text-[10px] font-mono opacity-50"
+                >
+                  {if rem(step, 4) == 0, do: div(step, 4) + 1, else: "·"}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={slot <- @pattern.slots}>
+                <th class="text-left font-normal">
+                  <div class="flex items-center gap-1">
+                    <button
+                      class={[
+                        "btn btn-xs w-7",
+                        slot.muted? && "btn-error",
+                        !slot.muted? && "btn-ghost"
+                      ]}
+                      phx-click="toggle_mute"
+                      phx-value-slot={slot.id}
+                      title="Mute"
+                    >
+                      {slot.id}
+                    </button>
+                    <form phx-change="slot_synth" class="contents">
+                      <input type="hidden" name="slot" value={slot.id} />
+                      <select name="synth" class="select select-bordered select-xs w-28">
+                        <option :for={synth <- @synths} value={synth} selected={synth == slot.synth}>
+                          {synth}
+                        </option>
+                      </select>
+                    </form>
+                    <button
+                      class="btn btn-xs btn-ghost"
+                      phx-click="clear_slot"
+                      phx-value-slot={slot.id}
+                      title="Zeile leeren"
+                    >
+                      ⌫
+                    </button>
+                  </div>
+                </th>
+                <td :for={step <- 0..(@pattern.steps - 1)}>
+                  <button
+                    class={
+                      cell_class(Map.get(slot.steps, step), step == @playhead, rem(step, 4) == 0)
+                    }
+                    phx-click="cell"
+                    phx-value-slot={slot.id}
+                    phx-value-step={step}
+                  >
+                    {cell_label(Map.get(slot.steps, step))}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -352,6 +637,34 @@ defmodule OctopusWeb.StudioLive do
 
   # -- Helpers --------------------------------------------------------------
 
+  # Which column the transport is on right now, wrapped into the pattern.
+  defp playhead(%{beats: beats} = position, pattern) do
+    per_beat = Map.get(position, :steps_per_beat, 4)
+    Integer.mod(floor(beats * per_beat), pattern.steps)
+  end
+
+  defp playhead(_position, _pattern), do: -1
+
+  defp cell_label(nil), do: ""
+  defp cell_label(%{panel: panel}), do: panel
+
+  defp cell_class(cell, playhead?, beat_start?) do
+    [
+      "btn btn-xs w-7 min-h-0 h-7 p-0 font-mono",
+      cell && "btn-info",
+      is_nil(cell) && beat_start? && "btn-neutral btn-outline",
+      is_nil(cell) && !beat_start? && "btn-ghost bg-base-300/60",
+      playhead? && "ring-2 ring-warning"
+    ]
+  end
+
+  defp save_opts(socket) do
+    [
+      bpm: socket.assigns.position.bpm,
+      scene: socket.assigns.scene && socket.assigns.scene.program
+    ]
+  end
+
   defp format_position(%{bar: bar, beat: beat, step: step}) do
     "#{String.pad_leading(to_string(bar), 3, "0")}.#{beat}.#{step}"
   end
@@ -396,7 +709,7 @@ defmodule OctopusWeb.StudioLive do
   # Read from the scheduler rather than remembered here, so a reconnect or a
   # second browser tab shows what is actually running.
   defp metronome_running? do
-    safe(fn -> :sys.get_state(Scheduler).source != nil end, false)
+    safe(&Scheduler.metronome?/0, false)
   end
 
   defp chase_state do

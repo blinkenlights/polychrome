@@ -7,7 +7,7 @@ defmodule Octopus.Sound.Supervisor do
 
   use Supervisor
 
-  alias Octopus.Sound.{Clock, Engine, RingChase, Scheduler}
+  alias Octopus.Sound.{Clock, Engine, Patch, RingChase, Scheduler}
 
   def start_link(opts), do: Supervisor.start_link(__MODULE__, opts, name: __MODULE__)
 
@@ -19,7 +19,8 @@ defmodule Octopus.Sound.Supervisor do
       {Engine.module(), Keyword.get(config, :engine_opts, [])},
       {Clock, Keyword.get(config, :clock, [])},
       {Scheduler, Keyword.get(config, :scheduler, [])},
-      {RingChase, Keyword.get(config, :ring_chase, [])}
+      {RingChase, Keyword.get(config, :ring_chase, [])},
+      {Patch, Keyword.get(config, :patch, [])}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)
