@@ -8,12 +8,33 @@ Stand nach dem ersten Durchgang. Legende:
 | 🔁 | **nachtesten** — der Fall ist seither repariert oder der Testfall war falsch |
 | ⬜ | noch offen |
 
-> **Wichtig vor dem nächsten Durchgang: Server neu starten.** Die Fixes für D1,
-> D3, D4, D11 und G11 kamen erst nach deinem letzten Lauf; ein laufender Server
-> hat sie nicht.
+> **Vor dem nächsten Durchgang: Server neu starten**, und im Foyer die
+> **Rotation der Szene abschalten** (Rotation, Orbit, Sweeps) — siehe D-Block.
 
-**Offen sind 14 Fälle**, davon 6 zum Nachtesten. Der ganze Block I ist noch
+**Offen sind 12 Fälle**, davon 4 zum Nachtesten. Der ganze Block I ist noch
 unberührt.
+
+## Was sich seit dem dritten Durchgang geändert hat
+
+- **Das „Tempo wackelt nach einer Weile" ist die Szene, nicht die Uhr.**
+  Im laufenden System über 75 s gemessen: Frames halten die Echtzeit auf eine
+  Millisekunde, geplante Noten 518,4 ms ±0,6 in beiden Hälften, scsynth meldet
+  nichts als verspätet. Sway und konstanter Orbit sind genauso gleichmäßig.
+  Rotation nicht:
+
+  | Szene | max. Abweichung |
+  |---|---|
+  | ohne Rotation | **0,6 ms** |
+  | `rot_auto` (Sweep) | **254,8 ms** |
+  | `roll_rate: 20` | **709,8 ms** |
+
+  Das ist richtig so — Rotation dreht den Ring unter der Formel, die Welle
+  läuft schneller und langsamer an den Panels vorbei, und der Chase folgt dem
+  Bild. Es sieht nur aus wie ein Timing-Fehler. **Das Studio schreibt jetzt neben
+  den Ring-Chase, welche Bewegung aktiv ist und was sie anrichtet.**
+- **D11** litt zusätzlich an derselben Ursache: mit Rotation verschiebt sich die
+  Gleichzeitigkeit der drei Töne zyklisch — „versetzt, dann unisono, dann wieder
+  versetzt".
 
 ## Was sich seit dem zweiten Durchgang geändert hat
 
@@ -95,7 +116,10 @@ Dann `http://localhost:4000/studio` öffnen.
 
 ## D · Ring-Chase (Licht → Sound)
 
-**Voraussetzung: Formel `sin(atan2(ny,nx) - t)`.**
+**Voraussetzung: Formel `sin(atan2(ny,nx) - t)` — und eine Szene ohne
+Eigenbewegung.** Rotation, Orbit und die Auto-Sweeps drehen den Ring unter der
+Formel; der Chase folgt und wird dadurch ungleichmäßig. Das Studio warnt neben
+dem Ring-Chase, wenn etwas davon aktiv ist. Zum Testen im Foyer abschalten.
 
 Nicht `sin(x*0.5 - t)`. Nachgemessen: dort sitzen elf Abstände bei 0,433 s und
 einer — zwischen Panel 12 und 1 — bei 1,5 s. `x*k` läuft nur rund, wenn `k` mal
@@ -104,17 +128,17 @@ und läuft immer rund; der Faktor davor ist die Anzahl Wellen auf dem Ring.
 
 | # | | Schritt | Erwartet |
 |---|---|---|---|
-| D1 | 🔁 | Ring-Chase an | **Gleichmäßige** Töne, kein Stolpern, **keine Lücke** zwischen Panel 12 und 1 |
+| D1 | 🔁 | Ring-Chase an, Szenenbewegung aus | **Gleichmäßige** Töne, kein Stolpern, **keine Lücke** zwischen Panel 12 und 1 |
 | D2 | ✅ | Pegelmeter beobachten | Leuchten der Reihe nach in Wanderrichtung |
-| D3 | 🔁 | Formel `sin(atan2(ny,nx) + t)` | Bewegung dreht sich um, gleichmäßig |
-| D4 | 🔁 | Formel `sin(atan2(ny,nx) - t*3)` | Schneller und lauter, **weiterhin gleichmäßig** |
+| D3 | ✅ | Formel `sin(atan2(ny,nx) + t)` | Bewegung dreht sich um, gleichmäßig |
+| D4 | ✅ | Formel `sin(atan2(ny,nx) - t*3)` | Schneller und lauter, weiterhin gleichmäßig |
 | D5 | ✅ | Formel `sin(atan2(ny,nx) - t*0.05)` | **Stille ist das erwartete Ergebnis.** So eine Welle steigt nur um 0,0017 pro Frame und liegt damit unter der voreingestellten Mindeststeilheit von 0,002 — der Chase soll ein kaum bewegtes Bild nicht antasten. Weiter bei D6 |
 | D6 | ✅ | Mindeststeilheit aufs Minimum (0.0005) | Auch die langsame Welle klingt wieder |
 | D7 | ✅ | Klang `pc_pluck`, Länge 1500 ms | Gezupft, lang ausklingend |
 | D8 | ⬜ | Mindeststeilheit aufs Maximum | Stille, bis die Welle sehr steil wird |
 | D9 | ⬜ | Ring-Chase aus | Sofort still, keine Nachzügler |
 | D10 | ⬜ | Transport auf Stop, Chase an | Klingt trotzdem — das Bild ist die Uhr |
-| D11 | 🔁 | Formel `sin(atan2(ny,nx)*3 - t)` | **Drei Töne exakt gleichzeitig**, dann die nächsten drei — und drei *verschiedene* Tonhöhen, kein Schweben |
+| D11 | 🔁 | Formel `sin(atan2(ny,nx)*3 - t)`, **Szenenbewegung aus** | **Drei Töne exakt gleichzeitig**, dann die nächsten drei — und drei *verschiedene* Tonhöhen, kein Schweben |
 
 ## E · Drone
 
@@ -124,8 +148,8 @@ und läuft immer rund; der Faktor davor ist die Anzahl Wellen auf dem Ring.
 | E2 | ✅ | Formel `1` | Alle Stimmen klingen |
 | E3 | ✅ | Formel `0-1` | Verstummt, bleibt aber an |
 | E4 | ✅ | Formel `sin(atan2(ny,nx) - t*0.3)` | Der Akkord wandert, Stimmen kommen und gehen — deutlich mehrstimmig |
-| E5 | 🔁 | **Formel auf `sin(x*0.5 - t*0.3)` wechseln**, dann Zoom weit auf | Mehr Stimmen gleichzeitig, flirrend. Mit `atan2` ist der Effekt absichtlich kaum hörbar: Richtungsformeln sind gegen Zoom weitgehend immun (siehe [pixelfun.md](../pixelfun.md)) — dafür ist `x` da |
-| E6 | 🔁 | Zoom weit zurück (weiter mit `sin(x*0.5 - t*0.3)`) | Wenige stehende Töne |
+| E5 | 🔁 | **Formel `sin(x*0.5 - t*0.3)`**, Zoom auf **×6** | Zoom **hoch = feineres Muster**: viele Stimmen wechseln schnell, flirrend. Mit `atan2` ist der Effekt absichtlich kaum hörbar — Richtungsformeln sind gegen Zoom weitgehend immun (siehe [pixelfun.md](../pixelfun.md)), dafür ist `x` da |
+| E6 | 🔁 | Weiter mit `sin(x*0.5 - t*0.3)`, Zoom auf **×1** | Zoom **niedrig = gröberes Muster**: nur zwei, drei Töne stehen gleichzeitig |
 | E7 | ✅ | Drone aus | Ausklingen, kein Abschneiden |
 | E8 | ✅ | Drone **und** Chase | Beides gleichzeitig, kein Aussetzer |
 
