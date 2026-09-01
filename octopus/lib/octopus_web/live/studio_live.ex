@@ -345,7 +345,13 @@ defmodule OctopusWeb.StudioLive do
 
         <div class="space-y-3">
           <.scene_card scene={@scene} />
-          <.sound_card chase={@chase} drone={@drone} metronome?={@metronome?} synths={@synths} />
+          <.sound_card
+            chase={@chase}
+            drone={@drone}
+            metronome?={@metronome?}
+            synths={@synths}
+            scene={@scene}
+          />
         </div>
       </div>
 
@@ -717,6 +723,7 @@ defmodule OctopusWeb.StudioLive do
   attr :drone, :map, required: true
   attr :metronome?, :boolean, required: true
   attr :synths, :list, required: true
+  attr :scene, :map, default: nil
 
   defp sound_card(assigns) do
     ~H"""
@@ -765,6 +772,14 @@ defmodule OctopusWeb.StudioLive do
           Jedes Panel, dessen Formelwert durch null steigt, klingt auf seinem eigenen
           Lautsprecher. Braucht keinen Transport — das Bild ist die Uhr.
         </p>
+        <div
+          :if={@scene && @scene.moving != []}
+          class="text-[11px] rounded bg-warning/15 border border-warning/40 p-2 leading-snug"
+        >
+          <b>{Enum.join(@scene.moving, ", ")}</b> aktiv. Das dreht den Ring unter der
+          Formel, also wird der Chase schneller und langsamer — er folgt dem Bild.
+          Für gleichmäßiges Tempo im Foyer abschalten.
+        </div>
 
         <form phx-change="configure_chase" class="space-y-2">
           <label class="form-control">
@@ -1087,6 +1102,27 @@ defmodule OctopusWeb.StudioLive do
 
   # Source and target keys are tuples; the DOM needs a string, so they travel
   # as "kind:arg" and come back through a whitelist rather than String.to_atom.
+  # Everything that turns the ring under the formula, in the order a person
+  # would look for it.
+  @motion_labels [
+    {:roll_rate, "Rotation"},
+    {:orbit_rate, "Orbit"},
+    {:rot_auto, "Rotations-Sweep"},
+    {:trans_auto, "Translate-Sweep"},
+    {:zoom_auto, "Zoom-Sweep"},
+    {:sway_auto, "Sway-Sweep"}
+  ]
+
+  defp scene_motion(config) do
+    Enum.flat_map(@motion_labels, fn {key, label} ->
+      case Map.get(config, key) do
+        true -> [label]
+        value when is_number(value) and value != 0 -> [label]
+        _ -> []
+      end
+    end)
+  end
+
   defp format_value(nil), do: "—"
   defp format_value(value) when is_float(value), do: :erlang.float_to_binary(value, decimals: 1)
   defp format_value(value), do: to_string(value)
@@ -1183,6 +1219,10 @@ defmodule OctopusWeb.StudioLive do
           app_id: app_id,
           name: config[:live_scene_name] || "Pixel Fun",
           program: config[:program],
+          # A rotating picture makes the chase speed up and slow down — it
+          # follows the picture, and the picture is moving. Worth saying out
+          # loud, because it looks like a timing fault and is not one.
+          moving: scene_motion(config),
           # Shown live, so a matrix row can be watched doing its work.
           values: [
             {"Zoom", format_value(config[:zoom_base])},
