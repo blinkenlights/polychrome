@@ -150,6 +150,9 @@ defmodule Octopus.Apps.PixelFun do
     defstruct [
       :program,
       :source,
+      # app_id of whatever is currently on the wall; probes only go out when
+      # that is us.
+      :selected_app_id,
       :colors,
       :last_colors,
       :target_colors,
@@ -975,6 +978,9 @@ defmodule Octopus.Apps.PixelFun do
 
     Octopus.App.subscribe_to_button_events()
     Octopus.Params.Global.subscribe()
+    # Probes drive sound, so only the picture that is actually on the wall may
+    # send them — otherwise a scene that was replaced keeps playing.
+    Octopus.AppManager.subscribe()
 
     display_info = Octopus.App.get_display_info()
     config = coerce_config(config)
@@ -1831,6 +1837,12 @@ defmodule Octopus.Apps.PixelFun do
 
   defp presets, do: String.to_existing_atom(@app_mode_presets)
 
+  def handle_info({:app_manager, {:selected_app, app_id}}, %State{} = state) do
+    {:noreply, %State{state | selected_app_id: app_id}}
+  end
+
+  def handle_info({:app_manager, _}, %State{} = state), do: {:noreply, state}
+
   def handle_info({:param_updated, :speed, new_value}, %State{} = state) do
     {:noreply, %{state | speed: new_value}}
   end
@@ -2387,8 +2399,37 @@ defmodule Octopus.Apps.PixelFun do
   # frame, so this runs unconditionally — and it is the only bridge the sound
   # side needs into the image.
   defp broadcast_probes(%State{} = state, at_ms) do
-    Probes.broadcast(probe_values(state), state.formula_seconds || state.seconds, at_ms)
+    if on_the_wall?(state) do
+      Probes.broadcast(probe_values(state), state.formula_seconds || state.seconds, at_ms)
+    end
+
+    :ok
   end
+
+  # Several Pixel Fun instances can be running at once — one displayed, others
+  # left over from a takeover. Only the displayed one may drive the sound, or
+  # the ring keeps playing a picture nobody can see.
+  defp on_the_wall?(%State{} = state) do
+    case {own_app_id(), selected_app_id(state)} do
+      {nil, _} -> true
+      {_own, nil} -> false
+      {own, selected} -> own == selected
+    end
+  end
+
+  defp own_app_id do
+    AppSupervisor.lookup_app_id(self())
+  rescue
+    _ -> nil
+  end
+
+  defp selected_app_id(%State{selected_app_id: nil}) do
+    Octopus.AppManager.get_selected_app()
+  catch
+    :exit, _ -> nil
+  end
+
+  defp selected_app_id(%State{selected_app_id: app_id}), do: app_id
 
   @doc """
   Formula value at the centre of each panel, in panel order.

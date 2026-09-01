@@ -57,9 +57,9 @@ defmodule OctopusWeb.StudioLiveTest do
     assert render(view) =~ "width: 80%"
   end
 
-  test "reports no scene when no Pixel Fun is running", %{conn: conn} do
+  test "reports no scene when nothing is on the wall", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/studio")
 
-    assert html =~ "Kein Pixel Fun aktiv"
+    assert html =~ "Auf der Wand läuft gerade kein Pixel Fun"
   end
 end

@@ -710,8 +710,8 @@ defmodule OctopusWeb.StudioLive do
           </.link>
         <% else %>
           <p class="text-sm opacity-60">
-            Kein Pixel Fun aktiv. Ohne laufende Szene gibt es keine Probes — und damit nichts,
-            woran der Klang hängen könnte.
+            Auf der Wand läuft gerade kein Pixel Fun. Ohne Szene auf der Wand gibt es keine
+            Probes — und damit nichts, woran der Klang hängen könnte.
           </p>
         <% end %>
       </div>
@@ -792,7 +792,7 @@ defmodule OctopusWeb.StudioLive do
           </label>
 
           <label class="form-control">
-            <span class="label-text text-xs">Länge {@chase.duration_ms} ms</span>
+            <span class="label-text text-xs">Länge {round(@chase.duration_ms)} ms</span>
             <input
               type="range"
               name="duration_ms"
@@ -1210,9 +1210,14 @@ defmodule OctopusWeb.StudioLive do
     )
   end
 
+  # The studio shows the picture that is on the wall, not merely one that
+  # happens to be running: a takeover can leave an older Pixel Fun alive, and
+  # showing that one would be a quiet lie about what the ring is doing.
   defp scene do
+    selected = safe(&Octopus.AppManager.get_selected_app/0, nil)
+
     Enum.find_value(AppSupervisor.running_apps(), fn
-      {PixelFun, app_id} ->
+      {PixelFun, app_id} when app_id == selected ->
         config = AppSupervisor.config(app_id)
 
         %{
