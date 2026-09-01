@@ -33,8 +33,10 @@ defmodule Octopus.Sound.RingChase do
   # The cost is a fixed offset against the picture, which is what the AV
   # offset is for; the gain is a rhythm that does not wobble.
   @default_latency_ms 80
-  # D dorian: no leading tone, so any order of these still sounds settled.
-  @default_scale [62, 64, 65, 67, 69, 71, 72, 74]
+  # D dorian, seven notes without repeating the octave — with the octave in the
+  # scale, the eighth panel would land on the same pitch as the first one an
+  # octave up, and two panels sharing a pitch defeats the point.
+  @default_scale [62, 64, 65, 67, 69, 71, 72]
 
   # -- API ------------------------------------------------------------------
 
@@ -173,7 +175,7 @@ defmodule Octopus.Sound.RingChase do
   defp play(state, index, rise, at_ms, seen_at) do
     Engine.note(%{
       channel: index + 1,
-      note: Enum.at(state.scale, rem(index, length(state.scale))),
+      note: note_for(state.scale, index),
       velocity: velocity(rise),
       duration_ms: state.duration_ms,
       synth: state.synth,
@@ -181,6 +183,20 @@ defmodule Octopus.Sound.RingChase do
     })
 
     %{state | last_trigger: Map.put(state.last_trigger, index, seen_at)}
+  end
+
+  @doc """
+  Pitch for a panel: the scale, rising by an octave each time it runs out.
+
+  Wrapping the scale plainly would give two panels the same pitch — with
+  twelve panels and eight steps, panel 1 and panel 9 — and two identical notes
+  sounding at the same instant interfere, which the ear reads as a smeared
+  attack rather than as a chord.
+  """
+  @spec note_for([integer()], non_neg_integer()) :: integer()
+  def note_for(scale, index) do
+    size = length(scale)
+    Enum.at(scale, rem(index, size)) + 12 * div(index, size)
   end
 
   # A steep crossing means a fast wave — let it hit harder than a slow one.

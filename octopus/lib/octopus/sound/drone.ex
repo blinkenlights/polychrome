@@ -102,7 +102,7 @@ defmodule Octopus.Sound.Drone do
 
         Engine.voice(id, %{
           channel: index + 1,
-          note: Enum.at(state.scale, rem(index, length(state.scale))),
+          note: Octopus.Sound.RingChase.note_for(state.scale, index),
           amp: 0.0,
           cutoff: state.cutoff
         })

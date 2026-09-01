@@ -26,6 +26,26 @@ defmodule Octopus.Sound.RingChaseTest do
     end
   end
 
+  describe "note_for/2" do
+    test "gives every panel its own pitch, rising by an octave past the scale" do
+      scale = [62, 64, 65, 67, 69, 71, 72]
+
+      assert RingChase.note_for(scale, 0) == 62
+      assert RingChase.note_for(scale, 6) == 72
+      # Panel 8 would otherwise collide with panel 1 — two identical notes at
+      # the same instant interfere and smear the attack.
+      assert RingChase.note_for(scale, 7) == 74
+      refute RingChase.note_for(scale, 7) == RingChase.note_for(scale, 0)
+    end
+
+    test "twelve panels get twelve distinct pitches" do
+      scale = [62, 64, 65, 67, 69, 71, 72]
+      pitches = Enum.map(0..11, &RingChase.note_for(scale, &1))
+
+      assert length(Enum.uniq(pitches)) == 12
+    end
+  end
+
   describe "crossing_fraction/2" do
     test "says where between two frames the value passed zero" do
       # Halfway between -0.5 and 0.5.
