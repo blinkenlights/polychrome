@@ -11,7 +11,26 @@ Stand nach dem ersten Durchgang. Legende:
 > **Vor dem nächsten Durchgang: Server neu starten**, und im Foyer die
 > **Rotation der Szene abschalten** (Rotation, Orbit, Sweeps) — siehe D-Block.
 
-**Offen sind 8 Fälle**, davon 4 zum Nachtesten.
+**Offen sind 8 Fälle**, davon 2 zum Nachtesten — E5/E6 und der Rest von Block I.
+
+## Was sich seit dem fünften Durchgang geändert hat
+
+- **E5/E6 fragte nach dem falschen Effekt.** Nachgemessen mit
+  `sin(x*0.5 - t*0.3)`:
+
+  | Zoom | klingende Panels | davon laut | Abstand zwischen ihnen |
+  |---|---|---|---|
+  | ×1 | 7,0 | 4,3 | **1** — direkt benachbart |
+  | ×3 | 5,3 | 3,7 | 4 — verstreut |
+  | ×6 | 4,4 | **1,4** | 4 — verstreut |
+
+  Zoom ändert also kaum, **wie viele** Stimmen klingen, sondern **welche**: von
+  einem engen Cluster benachbarter Tonhöhen zu einer weiten Lage. Drei oder mehr
+  Töne gleichzeitig sind bei beiden Einstellungen richtig.
+- **Die Lautstärkekurve des Drone ist jetzt gebogen.** Die gerade Zuordnung
+  füllte den Raum zwischen den lauten Panels mit halblauten und verwischte genau
+  diesen Unterschied. Jetzt muss ein Panel richtig hell sein, um richtig laut zu
+  sein — die Lage wird hörbar.
 
 ## Was sich seit dem vierten Durchgang geändert hat
 
@@ -120,9 +139,9 @@ Dann `http://localhost:4000/studio` öffnen.
 | C2 | ✅ | Formel `1` | Alle Balken gleich hoch, ganz oben |
 | C3 | ✅ | Formel `0-1` | Alle ganz unten |
 | C4 | ✅ | Formel `sin(x*0.5 - t)` | Eine Welle wandert durch die Balken |
-| C5 | 🔁 | „Stop" im Foyer bei Pixelfun | Solange danach kein anderes Bild auf der Wand ist, läuft Pixel Fun weiter — „Stop" beendet die *Übernahme*, nicht die App. Sobald etwas anderes auf der Wand ist, sagt die Szenenkarte „Auf der Wand läuft gerade kein Pixel Fun" und der Klang verstummt |
-| C6 | 🔁 | Anderes Pixelfun-Preset per Übernahme starten | Probes und Klang folgen sofort dem neuen Preset; das alte klingt **nicht** weiter |
-| C7 | 🔁 | Eine Nicht-Pixelfun-App auf die Wand holen (z. B. Fire) | Szenenkarte: „Auf der Wand läuft gerade kein Pixel Fun", alle Pegelmeter auf null |
+| C5 | ✅ | „Stop" im Foyer bei Pixelfun | Solange danach kein anderes Bild auf der Wand ist, läuft Pixel Fun weiter — „Stop" beendet die *Übernahme*, nicht die App. Sobald etwas anderes auf der Wand ist, sagt die Szenenkarte „Auf der Wand läuft gerade kein Pixel Fun" und der Klang verstummt |
+| C6 | ✅ | Anderes Pixelfun-Preset per Übernahme starten | Probes und Klang folgen sofort dem neuen Preset; das alte klingt **nicht** weiter |
+| C7 | ✅ | Eine Nicht-Pixelfun-App auf die Wand holen (z. B. Fire) | Szenenkarte: „Auf der Wand läuft gerade kein Pixel Fun", alle Pegelmeter auf null |
 
 ## D · Ring-Chase (Licht → Sound)
 
@@ -143,13 +162,13 @@ und läuft immer rund; der Faktor davor ist die Anzahl Wellen auf dem Ring.
 | D3 | ✅ | Formel `sin(atan2(ny,nx) + t)` | Bewegung dreht sich um, gleichmäßig |
 | D4 | ✅ | Formel `sin(atan2(ny,nx) - t*3)` | Schneller und lauter, weiterhin gleichmäßig |
 | D5 | ✅ | Formel `sin(atan2(ny,nx) - t*0.05)` | **Stille ist das erwartete Ergebnis.** So eine Welle steigt nur um 0,0017 pro Frame und liegt damit unter der voreingestellten Mindeststeilheit von 0,002 — der Chase soll ein kaum bewegtes Bild nicht antasten. Weiter bei D6 |
-| D6 | 🔁 | Mindeststeilheit aufs Minimum (0.0005) | Die langsame Welle klingt wieder — aber **sehr** sparsam: `t*0.05` braucht 125 s für eine Runde, das ist ein Ton alle ~10 s. Mindestens 30 s hinhören |
-| D7 | 🔁 | Klang `pc_pluck`, Länge einmal auf **100 ms**, dann auf **2000 ms** | Deutlich unterschiedlich langer Ausklang. Nachgeprüft, dass der Regler ankommt; bei 400 ↔ 1500 ms ist der Unterschied auf einem Zupfklang subtiler als erwartet |
-| D8 | ⬜ | Mindeststeilheit aufs Maximum | Stille, bis die Welle sehr steil wird |
+| D6 | ✅ | Mindeststeilheit aufs Minimum (0.0005) | Die langsame Welle klingt wieder — aber **sehr** sparsam: `t*0.05` braucht 125 s für eine Runde, das ist ein Ton alle ~10 s. Mindestens 30 s hinhören |
+| D7 | ✅ | Klang `pc_pluck`, Länge einmal auf **100 ms**, dann auf **2000 ms** | Deutlich unterschiedlich langer Ausklang. Nachgeprüft, dass der Regler ankommt; bei 400 ↔ 1500 ms ist der Unterschied auf einem Zupfklang subtiler als erwartet |
+| D8 | ✅ | Mindeststeilheit aufs Maximum | Stille, bis die Welle sehr steil wird |
 | D9 | ✅ | Ring-Chase aus | Sofort still, keine Nachzügler |
 | D10 | ✅ | Transport auf Stop, Chase an | Klingt trotzdem — das Bild ist die Uhr |
 | D12 | ✅ | BPM ändern, während der Chase läuft | **Das Tempo ändert sich nicht, und das ist so.** Der Chase hängt am Bild, nicht am Transport; BPM steuert Grid und Metronom. Die Szene an den Takt zu binden ist gebaut, aber noch nicht bedienbar — siehe „fehlende Funktionen" |
-| D11 | 🔁 | Formel `sin(atan2(ny,nx)*3 - t)`, **Szenenbewegung aus** | **Drei Töne exakt gleichzeitig**, dann die nächsten drei — und drei *verschiedene* Tonhöhen, kein Schweben |
+| D11 | ✅ | Formel `sin(atan2(ny,nx)*3 - t)`, **Szenenbewegung aus** | **Drei Töne exakt gleichzeitig**, dann die nächsten drei — und drei *verschiedene* Tonhöhen, kein Schweben |
 
 ## E · Drone
 
@@ -159,8 +178,8 @@ und läuft immer rund; der Faktor davor ist die Anzahl Wellen auf dem Ring.
 | E2 | ✅ | Formel `1` | Alle Stimmen klingen |
 | E3 | ✅ | Formel `0-1` | Verstummt, bleibt aber an |
 | E4 | ✅ | Formel `sin(atan2(ny,nx) - t*0.3)` | Der Akkord wandert, Stimmen kommen und gehen — deutlich mehrstimmig |
-| E5 | 🔁 | **Formel `sin(x*0.5 - t*0.3)`**, Zoom auf **×6** | Zoom **hoch = feineres Muster**: viele Stimmen wechseln schnell, flirrend. Mit `atan2` ist der Effekt absichtlich kaum hörbar — Richtungsformeln sind gegen Zoom weitgehend immun (siehe [pixelfun.md](../pixelfun.md)), dafür ist `x` da |
-| E6 | 🔁 | Weiter mit `sin(x*0.5 - t*0.3)`, Zoom auf **×1** | Zoom **niedrig = gröberes Muster**: nur zwei, drei Töne stehen gleichzeitig |
+| E5 | 🔁 | **Formel `sin(x*0.5 - t*0.3)`**, Zoom **×6** | **Weite Lage:** die klingenden Panels liegen weit auseinander, also große Intervalle — offener, „gespreizter" Akkord, weniger laute Stimmen. Mit `atan2` ist der Effekt absichtlich kaum hörbar: Richtungsformeln sind gegen Zoom weitgehend immun (siehe [pixelfun.md](../pixelfun.md)) |
+| E6 | 🔁 | Weiter mit `sin(x*0.5 - t*0.3)`, Zoom **×1** | **Enge Lage:** benachbarte Panels klingen, also benachbarte Skalenstufen — dichter, reibender Cluster. Achte auf die *Breite* des Akkords, nicht auf die Anzahl der Töne: die ist in beiden Fällen ähnlich |
 | E7 | ✅ | Drone aus | Ausklingen, kein Abschneiden |
 | E8 | ✅ | Drone **und** Chase | Beides gleichzeitig, kein Aussetzer |
 
@@ -180,7 +199,7 @@ und läuft immer rund; der Faktor davor ist die Anzahl Wellen auf dem Ring.
 | # | | Schritt | Erwartet |
 |---|---|---|---|
 | G1–G10 | ✅ | Speichern, Take, Laden, Löschen, Neustart, A/B | wie beschrieben |
-| G11 | 🔁 | Auf A stehen, „A → B kopieren", umschalten | B hat A's Muster. Nachgeprüft im Browser: auf A heißt der Knopf „A → B kopieren", auf B „B → A kopieren" — er kopiert immer die *laufende* Seite auf die andere. Danach haben beide Seiten dasselbe; das ist der Sinn der Sache |
+| G11 | ✅ | Auf A stehen, „A → B kopieren", umschalten | B hat A's Muster. Nachgeprüft im Browser: auf A heißt der Knopf „A → B kopieren", auf B „B → A kopieren" — er kopiert immer die *laufende* Seite auf die andere. Danach haben beide Seiten dasselbe; das ist der Sinn der Sache |
 
 ## H · Matrix
 
@@ -196,8 +215,8 @@ und läuft immer rund; der Faktor davor ist die Anzahl Wellen auf dem Ring.
 | I1 | ⬜ | Tab schließen und neu öffnen | Ton läuft durch, Seite zeigt den echten Zustand |
 | I3 | ⬜ | Zwei Tabs, in einem das Grid ändern | Der andere folgt sofort |
 | I4 | ✅ | Panic bei Chase + Drone + Grid | Sofort still, Transport aus, Instrumente aus |
-| I6 | 🔁 | Szene im Foyer wechseln | Probes, Chase und Drone folgen der neuen Szene |
-| I7 | 🔁 | Pixelfun von der Wand nehmen, während Chase und Drone laufen | Es wird still, keine Fehler; kommt das Bild zurück, klingt es wieder |
+| I6 | ✅ | Szene im Foyer wechseln | Probes, Chase und Drone folgen der neuen Szene |
+| I7 | ✅ | Pixelfun von der Wand nehmen, während Chase und Drone laufen | Es wird still, keine Fehler; kommt das Bild zurück, klingt es wieder |
 
 ---
 
