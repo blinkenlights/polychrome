@@ -1,0 +1,924 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  Statischer UI-Entwurf für docs/pixelfun-av/03-ui.md.
+  Einfach im Browser öffnen. Kein Build, keine externen Abhängigkeiten
+  außer den Google Fonts (fällt sonst auf Systemschriften zurück).
+-->
+<title>Pixelfun Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap">
+
+<style>
+  :root{
+    --ground:#0A0D12;
+    --panel:#111722;
+    --panel-2:#161E2B;
+    --sunk:#0C111A;
+    --line:#232D3D;
+    --line-soft:#1A2331;
+    --ink:#E7ECF4;
+    --ink-2:#9FAABC;
+    --ink-3:#6B7688;
+    /* the two coupled domains */
+    --light:#F2A33C;   /* Bild / Pixelfun */
+    --sound:#54D9E8;   /* Klang / Engine */
+    --alert:#F4593C;
+    --ok:#7BD88F;
+    --radius:10px;
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,sans-serif;
+    --cond:"IBM Plex Sans Condensed","IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;
+  }
+
+  *{box-sizing:border-box}
+
+  body{
+    margin:0;
+    background:var(--ground);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:16px;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .wrap{max-width:1180px;margin:0 auto;padding:48px 24px 96px;display:flex;flex-direction:column;gap:40px}
+
+  /* ---------- masthead ---------- */
+  .masthead{display:flex;flex-direction:column;gap:14px;max-width:70ch}
+  .eyebrow{
+    font-family:var(--cond);font-weight:700;font-size:12px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--ink-3);display:flex;gap:10px;align-items:center;flex-wrap:wrap
+  }
+  .eyebrow .dot{width:5px;height:5px;border-radius:50%;background:var(--light)}
+  h1{
+    font-size:clamp(30px,4.4vw,46px);line-height:1.06;margin:0;font-weight:700;
+    letter-spacing:-.022em;text-wrap:balance
+  }
+  h1 em{font-style:normal;color:var(--ink-3)}
+  .lede{margin:0;color:var(--ink-2);font-size:17px;max-width:62ch}
+  .legend{display:flex;gap:20px;flex-wrap:wrap;margin-top:4px;font-size:13px;color:var(--ink-2)}
+  .legend span{display:inline-flex;align-items:center;gap:7px}
+  .swatch{width:10px;height:10px;border-radius:2px;display:inline-block}
+
+  /* ---------- console shell ---------- */
+  .console{
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    overflow:hidden;box-shadow:0 24px 60px -30px #000, 0 0 0 1px #00000040
+  }
+  .console-tag{
+    display:flex;justify-content:space-between;align-items:center;gap:12px;
+    padding:8px 14px;background:var(--sunk);border-bottom:1px solid var(--line-soft);
+    font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.04em
+  }
+
+  /* ---------- transport ---------- */
+  .transport{
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    padding:12px 14px;background:linear-gradient(180deg,#18202D,#131A25);
+    border-bottom:1px solid var(--line)
+  }
+  .tbtn{
+    display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 12px;
+    background:var(--panel-2);border:1px solid var(--line);border-radius:8px;
+    color:var(--ink);font:600 13px/1 var(--sans);cursor:default
+  }
+  .tbtn.play{background:var(--light);border-color:#c9812a;color:#241703}
+  .tbtn.panic{margin-left:auto;background:#2A1512;border-color:#5A2A22;color:#F79683}
+  .field{
+    display:flex;flex-direction:column;gap:2px;padding:0 12px;height:38px;justify-content:center;
+    border-left:1px solid var(--line-soft)
+  }
+  .field .k{font-family:var(--cond);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+  .field .v{font-family:var(--mono);font-size:14px;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .field .v.sound{color:var(--sound)}
+  .pill{
+    font-family:var(--mono);font-size:11px;padding:3px 8px;border-radius:999px;
+    border:1px solid var(--line);color:var(--ink-2);background:var(--sunk)
+  }
+  .pill.ok{color:var(--ok);border-color:#2C4A34}
+
+  /* ---------- library bar ---------- */
+  .library{
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    padding:9px 14px;background:#0F141D;border-bottom:1px solid var(--line)
+  }
+  .lib-name{
+    display:flex;align-items:center;gap:9px;height:30px;padding:0 11px;border-radius:8px;
+    background:var(--panel-2);border:1px solid var(--line);font-size:12.5px
+  }
+  .lib-name .caret{color:var(--ink-3)}
+  .lib-name b{font-weight:600}
+  .ab{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;height:30px}
+  .ab span{display:flex;align-items:center;padding:0 12px;font:600 12px/1 var(--mono);color:var(--ink-2);background:var(--panel-2)}
+  .ab span.on{background:var(--light);color:#241703}
+  .lbtn{
+    display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;border-radius:8px;
+    background:var(--panel-2);border:1px solid var(--line);color:var(--ink-2);font:500 12px/1 var(--sans)
+  }
+  .lbtn.perform{margin-left:auto;border-color:#3A4A63;color:var(--ink)}
+  .check{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;border-radius:8px;
+    background:#12221A;border:1px solid #2C4A34;color:var(--ok);font:500 12px/1 var(--sans)}
+
+  /* ---------- body grid ---------- */
+  .body{display:grid;grid-template-columns:230px minmax(0,1fr) 230px}
+  .col{padding:16px;display:flex;flex-direction:column;gap:16px;min-width:0}
+  .col.scene{border-right:1px solid var(--line-soft);background:#101621}
+  .col.sound{border-left:1px solid var(--line-soft);background:#101621}
+  .col.stage{background:var(--sunk)}
+
+  .zone-label{
+    font-family:var(--cond);font-weight:700;font-size:11px;letter-spacing:.15em;
+    text-transform:uppercase;display:flex;align-items:center;gap:8px
+  }
+  .zone-label.light{color:var(--light)}
+  .zone-label.sound{color:var(--sound)}
+  .zone-label .rule{flex:1;height:1px;background:var(--line)}
+
+  .grp{display:flex;flex-direction:column;gap:8px}
+  .code{
+    font-family:var(--mono);font-size:12px;background:var(--sunk);border:1px solid var(--line);
+    border-radius:8px;padding:9px 10px;color:#DCC9A6;overflow-x:auto;white-space:nowrap
+  }
+  .varbar{font-family:var(--mono);font-size:10.5px;color:var(--ink-3)}
+
+  .knob{display:flex;flex-direction:column;gap:5px}
+  .knob .row{display:flex;justify-content:space-between;font-size:12px;color:var(--ink-2)}
+  .knob .row b{font-family:var(--mono);font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+  .track{height:4px;border-radius:2px;background:#1E2735;position:relative}
+  .track i{position:absolute;inset:0 auto 0 0;border-radius:2px;background:var(--light)}
+  .track.sound i{background:var(--sound)}
+  .track b{
+    position:absolute;top:50%;width:11px;height:11px;margin-left:-5px;transform:translateY(-50%);
+    border-radius:50%;background:#E7ECF4;box-shadow:0 1px 3px #000
+  }
+
+  .select{
+    display:flex;justify-content:space-between;align-items:center;height:32px;padding:0 10px;
+    background:var(--panel-2);border:1px solid var(--line);border-radius:8px;font-size:12.5px;color:var(--ink)
+  }
+  .select .caret{color:var(--ink-3)}
+  .seg{display:flex;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg span{flex:1;text-align:center;font-size:11.5px;padding:6px 4px;color:var(--ink-2)}
+  .seg span.on{background:var(--light);color:#241703;font-weight:600}
+
+  /* probe list */
+  .probes{display:flex;flex-direction:column;gap:3px}
+  .probe{display:grid;grid-template-columns:24px 1fr 40px;gap:8px;align-items:center;font-family:var(--mono);font-size:10.5px;color:var(--ink-3)}
+  .probe .bar{height:6px;background:#1A2331;border-radius:3px;overflow:hidden;position:relative}
+  .probe .bar i{position:absolute;top:0;bottom:0;left:50%;background:var(--light);border-radius:2px}
+  .probe .val{text-align:right;color:var(--ink-2);font-variant-numeric:tabular-nums}
+
+  /* ---------- stage ---------- */
+  .stage-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+  .stage-head .hint{font-size:11.5px;color:var(--ink-3)}
+  .screen{
+    background:#05070B;border:1px solid var(--line);border-radius:var(--radius);padding:10px;
+    display:flex;flex-direction:column;gap:8px
+  }
+  .screen canvas{display:block;width:100%;image-rendering:pixelated;border-radius:4px}
+  #strip{height:auto;aspect-ratio:12/1}
+  .meters{display:grid;grid-template-columns:repeat(12,1fr);gap:3px}
+  .meter{height:34px;background:#0C121B;border-radius:3px;position:relative;overflow:hidden}
+  .meter i{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(180deg,var(--sound),#1E7C88)}
+  .meter u{
+    position:absolute;left:0;right:0;bottom:2px;text-align:center;font:500 9px/1 var(--mono);
+    color:#0A0D12;text-decoration:none
+  }
+  .stage-two{display:grid;grid-template-columns:minmax(0,1fr) 226px;gap:12px;align-items:start}
+  #ring{width:226px;height:226px}
+  .ringbox{background:#05070B;border:1px solid var(--line);border-radius:var(--radius);padding:8px}
+  .ringcap{font-family:var(--cond);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);text-align:center;padding-top:4px}
+
+  /* ---------- sound slots ---------- */
+  .slot{
+    display:flex;align-items:center;gap:8px;padding:8px 9px;background:var(--panel-2);
+    border:1px solid var(--line);border-radius:8px
+  }
+  .slot.active{border-color:#2E6B74;background:#12222A}
+  .slot .n{font-family:var(--mono);font-size:10px;color:var(--ink-3);width:12px}
+  .slot .nm{flex:1;font-size:12.5px}
+  .slot .kind{font-family:var(--cond);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+  .slot .lvl{width:26px;height:4px;border-radius:2px;background:#1E2735;position:relative}
+  .slot .lvl i{position:absolute;inset:0 auto 0 0;background:var(--sound);border-radius:2px}
+
+  /* ---------- coupling ---------- */
+  .coupling{border-top:1px solid var(--line);background:#0F141D}
+  .tabs{display:flex;align-items:center;gap:4px;padding:10px 14px 0}
+  .tab{
+    appearance:none;background:transparent;border:1px solid transparent;border-bottom:none;
+    color:var(--ink-3);font:600 12px/1 var(--sans);padding:8px 14px;border-radius:8px 8px 0 0;cursor:pointer
+  }
+  .tab:hover{color:var(--ink)}
+  .tab[aria-selected="true"]{background:#0F141D;border-color:var(--line);color:var(--ink);position:relative;top:1px}
+  .tab:focus-visible{outline:2px solid var(--sound);outline-offset:2px}
+  .tabs .spacer{flex:1}
+  .tabs .note{font-size:11.5px;color:var(--ink-3);padding-right:4px}
+  .pane{padding:14px;border-top:1px solid var(--line);overflow-x:auto}
+  .pane[hidden]{display:none}
+
+  table.grid{border-collapse:separate;border-spacing:3px;font-family:var(--mono);font-size:10px}
+  table.grid th{font-weight:500;color:var(--ink-3);text-align:left;padding-right:8px;white-space:nowrap}
+  table.grid th.step{width:22px;text-align:center;padding:0}
+  table.grid td{width:22px;height:22px;padding:0}
+  .cell{
+    width:22px;height:22px;border-radius:4px;background:#141C27;border:1px solid #1D2735;
+    display:flex;align-items:center;justify-content:center;font-size:9px;color:#5C6980
+  }
+  .cell.on{background:var(--sound);border-color:#7FE7F2;color:#04222A;font-weight:600}
+  .cell.on.light{background:var(--light);border-color:#FFC777;color:#2A1A02}
+  .cell.hold{background:linear-gradient(90deg,#1C3B42,#12262B);border-color:#2A5A63}
+  .cell.beat{border-color:#2C3A4D}
+  .playhead{outline:2px solid var(--light);outline-offset:1px}
+
+  table.mtx{border-collapse:collapse;font-size:11.5px;width:100%;min-width:640px}
+  table.mtx th,table.mtx td{border:1px solid var(--line-soft);padding:7px 9px;text-align:left}
+  table.mtx thead th{
+    font-family:var(--cond);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ink-3);font-weight:700;background:#121924
+  }
+  table.mtx tbody th{font-weight:500;color:var(--ink-2);background:#111823;white-space:nowrap}
+  .amt{display:flex;align-items:center;gap:8px}
+  .amt .bar{flex:1;height:5px;background:#1A2331;border-radius:3px;overflow:hidden;position:relative}
+  .amt .bar i{position:absolute;top:0;bottom:0;left:0;background:var(--light);border-radius:3px}
+  .amt .bar.s i{background:var(--sound)}
+  .amt .num{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);width:34px;text-align:right;font-variant-numeric:tabular-nums}
+  .none{color:var(--ink-3)}
+
+  .probe-tab{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;min-width:600px}
+  .pcard{background:#121924;border:1px solid var(--line);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:7px}
+  .pcard .t{display:flex;justify-content:space-between;align-items:center}
+  .pcard .t b{font:600 12px/1 var(--sans)}
+  .pcard .t span{font-family:var(--mono);font-size:10px;color:var(--ink-3)}
+  .pcard .d{font-size:11.5px;color:var(--ink-2);line-height:1.45}
+
+  /* ---------- direction glyphs + filters ---------- */
+  .dir{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--ink-3)}
+  .dir i{width:7px;height:7px;border-radius:2px;display:inline-block}
+  .dir i.l{background:var(--light)}
+  .dir i.s{background:var(--sound)}
+  .dir i.n{background:#5D6B80}
+  .filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+  .chip{
+    display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border-radius:999px;
+    border:1px solid var(--line);background:var(--panel-2);color:var(--ink-2);font-size:11.5px
+  }
+  .chip.on{border-color:#3A4A63;color:var(--ink);background:#18202D}
+
+  /* ---------- sources tab ---------- */
+  .srcgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:10px;min-width:600px}
+  .srchead{
+    font-family:var(--cond);font-size:10px;letter-spacing:.13em;text-transform:uppercase;
+    color:var(--ink-3);grid-column:1/-1;display:flex;align-items:center;gap:8px;margin-top:4px
+  }
+  .srchead .rule{flex:1;height:1px;background:var(--line)}
+
+  /* ---------- program panel ---------- */
+  .qrow{
+    display:grid;grid-template-columns:26px 1fr 92px 132px 92px;gap:12px;align-items:center;
+    padding:9px 14px;border-bottom:1px solid var(--line-soft);font-size:13px
+  }
+  .qrow:last-child{border-bottom:none}
+  .qrow.now{background:#141C27}
+  .qrow .num{font-family:var(--mono);font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+  .qrow .nm{display:flex;align-items:center;gap:9px;min-width:0}
+  .qrow .nm b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .qrow .meta{font-family:var(--mono);font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+  .badge{font-family:var(--cond);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;padding:3px 7px;border-radius:4px;white-space:nowrap}
+  .badge.live{background:#2A2113;color:#F2C27F}
+  .badge.free{background:#12221A;color:var(--ok)}
+  .badge.draft{background:#1A2331;color:var(--ink-3)}
+  .qhead{
+    display:grid;grid-template-columns:26px 1fr 92px 132px 92px;gap:12px;padding:8px 14px;
+    background:#0F141D;border-bottom:1px solid var(--line);
+    font-family:var(--cond);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)
+  }
+
+  /* ---------- reading notes ---------- */
+  .notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1px;background:var(--line-soft);border:1px solid var(--line-soft);border-radius:12px;overflow:hidden}
+  .note-card{background:var(--panel);padding:18px 18px 20px;display:flex;flex-direction:column;gap:7px}
+  .note-card h3{margin:0;font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px}
+  .note-card h3 .swatch{flex:none}
+  .note-card p{margin:0;font-size:13.5px;color:var(--ink-2);line-height:1.5}
+
+  h2{font-size:22px;margin:0 0 4px;font-weight:700;letter-spacing:-.015em}
+  .section{display:flex;flex-direction:column;gap:16px}
+  .section > p.sub{margin:0;color:var(--ink-2);max-width:62ch;font-size:15px}
+
+  ol.q{margin:0;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:1px;background:var(--line-soft);border:1px solid var(--line-soft);border-radius:12px;overflow:hidden}
+  ol.q li{background:var(--panel);padding:14px 18px;display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:baseline}
+  ol.q .tagq{
+    font-family:var(--cond);font-size:10px;letter-spacing:.11em;text-transform:uppercase;font-weight:700;
+    padding:3px 7px;border-radius:4px;white-space:nowrap
+  }
+  .tagq.arch{background:#2A2113;color:#F2C27F}
+  .tagq.ui{background:#12262B;color:#8FE3EC}
+  ol.q p{margin:0;font-size:14px;color:var(--ink-2)}
+  ol.q p b{color:var(--ink);font-weight:600}
+
+  footer{color:var(--ink-3);font-size:12.5px;font-family:var(--mono);border-top:1px solid var(--line-soft);padding-top:18px}
+
+  @media (max-width:980px){
+    .body{grid-template-columns:1fr}
+    .col.scene,.col.sound{border:none;border-bottom:1px solid var(--line-soft)}
+    .stage-two{grid-template-columns:1fr}
+    #ring{width:100%;height:auto;max-width:280px;margin:0 auto}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow"><span class="dot"></span> Polychrome · Branch feat/pixelfun-audiovisual</div>
+    <h1>Pixelfun Studio <em>— ein Takt, ein Raum, ein Feld</em></h1>
+    <p class="lede">
+      Entwurf der Komponier-Oberfläche für audiovisuelles Pixelfun. Der Ring hat zwölf
+      Panels und pro Panel einen Lautsprecher: Panelindex ist Azimut ist Klangort.
+      Oben das Studio — hier wird <em style="font-style:normal;color:var(--ink)">eine</em>
+      Komposition gebaut. Darunter die Ebene, die entscheidet, was davon wann läuft.
+    </p>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--light)"></i> Bild · Pixelfun</span>
+      <span><i class="swatch" style="background:var(--sound)"></i> Klang · Engine</span>
+      <span style="color:var(--ink-3)">Mockup, kein lauffähiges UI — die Bewegung zeigt Zielbild 1 „Ring-Chase“</span>
+    </div>
+  </header>
+
+  <!-- ===================== CONSOLE MOCKUP ===================== -->
+  <section class="console" aria-label="Entwurf der Studio-Oberfläche">
+    <div class="console-tag">
+      <span>octopus · /studio</span>
+      <span>Nation2026 · 12 × 8×8 px · Ring ⌀ 20 m · 12 Kanäle</span>
+    </div>
+
+    <!-- transport -->
+    <div class="transport">
+      <span class="tbtn play">▶ Play</span>
+      <span class="tbtn">Tap</span>
+      <div class="field"><span class="k">Tempo</span><span class="v" id="bpm">120.0 BPM</span></div>
+      <div class="field"><span class="k">Position</span><span class="v" id="pos">004.2.3</span></div>
+      <div class="field"><span class="k">Loop</span><span class="v">8 Takte ⟲</span></div>
+      <div class="field"><span class="k">AV-Offset</span><span class="v">−34 ms</span></div>
+      <div class="field"><span class="k">Master</span><span class="v sound">−6.0 dB</span></div>
+      <div class="field"><span class="k">Engine</span><span class="v" style="font-size:12px">SuperCollider</span></div>
+      <span class="pill ok">taktgenau</span>
+      <span class="tbtn panic">Panic</span>
+    </div>
+
+    <!-- library -->
+    <div class="library">
+      <span class="lib-name"><span style="color:var(--ink-3);font-size:11px">Komposition</span><b>Ring-Chase 3</b><span class="caret">▾</span></span>
+      <span class="ab"><span class="on">A</span><span>B</span></span>
+      <span class="lbtn">Speichern</span>
+      <span class="lbtn">Take</span>
+      <span class="check">☑ Für Rotation freigegeben</span>
+      <span class="lbtn perform">Performance-Modus →</span>
+    </div>
+
+    <!-- three columns -->
+    <div class="body">
+
+      <!-- SZENE -->
+      <div class="col scene">
+        <div class="zone-label light">Szene <i class="rule"></i></div>
+
+        <div class="grp">
+          <div class="code">sin(x*0.5 - t) * cos(y*0.6 + t*0.4)</div>
+          <div class="varbar">x y nx ny nz · t i · l m h · pi tau</div>
+        </div>
+
+        <div class="grp">
+          <div class="zone-label light" style="font-size:10px">Szenen-Slots <i class="rule"></i></div>
+          <div class="seg" role="presentation">
+            <span class="on">A</span><span>B</span><span>C</span><span>+</span>
+          </div>
+          <div class="select"><span style="font-size:11.5px">Wechsel: alle 8 Takte</span><span class="caret">▾</span></div>
+        </div>
+
+        <div class="grp">
+          <div class="select"><span>Zeitquelle: Beats</span><span class="caret">▾</span></div>
+          <div class="seg" role="presentation">
+            <span>Sekunden</span><span class="on">Beats</span>
+          </div>
+        </div>
+
+        <div class="grp">
+          <div class="knob">
+            <div class="row"><span>Zoom</span><b>×1.85</b></div>
+            <div class="track"><i style="width:42%"></i><b style="left:42%"></b></div>
+          </div>
+          <div class="knob">
+            <div class="row"><span>Rotation</span><b>12 °/s</b></div>
+            <div class="track"><i style="width:58%"></i><b style="left:58%"></b></div>
+          </div>
+          <div class="knob">
+            <div class="row"><span>Sättigung</span><b>72 %</b></div>
+            <div class="track"><i style="width:72%"></i><b style="left:72%"></b></div>
+          </div>
+          <div class="knob">
+            <div class="row"><span>Rot-Sweep</span><b>4 Takte</b></div>
+            <div class="track"><i style="width:33%"></i><b style="left:33%"></b></div>
+          </div>
+        </div>
+
+        <div class="grp">
+          <div class="zone-label light" style="font-size:10px">Probes <i class="rule"></i></div>
+          <div class="probes" id="probeList"></div>
+        </div>
+      </div>
+
+      <!-- STAGE -->
+      <div class="col stage">
+        <div class="stage-head">
+          <div class="zone-label">Stage</div>
+          <span class="hint">Bild und Pegel derselben zwölf Orte</span>
+        </div>
+
+        <div class="screen">
+          <canvas id="strip" width="1152" height="96" aria-label="Ring-Abwicklung, 12 Panels à 8×8 Pixel"></canvas>
+          <div class="meters" id="meters"></div>
+        </div>
+
+        <div class="stage-two">
+          <div class="screen" style="gap:10px">
+            <div class="zone-label sound" style="font-size:10px">Was gerade koppelt <i class="rule"></i></div>
+            <p style="margin:0;font-size:12.5px;color:var(--ink-2);line-height:1.5">
+              Lesehilfe, keine Bedienung: welche Regel gerade Bild und Ton verbindet.
+              Hier — Probe je Panelmitte, ausgelöst beim Nulldurchgang, spielt
+              <b style="color:var(--sound);font-weight:600">Ping</b> auf dem Lautsprecher unter der Welle.
+            </p>
+            <div class="probes" style="margin-top:2px">
+              <div class="probe"><span>von</span><span style="color:var(--ink-2)">Probe 1…12 · Nulldurchgang ↑</span><span class="val">—</span></div>
+              <div class="probe"><span>nach</span><span style="color:var(--ink-2)">Slot 2 „Ping“ · Kanal folgt Probe</span><span class="val">1.00</span></div>
+              <div class="probe"><span>zeit</span><span style="color:var(--ink-2)">200 ms Vorlauf · AV −34 ms</span><span class="val">ok</span></div>
+            </div>
+          </div>
+          <div class="ringbox">
+            <canvas id="ring" width="452" height="452" aria-label="Ringdraufsicht mit zwölf Panels und Pegeln"></canvas>
+            <div class="ringcap">Ringdraufsicht · Publikum in der Mitte</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- KLANG -->
+      <div class="col sound">
+        <div class="zone-label sound">Klang <i class="rule"></i></div>
+
+        <div class="grp" id="slots">
+          <div class="slot"><span class="n">1</span><span class="nm">Drone</span><span class="kind">synth</span><span class="lvl"><i style="width:60%"></i></span></div>
+          <div class="slot active"><span class="n">2</span><span class="nm">Ping</span><span class="kind">synth</span><span class="lvl"><i id="pingLvl" style="width:20%"></i></span></div>
+          <div class="slot"><span class="n">3</span><span class="nm">Feld A</span><span class="kind">sample</span><span class="lvl"><i style="width:35%"></i></span></div>
+          <div class="slot"><span class="n">4</span><span class="nm">Bass</span><span class="kind">synth</span><span class="lvl"><i style="width:48%"></i></span></div>
+          <div class="slot"><span class="n">5</span><span class="nm">Klick</span><span class="kind">sample</span><span class="lvl"><i style="width:22%"></i></span></div>
+          <div class="slot"><span class="n">6</span><span class="nm">Glocke</span><span class="kind">synth</span><span class="lvl"><i style="width:14%"></i></span></div>
+          <div class="slot"><span class="n">7</span><span class="nm">Wolke</span><span class="kind">granular</span><span class="lvl"><i style="width:41%"></i></span></div>
+          <div class="slot"><span class="n">8</span><span class="nm">—</span><span class="kind">leer</span><span class="lvl"></span></div>
+        </div>
+
+        <div class="grp">
+          <div class="zone-label sound" style="font-size:10px">Slot 2 · Ping <i class="rule"></i></div>
+          <div class="select"><span>SynthDef: pluck</span><span class="caret">▾</span></div>
+          <div class="knob">
+            <div class="row"><span>Tonhöhe</span><b>D4 · dorisch</b></div>
+            <div class="track sound"><i style="width:46%"></i><b style="left:46%"></b></div>
+          </div>
+          <div class="knob">
+            <div class="row"><span>Filter</span><b>2.4 kHz</b></div>
+            <div class="track sound"><i style="width:64%"></i><b style="left:64%"></b></div>
+          </div>
+          <div class="knob">
+            <div class="row"><span>Release</span><b>380 ms</b></div>
+            <div class="track sound"><i style="width:28%"></i><b style="left:28%"></b></div>
+          </div>
+          <div class="select"><span>Kanal: folgt Probe</span><span class="caret">▾</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- coupling -->
+    <div class="coupling">
+      <div class="tabs" role="tablist" aria-label="Kopplung">
+        <button class="tab" role="tab" id="tab-grid" aria-controls="pane-grid" aria-selected="true">Grid</button>
+        <button class="tab" role="tab" id="tab-matrix" aria-controls="pane-matrix" aria-selected="false">Matrix</button>
+        <button class="tab" role="tab" id="tab-probes" aria-controls="pane-probes" aria-selected="false">Quellen</button>
+        <span class="spacer"></span>
+        <span class="note">Ereignisse im Grid · Verläufe in der Matrix · Quellen definieren, was sich bewegt</span>
+      </div>
+
+      <div class="pane" role="tabpanel" id="pane-grid" aria-labelledby="tab-grid">
+        <table class="grid" id="stepGrid"></table>
+        <p style="margin:12px 0 0;font-size:12.5px;color:var(--ink-2);max-width:70ch">
+          Jede Zelle trägt zusätzlich einen <b style="color:var(--ink);font-weight:600">Ort</b> — die Zahl ist das
+          Panel, auf dem der Schritt klingt. Das unterscheidet dieses Grid von jeder Groovebox:
+          komponiert wird nicht nur wann, sondern wo auf dem Ring.
+        </p>
+      </div>
+
+      <div class="pane" role="tabpanel" id="pane-matrix" aria-labelledby="tab-matrix" hidden>
+        <div class="filters">
+          <span class="chip on">Alle Richtungen</span>
+          <span class="chip"><span class="dir"><i class="s"></i>→<i class="l"></i></span> Sound → Licht</span>
+          <span class="chip"><span class="dir"><i class="l"></i>→<i class="s"></i></span> Licht → Sound</span>
+          <span class="chip"><span class="dir"><i class="n"></i>→<i class="l"></i><i class="s"></i></span> Partitur → beides</span>
+        </div>
+        <table class="mtx">
+          <thead>
+            <tr><th style="width:64px">Richtung</th><th>Quelle</th><th>Ziel</th><th style="width:30%">Betrag</th><th>Kurve</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="dir"><i class="n"></i>→<i class="l"></i></span></td>
+              <th>Transport-Phase · 8 Takte</th><td>Pixelfun · Zoom</td>
+              <td><span class="amt"><span class="bar"><i style="width:38%"></i></span><span class="num">+0.38</span></span></td>
+              <td class="none">sine in/out</td>
+            </tr>
+            <tr>
+              <td><span class="dir"><i class="l"></i>→<i class="s"></i></span></td>
+              <th>Formel-Probe · Panelmitten</th><td>Slot 1 „Drone“ · Amp je Kanal</td>
+              <td><span class="amt"><span class="bar s"><i style="width:82%"></i></span><span class="num">+0.82</span></span></td>
+              <td class="none">linear</td>
+            </tr>
+            <tr>
+              <td><span class="dir"><i class="s"></i>→<i class="l"></i></span></td>
+              <th>Audio-Feature · Bass-Hüllkurve</th><td>Pixelfun · Sättigung</td>
+              <td><span class="amt"><span class="bar"><i style="width:24%"></i></span><span class="num">+0.24</span></span></td>
+              <td class="none">exp</td>
+            </tr>
+            <tr>
+              <td><span class="dir"><i class="n"></i>→<i class="s"></i></span></td>
+              <th>LFO · 1 Takt, dreieck</th><td>Slot 2 „Ping“ · Filter</td>
+              <td><span class="amt"><span class="bar s"><i style="width:55%"></i></span><span class="num">+0.55</span></span></td>
+              <td class="none">linear</td>
+            </tr>
+            <tr>
+              <td><span class="dir"><i class="n"></i>→<i class="l"></i><i class="s"></i></span></td>
+              <th>MIDI · Regler 1</th><td>Dichte · Pattern + Helligkeit</td>
+              <td><span class="amt"><span class="bar"><i style="width:41%"></i></span><span class="num">+0.41</span></span></td>
+              <td class="none">stufig</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pane" role="tabpanel" id="pane-probes" aria-labelledby="tab-probes" hidden>
+        <div class="srcgrid">
+          <div class="srchead" style="color:var(--light)">Aus dem Bild — Probes <i class="rule"></i></div>
+          <div class="pcard">
+            <div class="t"><b>Panelmitten 1…12</b><span>x = (n−5.5)·2</span></div>
+            <p class="d">Zwölf Messstellen, eine je Panel. Liefert einen kontinuierlichen Wert und einen Trigger beim Nulldurchgang aufwärts.</p>
+          </div>
+          <div class="pcard">
+            <div class="t"><b>Glättung · Schwelle</b><span>τ 60 ms · 0.15</span></div>
+            <p class="d">Verhindert Doppeltrigger bei zappeligen Formeln. Unter der Schwelle bleibt der Ring still.</p>
+          </div>
+
+          <div class="srchead" style="color:var(--sound)">Aus dem Klang — Features <i class="rule"></i></div>
+          <div class="pcard">
+            <div class="t"><b>Bänder l · m · h</b><span>60 Hz</span></div>
+            <p class="d">Pegel je Frequenzbereich, direkt aus der Engine statt aus einem Mikrofon. Liegen auch als Formelvariablen an.</p>
+          </div>
+          <div class="pcard">
+            <div class="t"><b>Onsets</b><span>je Slot</span></div>
+            <p class="d">Meldet den Anfang eines Tons. Weil die Engine ihn plant, ist er sogar vor dem Erklingen bekannt.</p>
+          </div>
+
+          <div class="srchead">Neutral — Partitur <i class="rule"></i></div>
+          <div class="pcard">
+            <div class="t"><b>Transport-Phasen</b><span>1 · 4 · 8 · 16 Takte</span></div>
+            <p class="d">Sägezahn oder Dreieck über N Takte. Die Grundlage für alles, was langsam atmet.</p>
+          </div>
+          <div class="pcard">
+            <div class="t"><b>LFOs · Zufall</b><span>4 frei belegbar</span></div>
+            <p class="d">Frei laufend oder ins Raster gerastet, dazu Sample &amp; Hold für sprunghafte Werte.</p>
+          </div>
+          <div class="pcard">
+            <div class="t"><b>MIDI</b><span>Regler · Pads</span></div>
+            <p class="d">Regler sind Quellen wie jede andere, Pads sind Trigger wie jeder andere — dieselbe Matrix.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== PROGRAM LAYER ===================== -->
+  <section class="section">
+    <div>
+      <h2>Die Ebene darüber: das Programm</h2>
+      <p class="sub">Das Studio baut <em>eine</em> Komposition. Was davon wann läuft, entscheidet die
+        bestehende Konsole — Warteschlange, Rotation, Übernahme, Übergänge gibt es dort schon.
+        Kompositionen reihen sich dort als Einträge ein, sobald sie freigegeben sind.</p>
+    </div>
+
+    <div class="console">
+      <div class="console-tag">
+        <span>octopus · / · Konsole</span>
+        <span>Rotation läuft · Wechsel auf Taktgrenze · Überblendung 4 Takte</span>
+      </div>
+      <div class="transport">
+        <span class="tbtn">⏸ Rotation</span>
+        <span class="tbtn">⏭ Weiter</span>
+        <div class="field"><span class="k">Jetzt</span><span class="v" style="font-size:12px">Ring-Chase 3</span></div>
+        <div class="field"><span class="k">Rest</span><span class="v">02:41</span></div>
+        <div class="field"><span class="k">Als nächstes</span><span class="v" style="font-size:12px">Voicing-Drone</span></div>
+        <div class="field"><span class="k">Überblendung</span><span class="v sound">4 Takte</span></div>
+        <span class="tbtn panic" style="background:var(--panel-2);border-color:var(--line);color:var(--ink)">Übernehmen</span>
+      </div>
+      <div class="qhead"><span>#</span><span>Eintrag</span><span>Dauer</span><span>Status</span><span>Tempo</span></div>
+      <div class="qrow now">
+        <span class="num">1</span>
+        <span class="nm"><span class="badge live">läuft</span><b>Ring-Chase 3</b></span>
+        <span class="meta">5:00</span><span><span class="badge free">freigegeben</span></span><span class="meta">120.0</span>
+      </div>
+      <div class="qrow">
+        <span class="num">2</span>
+        <span class="nm"><b>Voicing-Drone</b></span>
+        <span class="meta">8:00</span><span><span class="badge free">freigegeben</span></span><span class="meta">120.0</span>
+      </div>
+      <div class="qrow">
+        <span class="num">3</span>
+        <span class="nm"><b>Sample-Kammern</b></span>
+        <span class="meta">6:00</span><span><span class="badge free">freigegeben</span></span><span class="meta">96.0</span>
+      </div>
+      <div class="qrow">
+        <span class="num">4</span>
+        <span class="nm"><b>Sternenhimmel</b> <span style="color:var(--ink-3);font-size:11.5px">— Szene ohne Ton</span></span>
+        <span class="meta">4:00</span><span><span class="badge free">freigegeben</span></span><span class="meta">—</span>
+      </div>
+      <div class="qrow" style="opacity:.55">
+        <span class="num">—</span>
+        <span class="nm"><b>Chase-Experiment</b></span>
+        <span class="meta">—</span><span><span class="badge draft">Entwurf</span></span><span class="meta">128.0</span>
+      </div>
+    </div>
+
+    <div class="notes">
+      <div class="note-card">
+        <h3><i class="swatch" style="background:var(--light)"></i> Freigabe</h3>
+        <p>Der Haken im Studio entscheidet, ob eine Komposition hier überhaupt auftauchen darf. Entwürfe bleiben unten und laufen nie von allein.</p>
+      </div>
+      <div class="note-card">
+        <h3><i class="swatch" style="background:var(--sound)"></i> Übergang</h3>
+        <p>Der Wechsel wartet auf die nächste Eins. Das Bild nimmt die vorhandenen Transitions, der Ton blendet über N Takte über — beide Kompositionen klingen währenddessen gleichzeitig.</p>
+      </div>
+      <div class="note-card">
+        <h3><i class="swatch" style="background:#5D6B80"></i> Übernehmen</h3>
+        <p>Hand ans Steuer: Rotation pausiert, die gewählte Komposition bleibt stehen, das Studio bearbeitet genau sie. Loslassen, und die Rotation läuft weiter.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== READING NOTES ===================== -->
+  <section class="section">
+    <div>
+      <h2>Wie die Seite gelesen wird</h2>
+      <p class="sub">Sechs Zonen, jede mit einer Aufgabe. Die Mitte ist die Wahrheit, links das Bild,
+        rechts der Klang, unten die Kopplung, oben die Zeit.</p>
+    </div>
+    <div class="notes">
+      <div class="note-card">
+        <h3><i class="swatch" style="background:var(--ink-2)"></i> Transport</h3>
+        <p>Eine Uhr für alles. BPM, Position, Loop, AV-Offset, Master, Engine-Status, Panic. Immer sichtbar, weil man im Hören nicht scrollt.</p>
+      </div>
+      <div class="note-card">
+        <h3><i class="swatch" style="background:#5D6B80"></i> Bibliothek</h3>
+        <p>Hier wird „alles ist ein Preset“ konkret: Komposition wählen, A/B vergleichen, speichern, einen Take einfrieren — und erst mit dem Haken läuft sie im Programm der Installation.</p>
+      </div>
+      <div class="note-card">
+        <h3><i class="swatch" style="background:var(--light)"></i> Szene</h3>
+        <p>Der bestehende Pixelfun-Editor, kompakt. Neu sind nur zwei Dinge: Zeitquelle Sekunden ↔ Beats und die Probe-Punkte.</p>
+      </div>
+      <div class="note-card">
+        <h3><i class="swatch" style="background:linear-gradient(90deg,var(--light),var(--sound))"></i> Stage</h3>
+        <p>Ring-Abwicklung, Pegel je Panel und Draufsicht. Wer eine Bewegung sieht, aber nicht hört, sieht sofort, dass das Mapping nicht stimmt.</p>
+      </div>
+      <div class="note-card">
+        <h3><i class="swatch" style="background:var(--sound)"></i> Klang</h3>
+        <p>Slots statt Spuren. Jeder Slot trägt seine Ring-Zuordnung sichtbar: festes Panel, alle Panels, rotierend, oder er folgt einer Probe.</p>
+      </div>
+      <div class="note-card">
+        <h3><i class="swatch" style="background:#5D6B80"></i> Kopplung</h3>
+        <p>Grid für Ereignisse, Matrix für langsame Modulation, Probes für die Brücke aus dem Bild. Jede Zelle zeigt ihren Wert live — Kopplung muss sichtbar sein.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== OPEN QUESTIONS ===================== -->
+  <section class="section">
+    <div>
+      <h2>Was wir zusammen entscheiden müssen</h2>
+      <p class="sub">Sortiert danach, was blockiert. Die vollständige Liste steht in
+        <span style="font-family:var(--mono);font-size:13px;color:var(--ink)">docs/pixelfun-av/04-offene-fragen.md</span>.</p>
+    </div>
+    <ol class="q">
+      <li><span class="tagq arch">Architektur</span><p><b>Audio-Hardware und Zielrechner.</b> Welches Interface, wie viele Ausgänge, und ist Kanal n physisch wirklich Panel n? Davon hängt ab, ob die Ringdraufsicht die Realität abbildet.</p></li>
+      <li><span class="tagq arch">Architektur</span><p><b>Wer betreibt SuperCollider?</b> Ein Dienst mehr auf dem Pi ist Ops-Arbeit. Die Engine-Behaviour hält beak als Rückfallebene offen — die Frage ist, worauf wir optimieren.</p></li>
+      <li><span class="tagq arch">Architektur</span><p><b>Ring oder auch Wand?</b> Der räumliche Teil ist ringspezifisch. Auf Woodstock und Pixie wird aus Azimut links ↔ rechts.</p></li>
+      <li><span class="tagq ui">Oberfläche</span><p><b>Komponier-Metapher.</b> Step-Grid plus Modulationsmatrix — oder DAW-Timeline, oder reines Live-Patch ohne Sequencer? Das entscheidet den ganzen unteren Bereich.</p></li>
+      <li><span class="tagq ui">Oberfläche</span><p><b>Szeneneditor: neu oder referenziert?</b> Vorschlag ist referenzieren, mit Aufklappen zum Bearbeiten — sonst pflegen wir zwei Editoren für dieselbe Sache.</p></li>
+      <li><span class="tagq ui">Oberfläche</span><p><b>Wie viele Slots, und Polymeter?</b> Unterschiedliche Loop-Längen je Slot sind für Dauerbetrieb musikalisch sehr ergiebig — und machen das Grid komplizierter.</p></li>
+    </ol>
+  </section>
+
+  <footer>
+    docs/pixelfun-av/ · Konzept · Architektur · UI · offene Fragen — Stand dieses Entwurfs, noch kein Code.
+  </footer>
+</div>
+
+<script>
+(function(){
+  var PANELS = 12, PW = 8, PH = 8;
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---- build meters ---- */
+  var metersEl = document.getElementById('meters');
+  var meterBars = [];
+  for (var i=0;i<PANELS;i++){
+    var m = document.createElement('div');
+    m.className = 'meter';
+    var fill = document.createElement('i'); fill.style.height = '0%';
+    var lab = document.createElement('u'); lab.textContent = (i+1);
+    m.appendChild(fill); m.appendChild(lab); metersEl.appendChild(m);
+    meterBars.push(fill);
+  }
+
+  /* ---- build probe list ---- */
+  var probeList = document.getElementById('probeList');
+  var probeBars = [], probeVals = [];
+  for (var p=0;p<PANELS;p++){
+    var row = document.createElement('div'); row.className = 'probe';
+    var n = document.createElement('span'); n.textContent = (p+1<10?'0':'')+(p+1);
+    var bar = document.createElement('span'); bar.className='bar';
+    var fi = document.createElement('i'); bar.appendChild(fi);
+    var v = document.createElement('span'); v.className='val'; v.textContent='0.00';
+    row.appendChild(n); row.appendChild(bar); row.appendChild(v);
+    probeList.appendChild(row);
+    probeBars.push(fi); probeVals.push(v);
+  }
+
+  /* ---- build step grid ---- */
+  var GRID = [
+    {name:'Ping',  cls:'',      steps:{0:1,3:4,6:7,9:10,12:1}},
+    {name:'Bass',  cls:'light', steps:{0:0,8:6}},
+    {name:'Feld A',cls:'hold',  steps:{}},
+    {name:'Drone', cls:'hold',  steps:{}}
+  ];
+  var table = document.getElementById('stepGrid');
+  var head = document.createElement('tr');
+  head.appendChild(document.createElement('th'));
+  for (var s=0;s<16;s++){
+    var th = document.createElement('th'); th.className='step';
+    th.textContent = (s%4===0) ? (s/4+1) : '·';
+    head.appendChild(th);
+  }
+  table.appendChild(head);
+  var cellRefs = [];
+  GRID.forEach(function(rowdef){
+    var tr = document.createElement('tr');
+    var th = document.createElement('th'); th.textContent = rowdef.name; tr.appendChild(th);
+    var rowCells = [];
+    for (var s=0;s<16;s++){
+      var td = document.createElement('td');
+      var c = document.createElement('div');
+      c.className = 'cell' + (s%4===0 ? ' beat':'');
+      if (rowdef.cls === 'hold'){
+        if (s < 16) c.className += ' hold';
+      } else if (rowdef.steps.hasOwnProperty(s)){
+        c.className += ' on' + (rowdef.cls ? ' '+rowdef.cls : '');
+        c.textContent = rowdef.steps[s] + 1;
+      }
+      td.appendChild(c); tr.appendChild(td); rowCells.push(c);
+    }
+    table.appendChild(tr); cellRefs.push(rowCells);
+  });
+
+  /* ---- tabs ---- */
+  var tabs = [].slice.call(document.querySelectorAll('.tab'));
+  tabs.forEach(function(t){
+    t.addEventListener('click', function(){
+      tabs.forEach(function(o){
+        var on = (o === t);
+        o.setAttribute('aria-selected', on ? 'true' : 'false');
+        document.getElementById(o.getAttribute('aria-controls')).hidden = !on;
+      });
+    });
+  });
+
+  /* ---- canvases ---- */
+  var strip = document.getElementById('strip'), sctx = strip.getContext('2d');
+  var ring = document.getElementById('ring'), rctx = ring.getContext('2d');
+  var SCALE = strip.width / (PANELS*PW);   // 4 px per LED
+  var levels = new Float32Array(PANELS);
+  var prev = new Float32Array(PANELS);
+  var pingEl = document.getElementById('pingLvl');
+  var posEl = document.getElementById('pos');
+
+  function formula(x, y, t){
+    return Math.sin(x*0.5 - t) * Math.cos(y*0.6 + t*0.4);
+  }
+  // duotone ramp: cyan (neg) -> ground -> amber (pos)
+  function shade(v){
+    var a = Math.min(1, Math.abs(v));
+    var e = a*a*(3-2*a);
+    if (v >= 0) return 'rgb('+Math.round(242*e)+','+Math.round(163*e)+','+Math.round(60*e)+')';
+    return 'rgb('+Math.round(84*e)+','+Math.round(217*e)+','+Math.round(232*e)+')';
+  }
+
+  var start = performance.now();
+  function frame(now){
+    var secs = (now - start)/1000;
+    var t = reduce ? 2.2 : secs*1.4;
+
+    // strip
+    sctx.fillStyle = '#05070B';
+    sctx.fillRect(0,0,strip.width,strip.height);
+    for (var px=0; px<PANELS*PW; px++){
+      var panel = Math.floor(px/PW);
+      var x = (px - (PANELS*PW)/2) * 0.25;
+      for (var py=0; py<PH; py++){
+        var y = (py - PH/2) * 0.5;
+        sctx.fillStyle = shade(formula(x,y,t));
+        sctx.fillRect(px*SCALE, py*SCALE, SCALE, SCALE);
+      }
+      // panel seams
+      if (px % PW === 0 && px > 0){
+        sctx.fillStyle = '#05070B';
+        sctx.fillRect(px*SCALE-1, 0, 2, strip.height);
+      }
+    }
+
+    // probes at panel centres -> trigger on rising zero crossing
+    for (var i=0;i<PANELS;i++){
+      var cx = ((i*PW + PW/2) - (PANELS*PW)/2) * 0.25;
+      var v = formula(cx, 0, t);
+      if (prev[i] <= 0 && v > 0 && Math.abs(v) > 0.001) levels[i] = 1;
+      prev[i] = v;
+      levels[i] *= 0.94;
+
+      meterBars[i].style.height = Math.round(levels[i]*100) + '%';
+      probeBars[i].style.width = Math.abs(v)*50 + '%';
+      probeBars[i].style.left = (v >= 0 ? '50%' : (50 - Math.abs(v)*50) + '%');
+      probeBars[i].style.background = v >= 0 ? '#F2A33C' : '#54D9E8';
+      probeVals[i].textContent = (v>=0?' ':'') + v.toFixed(2);
+    }
+
+    // ring top view
+    var W = ring.width, C = W/2, R = W*0.36;
+    rctx.clearRect(0,0,W,W);
+    rctx.strokeStyle = '#1A2331'; rctx.lineWidth = 2;
+    rctx.beginPath(); rctx.arc(C,C,R,0,Math.PI*2); rctx.stroke();
+    rctx.strokeStyle = '#151D29';
+    rctx.beginPath(); rctx.arc(C,C,W*0.10,0,Math.PI*2); rctx.stroke();
+    rctx.fillStyle = '#3A4759';
+    rctx.font = '500 20px "IBM Plex Mono", monospace';
+    rctx.textAlign='center'; rctx.textBaseline='middle';
+    rctx.fillText('Publikum', C, C);
+
+    for (var k=0;k<PANELS;k++){
+      var ang = (k/PANELS)*Math.PI*2 - Math.PI/2;
+      var pxr = C + Math.cos(ang)*R, pyr = C + Math.sin(ang)*R;
+      var cxk = ((k*PW + PW/2) - (PANELS*PW)/2) * 0.25;
+      var bright = Math.abs(formula(cxk, 0, t));
+      // panel brightness
+      rctx.fillStyle = shade(formula(cxk,0,t));
+      rctx.beginPath(); rctx.arc(pxr,pyr, 11 + bright*5, 0, Math.PI*2); rctx.fill();
+      // level ring
+      if (levels[k] > 0.01){
+        rctx.strokeStyle = 'rgba(84,217,232,'+levels[k].toFixed(3)+')';
+        rctx.lineWidth = 3;
+        rctx.beginPath(); rctx.arc(pxr,pyr, 17 + (1-levels[k])*16, 0, Math.PI*2); rctx.stroke();
+      }
+      rctx.fillStyle = '#5A6678';
+      rctx.font = '500 15px "IBM Plex Mono", monospace';
+      rctx.fillText(String(k+1), C + Math.cos(ang)*(R+30), C + Math.sin(ang)*(R+30));
+    }
+
+    // transport position + playhead
+    var beats = t/ (Math.PI/2) ;           // arbitrary musical mapping for the mock
+    var step = Math.floor(beats*2) % 16;
+    var bar = Math.floor(beats/4) % 8 + 1;
+    posEl.textContent = ('00'+bar).slice(-3) + '.' + (Math.floor(beats)%4+1) + '.' + (Math.floor(beats*4)%4+1);
+    cellRefs.forEach(function(row){
+      row.forEach(function(c, idx){ c.classList.toggle('playhead', idx === step); });
+    });
+    var maxL = 0; for (var q=0;q<PANELS;q++) maxL = Math.max(maxL, levels[q]);
+    pingEl.style.width = Math.round(12 + maxL*88) + '%';
+
+    if (!reduce) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+
+</body>
+</html>
