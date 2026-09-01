@@ -88,3 +88,11 @@ config :octopus, :env, :dev
 
 # RADAR_SOURCE_MODE=off|live|exact|fuzzy (default :off). Set RADAR_DEPLOYMENT on hosts
 # with hardware for live mode.
+
+# Sound: SuperCollider started as a port of the engine process, stereo out.
+# `mix sound.synthdefs` has to have run once.
+config :octopus, Octopus.Sound,
+  enabled: true,
+  engine: Octopus.Sound.Engine.SuperCollider,
+  channels: 2,
+  super_collider: [auto_start: true, port: 57_110]

@@ -35,3 +35,6 @@ config :octopus, :osc_server_port, 0
 # Nation2026 defines radar; Pixie does not. Use Pixie so tests can start radar
 # children (e.g. Mock.World) in isolation without the application supervisor.
 config :octopus, :installation, Octopus.Installation.Pixie
+
+# The sound stack is started per test that needs it, never globally.
+config :octopus, Octopus.Sound, enabled: false, engine: Octopus.Sound.Engine.Null, channels: 4

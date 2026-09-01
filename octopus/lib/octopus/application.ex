@@ -53,10 +53,11 @@ defmodule Octopus.Application do
 
         # WebApp
         {Finch, name: Octopus.Finch},
-        OctopusWeb.Endpoint,
+        OctopusWeb.Endpoint
 
         # OSC — skipped when OSC_SERVER_ENABLED=false.
       ] ++
+        sound_children() ++
         case System.get_env("OSC_SERVER_ENABLED", "true") do
           "false" -> []
           _ -> [Octopus.Osc.Server]
@@ -78,6 +79,14 @@ defmodule Octopus.Application do
     end
 
     result
+  end
+
+  defp sound_children do
+    if Keyword.get(Application.get_env(:octopus, Octopus.Sound, []), :enabled, false) do
+      [Octopus.Sound.Supervisor]
+    else
+      []
+    end
   end
 
   defp radar_children do

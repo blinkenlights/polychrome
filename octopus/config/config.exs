@@ -36,6 +36,19 @@ config :octopus, :firmware_broadcaster_remote_port, 1337
 # Used by Octopus.Osc.Server - Open Sound Control for audio/visual applications
 config :octopus, :osc_server_port, 8000
 
+# =============================================================================
+# SOUND
+# =============================================================================
+
+# The sound stack (transport, scheduler, engine). Disabled by default so a
+# machine without audio boots unchanged; dev.exs switches it on.
+# `channels: nil` means one channel per panel.
+config :octopus, Octopus.Sound,
+  enabled: false,
+  engine: Octopus.Sound.Engine.Null,
+  channels: nil,
+  lookahead_ms: 200
+
 # Network addresses are now configured in Installation modules
 # See lib/octopus/installation/*.ex files
 
