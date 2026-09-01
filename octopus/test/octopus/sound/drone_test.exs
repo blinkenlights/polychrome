@@ -4,15 +4,23 @@ defmodule Octopus.Sound.DroneTest do
   alias Octopus.Installation
   alias Octopus.Sound.{Drone, Engine, Probes}
 
-  describe "amplitude/2" do
+  describe "amplitude/3" do
     test "only the bright half of the formula sounds" do
-      assert Drone.amplitude(1.0, 1.0) == 1.0
-      assert Drone.amplitude(0.5, 1.0) == 0.5
-      assert Drone.amplitude(-0.5, 1.0) == 0.0
+      assert Drone.amplitude(1.0, 1.0, 1.0) == 1.0
+      assert Drone.amplitude(0.5, 1.0, 1.0) == 0.5
+      assert Drone.amplitude(-0.5, 1.0, 1.0) == 0.0
     end
 
     test "gain scales it" do
-      assert Drone.amplitude(1.0, 0.4) == 0.4
+      assert Drone.amplitude(1.0, 0.4, 1.0) == 0.4
+    end
+
+    test "the curve pushes lukewarm panels down and leaves bright ones alone" do
+      # A panel at half brightness should not be half as loud as a bright one,
+      # or the voicing disappears into a wash.
+      assert Drone.amplitude(1.0, 1.0) == 1.0
+      assert Drone.amplitude(0.5, 1.0) < 0.35
+      assert Drone.amplitude(0.5, 1.0) > 0.2
     end
   end
 
@@ -73,7 +81,8 @@ defmodule Octopus.Sound.DroneTest do
 
       assert_receive {:set_voice, {:drone, 0}, %{amp: 1.0}}
       assert_receive {:set_voice, {:drone, 1}, %{amp: +0.0}}
-      assert_receive {:set_voice, {:drone, 2}, %{amp: 0.5}}
+      assert_receive {:set_voice, {:drone, 2}, %{amp: quiet}}
+      assert quiet < 0.35 and quiet > 0.2
     end
 
     test "a stopped drone ignores the picture" do

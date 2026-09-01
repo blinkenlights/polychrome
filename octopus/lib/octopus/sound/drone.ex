@@ -5,12 +5,19 @@ defmodule Octopus.Sound.Drone do
   Every panel gets a pitch from a scale and a sustained voice. The formula
   value at that panel is its amplitude — where the pattern is bright, that
   pitch is audible; where it is dark, it disappears. The chord changes because
-  the picture changes, and zooming out until the pattern is fine turns a
-  three-note drone into a shimmer.
+  the picture changes.
 
   Only the positive half of the formula sounds. Using the absolute value would
   make every panel audible on both halves of the wave, which flattens exactly
   the movement this is meant to expose.
+
+  Loudness follows the value along a curve rather than straight. Measured on
+  the ring with `sin(x*0.5 - t*0.3)`, the number of panels above zero barely
+  moves with zoom — 7 at ×1, 4.4 at ×6 — and what actually changes is *which*
+  ones: neighbours at low zoom, scattered at high zoom, so the chord goes from
+  a tight cluster to a wide voicing. A straight mapping fills the space between
+  them with half-loud voices and muddies exactly that difference; the curve
+  pushes the middle down and lets the voicing be heard.
   """
 
   use GenServer
@@ -22,6 +29,9 @@ defmodule Octopus.Sound.Drone do
   # D dorian across the ring, low to high, so neighbours are consonant.
   @default_scale [38, 45, 50, 53, 57, 60, 62, 65, 69, 72, 74, 77]
   @default_cutoff 1800
+  # 1 would be a straight mapping. Higher separates loud panels from lukewarm
+  # ones; much higher makes the drone gappy.
+  @default_contour 1.8
 
   # -- API ------------------------------------------------------------------
 
@@ -32,14 +42,21 @@ defmodule Octopus.Sound.Drone do
 
   def enabled?, do: GenServer.call(__MODULE__, :enabled?)
 
-  @doc "Adjusts `:gain`, `:cutoff`, `:scale`."
+  @doc "Adjusts `:gain`, `:cutoff`, `:scale`, `:contour`."
   def configure(opts) when is_list(opts), do: GenServer.call(__MODULE__, {:configure, opts})
 
   def state, do: GenServer.call(__MODULE__, :state)
 
-  @doc "Amplitude for a probe reading: the positive half, scaled."
-  @spec amplitude(float(), float()) :: float()
-  def amplitude(value, gain), do: max(value, 0.0) * gain
+  @doc """
+  Amplitude for a probe reading: the positive half, curved, scaled.
+
+  `contour` of 1 is a straight mapping; the default bends it so a panel has to
+  be properly bright to be properly loud.
+  """
+  @spec amplitude(float(), float(), float()) :: float()
+  def amplitude(value, gain, contour \\ @default_contour) do
+    :math.pow(max(value, 0.0), contour) * gain
+  end
 
   # -- Server ---------------------------------------------------------------
 
@@ -50,6 +67,7 @@ defmodule Octopus.Sound.Drone do
        enabled?: Keyword.get(opts, :enabled, false),
        gain: Keyword.get(opts, :gain, @default_gain),
        cutoff: Keyword.get(opts, :cutoff, @default_cutoff),
+       contour: Keyword.get(opts, :contour, @default_contour),
        scale: Keyword.get(opts, :scale, @default_scale),
        voices: []
      }}
@@ -82,7 +100,7 @@ defmodule Octopus.Sound.Drone do
     values
     |> Enum.with_index()
     |> Enum.each(fn {value, index} ->
-      Engine.set_voice(voice_id(index), %{amp: amplitude(value, state.gain)})
+      Engine.set_voice(voice_id(index), %{amp: amplitude(value, state.gain, state.contour)})
     end)
 
     {:noreply, state}
