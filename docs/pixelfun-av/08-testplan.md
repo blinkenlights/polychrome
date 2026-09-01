@@ -11,8 +11,17 @@ Stand nach dem ersten Durchgang. Legende:
 > **Vor dem nächsten Durchgang: Server neu starten**, und im Foyer die
 > **Rotation der Szene abschalten** (Rotation, Orbit, Sweeps) — siehe D-Block.
 
-**Offen sind 12 Fälle**, davon 4 zum Nachtesten. Der ganze Block I ist noch
-unberührt.
+**Offen sind 8 Fälle**, davon 4 zum Nachtesten.
+
+## Was sich seit dem vierten Durchgang geändert hat
+
+- **Der Klang folgt jetzt der Wand.** Vorher schickte *jedes* laufende Pixel Fun
+  Probes — und „Stop" im Foyer beendet die Übernahme, nicht die App. Also klang
+  eine Szene weiter, die längst ersetzt war. Jetzt sendet Pixel Fun nur, solange
+  es das Bild auf der Wand ist, und die Szenenkarte zeigt die Szene auf der Wand
+  statt irgendeine laufende. Nachgeprüft: Fire auf die Wand holen → alle
+  Pegelmeter auf null.
+- **Die Länge des Chase-Klangs stand als „1.5e3 ms" da.**
 
 ## Was sich seit dem dritten Durchgang geändert hat
 
@@ -111,8 +120,9 @@ Dann `http://localhost:4000/studio` öffnen.
 | C2 | ✅ | Formel `1` | Alle Balken gleich hoch, ganz oben |
 | C3 | ✅ | Formel `0-1` | Alle ganz unten |
 | C4 | ✅ | Formel `sin(x*0.5 - t)` | Eine Welle wandert durch die Balken |
-| C5 | ✅ | „Stop" im Foyer bei Pixelfun | **Die Szene bleibt im Studio aktiv, und das ist richtig.** „Stop" auf einer Szenenkachel beendet die *Übernahme* und gibt die Rotation wieder frei — die App läuft weiter. Nachgeprüft: der Knopf löst `stop_takeover` aus, nicht `stop_app`. Das Studio zeigt, was läuft |
-| C6 | ⬜ | Pixelfun wieder starten | Balken laufen wieder, ohne Neuladen |
+| C5 | 🔁 | „Stop" im Foyer bei Pixelfun | Solange danach kein anderes Bild auf der Wand ist, läuft Pixel Fun weiter — „Stop" beendet die *Übernahme*, nicht die App. Sobald etwas anderes auf der Wand ist, sagt die Szenenkarte „Auf der Wand läuft gerade kein Pixel Fun" und der Klang verstummt |
+| C6 | 🔁 | Anderes Pixelfun-Preset per Übernahme starten | Probes und Klang folgen sofort dem neuen Preset; das alte klingt **nicht** weiter |
+| C7 | 🔁 | Eine Nicht-Pixelfun-App auf die Wand holen (z. B. Fire) | Szenenkarte: „Auf der Wand läuft gerade kein Pixel Fun", alle Pegelmeter auf null |
 
 ## D · Ring-Chase (Licht → Sound)
 
@@ -128,16 +138,17 @@ und läuft immer rund; der Faktor davor ist die Anzahl Wellen auf dem Ring.
 
 | # | | Schritt | Erwartet |
 |---|---|---|---|
-| D1 | 🔁 | Ring-Chase an, Szenenbewegung aus | **Gleichmäßige** Töne, kein Stolpern, **keine Lücke** zwischen Panel 12 und 1 |
+| D1 | ✅ | Ring-Chase an, Szenenbewegung aus | **Gleichmäßige** Töne, kein Stolpern, **keine Lücke** zwischen Panel 12 und 1 |
 | D2 | ✅ | Pegelmeter beobachten | Leuchten der Reihe nach in Wanderrichtung |
 | D3 | ✅ | Formel `sin(atan2(ny,nx) + t)` | Bewegung dreht sich um, gleichmäßig |
 | D4 | ✅ | Formel `sin(atan2(ny,nx) - t*3)` | Schneller und lauter, weiterhin gleichmäßig |
 | D5 | ✅ | Formel `sin(atan2(ny,nx) - t*0.05)` | **Stille ist das erwartete Ergebnis.** So eine Welle steigt nur um 0,0017 pro Frame und liegt damit unter der voreingestellten Mindeststeilheit von 0,002 — der Chase soll ein kaum bewegtes Bild nicht antasten. Weiter bei D6 |
-| D6 | ✅ | Mindeststeilheit aufs Minimum (0.0005) | Auch die langsame Welle klingt wieder |
-| D7 | ✅ | Klang `pc_pluck`, Länge 1500 ms | Gezupft, lang ausklingend |
+| D6 | 🔁 | Mindeststeilheit aufs Minimum (0.0005) | Die langsame Welle klingt wieder — aber **sehr** sparsam: `t*0.05` braucht 125 s für eine Runde, das ist ein Ton alle ~10 s. Mindestens 30 s hinhören |
+| D7 | 🔁 | Klang `pc_pluck`, Länge einmal auf **100 ms**, dann auf **2000 ms** | Deutlich unterschiedlich langer Ausklang. Nachgeprüft, dass der Regler ankommt; bei 400 ↔ 1500 ms ist der Unterschied auf einem Zupfklang subtiler als erwartet |
 | D8 | ⬜ | Mindeststeilheit aufs Maximum | Stille, bis die Welle sehr steil wird |
-| D9 | ⬜ | Ring-Chase aus | Sofort still, keine Nachzügler |
-| D10 | ⬜ | Transport auf Stop, Chase an | Klingt trotzdem — das Bild ist die Uhr |
+| D9 | ✅ | Ring-Chase aus | Sofort still, keine Nachzügler |
+| D10 | ✅ | Transport auf Stop, Chase an | Klingt trotzdem — das Bild ist die Uhr |
+| D12 | ✅ | BPM ändern, während der Chase läuft | **Das Tempo ändert sich nicht, und das ist so.** Der Chase hängt am Bild, nicht am Transport; BPM steuert Grid und Metronom. Die Szene an den Takt zu binden ist gebaut, aber noch nicht bedienbar — siehe „fehlende Funktionen" |
 | D11 | 🔁 | Formel `sin(atan2(ny,nx)*3 - t)`, **Szenenbewegung aus** | **Drei Töne exakt gleichzeitig**, dann die nächsten drei — und drei *verschiedene* Tonhöhen, kein Schweben |
 
 ## E · Drone
@@ -183,13 +194,10 @@ und läuft immer rund; der Faktor davor ist die Anzahl Wellen auf dem Ring.
 | # | | Schritt | Erwartet |
 |---|---|---|---|
 | I1 | ⬜ | Tab schließen und neu öffnen | Ton läuft durch, Seite zeigt den echten Zustand |
-| I2 | ⬜ | Netzwerk kurz trennen | Nach dem Reconnect stimmen Schalter und Grid |
 | I3 | ⬜ | Zwei Tabs, in einem das Grid ändern | Der andere folgt sofort |
-| I4 | ⬜ | Panic bei Chase + Drone + Grid | Sofort still, Transport aus, Instrumente aus |
-| I5 | ⬜ | Nach Panic alles wieder einschalten | Klingt wieder |
-| I6 | ⬜ | Szene im Foyer wechseln | Probes, Chase und Drone folgen der neuen Szene |
-| I7 | ⬜ | Pixelfun beenden, während Chase und Drone laufen | Keine Fehler, es wird still; nach Neustart läuft es weiter |
-| I8 | ⬜ | CPU im Blick | 30 fps, keine Aussetzer im Ton |
+| I4 | ✅ | Panic bei Chase + Drone + Grid | Sofort still, Transport aus, Instrumente aus |
+| I6 | 🔁 | Szene im Foyer wechseln | Probes, Chase und Drone folgen der neuen Szene |
+| I7 | 🔁 | Pixelfun von der Wand nehmen, während Chase und Drone laufen | Es wird still, keine Fehler; kommt das Bild zurück, klingt es wieder |
 
 ---
 
