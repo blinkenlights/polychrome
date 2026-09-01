@@ -101,7 +101,15 @@ defmodule OctopusWeb.StudioLive do
 
   def handle_event("panic", _params, socket) do
     Sound.panic()
-    {:noreply, assign(socket, levels: %{})}
+
+    {:noreply,
+     assign(socket,
+       levels: %{},
+       chase: chase_state(),
+       drone: drone_state(),
+       metronome?: metronome_running?(),
+       position: safe(&Clock.position/0, socket.assigns.position)
+     )}
   end
 
   def handle_event("toggle_metronome", _params, socket) do
@@ -404,9 +412,9 @@ defmodule OctopusWeb.StudioLive do
         <button
           class="btn btn-sm btn-ghost"
           phx-click="copy_ab"
-          title="Live-Muster in die andere Seite kopieren"
+          title="Das laufende Muster in die andere Seite kopieren"
         >
-          A→B kopieren
+          {if @patch_slot == :a, do: "A → B kopieren", else: "B → A kopieren"}
         </button>
 
         <div :if={@compositions != []} class="flex items-center gap-1 flex-wrap ml-auto">
@@ -585,8 +593,14 @@ defmodule OctopusWeb.StudioLive do
     ~H"""
     <div class="card bg-base-200 border border-base-300">
       <div class="card-body p-3 gap-3">
-        <div :if={@preview?} class="h-64 rounded-lg overflow-hidden bg-black">
-          {live_render(@socket, PixelsLive, id: "studio-preview", session: %{"embedded" => true})}
+        <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_240px] gap-3">
+          <div :if={@preview?} class="h-64 rounded-lg overflow-hidden bg-black">
+            {live_render(@socket, PixelsLive,
+              id: "studio-preview",
+              session: %{"embedded" => true, "view" => "Streifen (abgewickelt)"}
+            )}
+          </div>
+          <.ring_view panels={@panels} probes={@probes} levels={@levels} />
         </div>
 
         <div>
@@ -615,6 +629,54 @@ defmodule OctopusWeb.StudioLive do
             Balken: Formelwert −1…+1 · Linie darunter: Pegel des Lautsprechers an diesem Panel
           </div>
         </div>
+      </div>
+    </div>
+    """
+  end
+
+  attr :panels, :integer, required: true
+  attr :probes, :list, required: true
+  attr :levels, :map, required: true
+
+  defp ring_view(assigns) do
+    ~H"""
+    <div class="rounded-lg bg-black p-2 flex flex-col items-center justify-center">
+      <svg viewBox="0 0 200 200" class="w-full max-w-[220px]">
+        <circle cx="100" cy="100" r="72" fill="none" stroke="#1A2331" stroke-width="1" />
+        <circle cx="100" cy="100" r="20" fill="none" stroke="#151D29" stroke-width="1" />
+        <text x="100" y="103" text-anchor="middle" font-size="8" fill="#3A4759">Publikum</text>
+
+        <g :for={{position, index} <- Enum.with_index(ring_positions(@panels))}>
+          <circle
+            cx={position.x}
+            cy={position.y}
+            r={7 + abs(probe_at(@probes, index)) * 4}
+            fill={probe_color(probe_at(@probes, index))}
+            fill-opacity={0.25 + abs(probe_at(@probes, index)) * 0.75}
+          />
+          <circle
+            :if={Map.get(@levels, index + 1, 0.0) > 0.02}
+            cx={position.x}
+            cy={position.y}
+            r={12 + (1 - Map.get(@levels, index + 1, 0.0)) * 10}
+            fill="none"
+            stroke="#54D9E8"
+            stroke-width="1.5"
+            stroke-opacity={Map.get(@levels, index + 1, 0.0)}
+          />
+          <text
+            x={position.label_x}
+            y={position.label_y}
+            text-anchor="middle"
+            font-size="7"
+            fill="#5A6678"
+          >
+            {index + 1}
+          </text>
+        </g>
+      </svg>
+      <div class="text-[10px] uppercase tracking-wider opacity-50 mt-1">
+        Ringdraufsicht · Publikum in der Mitte
       </div>
     </div>
     """
@@ -729,14 +791,14 @@ defmodule OctopusWeb.StudioLive do
 
           <label class="form-control">
             <span class="label-text text-xs">
-              Mindeststeilheit {:erlang.float_to_binary(@chase.min_rise * 1.0, decimals: 3)}
+              Mindeststeilheit {:erlang.float_to_binary(@chase.min_rise * 1.0, decimals: 4)}
             </span>
             <input
               type="range"
               name="min_rise"
-              min="0.002"
-              max="0.1"
-              step="0.002"
+              min="0.0005"
+              max="0.05"
+              step="0.0005"
               value={@chase.min_rise}
               class="range range-xs"
             />
@@ -1028,6 +1090,25 @@ defmodule OctopusWeb.StudioLive do
   defp format_value(nil), do: "—"
   defp format_value(value) when is_float(value), do: :erlang.float_to_binary(value, decimals: 1)
   defp format_value(value), do: to_string(value)
+
+  # Panel 1 at the top, then clockwise — the same order the strip reads in.
+  defp ring_positions(panels) do
+    for index <- 0..(panels - 1) do
+      angle = index / panels * 2 * :math.pi() - :math.pi() / 2
+
+      %{
+        x: 100 + :math.cos(angle) * 72,
+        y: 100 + :math.sin(angle) * 72,
+        label_x: 100 + :math.cos(angle) * 90,
+        label_y: 100 + :math.sin(angle) * 90 + 2
+      }
+    end
+  end
+
+  defp probe_at(probes, index), do: Enum.at(probes, index) || 0.0
+
+  defp probe_color(value) when value >= 0, do: "#F2A33C"
+  defp probe_color(_value), do: "#54D9E8"
 
   defp probe_mean([]), do: 0.5
   defp probe_mean(probes), do: (Enum.sum(probes) / length(probes) + 1) / 2

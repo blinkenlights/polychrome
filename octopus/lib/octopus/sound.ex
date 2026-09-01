@@ -14,7 +14,7 @@ defmodule Octopus.Sound do
   Channels are 1-based and mean panels.
   """
 
-  alias Octopus.Sound.{Clock, Engine, Patch, RingChase, Scheduler}
+  alias Octopus.Sound.{Clock, Drone, Engine, Patch, RingChase, Scheduler}
 
   @doc "Plays one note now, or at `:at_ms` (monotonic, see `Octopus.Sound.Time`)."
   def note(params \\ [])
@@ -61,10 +61,28 @@ defmodule Octopus.Sound do
   @doc "Switches between the A and B pattern."
   defdelegate switch_pattern(), to: Patch, as: :switch
 
-  @doc "Everything off, right now."
+  @doc """
+  Everything off, and it stays off.
+
+  Silencing the engine alone would last until the next step of the grid or the
+  next crossing of a wave — a panic button that needs a second press is not
+  one. So the transport stops, the instruments are switched off, and only then
+  is everything that is sounding cut.
+  """
   def panic do
-    Scheduler.clear()
+    safely(&Clock.stop/0)
+    safely(&Scheduler.clear/0)
+    safely(fn -> RingChase.enable(false) end)
+    safely(fn -> Drone.enable(false) end)
     Engine.panic()
+  end
+
+  defp safely(fun) do
+    fun.()
+  rescue
+    _ -> :ok
+  catch
+    :exit, _ -> :ok
   end
 
   @doc "Which engine is active and what it can do."

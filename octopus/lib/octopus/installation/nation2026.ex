@@ -72,6 +72,11 @@ defmodule Octopus.Installation.Nation2026 do
         pixel_size: {12, 12}
       ],
       [
+        name: "Streifen (abgewickelt)",
+        mode: "strip",
+        pixel_size: {8, 8}
+      ],
+      [
         name: "Nation 2026",
         mode: "image",
         background_image: "/images/nation2025-background.webp",

@@ -21,8 +21,12 @@ defmodule Octopus.Layout do
   # `panel_info`/`panel_pixel_count` are set on every layout (see
   # `Octopus.Installation.simulator_layouts/0`) so the simulator can show a
   # per-panel tooltip on hover regardless of arrangement/mode.
+  # `circularize?` is how a layout says it wants to stay a straight strip even
+  # on a ring installation — the studio needs the panels side by side, where
+  # the ring view answers a different question.
   defstruct @keys ++
-              [:panel_centers, :panel_rotations, :panel_pixel_count, :panel_info]
+              [:panel_centers, :panel_rotations, :panel_pixel_count, :panel_info] ++
+              [circularize?: true]
 
   @typedoc """
   Position of a pixel in the image, or — for circular ring layouts — a

@@ -85,7 +85,7 @@ defmodule Octopus.Sound.Engine.Beak do
 
   @impl true
   def panic do
-    for channel <- 1..Octopus.Sound.Engine.channels() do
+    for channel <- 1..Octopus.Sound.Engine.panels() do
       send_frame(%SynthFrame{event_type: :NOTE_OFF, channel: channel})
       send_frame(%AudioFrame{channel: channel, stop: true})
     end

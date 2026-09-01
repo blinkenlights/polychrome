@@ -26,6 +26,17 @@ defmodule Octopus.Sound.RingChaseTest do
     end
   end
 
+  describe "crossing_fraction/2" do
+    test "says where between two frames the value passed zero" do
+      # Halfway between -0.5 and 0.5.
+      assert RingChase.crossing_fraction(-0.5, 0.5) == 0.5
+      # Only just before the second frame.
+      assert_in_delta RingChase.crossing_fraction(-0.9, 0.1), 0.9, 1.0e-9
+      # Already there at the first.
+      assert RingChase.crossing_fraction(0.0, 1.0) == 0.0
+    end
+  end
+
   describe "the chase" do
     setup do
       previous = Application.get_env(:octopus, Octopus.Sound, [])
@@ -43,7 +54,7 @@ defmodule Octopus.Sound.RingChaseTest do
         Application.put_env(:octopus, Octopus.Sound, previous)
       end)
 
-      pid = start_supervised!({RingChase, enabled: true, min_interval_ms: 0})
+      pid = start_supervised!({RingChase, enabled: true, min_interval_ms: 0, latency_ms: 0})
       %{chase: pid}
     end
 
@@ -101,6 +112,49 @@ defmodule Octopus.Sound.RingChaseTest do
       probe(chase, [-0.5])
       probe(chase, [0.9])
       refute_receive {:note, _}, 100
+    end
+
+    test "schedules the note ahead, so frame jitter cannot reach the rhythm",
+         %{chase: chase} do
+      RingChase.configure(latency_ms: 100)
+
+      first = Time.now()
+      probe(chase, [-0.5])
+      probe(chase, [0.5])
+
+      assert_receive {:note, note}, 200
+      # Interpolated crossing plus the latency: comfortably in the future.
+      assert note.at_ms > first + 50
+    end
+
+    test "an even wave stays even, even when the frames do not arrive evenly",
+         %{chase: chase} do
+      # The complaint this fixes: frames come from a render loop and jitter by
+      # a few milliseconds, and firing on arrival puts that jitter straight
+      # into the rhythm. The crossing is interpolated instead, so the note
+      # lands where the wave actually crossed.
+      RingChase.configure(latency_ms: 200)
+
+      # A wave rising by 0.1 per 100 ms of wave time, crossing zero exactly
+      # every 500 ms — but reported at wobbly moments.
+      base = Time.now()
+      arrivals = [0, 96, 207, 298, 411, 503, 592, 707, 803, 898, 1_010]
+
+      Enum.each(arrivals, fn offset ->
+        value = :math.sin(2 * :math.pi() * offset / 500)
+        send(chase, {:pixel_probes, %{values: [value], seconds: 0.0, at_ms: base + offset}})
+        _ = :sys.get_state(chase)
+      end)
+
+      notes =
+        for _ <- 1..2 do
+          assert_receive {:note, note}, 300
+          note.at_ms
+        end
+
+      [first, second] = notes
+      # Two crossings of a 500 ms wave, regardless of when the frames arrived.
+      assert_in_delta second - first, 500, 12
     end
 
     test "can be switched off", %{chase: chase} do

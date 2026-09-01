@@ -92,7 +92,13 @@ defmodule OctopusWeb.PixelsLive do
   def mount(_params, session, socket) do
     embedded = session["embedded"] in [true, "true"]
     views = get_views()
-    default_view = views |> Map.keys() |> List.first()
+
+    # An embedder can ask for a named view — the studio wants the unrolled
+    # strip, the foyer the ring.
+    default_view =
+      Enum.find(Map.keys(views), fn key -> views[key].name == session["view"] end) ||
+        views |> Map.keys() |> List.first()
+
     pixel_layout = views[default_view]
     panel_status_visible = Installation.num_panels() > 0
     sending_to_panels = Broadcaster.sending_enabled?()
@@ -551,7 +557,10 @@ defmodule OctopusWeb.PixelsLive do
     {:noreply, socket}
   end
 
-  def handle_info({:panel_status, panel, status}, %{assigns: %{panel_status_visible: true}} = socket) do
+  def handle_info(
+        {:panel_status, panel, status},
+        %{assigns: %{panel_status_visible: true}} = socket
+      ) do
     panel_statuses =
       Enum.map(socket.assigns.panel_statuses, fn entry ->
         if entry.panel == panel, do: %{entry | status: status}, else: entry

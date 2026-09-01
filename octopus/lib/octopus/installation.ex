@@ -453,6 +453,21 @@ defmodule Octopus.Installation do
               arrangement
             )
 
+          "strip" ->
+            # Panels side by side, even on a ring: the unrolled view.
+            %Octopus.Layout{
+              __MODULE__.generate_generic_layout(
+                name,
+                num_panels,
+                panel_width,
+                panel_height,
+                panel_gap,
+                layout_opts,
+                :linear
+              )
+              | circularize?: false
+            }
+
           "image" ->
             __MODULE__.generate_image_layout(
               name,
@@ -464,7 +479,7 @@ defmodule Octopus.Installation do
             )
 
           unknown_mode ->
-            raise "Unknown simulator layout mode: #{unknown_mode}. Supported modes: 'image', 'generic'"
+            raise "Unknown simulator layout mode: #{unknown_mode}. Supported modes: 'image', 'generic', 'strip'"
         end
       end)
       |> Macro.escape()
@@ -1070,6 +1085,8 @@ defmodule Octopus.Installation do
   # development layout arranged as a ring, matching the panel order/angles
   # used by `panel_positions_m/1` and `OctopusWeb.RadarLive`'s ring view.
   # Image-backed layouts (annotated photos) are left untouched.
+  defp maybe_circularize_layout(%Octopus.Layout{circularize?: false} = layout), do: layout
+
   defp maybe_circularize_layout(%Octopus.Layout{background_image: bg} = layout)
        when bg in [nil, ""] do
     if arrangement() == :circular do

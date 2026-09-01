@@ -97,7 +97,7 @@ defmodule Octopus.Sound.Drone do
 
   defp start_voices(state) do
     voices =
-      for index <- 0..(Engine.channels() - 1) do
+      for index <- 0..(Engine.panels() - 1) do
         id = voice_id(index)
 
         Engine.voice(id, %{

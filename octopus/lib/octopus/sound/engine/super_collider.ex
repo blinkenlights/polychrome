@@ -261,8 +261,13 @@ defmodule Octopus.Sound.Engine.SuperCollider do
   # inaudible. Folding wraps them onto the outputs that exist, so movement
   # around the ring is still audible while prototyping — the installation
   # itself runs `:direct`, one output per panel.
-  defp output_bus(channel, %{mapping: :fold, channels: channels}),
-    do: rem(channel - 1, channels)
+  # Contiguous arcs, not modulo: with two outputs, panels 1..6 go left and
+  # 7..12 right, so a pattern that moves around the ring still moves across
+  # the speakers. Modulo would put panel 1 and panel 7 — opposite each other —
+  # on the same side.
+  defp output_bus(channel, %{mapping: :fold, channels: channels}) do
+    div((channel - 1) * channels, Engine.panels())
+  end
 
   defp output_bus(channel, _state), do: channel - 1
 

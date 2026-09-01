@@ -114,3 +114,14 @@
         calc(var(--filler-size) * -1 - var(--filler-offset)) 0 0 var(--filler-size);
 }
 
+
+/* daisyUI's small selects put a padding on top of a line-height that already
+   fills the control, so the chosen option is pushed out of the visible box and
+   the field looks empty until it is opened. Normalising both brings the text
+   back and leaves the control's size untouched. */
+.select-sm,
+.select-xs {
+    line-height: 1.2;
+    padding-top: 0;
+    padding-bottom: 0;
+}

@@ -64,7 +64,17 @@ defmodule Octopus.Sound.Engine do
   @spec config() :: keyword()
   def config, do: Application.get_env(:octopus, Octopus.Sound, [])
 
-  @doc "Number of output channels — one per panel unless configured otherwise."
+  @doc """
+  Number of panels — how many places on the ring there are to sound from.
+
+  Distinct from `channels/0`: on the installation the two are equal, but a
+  laptop has two outputs and still twelve panels, and anything that reasons
+  about places (probes, the drone, the grid) has to count panels.
+  """
+  @spec panels() :: pos_integer()
+  def panels, do: Installation.num_panels()
+
+  @doc "Number of physical output channels the engine writes to."
   @spec channels() :: pos_integer()
   def channels do
     case Keyword.get(config(), :channels) do
