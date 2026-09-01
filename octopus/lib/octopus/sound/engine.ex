@@ -13,6 +13,9 @@ defmodule Octopus.Sound.Engine do
   """
 
   alias Octopus.Installation
+  alias Phoenix.PubSub
+
+  @topic "sound_notes"
 
   @type note :: %{
           channel: pos_integer(),
@@ -24,7 +27,8 @@ defmodule Octopus.Sound.Engine do
         }
 
   @callback start_link(keyword()) :: GenServer.on_start()
-  @callback capabilities() :: %{scheduling: :timestamped | :immediate, channels: pos_integer()}
+  @callback capabilities() ::
+              %{scheduling: :timestamped | :immediate | :none, channels: pos_integer()}
   @callback note(note()) :: :ok
   @callback panic() :: :ok
 
@@ -55,16 +59,30 @@ defmodule Octopus.Sound.Engine do
   end
 
   @doc """
+  Receives `{:sound_note, note}` for every note played, whichever source it
+  came from. Sparse enough to publish one message each — unlike frames.
+  """
+  def subscribe_notes, do: PubSub.subscribe(Octopus.PubSub, @topic)
+
+  @doc """
   Plays one note. `:at_ms` is a monotonic timestamp (see `Octopus.Sound.Time`)
   and defaults to now.
   """
   @spec note(map()) :: :ok
   def note(params \\ %{}) do
-    params
-    |> Map.new()
-    |> then(&Map.merge(@default_note, &1))
-    |> Map.put_new_lazy(:at_ms, &Octopus.Sound.Time.now/0)
-    |> module().note()
+    note =
+      params
+      |> Map.new()
+      |> then(&Map.merge(@default_note, &1))
+      |> Map.put_new_lazy(:at_ms, &Octopus.Sound.Time.now/0)
+
+    result = module().note(note)
+
+    if Process.whereis(Octopus.PubSub) do
+      PubSub.broadcast(Octopus.PubSub, @topic, {:sound_note, note})
+    end
+
+    result
   end
 
   @spec capabilities() :: map()

@@ -17,7 +17,7 @@ defmodule Octopus.Sound.Engine.Null do
 
   @impl true
   def capabilities do
-    %{scheduling: :immediate, channels: Octopus.Sound.Engine.channels()}
+    %{scheduling: :none, channels: Octopus.Sound.Engine.channels()}
   end
 
   @impl true

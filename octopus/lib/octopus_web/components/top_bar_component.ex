@@ -86,6 +86,7 @@ defmodule OctopusWeb.TopBarComponent do
   defp nav_links do
     [
       {"/", "Foyer"},
+      {"/studio", "Studio"},
       {"/radar", "Radar"},
       {"/radar/debug", "Radar Debug"}
     ]

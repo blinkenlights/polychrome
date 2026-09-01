@@ -33,6 +33,9 @@ defmodule Octopus.Sound do
   defdelegate position(), to: Clock
   defdelegate subscribe(), to: Clock
 
+  @doc "Receives `{:sound_note, note}` for every note played."
+  defdelegate subscribe_notes(), to: Engine
+
   @doc "Built-in metronome — the audible proof that the clock is steady."
   defdelegate metronome(on?), to: Scheduler
 
