@@ -8,10 +8,26 @@ Stand nach dem ersten Durchgang. Legende:
 | 🔁 | **nachtesten** — der Fall ist seither repariert oder der Testfall war falsch |
 | ⬜ | noch offen |
 
-**Offen sind 22 Fälle**, davon 13 zum Nachtesten. Der ganze Block I (Zusammenspiel)
-ist noch unberührt.
+> **Wichtig vor dem nächsten Durchgang: Server neu starten.** Die Fixes für D1,
+> D3, D4, D11 und G11 kamen erst nach deinem letzten Lauf; ein laufender Server
+> hat sie nicht.
 
-## Was sich seit dem ersten Durchgang geändert hat
+**Offen sind 14 Fälle**, davon 6 zum Nachtesten. Der ganze Block I ist noch
+unberührt.
+
+## Was sich seit dem zweiten Durchgang geändert hat
+
+- **Der Chase-Zeitstempel hing an der Renderdauer.** Nachgemessen im laufenden
+  System: Frames jetzt exakt 33,0 ms auseinander (Abweichung 0,0 ms), Noten
+  518–519 ms (Abweichung 0,6 ms), Panels sauber 1…12 ohne Naht. Das war die
+  Restursache von D1/D3/D4.
+- **Jedes Panel hat jetzt eine eigene Tonhöhe.** Bei zwölf Panels und acht
+  Skalentönen lagen Panel 1 und 9 auf demselben Ton — zwei gleiche gleichzeitige
+  Töne interferieren, und das klingt wie Versatz. Das war D11.
+- **C5 und E5/E6 waren falsche Testfälle von mir**, siehe dort.
+- **G11 stimmt**, war ebenfalls ein alter Build.
+
+## Was sich im ersten Durchgang geändert hatte
 
 - **Der Chase stolpert nicht mehr.** Zwei Ursachen: die Formel `sin(x*0.5 - t)`
   läuft nicht sauber um den Ring (Naht zwischen Panel 12 und 1), und der
@@ -51,8 +67,8 @@ Dann `http://localhost:4000/studio` öffnen.
 | A5 | ⬜ | scsynth von Hand starten, dann Server starten | Server übernimmt ihn, kein „address in use" |
 | A6 | ⬜ | `engine: Octopus.Sound.Engine.Beak` in `config/dev.exs`, neu starten | Badge **best effort** |
 | A7 | ⬜ | `engine: Octopus.Sound.Engine.Null`, neu starten | Badge **kein Klang**, Seite funktioniert vollständig |
-| A8 | 🔁 | Stage ansehen | Links der **abgewickelte Streifen** (12 Panels nebeneinander), rechts die **Ringdraufsicht** |
-| A9 | 🔁 | Dropdowns im Klang-Bereich und über dem Streifen | Der gewählte Eintrag ist lesbar, nicht abgeschnitten |
+| A8 | ✅ | Stage ansehen | Links der **abgewickelte Streifen** (12 Panels nebeneinander), rechts die **Ringdraufsicht** |
+| A9 | ✅ | Dropdowns im Klang-Bereich und über dem Streifen | Der gewählte Eintrag ist lesbar, nicht abgeschnitten |
 
 ## B · Transport
 
@@ -63,7 +79,7 @@ Dann `http://localhost:4000/studio` öffnen.
 | B3 | ✅ | Stop, warten, Play | Steht still, läuft dann weiter |
 | B4 | ✅ | Tempo 120 → 60 im Lauf | Kein Sprung, halbes Tempo |
 | B5 | ✅ | Tempo → 240 | Doppeltes Tempo, kein Sprung |
-| B6 | 🔁 | **Erst** Ring-Chase oder Grid starten, dann Panic | Ton sofort still, **Transport stoppt**, Ring-Chase und Drone gehen aus. Die Animation läuft weiter — Panic ist der Not-Aus für den Ton |
+| B6 | ✅ | **Erst** Ring-Chase oder Grid starten, dann Panic | Ton sofort still, **Transport stoppt**, Ring-Chase und Drone gehen aus. Die Animation läuft weiter — Panic ist der Not-Aus für den Ton |
 | B7 | ✅ | Zweiter Browsertab | Beide zeigen denselben Zustand |
 
 ## C · Probes
@@ -74,7 +90,7 @@ Dann `http://localhost:4000/studio` öffnen.
 | C2 | ✅ | Formel `1` | Alle Balken gleich hoch, ganz oben |
 | C3 | ✅ | Formel `0-1` | Alle ganz unten |
 | C4 | ✅ | Formel `sin(x*0.5 - t)` | Eine Welle wandert durch die Balken |
-| C5 | 🔁 | Pixelfun im Foyer **beenden** (nicht nur wegschalten) | „Kein Pixel Fun aktiv", Balken stehen still. Nur weggeschaltet läuft die App weiter — das ist so gewollt |
+| C5 | ✅ | „Stop" im Foyer bei Pixelfun | **Die Szene bleibt im Studio aktiv, und das ist richtig.** „Stop" auf einer Szenenkachel beendet die *Übernahme* und gibt die Rotation wieder frei — die App läuft weiter. Nachgeprüft: der Knopf löst `stop_takeover` aus, nicht `stop_app`. Das Studio zeigt, was läuft |
 | C6 | ⬜ | Pixelfun wieder starten | Balken laufen wieder, ohne Neuladen |
 
 ## D · Ring-Chase (Licht → Sound)
@@ -89,16 +105,16 @@ und läuft immer rund; der Faktor davor ist die Anzahl Wellen auf dem Ring.
 | # | | Schritt | Erwartet |
 |---|---|---|---|
 | D1 | 🔁 | Ring-Chase an | **Gleichmäßige** Töne, kein Stolpern, **keine Lücke** zwischen Panel 12 und 1 |
-| D2 | 🔁 | Pegelmeter beobachten | Leuchten der Reihe nach in Wanderrichtung |
-| D3 | 🔁 | Formel `sin(atan2(ny,nx) + t)` | Bewegung dreht sich um |
+| D2 | ✅ | Pegelmeter beobachten | Leuchten der Reihe nach in Wanderrichtung |
+| D3 | 🔁 | Formel `sin(atan2(ny,nx) + t)` | Bewegung dreht sich um, gleichmäßig |
 | D4 | 🔁 | Formel `sin(atan2(ny,nx) - t*3)` | Schneller und lauter, **weiterhin gleichmäßig** |
-| D5 | 🔁 | Formel `sin(atan2(ny,nx) - t*0.05)` | Sehr langsam; ab einem Punkt verstummt es |
-| D6 | 🔁 | Mindeststeilheit aufs Minimum (0.0005) | Auch die langsame Welle klingt wieder |
-| D7 | ⬜ | Klang `pc_pluck`, Länge 1500 ms | Gezupft, lang ausklingend |
+| D5 | ✅ | Formel `sin(atan2(ny,nx) - t*0.05)` | **Stille ist das erwartete Ergebnis.** So eine Welle steigt nur um 0,0017 pro Frame und liegt damit unter der voreingestellten Mindeststeilheit von 0,002 — der Chase soll ein kaum bewegtes Bild nicht antasten. Weiter bei D6 |
+| D6 | ✅ | Mindeststeilheit aufs Minimum (0.0005) | Auch die langsame Welle klingt wieder |
+| D7 | ✅ | Klang `pc_pluck`, Länge 1500 ms | Gezupft, lang ausklingend |
 | D8 | ⬜ | Mindeststeilheit aufs Maximum | Stille, bis die Welle sehr steil wird |
 | D9 | ⬜ | Ring-Chase aus | Sofort still, keine Nachzügler |
 | D10 | ⬜ | Transport auf Stop, Chase an | Klingt trotzdem — das Bild ist die Uhr |
-| D11 | 🔁 | Formel `sin(atan2(ny,nx)*3 - t)` | **Drei Töne exakt gleichzeitig**, dann die nächsten drei — kein Versatz innerhalb einer Gruppe |
+| D11 | 🔁 | Formel `sin(atan2(ny,nx)*3 - t)` | **Drei Töne exakt gleichzeitig**, dann die nächsten drei — und drei *verschiedene* Tonhöhen, kein Schweben |
 
 ## E · Drone
 
@@ -107,9 +123,9 @@ und läuft immer rund; der Faktor davor ist die Anzahl Wellen auf dem Ring.
 | E1 | ✅ | Drone an | Klangteppich setzt langsam ein |
 | E2 | ✅ | Formel `1` | Alle Stimmen klingen |
 | E3 | ✅ | Formel `0-1` | Verstummt, bleibt aber an |
-| E4 | 🔁 | Formel `sin(atan2(ny,nx) - t*0.3)` | Der Akkord wandert, Stimmen kommen und gehen — **deutlich mehrstimmig** |
-| E5 | 🔁 | Zoom weit auf (feines Muster) | Mehr Stimmen gleichzeitig, flirrend |
-| E6 | 🔁 | Zoom weit zurück | Wenige stehende Töne |
+| E4 | ✅ | Formel `sin(atan2(ny,nx) - t*0.3)` | Der Akkord wandert, Stimmen kommen und gehen — deutlich mehrstimmig |
+| E5 | 🔁 | **Formel auf `sin(x*0.5 - t*0.3)` wechseln**, dann Zoom weit auf | Mehr Stimmen gleichzeitig, flirrend. Mit `atan2` ist der Effekt absichtlich kaum hörbar: Richtungsformeln sind gegen Zoom weitgehend immun (siehe [pixelfun.md](../pixelfun.md)) — dafür ist `x` da |
+| E6 | 🔁 | Zoom weit zurück (weiter mit `sin(x*0.5 - t*0.3)`) | Wenige stehende Töne |
 | E7 | ✅ | Drone aus | Ausklingen, kein Abschneiden |
 | E8 | ✅ | Drone **und** Chase | Beides gleichzeitig, kein Aussetzer |
 
@@ -121,7 +137,7 @@ und läuft immer rund; der Faktor davor ist die Anzahl Wellen auf dem Ring.
 | F2 | ✅ | Nochmal klicken | Leer |
 | F3 | ✅ | Pinsel 7, dieselbe Zelle | Zeigt „7" — verschoben, nicht gelöscht |
 | F4 | ✅ | Vier Schritte, Play | Playhead wandert, es klingt an den Schritten |
-| F5 | 🔁 | Panel 1 und Panel 7 in einer Zeile | Klang wechselt hörbar die Seite (1–6 links, 7–12 rechts) |
+| F5 | ✅ | Panel 1 und Panel 7 in einer Zeile | Klang wechselt hörbar die Seite (1–6 links, 7–12 rechts) |
 | F6–F12 | ✅ | Mute, Klang je Zeile, ⌫, Metronom, Tempo | wie beschrieben |
 
 ## G · Kompositionen
@@ -129,7 +145,7 @@ und läuft immer rund; der Faktor davor ist die Anzahl Wellen auf dem Ring.
 | # | | Schritt | Erwartet |
 |---|---|---|---|
 | G1–G10 | ✅ | Speichern, Take, Laden, Löschen, Neustart, A/B | wie beschrieben |
-| G11 | 🔁 | Auf A stehen, „A → B kopieren", umschalten | B hat A's Muster. Der Knopf beschriftet sich um: auf B heißt er „B → A kopieren" und kopiert entsprechend |
+| G11 | 🔁 | Auf A stehen, „A → B kopieren", umschalten | B hat A's Muster. Nachgeprüft im Browser: auf A heißt der Knopf „A → B kopieren", auf B „B → A kopieren" — er kopiert immer die *laufende* Seite auf die andere. Danach haben beide Seiten dasselbe; das ist der Sinn der Sache |
 
 ## H · Matrix
 
