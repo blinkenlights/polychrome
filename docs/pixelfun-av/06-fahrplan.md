@@ -58,13 +58,20 @@ Zwei Dinge zeigten sich erst an echten Formelwerten:
 - Monotone Zeit ist vorzeichenbehaftet und startet weit unter null, „noch nie ausgelöst"
   braucht also einen eigenen Fall statt einer sehr kleinen Zahl.
 
-## M4 · `/studio` — Grundgerüst
+## M4 · `/studio` — Grundgerüst ✅
 
 LiveView mit Transport, Stage (bestehenden Pixel-Canvas-Hook wiederverwenden,
 quadratische Pixel), Pegelmeter je Panel, Slot-Liste (8), Probes-Liste,
 Szenen-Referenz. Zunächst überwiegend anzeigen; bedienbar sind Transport und Slots.
 
-**Fertig, wenn:** man M3 ohne IEx starten, hören und beobachten kann.
+**Fertig.** `/studio` (im Menü neben „Foyer") zeigt Transport, die Ring-Vorschau, je
+Panel einen vorzeichenbehafteten Probe-Balken und einen Pegelmeter, die referenzierte
+Szene und die Klangquellen, die es heute gibt: Metronom und Ring-Chase mit Klang,
+Länge und Mindeststeilheit.
+
+Gespielte Noten laufen dafür über ein eigenes PubSub-Thema — Noten sind selten genug
+für eine Nachricht pro Stück, anders als Frames. Probe-Werte kommen mit jedem Frame und
+werden auf zehn pro Sekunde gedrosselt.
 
 ## M5 · Grid und Kompositionen
 
@@ -142,6 +149,9 @@ Octopus.Sound.configure_ring_chase(synth: "pc_pluck", duration_ms: 900)
 Er braucht **keinen** Transport — das Bild ist die Uhr. Wer ihn im Takt will, bindet die
 Szene an Beats (`time_source: :beats`, M4).
 
+Alles davon geht seit M4 auch ohne IEx: **`/studio`** im Menü. Der Ring-Chase braucht
+dort nur eine laufende Pixelfun-Szene und einen Klick.
+
 Umschalten auf beak: in `config/dev.exs` `engine: Octopus.Sound.Engine.Beak`. Oben
 ändert sich nichts, nur der Timing-Modus meldet dann `:immediate`.
 
@@ -154,7 +164,7 @@ Installation läuft mit `:direct` — ein Ausgang pro Panel.
 ## Reihenfolge auf einen Blick
 
 ```
-M0 Ton ✅ ► M1 Uhr ✅ ► M2 Probes ✅ ► M3 Ring-Chase ✅ ► M4 Studio ──► M5 Grid
+M0 Ton ✅ ► M1 Uhr ✅ ► M2 Probes ✅ ► M3 Ring-Chase ✅ ► M4 Studio ✅ ► M5 Grid
                                           │                            │
                                     „hört man das Bild?" ✅     M6 Matrix ──► M7 Programm
                                                                              │
