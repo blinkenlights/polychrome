@@ -46,7 +46,7 @@ Dann `http://localhost:4000/studio` öffnen.
 | B3 | Stop, 10 s warten, Play | Position steht während der Pause still und läuft dann weiter |
 | B4 | Während des Laufens Tempo von 120 auf 60 ändern | Position springt **nicht**, läuft nur halb so schnell weiter |
 | B5 | Tempo auf 240 | Doppelte Geschwindigkeit, wieder ohne Sprung |
-| B6 | Panic drücken | Alles sofort still |
+| B6 | Erst Ring-Chase **oder** Grid starten, damit etwas klingt, dann Panic | Ton sofort still, Transport stoppt, Ring-Chase und Drone gehen aus. Die Animation läuft weiter — Panic ist der Not-Aus für den **Ton**, das Bild ist davon unberührt |
 | B7 | Zweiten Browsertab auf `/studio` öffnen | Beide Tabs zeigen dieselbe Position, dasselbe Tempo, dasselbe Grid |
 
 ## C · Probes (die Brücke vom Bild zum Klang)
@@ -57,20 +57,34 @@ Dann `http://localhost:4000/studio` öffnen.
 | C2 | Im Foyer die Formel auf `1` setzen | Alle zwölf Balken stehen gleich hoch, ganz oben |
 | C3 | Formel auf `0-1` | Alle Balken ganz unten |
 | C4 | Formel auf `sin(x*0.5 - t)` | Eine Welle wandert sichtbar durch die zwölf Balken |
-| C5 | Pixelfun im Foyer beenden | Szenen-Karte sagt „Kein Pixel Fun aktiv", Balken stehen still |
+| C5 | Pixelfun im Foyer **beenden** (nicht nur wegschalten) | Szenen-Karte sagt „Kein Pixel Fun aktiv", Balken stehen still. Solange die App nur nicht *angezeigt* wird, läuft sie weiter und die Probes laufen mit — das ist so gewollt |
 | C6 | Pixelfun wieder starten | Balken laufen wieder, ohne Neuladen der Seite |
 
 ## D · Ring-Chase (Licht → Sound)
 
-Voraussetzung: Pixelfun läuft mit `sin(x*0.5 - t)`.
+**Voraussetzung: Formel `sin(atan2(ny,nx) - t)`.**
+
+Nicht `sin(x*0.5 - t)`. Nachgemessen: mit `x*0.5` sitzen elf Abstände exakt bei
+0,433 s und einer — der zwischen Panel 12 und 1 — bei 1,5 s. Das ist kein Fehler
+im Chase, sondern in der Formel: `x*k` läuft nur dann sauber um den Ring, wenn
+`k` mal die Ringbreite ein ganzes Vielfaches von 2π ergibt, und 0.5 tut das nicht.
+
+`atan2(ny,nx)` ist der Azimut selbst und läuft immer rund. Der Faktor davor ist
+direkt die Anzahl der Wellen auf dem Ring:
+
+| Formel | Effekt |
+|---|---|
+| `sin(atan2(ny,nx) - t)` | **eine** Welle wandert rundherum, gleichmäßig, ohne Naht |
+| `sin(atan2(ny,nx)*3 - t)` | drei Wellen — drei Panels klingen gleichzeitig, marschierend |
+| `sin(atan2(ny,nx)*2 - t*2)` | zwei Wellen, doppelt so schnell |
 
 | # | Schritt | Erwartet |
 |---|---|---|
-| D1 | Ring-Chase einschalten | Regelmäßige kurze Töne, die im Stereobild hin- und herwandern |
+| D1 | Ring-Chase einschalten | Gleichmäßige kurze Töne, ohne Stolpern und ohne Lücke am Übergang von Panel 12 auf 1 |
 | D2 | Pegelmeter unter den Probe-Balken beobachten | Sie leuchten der Reihe nach auf, in Wanderrichtung |
-| D3 | Formel auf `sin(x*0.5 + t)` ändern | Die Bewegung dreht sich um |
-| D4 | Formel auf `sin(x*0.5 - t*3)` | Deutlich schneller **und** hörbar lauter (steilere Nulldurchgänge) |
-| D5 | Formel auf `sin(x*0.5 - t*0.05)` | Sehr langsam; ab einem Punkt verstummt es (Mindeststeilheit) |
+| D3 | Formel auf `sin(atan2(ny,nx) + t)` ändern | Die Bewegung dreht sich um |
+| D4 | Formel auf `sin(atan2(ny,nx) - t*3)` | Deutlich schneller **und** hörbar lauter (steilere Nulldurchgänge), weiterhin gleichmäßig |
+| D5 | Formel auf `sin(atan2(ny,nx) - t*0.05)` | Sehr langsam; ab einem Punkt verstummt es (Mindeststeilheit) |
 | D6 | Mindeststeilheit auf Minimum ziehen | Auch die langsame Welle klingt wieder |
 | D7 | Klang auf `pc_pluck`, Länge auf 1500 ms | Gezupfter, lang ausklingender Klang statt kurzem Ping |
 | D8 | Mindeststeilheit auf Maximum | Stille, bis die Welle wieder sehr steil wird |
@@ -98,7 +112,7 @@ Voraussetzung: Pixelfun läuft mit `sin(x*0.5 - t)`.
 | F2 | Dieselbe Zelle nochmal klicken | Zelle ist wieder leer |
 | F3 | Zelle setzen, Pinsel auf 7, dieselbe Zelle klicken | Zelle zeigt „7" — verschoben, nicht gelöscht |
 | F4 | Vier Schritte in Zeile 1 setzen, Play | Playhead wandert, an den gesetzten Schritten klingt es |
-| F5 | Verschiedene Panels in einer Zeile | Der Klang wechselt hörbar die Seite (in dev: links/rechts) |
+| F5 | Panel 1 und Panel 7 in einer Zeile | Der Klang wechselt hörbar die Seite. In dev wird der Ring in zusammenhängende Bögen gefaltet: Panel 1–6 links, 7–12 rechts |
 | F6 | Zeile 1 stummschalten (Zahl links) | Zeile wird rot, ist still, Schritte bleiben stehen |
 | F7 | Stumm wieder aus | Klingt wieder wie vorher |
 | F8 | Klang einer Zeile auf `pc_drone` | Diese Zeile klingt lang und weich |
@@ -121,7 +135,7 @@ Voraussetzung: Pixelfun läuft mit `sin(x*0.5 - t)`.
 | G8 | Eintrag löschen (×) | Nachfrage, danach aus der Liste verschwunden |
 | G9 | A/B: Muster in A, auf B umschalten | B ist leer, A bleibt erhalten |
 | G10 | In B etwas anderes bauen, hin- und herschalten | Beide Muster bleiben unabhängig erhalten |
-| G11 | „A→B kopieren", dann umschalten | B hat dasselbe Muster wie A |
+| G11 | „A → B kopieren", dann umschalten | B hat dasselbe Muster wie A. Der Knopf beschriftet sich um: steht man auf B, heißt er „B → A kopieren" und kopiert entsprechend |
 
 ## H · Matrix
 
@@ -178,9 +192,13 @@ einem flirrenden Muster.
 
 - **Der Drone taucht in den Pegelmetern nicht auf.** Die Meter reagieren auf
   angeschlagene Noten; gehaltene Stimmen haben keinen Anschlag.
-- **Nach Panic muss der Drone einmal aus- und wieder eingeschaltet werden.**
-  Panic räumt im Klangserver alles ab, der Drone hält aber noch seine Stimmen
-  für lebendig und redet ins Leere.
+- **Der Ring-Chase klingt 80 ms nach dem Bild.** Das ist der Preis für
+  gleichmäßiges Timing: der Nulldurchgang wird zwischen zwei Frames
+  interpoliert und die Note konstant nach vorn geplant, statt sie beim
+  Eintreffen des Frames abzufeuern. Konstant statt zappelig — und genau das,
+  wofür später der AV-Offset da ist.
+- **In dev hörst du den Ring auf zwei Ausgängen.** Panel 1–6 links, 7–12
+  rechts. Feinere Räumlichkeit lässt sich am Laptop nicht beurteilen.
 - **Die Matrix merkt sich den Ausgangswert beim Anlegen der Zeile.** Wenn du
   den Parameter danach im Foyer von Hand verstellst, springt er beim Entfernen
   der Zeile auf den *alten* Wert zurück.
