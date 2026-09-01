@@ -1,12 +1,28 @@
 # 08 — Manueller Testplan
 
-Für den Durchgang durch alles, was in M0–M6 entstanden ist. Gedacht zum
-Abhaken: links der Schritt, rechts was passieren soll. Wo etwas anders ist,
-notier es unten unter „Befunde" — dort steht auch, was ein guter Fehlerbericht
-enthält.
+Stand nach dem ersten Durchgang. Legende:
 
-**Bekannte Grenzen** stehen am Ende. Bitte vorher überfliegen, damit du nicht
-Zeit mit Dingen verbringst, von denen wir schon wissen, dass sie noch fehlen.
+| | |
+|---|---|
+| ✅ | bestanden, nichts zu tun |
+| 🔁 | **nachtesten** — der Fall ist seither repariert oder der Testfall war falsch |
+| ⬜ | noch offen |
+
+**Offen sind 22 Fälle**, davon 13 zum Nachtesten. Der ganze Block I (Zusammenspiel)
+ist noch unberührt.
+
+## Was sich seit dem ersten Durchgang geändert hat
+
+- **Der Chase stolpert nicht mehr.** Zwei Ursachen: die Formel `sin(x*0.5 - t)`
+  läuft nicht sauber um den Ring (Naht zwischen Panel 12 und 1), und der
+  Zeitstempel der Probes hing an der Renderdauer statt am Frame-Raster.
+  Nachgemessen über 270 Frames: Abstände vorher 503–540 ms, jetzt 518–519 ms.
+- **Neue Formelempfehlung** für alles auf dem Ring: `sin(atan2(ny,nx) - t)`.
+- **Der Drone ist zwölfstimmig** — er zählte vorher Ausgangskanäle statt Panels.
+- **Panel 1 und 7 liegen nicht mehr auf demselben Lautsprecher.**
+- **Panic stoppt jetzt auch Transport und Instrumente.**
+- **Neu in der Stage:** abgewickelter Streifen und Ringdraufsicht.
+- **Dropdowns zeigen wieder ihren Text.**
 
 ## Vorbereitung
 
@@ -18,173 +34,136 @@ BOOT_APP=PixelFun mix phx.server
 
 Dann `http://localhost:4000/studio` öffnen.
 
-> **Ton auf dem Laptop:** In dev sind zwei Ausgänge konfiguriert und die zwölf
-> Panels werden darauf gefaltet (`mapping: :fold`). Du hörst die Bewegung
-> also als Links/Rechts-Wechsel, nicht als Kreis. Das ist Absicht — sonst
-> wären zehn von zwölf Panels stumm.
+> **Ton auf dem Laptop:** zwei Ausgänge, der Ring wird in zusammenhängende Bögen
+> gefaltet — Panel 1–6 links, 7–12 rechts. Bewegung um den Ring hörst du also als
+> Wechsel zwischen links und rechts.
 
 ---
 
 ## A · Engine und Start
 
-| # | Schritt | Erwartet |
-|---|---|---|
-| A1 | Studio öffnen | Transport zeigt Engine **SuperCollider**, Badge **taktgenau** (grün) |
-| A2 | Serverlog ansehen | `scsynth is up, loading SynthDefs from …`, keine `FAILURE` |
-| A3 | `Octopus.Sound.note(channel: 1)` in IEx | Ein Ton ist hörbar |
-| A4 | Server mit Strg-C beenden, `pgrep scsynth` | Kein scsynth mehr übrig |
-| A5 | scsynth von Hand starten, dann Server starten | Server übernimmt den laufenden Server, startet keinen zweiten, kein „address in use" |
-| A6 | In `config/dev.exs` `engine: Octopus.Sound.Engine.Beak`, neu starten | Badge zeigt **best effort**, Töne kommen aus beak (sofern beak läuft) |
-| A7 | `engine: Octopus.Sound.Engine.Null`, neu starten | Badge zeigt **kein Klang**, Seite funktioniert vollständig weiter |
+| # | | Schritt | Erwartet |
+|---|---|---|---|
+| A1 | ✅ | Studio öffnen | Engine **SuperCollider**, Badge **taktgenau** |
+| A2 | ✅ | Serverlog | `loading SynthDefs from …`, keine `FAILURE` |
+| A3 | ✅ | `Octopus.Sound.note(channel: 1)` in IEx | Ein Ton |
+| A4 | ⬜ | Server mit Strg-C beenden, `pgrep scsynth` | Kein scsynth mehr übrig |
+| A5 | ⬜ | scsynth von Hand starten, dann Server starten | Server übernimmt ihn, kein „address in use" |
+| A6 | ⬜ | `engine: Octopus.Sound.Engine.Beak` in `config/dev.exs`, neu starten | Badge **best effort** |
+| A7 | ⬜ | `engine: Octopus.Sound.Engine.Null`, neu starten | Badge **kein Klang**, Seite funktioniert vollständig |
+| A8 | 🔁 | Stage ansehen | Links der **abgewickelte Streifen** (12 Panels nebeneinander), rechts die **Ringdraufsicht** |
+| A9 | 🔁 | Dropdowns im Klang-Bereich und über dem Streifen | Der gewählte Eintrag ist lesbar, nicht abgeschnitten |
 
 ## B · Transport
 
-| # | Schritt | Erwartet |
-|---|---|---|
-| B1 | Play drücken | Position zählt hoch, Knopf wird zu Stop |
-| B2 | Bei 120 BPM zehn Sekunden laufen lassen | Position ist um 20 Beats weitergelaufen (5 Takte) |
-| B3 | Stop, 10 s warten, Play | Position steht während der Pause still und läuft dann weiter |
-| B4 | Während des Laufens Tempo von 120 auf 60 ändern | Position springt **nicht**, läuft nur halb so schnell weiter |
-| B5 | Tempo auf 240 | Doppelte Geschwindigkeit, wieder ohne Sprung |
-| B6 | Erst Ring-Chase **oder** Grid starten, damit etwas klingt, dann Panic | Ton sofort still, Transport stoppt, Ring-Chase und Drone gehen aus. Die Animation läuft weiter — Panic ist der Not-Aus für den **Ton**, das Bild ist davon unberührt |
-| B7 | Zweiten Browsertab auf `/studio` öffnen | Beide Tabs zeigen dieselbe Position, dasselbe Tempo, dasselbe Grid |
+| # | | Schritt | Erwartet |
+|---|---|---|---|
+| B1 | ✅ | Play | Position zählt hoch |
+| B2 | ✅ | Zehn Sekunden bei 120 BPM | 20 Beats weiter (5 Takte) |
+| B3 | ✅ | Stop, warten, Play | Steht still, läuft dann weiter |
+| B4 | ✅ | Tempo 120 → 60 im Lauf | Kein Sprung, halbes Tempo |
+| B5 | ✅ | Tempo → 240 | Doppeltes Tempo, kein Sprung |
+| B6 | 🔁 | **Erst** Ring-Chase oder Grid starten, dann Panic | Ton sofort still, **Transport stoppt**, Ring-Chase und Drone gehen aus. Die Animation läuft weiter — Panic ist der Not-Aus für den Ton |
+| B7 | ✅ | Zweiter Browsertab | Beide zeigen denselben Zustand |
 
-## C · Probes (die Brücke vom Bild zum Klang)
+## C · Probes
 
-| # | Schritt | Erwartet |
-|---|---|---|
-| C1 | Studio bei laufender Pixelfun-Szene | Zwölf Balken bewegen sich, jeder wächst von der Mittellinie nach oben oder unten |
-| C2 | Im Foyer die Formel auf `1` setzen | Alle zwölf Balken stehen gleich hoch, ganz oben |
-| C3 | Formel auf `0-1` | Alle Balken ganz unten |
-| C4 | Formel auf `sin(x*0.5 - t)` | Eine Welle wandert sichtbar durch die zwölf Balken |
-| C5 | Pixelfun im Foyer **beenden** (nicht nur wegschalten) | Szenen-Karte sagt „Kein Pixel Fun aktiv", Balken stehen still. Solange die App nur nicht *angezeigt* wird, läuft sie weiter und die Probes laufen mit — das ist so gewollt |
-| C6 | Pixelfun wieder starten | Balken laufen wieder, ohne Neuladen der Seite |
+| # | | Schritt | Erwartet |
+|---|---|---|---|
+| C1 | ✅ | Studio bei laufender Szene | Zwölf Balken bewegen sich um die Mittellinie |
+| C2 | ✅ | Formel `1` | Alle Balken gleich hoch, ganz oben |
+| C3 | ✅ | Formel `0-1` | Alle ganz unten |
+| C4 | ✅ | Formel `sin(x*0.5 - t)` | Eine Welle wandert durch die Balken |
+| C5 | 🔁 | Pixelfun im Foyer **beenden** (nicht nur wegschalten) | „Kein Pixel Fun aktiv", Balken stehen still. Nur weggeschaltet läuft die App weiter — das ist so gewollt |
+| C6 | ⬜ | Pixelfun wieder starten | Balken laufen wieder, ohne Neuladen |
 
 ## D · Ring-Chase (Licht → Sound)
 
 **Voraussetzung: Formel `sin(atan2(ny,nx) - t)`.**
 
-Nicht `sin(x*0.5 - t)`. Nachgemessen: mit `x*0.5` sitzen elf Abstände exakt bei
-0,433 s und einer — der zwischen Panel 12 und 1 — bei 1,5 s. Das ist kein Fehler
-im Chase, sondern in der Formel: `x*k` läuft nur dann sauber um den Ring, wenn
-`k` mal die Ringbreite ein ganzes Vielfaches von 2π ergibt, und 0.5 tut das nicht.
+Nicht `sin(x*0.5 - t)`. Nachgemessen: dort sitzen elf Abstände bei 0,433 s und
+einer — zwischen Panel 12 und 1 — bei 1,5 s. `x*k` läuft nur rund, wenn `k` mal
+die Ringbreite ein Vielfaches von 2π ergibt. `atan2(ny,nx)` ist der Azimut selbst
+und läuft immer rund; der Faktor davor ist die Anzahl Wellen auf dem Ring.
 
-`atan2(ny,nx)` ist der Azimut selbst und läuft immer rund. Der Faktor davor ist
-direkt die Anzahl der Wellen auf dem Ring:
+| # | | Schritt | Erwartet |
+|---|---|---|---|
+| D1 | 🔁 | Ring-Chase an | **Gleichmäßige** Töne, kein Stolpern, **keine Lücke** zwischen Panel 12 und 1 |
+| D2 | 🔁 | Pegelmeter beobachten | Leuchten der Reihe nach in Wanderrichtung |
+| D3 | 🔁 | Formel `sin(atan2(ny,nx) + t)` | Bewegung dreht sich um |
+| D4 | 🔁 | Formel `sin(atan2(ny,nx) - t*3)` | Schneller und lauter, **weiterhin gleichmäßig** |
+| D5 | 🔁 | Formel `sin(atan2(ny,nx) - t*0.05)` | Sehr langsam; ab einem Punkt verstummt es |
+| D6 | 🔁 | Mindeststeilheit aufs Minimum (0.0005) | Auch die langsame Welle klingt wieder |
+| D7 | ⬜ | Klang `pc_pluck`, Länge 1500 ms | Gezupft, lang ausklingend |
+| D8 | ⬜ | Mindeststeilheit aufs Maximum | Stille, bis die Welle sehr steil wird |
+| D9 | ⬜ | Ring-Chase aus | Sofort still, keine Nachzügler |
+| D10 | ⬜ | Transport auf Stop, Chase an | Klingt trotzdem — das Bild ist die Uhr |
+| D11 | 🔁 | Formel `sin(atan2(ny,nx)*3 - t)` | **Drei Töne exakt gleichzeitig**, dann die nächsten drei — kein Versatz innerhalb einer Gruppe |
 
-| Formel | Effekt |
-|---|---|
-| `sin(atan2(ny,nx) - t)` | **eine** Welle wandert rundherum, gleichmäßig, ohne Naht |
-| `sin(atan2(ny,nx)*3 - t)` | drei Wellen — drei Panels klingen gleichzeitig, marschierend |
-| `sin(atan2(ny,nx)*2 - t*2)` | zwei Wellen, doppelt so schnell |
+## E · Drone
 
-| # | Schritt | Erwartet |
-|---|---|---|
-| D1 | Ring-Chase einschalten | Gleichmäßige kurze Töne, ohne Stolpern und ohne Lücke am Übergang von Panel 12 auf 1 |
-| D2 | Pegelmeter unter den Probe-Balken beobachten | Sie leuchten der Reihe nach auf, in Wanderrichtung |
-| D3 | Formel auf `sin(atan2(ny,nx) + t)` ändern | Die Bewegung dreht sich um |
-| D4 | Formel auf `sin(atan2(ny,nx) - t*3)` | Deutlich schneller **und** hörbar lauter (steilere Nulldurchgänge), weiterhin gleichmäßig |
-| D5 | Formel auf `sin(atan2(ny,nx) - t*0.05)` | Sehr langsam; ab einem Punkt verstummt es (Mindeststeilheit) |
-| D6 | Mindeststeilheit auf Minimum ziehen | Auch die langsame Welle klingt wieder |
-| D7 | Klang auf `pc_pluck`, Länge auf 1500 ms | Gezupfter, lang ausklingender Klang statt kurzem Ping |
-| D8 | Mindeststeilheit auf Maximum | Stille, bis die Welle wieder sehr steil wird |
-| D9 | Ring-Chase ausschalten | Sofort still, keine Nachzügler |
-| D10 | Transport auf Stop, Ring-Chase an | Klingt trotzdem — der Chase braucht keinen Transport, das Bild ist die Uhr |
+| # | | Schritt | Erwartet |
+|---|---|---|---|
+| E1 | ✅ | Drone an | Klangteppich setzt langsam ein |
+| E2 | ✅ | Formel `1` | Alle Stimmen klingen |
+| E3 | ✅ | Formel `0-1` | Verstummt, bleibt aber an |
+| E4 | 🔁 | Formel `sin(atan2(ny,nx) - t*0.3)` | Der Akkord wandert, Stimmen kommen und gehen — **deutlich mehrstimmig** |
+| E5 | 🔁 | Zoom weit auf (feines Muster) | Mehr Stimmen gleichzeitig, flirrend |
+| E6 | 🔁 | Zoom weit zurück | Wenige stehende Töne |
+| E7 | ✅ | Drone aus | Ausklingen, kein Abschneiden |
+| E8 | ✅ | Drone **und** Chase | Beides gleichzeitig, kein Aussetzer |
 
-## E · Drone (Licht → Sound, gehalten)
+## F · Grid
 
-| # | Schritt | Erwartet |
-|---|---|---|
-| E1 | Drone einschalten | Ein Klangteppich setzt langsam ein (kein Knacken, kein Schlag) |
-| E2 | Formel `1` | Alle Stimmen klingen, dichtester Akkord |
-| E3 | Formel `0-1` | Der Drone verstummt, bleibt aber eingeschaltet |
-| E4 | Formel `sin(x*0.5 - t*0.3)` | Der Akkord wandert hörbar, Stimmen kommen und gehen |
-| E5 | Im Foyer den Zoom weit aufdrehen (feines Muster) | Mehr Stimmen gleichzeitig, flirrender |
-| E6 | Zoom weit zurück (grobes Muster) | Wenige stehende Töne |
-| E7 | Drone ausschalten | Ausklingen über ein paar Sekunden, kein abruptes Abschneiden |
-| E8 | Drone an **und** Ring-Chase an | Beides gleichzeitig hörbar, kein Aussetzer |
-
-## F · Grid (Partitur)
-
-| # | Schritt | Erwartet |
-|---|---|---|
-| F1 | Panel-Pinsel auf 3, Zelle in Zeile 1 Schritt 1 klicken | Zelle wird blau und zeigt „3" |
-| F2 | Dieselbe Zelle nochmal klicken | Zelle ist wieder leer |
-| F3 | Zelle setzen, Pinsel auf 7, dieselbe Zelle klicken | Zelle zeigt „7" — verschoben, nicht gelöscht |
-| F4 | Vier Schritte in Zeile 1 setzen, Play | Playhead wandert, an den gesetzten Schritten klingt es |
-| F5 | Panel 1 und Panel 7 in einer Zeile | Der Klang wechselt hörbar die Seite. In dev wird der Ring in zusammenhängende Bögen gefaltet: Panel 1–6 links, 7–12 rechts |
-| F6 | Zeile 1 stummschalten (Zahl links) | Zeile wird rot, ist still, Schritte bleiben stehen |
-| F7 | Stumm wieder aus | Klingt wieder wie vorher |
-| F8 | Klang einer Zeile auf `pc_drone` | Diese Zeile klingt lang und weich |
-| F9 | ⌫ in einer Zeile | Nur diese Zeile ist leer |
-| F10 | Metronom an, während ein Muster läuft | Klick **zusätzlich** zum Muster; das Muster bleibt erhalten |
-| F11 | Metronom aus | Muster läuft unverändert weiter |
-| F12 | Tempo während des Spielens ändern | Muster wird schneller/langsamer, verliert den Takt nicht |
+| # | | Schritt | Erwartet |
+|---|---|---|---|
+| F1 | ✅ | Pinsel 3, Zelle klicken | Zelle blau mit „3" |
+| F2 | ✅ | Nochmal klicken | Leer |
+| F3 | ✅ | Pinsel 7, dieselbe Zelle | Zeigt „7" — verschoben, nicht gelöscht |
+| F4 | ✅ | Vier Schritte, Play | Playhead wandert, es klingt an den Schritten |
+| F5 | 🔁 | Panel 1 und Panel 7 in einer Zeile | Klang wechselt hörbar die Seite (1–6 links, 7–12 rechts) |
+| F6–F12 | ✅ | Mute, Klang je Zeile, ⌫, Metronom, Tempo | wie beschrieben |
 
 ## G · Kompositionen
 
-| # | Schritt | Erwartet |
-|---|---|---|
-| G1 | Muster bauen, Namen eingeben, Speichern | Meldung „gespeichert", Name erscheint rechts in der Liste |
-| G2 | Ohne Namen speichern | Fehlermeldung, nichts wird gespeichert |
-| G3 | Etwas ändern, unter **demselben** Namen speichern | Kein zweiter Eintrag, der bestehende wird überschrieben |
-| G4 | Take drücken | Neuer Eintrag „Take JJJJ-MM-TT hh:mm:ss", Arbeitsversion unverändert |
-| G5 | Grid leeren, gespeicherte Komposition laden | Muster ist vollständig zurück, inklusive Panel je Schritt |
-| G6 | Beim Laden aufs Tempo achten | Tempo springt auf das gespeicherte |
-| G7 | Server beenden und neu starten, Seite laden | Grid ist leer, Liste zeigt die Kompositionen; Laden stellt alles wieder her |
-| G8 | Eintrag löschen (×) | Nachfrage, danach aus der Liste verschwunden |
-| G9 | A/B: Muster in A, auf B umschalten | B ist leer, A bleibt erhalten |
-| G10 | In B etwas anderes bauen, hin- und herschalten | Beide Muster bleiben unabhängig erhalten |
-| G11 | „A → B kopieren", dann umschalten | B hat dasselbe Muster wie A. Der Knopf beschriftet sich um: steht man auf B, heißt er „B → A kopieren" und kopiert entsprechend |
+| # | | Schritt | Erwartet |
+|---|---|---|---|
+| G1–G10 | ✅ | Speichern, Take, Laden, Löschen, Neustart, A/B | wie beschrieben |
+| G11 | 🔁 | Auf A stehen, „A → B kopieren", umschalten | B hat A's Muster. Der Knopf beschriftet sich um: auf B heißt er „B → A kopieren" und kopiert entsprechend |
 
 ## H · Matrix
 
-| # | Schritt | Erwartet |
-|---|---|---|
-| H1 | Quelle „Klang · Onsets", Ziel „Szene · Sättigung", ＋ Zeile | Zeile erscheint, Richtung **Sound → Licht** |
-| H2 | Ring-Chase an, Szenen-Karte beobachten | Sättigung springt bei jedem Ton hoch und fällt zurück |
-| H3 | Betrag auf 0 ziehen | Sättigung bleibt still stehen |
-| H4 | Betrag auf 1 | Deutlich größerer Ausschlag |
-| H5 | Kurve auf `exp` | Nur kräftige Anschläge schlagen noch durch |
-| H6 | Kurve auf `inverse` | Der Ausschlag kehrt sich um |
-| H7 | Zeile mit ◼ deaktivieren | Parameter geht auf den Ausgangswert zurück |
-| H8 | Zeile mit × entfernen | Parameter bleibt auf dem Ausgangswert |
-| H9 | Quelle „Phase · 8 Takte" → „Szene · Zoom", Transport an | Das Bild atmet über acht Takte hinein und wieder heraus |
-| H10 | Quelle „Probes · Maximum" → „Drone · Lautstärke" | Richtung **Licht → Sound**; der Drone schwillt mit dem Bild |
-| H11 | Filter „Licht → Sound" | Nur diese Zeile bleibt sichtbar |
-| H12 | Filter „Alle" | Alle Zeilen wieder da |
-| H13 | Zwei Zeilen auf dasselbe Ziel | Beide Beträge addieren sich, nichts überschreibt das andere |
-| H14 | Quellen-Karten unten beobachten | Vier Balken bewegen sich live mit Bild und Klang |
-| H15 | Alles an (Chase, Drone, Grid, drei Matrixzeilen), fünf Minuten laufen lassen | Nichts hakt, keine Fehler im Log, Bild bleibt flüssig |
+| # | | Schritt | Erwartet |
+|---|---|---|---|
+| H1–H14 | ✅ | Zeile anlegen, Betrag, Kurve, Filter, zwei Zeilen auf ein Ziel | wie beschrieben |
+| H15 | ⬜ | Alles an (Chase, Drone, Grid, drei Matrixzeilen), fünf Minuten | Nichts hakt, keine Fehler im Log, Bild bleibt flüssig |
 
 ## I · Zusammenspiel und Robustheit
 
-| # | Schritt | Erwartet |
-|---|---|---|
-| I1 | Während alles läuft: Browsertab schließen und neu öffnen | Ton läuft ununterbrochen weiter, Seite zeigt den echten Zustand |
-| I2 | Netzwerk kurz trennen (LiveView-Reconnect) | Nach dem Reconnect stimmen Schalterstellungen und Grid |
-| I3 | Zwei Tabs, in einem das Grid ändern | Der andere Tab folgt sofort |
-| I4 | Panic bei laufendem Chase + Drone + Grid | Sofort still |
-| I5 | Nach Panic: Drone aus- und wieder einschalten | Drone klingt wieder (siehe bekannte Grenzen) |
-| I6 | Im Foyer die Szene wechseln | Probes, Chase und Drone folgen der neuen Szene |
-| I7 | Pixelfun beenden, während Chase und Drone laufen | Keine Fehler, es wird still; nach dem Neustart läuft es weiter |
-| I8 | CPU-Auslastung im Blick behalten | Frames bleiben bei 30 fps, keine Aussetzer im Ton |
+| # | | Schritt | Erwartet |
+|---|---|---|---|
+| I1 | ⬜ | Tab schließen und neu öffnen | Ton läuft durch, Seite zeigt den echten Zustand |
+| I2 | ⬜ | Netzwerk kurz trennen | Nach dem Reconnect stimmen Schalter und Grid |
+| I3 | ⬜ | Zwei Tabs, in einem das Grid ändern | Der andere folgt sofort |
+| I4 | ⬜ | Panic bei Chase + Drone + Grid | Sofort still, Transport aus, Instrumente aus |
+| I5 | ⬜ | Nach Panic alles wieder einschalten | Klingt wieder |
+| I6 | ⬜ | Szene im Foyer wechseln | Probes, Chase und Drone folgen der neuen Szene |
+| I7 | ⬜ | Pixelfun beenden, während Chase und Drone laufen | Keine Fehler, es wird still; nach Neustart läuft es weiter |
+| I8 | ⬜ | CPU im Blick | 30 fps, keine Aussetzer im Ton |
 
 ---
 
 ## Befunde
 
-Für jeden Fund bitte notieren:
+Für jeden Fund:
 
-1. **Nummer aus diesem Plan** (oder „neu"), und was du getan hast
+1. **Nummer** (oder „neu") und was du getan hast
 2. **Erwartet / tatsächlich** in je einem Satz
-3. **Szene** (Formel) und **Zustand** (was war an: Chase, Drone, Grid, Matrixzeilen)
+3. **Szene** (Formel) und **Zustand** (was war an)
 4. **Reproduzierbar?** — immer, manchmal, einmalig
-5. Auffälligkeiten im **Serverlog** (besonders Zeilen mit `[scsynth]`)
+5. Auffälligkeiten im **Serverlog** (besonders `[scsynth]`)
 
-Der dritte Punkt ist der wichtigste: fast alles hier hängt an der Formel, und
-derselbe Klick fühlt sich bei einer langsamen Welle völlig anders an als bei
-einem flirrenden Muster.
+Punkt 3 ist der wichtigste: fast alles hängt an der Formel.
 
 ---
 
@@ -192,24 +171,14 @@ einem flirrenden Muster.
 
 - **Der Drone taucht in den Pegelmetern nicht auf.** Die Meter reagieren auf
   angeschlagene Noten; gehaltene Stimmen haben keinen Anschlag.
-- **Der Ring-Chase klingt 80 ms nach dem Bild.** Das ist der Preis für
-  gleichmäßiges Timing: der Nulldurchgang wird zwischen zwei Frames
-  interpoliert und die Note konstant nach vorn geplant, statt sie beim
-  Eintreffen des Frames abzufeuern. Konstant statt zappelig — und genau das,
-  wofür später der AV-Offset da ist.
-- **In dev hörst du den Ring auf zwei Ausgängen.** Panel 1–6 links, 7–12
-  rechts. Feinere Räumlichkeit lässt sich am Laptop nicht beurteilen.
-- **Die Matrix merkt sich den Ausgangswert beim Anlegen der Zeile.** Wenn du
-  den Parameter danach im Foyer von Hand verstellst, springt er beim Entfernen
-  der Zeile auf den *alten* Wert zurück.
-- **Kompositionen speichern das Muster, nicht die Szene.** Die Formel wird nur
-  zur Erinnerung mitgeschrieben; beim Laden wechselt das Bild nicht mit.
-  Ebenso wenig gespeichert: Matrixzeilen, Chase- und Drone-Einstellungen.
-- **A/B hält nur Muster**, keine Matrix und keine Instrumenteneinstellungen.
-- **Kein Rotationsbetrieb.** Freigabe, Warteschlange und Übergänge zwischen
-  Kompositionen sind M7 und noch nicht gebaut.
-- **Die Szene wird nur angezeigt, nicht bearbeitet.** Formel und
-  Szenenparameter ändert man weiter im Foyer.
-- **In dev nur zwei Ausgänge.** Räumlichkeit über zwölf echte Kanäle lässt
-  sich am Laptop nicht beurteilen (siehe
-  [07-hardware-prototyp.md](07-hardware-prototyp.md)).
+- **Der Ring-Chase klingt 80 ms nach dem Bild.** Preis für gleichmäßiges Timing:
+  der Nulldurchgang wird interpoliert und die Note konstant nach vorn geplant.
+  Konstant statt zappelig — und genau dafür ist später der AV-Offset da.
+- **In dev hörst du den Ring auf zwei Ausgängen** (1–6 links, 7–12 rechts).
+- **Die Matrix merkt sich den Ausgangswert beim Anlegen der Zeile.** Verstellst
+  du den Parameter danach im Foyer, springt er beim Entfernen auf den alten Wert.
+- **Kompositionen speichern das Muster, nicht die Szene.** Matrixzeilen, Chase-
+  und Drone-Einstellungen ebenfalls nicht.
+- **A/B hält nur Muster.**
+- **Kein Rotationsbetrieb** (Freigabe, Warteschlange, Übergänge) — das ist M7.
+- **Die Szene wird nur angezeigt, nicht bearbeitet.**
