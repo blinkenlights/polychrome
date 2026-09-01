@@ -13,6 +13,7 @@ Architektur und UI-Spezifikation als gemeinsame Diskussionsgrundlage.
 | [05-spaeter.md](05-spaeter.md) | Bewusst zurückgestellte Features |
 | [06-fahrplan.md](06-fahrplan.md) | Reihenfolge der Umsetzung, M0 bis M8 |
 | [07-hardware-prototyp.md](07-hardware-prototyp.md) | Audio-Hardware für den Schreibtisch |
+| [08-testplan.md](08-testplan.md) | Manuelle Testfälle zum Abhaken |
 | [studio-entwurf.html](studio-entwurf.html) | Der UI-Entwurf zum Anschauen — im Browser öffnen |
 
 ## Kurzfassung
