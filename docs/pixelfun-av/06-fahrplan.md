@@ -31,22 +31,32 @@ Backends (Null, Beak, SuperCollider), SynthDefs liegen in `priv/synthdefs`.
 mit 200-ms-Vorlauf. Gemessen: nach vier Sekunden bei 120 BPM steht der Transport auf
 8,002 Beats. 28 Tests decken Uhr, Scheduler und OSC-Kodierung ab.
 
-## M2 · Probes in Pixelfun
+## M2 · Probes in Pixelfun ✅
 
 Kleiner, klar abgegrenzter Eingriff in `pixel_fun.ex`: hinter einem Schalter pro Frame
 zusätzlich N Punkte auswerten und als `{:pixel_probes, %{t_beats: _, values: [...]}}`
 broadcasten.
 
-**Fertig, wenn:** ein IEx-Listener die zwölf Werte im Takt der Frames sieht und die
-Renderleistung messbar unverändert ist.
+**Fertig.** `PixelFun.probe_values/1` wertet die Formel an der Mitte jedes Panels aus,
+`Octopus.Sound.Probes` verteilt sie pro Frame. Die Flat-Transformparameter liegen jetzt
+in einer eigenen Funktion, damit Probe und Bild nicht auseinanderlaufen können.
 
-## M3 · Ring-Chase — das erste audiovisuelle Ergebnis
+## M3 · Ring-Chase — das erste audiovisuelle Ergebnis ✅
 
 Der Scheduler verbindet Probes mit Tönen: Nulldurchgang an Panel n → kurzer Ton auf
 Kanal n. Formel und Klang zunächst fest verdrahtet.
 
-**Fertig, wenn:** man das Bild wandern *hört*. Ab hier ist das Projekt real, und alle
-weiteren Entscheidungen lassen sich am Höreindruck treffen statt am Papier.
+**Fertig.** `Octopus.Sound.RingChase` spielt das Panel, dessen Wert durch null steigt.
+Gemessen mit `sin(x*0.5 - t)` auf Nation2026: die Panels klingen in der Reihenfolge
+10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8 — einmal um den Ring und über die Naht.
+
+Zwei Dinge zeigten sich erst an echten Formelwerten:
+
+- Der Schwellwert muss die **Steilheit** der Nullstelle prüfen, nicht die Höhe. Der Wert
+  *an* einem Nulldurchgang ist definitionsgemäß fast null — eine Höhenschwelle bringt bei
+  30 fps alles zum Schweigen.
+- Monotone Zeit ist vorzeichenbehaftet und startet weit unter null, „noch nie ausgelöst"
+  braucht also einen eigenen Fall statt einer sehr kleinen Zahl.
 
 ## M4 · `/studio` — Grundgerüst
 
@@ -122,17 +132,31 @@ Octopus.Sound.set_source(fn step, _timeline ->
 end)
 ```
 
+Der Ring-Chase (Zielbild 1), sobald eine Pixelfun-Szene läuft:
+
+```elixir
+Octopus.Sound.ring_chase(true)
+Octopus.Sound.configure_ring_chase(synth: "pc_pluck", duration_ms: 900)
+```
+
+Er braucht **keinen** Transport — das Bild ist die Uhr. Wer ihn im Takt will, bindet die
+Szene an Beats (`time_source: :beats`, M4).
+
 Umschalten auf beak: in `config/dev.exs` `engine: Octopus.Sound.Engine.Beak`. Oben
 ändert sich nichts, nur der Timing-Modus meldet dann `:immediate`.
+
+**Auf einem Stereo-Laptop** faltet `mapping: :fold` (in `config/dev.exs` gesetzt) die
+zwölf Panels auf die vorhandenen Ausgänge, sonst wären zehn davon stumm. Die
+Installation läuft mit `:direct` — ein Ausgang pro Panel.
 
 ---
 
 ## Reihenfolge auf einen Blick
 
 ```
-M0 Ton ✅ ► M1 Uhr ✅ ► M2 Probes ──► M3 Ring-Chase ──► M4 Studio ──► M5 Grid
+M0 Ton ✅ ► M1 Uhr ✅ ► M2 Probes ✅ ► M3 Ring-Chase ✅ ► M4 Studio ──► M5 Grid
                                           │                            │
-                                    „hört man das Bild?"        M6 Matrix ──► M7 Programm
+                                    „hört man das Bild?" ✅     M6 Matrix ──► M7 Programm
                                                                              │
                                                                        M8 SuperCollider
 ```
