@@ -101,7 +101,35 @@ darf sie **überschreiben**. Ein Slot auf „festes Panel 3" spielt auf 3, auße
 wo im Raster ausdrücklich etwas anderes steht. Ein Slot auf „folgt Probe"
 ignoriert die Schrittangabe, weil sein Ort aus dem Bild kommt.
 
-## Zu entscheiden
+## Entschieden
+
+| | |
+|---|---|
+| **Slot = Instrument = Grid-Zeile** | ja. Das Grid bleibt dabei eine *Ansicht* der Slots — ein Slot existiert auch ohne einen einzigen Schritt, sonst ließe sich ein Drone gar nicht anlegen. |
+| **Schnellschalter** | bleiben, aber als **Knöpfe**: „Drone einrichten" füllt den nächsten freien Slot. Danach ist es ein Slot wie jeder andere. Ein Umschalter wäre beim zweiten Klick mehrdeutig — löschen oder stummschalten? — und hätte wieder zwei Wahrheiten erzeugt. |
+| **Auslöser** | die drei vorhandenen: Grid, Probe-Nulldurchgang, gehalten. Kein MIDI, weil es im Projekt keine MIDI-Anbindung gibt und eine Abstraktion nach einem ungetesteten Fall geformt würde. Das Auslöser-Feld hat aber von Anfang an einen Typ, damit MIDI später ein Wert ist und keine Migration. |
+| **Stimmenzahl** | kein hartes Limit. Die Klangspalte zeigt, wie viele Stimmen ein Slot belegt („alle Panels: 12"), und `Engine.capabilities/0` sagt, was die Engine trägt. Für SuperCollider sind 48 gehaltene Stimmen nichts; bei beak ist nicht die Zahl das Limit, sondern dass es eine klingende Note gar nicht verändern kann. Eine Regel wie „nur ein Slot darf alle Panels belegen" würde etwas verbieten, das musikalisch reizvoll ist. |
+
+Bei **acht Slots** bleibt es. Mit Chase und Drone darin sind sie schneller voll als
+gedacht — aber erhöhen ist trivial, verkleinern nicht, und acht zwingt zu
+Entscheidungen, was einem Loop guttut.
+
+### Eine Korrektur zum Ort
+
+Oben stand „der Slot legt die Regel fest, der Schritt darf sie überschreiben".
+Beim Aufschreiben zeigte sich, dass das mehrdeutig ist: jede Zelle trägt heute
+immer ein Panel, ein „Überschreiben" wäre also von der Regel nicht zu
+unterscheiden. Klarer ist, **den Schritt selbst zu einer der Regeln zu machen**:
+
+| Ort-Regel | woher der Kanal kommt |
+|---|---|
+| `:step` | aus dem Schritt im Grid (heutiges Verhalten) |
+| `:fixed` | festes Panel am Slot |
+| `:follow_probe` | das Panel, an dem gerade ausgelöst wurde |
+| `:all_panels` | eine Stimme je Panel gleichzeitig |
+| `:rotate` | wandert je Auslösung um n Panels weiter |
+
+## Ursprünglich zu entscheiden
 
 1. **Slot = Instrument = Grid-Zeile?** Der Entwurf sagt ja. Empfehlung: ja —
    wegen der vier Dinge oben, nicht wegen der Ordnung.
