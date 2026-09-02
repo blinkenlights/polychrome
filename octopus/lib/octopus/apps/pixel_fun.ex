@@ -2432,48 +2432,72 @@ defmodule Octopus.Apps.PixelFun do
   defp selected_app_id(%State{selected_app_id: app_id}), do: app_id
 
   @doc """
-  Formula value at the centre of each panel, in panel order.
+  One formula value per panel, in panel order.
 
-  Same evaluation as the picture, sampled at twelve points instead of ~768.
-  Public so it can be exercised directly, like `build_canvas/1`.
+  Same evaluation as the picture, only sampled far more sparsely. How a panel
+  is reduced to one number is `Octopus.Sound.Probes.mode/0`: the centre pixel
+  costs twelve evaluations a frame, the panel-wide modes cost as many as the
+  picture itself. Public so it can be exercised directly, like `build_canvas/1`.
   """
   def probe_values(%State{} = state) do
+    mode = Probes.mode()
+    pixels = probe_pixels(mode)
+
     case transform_backend() do
-      :flat -> probe_values_flat(state)
-      :sphere -> probe_values_sphere(state)
+      :flat -> probe_values_flat(state, mode, pixels)
+      :sphere -> probe_values_sphere(state, mode, pixels)
     end
   end
 
-  defp probe_values_flat(%State{} = state) do
+  # Which pixels of a panel the reading looks at, paired with the pixel index
+  # the formula wants as `i`. One entry for the centre mode, the whole panel
+  # for the modes that speak about the whole panel — so the caller never has to
+  # index into the list, which for 64 pixels would walk it 64 times.
+  defp probe_pixels(:center) do
+    fn panel ->
+      i = Probes.center_pixel_index()
+      [{Enum.at(panel, i), i}]
+    end
+  end
+
+  defp probe_pixels(_panel_wide), do: &Enum.with_index/1
+
+  defp probe_values_flat(%State{} = state, mode, pixels) do
     seconds = state.formula_seconds || state.seconds
     params = flat_transform_params(state, seconds)
-    center = Probes.center_pixel_index()
 
     Installation.virtual_pixel_positions_per_panel()
     |> Enum.with_index()
     |> Enum.map(fn {panel, panel_index} ->
-      {x, y} = Enum.at(panel, center)
-      {x_scaled, y_scaled} = FlatTransform.transform_pixel_coords(x, y, params)
+      panel
+      |> pixels.()
+      |> Enum.map(fn {{x, y}, i} ->
+        {x_scaled, y_scaled} = FlatTransform.transform_pixel_coords(x, y, params)
 
-      eval_probe(state, {x_scaled, y_scaled, {0.0, 0.0, 0.0}}, center, panel_index, seconds)
+        eval_probe(state, {x_scaled, y_scaled, {0.0, 0.0, 0.0}}, i, panel_index, seconds)
+      end)
+      |> then(&Probes.reduce(mode, &1))
     end)
   end
 
-  defp probe_values_sphere(%State{} = state) do
+  defp probe_values_sphere(%State{} = state, mode, pixels) do
     seconds = state.formula_seconds || state.seconds
     eff = effective_transform_values(state)
     z = max(eff.zoom_base || 1.0, @zoom_factor_min)
     motion_params = build_motion_params(state, seconds)
     branch = steady_branch(resolve_zoom_branches(state, z, seconds))
-    center = Probes.center_pixel_index()
 
     (state.pixel_dirs || SphereTransform.precompute_pixel_dirs())
     |> Enum.with_index()
     |> Enum.map(fn {panel, panel_index} ->
-      {x, y, d} = Enum.at(panel, center)
-      sample = sample_zoom_branch({motion_params, z, x, y, d}, branch)
+      panel
+      |> pixels.()
+      |> Enum.map(fn {{x, y, d}, i} ->
+        sample = sample_zoom_branch({motion_params, z, x, y, d}, branch)
 
-      eval_probe(state, sample, center, panel_index, seconds)
+        eval_probe(state, sample, i, panel_index, seconds)
+      end)
+      |> then(&Probes.reduce(mode, &1))
     end)
   end
 

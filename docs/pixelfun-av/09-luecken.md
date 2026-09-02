@@ -121,7 +121,7 @@ Nach Nutzen sortiert, nicht nach Aufwand.
    SynthDefs auslösen. Für Samples fehlt in der SuperCollider-Engine die
    Buffer-Verwaltung (`/b_allocRead`).
 3. **Kanal-Zuordnung je Slot** — „folgt Probe", „festes Panel", „alle Panels",
-   „rotiert um n je Trigger". Heute steckt der Ort ausschließlich im Schritt.
+   „rotiert um n je Trigger". ✅ *Erledigt:* der Ort ist ein Feld des Slots.
 4. **Master-Gain und Limiter.** Es gibt keinen Master. Für eine Installation,
    die stundenlang allein läuft, ist das die wichtigste fehlende Sicherung.
 5. **AV-Offset.** Eingemessen wird bisher nichts; der Chase klingt konstant
@@ -131,8 +131,12 @@ Nach Nutzen sortiert, nicht nach Aufwand.
    Drone sind jetzt Slots und werden mitgespeichert — nach einem Serverneustart
    kommen sie klingend zurück. Offen bleiben **Matrixzeilen** und der
    **Szenenbezug**.
-8. **Probes einstellen** — Position, Glättung, Schwelle, Ausgabeart. Die
-   Quellen-Karten sind heute nur Anzeige.
+8. **Probes einstellen** — ✅ *Weitgehend erledigt:* die Lesart eines Panels
+   (Mittelpixel, Panelmittel, Panelhelligkeit, Panelmaximum) ist unter
+   „Quellen" einstellbar, die gemessene Größe (Helligkeit, Tempo, Formelwert)
+   samt Schwelle und Mindeststeilheit am Slot, und der aktuelle Wert steht als
+   Tooltip auf jedem Probe-Balken. Offen bleiben **Position** (die zwölf
+   Messstellen sitzen fest auf den Panels) und **Glättung**.
 9. **Der Drone fehlt in den Pegelmetern über dem Streifen**, weil die auf
    Anschläge reagieren und gehaltene Stimmen keinen haben. In der Klangspalte hat
    inzwischen jeder Slot seinen eigenen Pegel.

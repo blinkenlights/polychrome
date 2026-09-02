@@ -12,7 +12,9 @@ defmodule Octopus.Sound.Trigger.Probe do
   brightness `|value|`, so firing on the value crossing zero puts every note
   in the dark gap between two bright bands — precise, and indistinguishable
   from random to someone sitting in front of it. Brightness rising through a
-  level fires as the band arrives.
+  level fires as the band arrives, and speed fires on the flank between the
+  two — where the picture is changing fastest, which is the other moment a
+  person can point at.
 
   The gate is the **steepness** of the crossing, not the height at it — at a
   crossing the measured quantity is by definition at the level, so a height
@@ -44,25 +46,55 @@ defmodule Octopus.Sound.Trigger.Probe do
   def set_latency(ms) when is_integer(ms), do: GenServer.call(__MODULE__, {:latency, ms})
 
   @doc """
+  The two frames a crossing is looked for in, as the quantity actually measured.
+
+  `:value` and `:brightness` are each read off a single frame, so the pair is
+  simply the last frame and this one. `:speed` is not a property of a frame but
+  of the step between two, so it needs three to have a "before" and a "now" of
+  its own — and it is measured per second rather than per frame, so a level
+  means the same thing whatever the frame rate is doing.
+  """
+  @spec series(map(), [float()], integer(), atom()) :: {[float()], [float()]}
+  def series(state, values, at_ms, :speed) do
+    with [_ | _] <- state.previous,
+         [_ | _] <- state.before_previous,
+         before_dt when before_dt > 0 <- elapsed(state.before_previous_at, state.previous_at),
+         now_dt when now_dt > 0 <- elapsed(state.previous_at, at_ms) do
+      {speeds(state.before_previous, state.previous, before_dt),
+       speeds(state.previous, values, now_dt)}
+    else
+      _not_yet -> {[], []}
+    end
+  end
+
+  def series(state, values, _at_ms, quantity) do
+    {Enum.map(state.previous, &Pattern.measure(quantity, &1)),
+     Enum.map(values, &Pattern.measure(quantity, &1))}
+  end
+
+  defp elapsed(nil, _to), do: 0
+  defp elapsed(from, to), do: (to - from) / 1000
+
+  defp speeds(before, now, seconds) do
+    Enum.zip_with(before, now, fn was, is -> abs(is - was) / seconds end)
+  end
+
+  @doc """
   Panels where the measured quantity rose through `level`, with how steeply.
 
   Rising edges only: a falling edge is the same band leaving, and sounding it
   would double every pass. Returns `{panel_index, rise}` pairs, because the
   steepness is also what the note is played with.
   """
-  @spec crossings([float()], [float()], atom(), float(), float()) ::
-          [{non_neg_integer(), float()}]
-  def crossings(previous, current, quantity, level, min_rise) do
-    previous
-    |> Enum.zip(current)
+  @spec crossings([float()], [float()], float(), float()) :: [{non_neg_integer(), float()}]
+  def crossings(before_series, now_series, level, min_rise) do
+    before_series
+    |> Enum.zip(now_series)
     |> Enum.with_index()
-    |> Enum.map(fn {{before, now}, index} ->
-      {index, Pattern.measure(quantity, before), Pattern.measure(quantity, now)}
-    end)
-    |> Enum.filter(fn {_index, before, now} ->
+    |> Enum.filter(fn {{before, now}, _index} ->
       before <= level and now > level and now - before >= min_rise
     end)
-    |> Enum.map(fn {index, before, now} -> {index, now - before} end)
+    |> Enum.map(fn {{before, now}, index} -> {index, now - before} end)
   end
 
   @doc """
@@ -94,6 +126,8 @@ defmodule Octopus.Sound.Trigger.Probe do
        slots: [],
        previous: [],
        previous_at: nil,
+       before_previous: [],
+       before_previous_at: nil,
        fired: %{}
      }, {:continue, :adopt}}
   end
@@ -102,7 +136,8 @@ defmodule Octopus.Sound.Trigger.Probe do
   def handle_continue(:adopt, state), do: {:noreply, %{state | slots: safe_slots()}}
 
   @impl true
-  def handle_call(:state, _from, state), do: {:reply, Map.drop(state, [:previous]), state}
+  def handle_call(:state, _from, state),
+    do: {:reply, Map.drop(state, [:previous, :before_previous]), state}
 
   def handle_call({:latency, ms}, _from, state), do: {:reply, :ok, %{state | latency_ms: ms}}
 
@@ -115,7 +150,12 @@ defmodule Octopus.Sound.Trigger.Probe do
     {:noreply,
      state
      |> trigger(values, at_ms)
-     |> Map.merge(%{previous: values, previous_at: at_ms})}
+     |> Map.merge(%{
+       previous: values,
+       previous_at: at_ms,
+       before_previous: state.previous,
+       before_previous_at: state.previous_at
+     })}
   end
 
   def handle_info(_message, state), do: {:noreply, state}
@@ -129,20 +169,17 @@ defmodule Octopus.Sound.Trigger.Probe do
     panels = Engine.panels()
 
     Enum.reduce(state.slots, state, fn slot, state ->
-      state.previous
-      |> crossings(
-        values,
-        slot.trigger.quantity,
-        slot.trigger.level,
-        slot.trigger.min_rise
-      )
+      {before_series, now_series} = series(state, values, at_ms, slot.trigger.quantity)
+
+      before_series
+      |> crossings(now_series, slot.trigger.level, slot.trigger.min_rise)
       |> Enum.reduce(state, fn {index, rise}, state ->
-        play(state, slot, index, rise, values, at_ms, panels)
+        play(state, slot, index, rise, {before_series, now_series}, at_ms, panels)
       end)
     end)
   end
 
-  defp play(state, slot, index, rise, values, at_ms, panels) do
+  defp play(state, slot, index, rise, {before_series, now_series}, at_ms, panels) do
     key = {slot.id, index}
     last = Map.get(state.fired, key)
 
@@ -150,12 +187,11 @@ defmodule Octopus.Sound.Trigger.Probe do
       state
     else
       panel = index + 1
-      quantity = slot.trigger.quantity
       level = slot.trigger.level
       # The interpolation works on the same quantity the crossing was found
       # in, shifted so the level sits at zero.
-      before = Pattern.measure(quantity, Enum.at(state.previous, index)) - level
-      now = Pattern.measure(quantity, Enum.at(values, index)) - level
+      before = Enum.at(before_series, index) - level
+      now = Enum.at(now_series, index) - level
       count = Map.get(state.fired, {:count, slot.id}, 0)
 
       for channel <- Pattern.channels_for(slot, panel, count, panels) do

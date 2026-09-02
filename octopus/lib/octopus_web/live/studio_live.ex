@@ -78,6 +78,7 @@ defmodule OctopusWeb.StudioLive do
        features: %{level: 0.0, onset: 0.0},
        bindings: safe(&Matrix.list/0, []),
        coupling_tab: :grid,
+       probe_mode: Probes.mode(),
        matrix_filter: :all,
        new_source: nil,
        new_target: nil
@@ -158,7 +159,7 @@ defmodule OctopusWeb.StudioLive do
       |> put_attr(params, "gain", &parse_number/1)
       |> put_attr(params, "note", &parse_integer/1)
       |> put_scale(params)
-      |> put_gate(params)
+      |> put_gate(params, slot_id, socket.assigns.pattern)
       |> put_place(params)
 
     if attrs != %{}, do: Patch.update(&Pattern.configure_slot(&1, slot_id, attrs))
@@ -167,6 +168,15 @@ defmodule OctopusWeb.StudioLive do
 
   def handle_event("coupling_tab", %{"tab" => tab}, socket) when tab in ~w(grid matrix sources) do
     {:noreply, assign(socket, coupling_tab: String.to_existing_atom(tab))}
+  end
+
+  # How a panel is read is one setting for the whole wall, not a slot's: every
+  # probe slot and every matrix row sees the same twelve numbers.
+  def handle_event("probe_mode", %{"mode" => mode}, socket) do
+    mode = existing_probe_mode(mode)
+    Probes.set_mode(mode)
+
+    {:noreply, assign(socket, probe_mode: mode)}
   end
 
   def handle_event("matrix_filter", %{"filter" => filter}, socket) do
@@ -382,6 +392,7 @@ defmodule OctopusWeb.StudioLive do
             preview?={@preview?}
             pattern={@pattern}
             bindings={@bindings}
+            probe_mode={@probe_mode}
             socket={@socket}
           />
 
@@ -398,6 +409,7 @@ defmodule OctopusWeb.StudioLive do
             new_target={@new_target || default_target()}
             probes={@probes}
             features={@features}
+            probe_mode={@probe_mode}
           />
         </div>
 
@@ -650,6 +662,7 @@ defmodule OctopusWeb.StudioLive do
   attr :preview?, :boolean, default: true
   attr :pattern, :map, required: true
   attr :bindings, :list, required: true
+  attr :probe_mode, :atom, required: true
   attr :socket, :map, required: true
 
   defp stage(assigns) do
@@ -679,7 +692,10 @@ defmodule OctopusWeb.StudioLive do
                 style={"width: #{round(Map.get(@levels, index + 1, 0.0) * 100)}%"}
               />
             </div>
-            <div class="w-full h-9 bg-base-300 rounded relative overflow-hidden">
+            <div
+              class="w-full h-9 bg-base-300 rounded relative overflow-hidden"
+              title={probe_title(@probes, index, @probe_mode)}
+            >
               <div class="absolute inset-x-0 top-1/2 h-px bg-base-content/20" />
               <div
                 class="absolute left-0 right-0 bg-warning"
@@ -691,7 +707,7 @@ defmodule OctopusWeb.StudioLive do
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_240px] gap-3">
-          <.coupling_note pattern={@pattern} bindings={@bindings} />
+          <.coupling_note pattern={@pattern} bindings={@bindings} probe_mode={@probe_mode} />
           <.ring_view panels={@panels} probes={@probes} levels={@levels} />
         </div>
       </div>
@@ -701,6 +717,7 @@ defmodule OctopusWeb.StudioLive do
 
   attr :pattern, :map, required: true
   attr :bindings, :list, required: true
+  attr :probe_mode, :atom, required: true
 
   defp coupling_note(assigns) do
     ~H"""
@@ -712,7 +729,10 @@ defmodule OctopusWeb.StudioLive do
         Lesehilfe, keine Bedienung: welche Regel gerade Bild und Ton verbindet.
       </p>
       <dl class="text-[11px] font-mono space-y-1">
-        <div :for={{label, value} <- coupling_lines(@pattern, @bindings)} class="flex gap-2">
+        <div
+          :for={{label, value} <- coupling_lines(@pattern, @bindings, @probe_mode)}
+          class="flex gap-2"
+        >
           <dt class="opacity-50 w-24 shrink-0">{label}</dt>
           <dd class="opacity-80">{value}</dd>
         </div>
@@ -1004,14 +1024,16 @@ defmodule OctopusWeb.StudioLive do
 
         <label :if={@slot.trigger.kind == :probe} class="block">
           <span class="text-[10px] opacity-60">
-            Schwelle {:erlang.float_to_binary(@slot.trigger.level * 1.0, decimals: 2)}
+            Schwelle {:erlang.float_to_binary(@slot.trigger.level * 1.0, decimals: 2)}{unit(
+              @slot.trigger.quantity
+            )}
           </span>
           <input
             type="range"
             name="level"
-            min={if @slot.trigger.quantity == :brightness, do: "0", else: "-0.9"}
-            max="0.9"
-            step="0.05"
+            min={level_range(@slot.trigger.quantity).min}
+            max={level_range(@slot.trigger.quantity).max}
+            step={level_range(@slot.trigger.quantity).step}
             value={@slot.trigger.level}
             class="range range-xs"
           />
@@ -1049,14 +1071,16 @@ defmodule OctopusWeb.StudioLive do
 
         <label :if={@slot.trigger.kind == :probe} class="block">
           <span class="text-[10px] opacity-60">
-            Mindeststeilheit {:erlang.float_to_binary(@slot.trigger.min_rise * 1.0, decimals: 4)}
+            Mindeststeilheit {:erlang.float_to_binary(@slot.trigger.min_rise * 1.0,
+              decimals: rise_range(@slot.trigger.quantity).decimals
+            )}{unit(@slot.trigger.quantity)}
           </span>
           <input
             type="range"
             name="min_rise"
-            min="0.0005"
-            max="0.05"
-            step="0.0005"
+            min={rise_range(@slot.trigger.quantity).min}
+            max={rise_range(@slot.trigger.quantity).max}
+            step={rise_range(@slot.trigger.quantity).step}
             value={@slot.trigger.min_rise}
             class="range range-xs"
           />
@@ -1231,6 +1255,7 @@ defmodule OctopusWeb.StudioLive do
   attr :new_target, :any, required: true
   attr :probes, :list, required: true
   attr :features, :map, required: true
+  attr :probe_mode, :atom, required: true
 
   defp coupling(assigns) do
     ~H"""
@@ -1270,6 +1295,7 @@ defmodule OctopusWeb.StudioLive do
           probes={@probes}
           features={@features}
           pattern={@pattern}
+          probe_mode={@probe_mode}
         />
       </div>
     </div>
@@ -1279,6 +1305,7 @@ defmodule OctopusWeb.StudioLive do
   attr :probes, :list, required: true
   attr :features, :map, required: true
   attr :pattern, :map, required: true
+  attr :probe_mode, :atom, required: true
 
   defp sources(assigns) do
     ~H"""
@@ -1290,6 +1317,25 @@ defmodule OctopusWeb.StudioLive do
       <div class="text-xs uppercase tracking-wider font-semibold text-warning">
         Aus dem Bild
       </div>
+
+      <form phx-change="probe_mode" class="rounded-lg bg-base-300/40 p-3 space-y-2">
+        <label class="block">
+          <span class="text-[10px] opacity-60">
+            Ein Panel wird gelesen als
+          </span>
+          <select name="mode" class="select select-bordered select-xs w-full">
+            <option
+              :for={{mode, name, _hint} <- Probes.modes()}
+              value={mode}
+              selected={mode == @probe_mode}
+            >
+              {name}
+            </option>
+          </select>
+        </label>
+        <p class="text-[11px] opacity-60 leading-snug">{probe_mode_hint(@probe_mode)}</p>
+      </form>
+
       <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
         <.source_card label="Probes · Mittel" domain={:light} value={probe_mean(@probes)} />
         <.source_card label="Probes · Maximum" domain={:light} value={probe_max(@probes)} />
@@ -1411,6 +1457,31 @@ defmodule OctopusWeb.StudioLive do
     end
   end
 
+  defp existing_probe_mode(raw) do
+    Enum.find_value(Probes.modes(), Probes.mode(), fn {mode, _name, _hint} ->
+      if to_string(mode) == raw, do: mode
+    end)
+  end
+
+  defp probe_mode_hint(mode) do
+    Enum.find_value(Probes.modes(), "", fn {known, _name, hint} ->
+      if known == mode, do: hint
+    end)
+  end
+
+  # The threshold and the steepness gate live on different scales per quantity:
+  # brightness and value are the reading itself, in -1..1; speed is how far the
+  # reading moves per second, which for anything worth hearing runs well past 1.
+  defp level_range(:speed), do: %{min: "0", max: "8", step: "0.1"}
+  defp level_range(:brightness), do: %{min: "0", max: "0.9", step: "0.05"}
+  defp level_range(_value), do: %{min: "-0.9", max: "0.9", step: "0.05"}
+
+  defp rise_range(:speed), do: %{min: "0.05", max: "4", step: "0.05", decimals: 2}
+  defp rise_range(_reading), do: %{min: "0.0005", max: "0.05", step: "0.0005", decimals: 4}
+
+  defp unit(:speed), do: "/s"
+  defp unit(_reading), do: ""
+
   defp decay(levels) do
     levels
     |> Enum.map(fn {channel, level} -> {channel, level * @level_decay} end)
@@ -1476,7 +1547,7 @@ defmodule OctopusWeb.StudioLive do
   # Everything that connects picture and sound right now — the slots the
   # picture sets off *and* the matrix rows. Listing only the slots would say
   # "nichts aktiv" while a matrix row is quietly moving the scene.
-  defp coupling_lines(pattern, bindings) do
+  defp coupling_lines(pattern, bindings, probe_mode) do
     instruments =
       pattern
       |> instrument_slots()
@@ -1494,7 +1565,8 @@ defmodule OctopusWeb.StudioLive do
       {"Bild → Klang",
        if(instruments == [], do: "— kein Instrument am Bild", else: Enum.join(instruments, " · "))},
       {"Matrix", if(rows == [], do: "— keine Zeile", else: Enum.join(rows, " · "))},
-      {"Messpunkte", "Probes 1…#{Installation.num_panels()} · Panelmitten, Formelwert −1…+1"},
+      {"Messpunkte",
+       "Probes 1…#{Installation.num_panels()} · #{Probes.mode_name(probe_mode)}, #{probe_span(probe_mode)}"},
       {"Zeit", "80 ms Vorlauf · Nulldurchgang zwischen zwei Frames interpoliert"}
     ]
   end
@@ -1511,6 +1583,26 @@ defmodule OctopusWeb.StudioLive do
         label_y: 100 + :math.sin(angle) * 90 + 2
       }
     end
+  end
+
+  # What a single word of the reading aid stands for. The full sentences live
+  # in Pattern.probe_quantities/0, where the slot is configured.
+  defp quantity_word(:brightness), do: "Helligkeit"
+  defp quantity_word(:speed), do: "Tempo"
+  defp quantity_word(_value), do: "Formelwert"
+
+  # A mode that averages brightness can never go negative; the others carry the
+  # sign of the wave, which is what makes a zero crossing a thing at all.
+  defp probe_span(:brightness), do: "Helligkeit 0…1"
+  defp probe_span(_signed), do: "Formelwert −1…+1"
+
+  # The bar says how much, this says what — the reading itself, under the
+  # cursor, so a threshold can be dialled against a number and not a guess.
+  defp probe_title(probes, index, mode) do
+    value = probe_at(probes, index)
+
+    "Panel #{index + 1} · #{Probes.mode_name(mode)}: " <>
+      :erlang.float_to_binary(value * 1.0, decimals: 3)
   end
 
   defp probe_at(probes, index), do: Enum.at(probes, index) || 0.0
@@ -1583,7 +1675,10 @@ defmodule OctopusWeb.StudioLive do
     end
   end
 
-  defp instrument_kind(%{trigger: %{kind: :probe}}), do: "vom Bild ausgelöst"
+  defp instrument_kind(%{trigger: %{kind: :probe, quantity: quantity, level: level}}) do
+    "ab #{:erlang.float_to_binary(level * 1.0, decimals: 2)}#{unit(quantity)} #{quantity_word(quantity)}"
+  end
+
   defp instrument_kind(%{trigger: %{kind: :held}}), do: "gehalten"
   defp instrument_kind(_slot), do: "Grid"
 
@@ -1682,16 +1777,27 @@ defmodule OctopusWeb.StudioLive do
 
   # The steepness gate belongs to the trigger, not to the sound, so it travels
   # inside the trigger rather than beside it.
-  defp put_gate(attrs, %{"min_rise" => raw, "kind" => "probe"} = params) do
+  defp put_gate(attrs, %{"min_rise" => raw, "kind" => "probe"} = params, slot_id, pattern) do
     defaults = Pattern.probe_trigger()
+    quantity = quantity(params["quantity"], defaults.quantity)
 
     case parse_number(raw) do
       {:ok, min_rise} ->
+        # The two sliders were standing on the old quantity's scale, so on a
+        # change of quantity their positions say nothing and the new
+        # quantity's own gate is the honest place to start.
+        gate =
+          if quantity == watched(pattern, slot_id) do
+            %{level: number_or(params["level"], defaults.level), min_rise: min_rise}
+          else
+            Pattern.gate_for(quantity)
+          end
+
         Map.put(attrs, :trigger, %{
           kind: :probe,
-          quantity: quantity(params["quantity"], defaults.quantity),
-          level: number_or(params["level"], defaults.level),
-          min_rise: min_rise,
+          quantity: quantity,
+          level: gate.level,
+          min_rise: gate.min_rise,
           min_interval_ms: round(number_or(params["min_interval_ms"], defaults.min_interval_ms))
         })
 
@@ -1700,7 +1806,14 @@ defmodule OctopusWeb.StudioLive do
     end
   end
 
-  defp put_gate(attrs, _params), do: attrs
+  defp put_gate(attrs, _params, _slot_id, _pattern), do: attrs
+
+  defp watched(pattern, slot_id) do
+    case Enum.find(pattern.slots, &(&1.id == slot_id)) do
+      %{trigger: %{quantity: quantity}} -> quantity
+      _no_probe -> nil
+    end
+  end
 
   # The place rule and its one extra number travel together: a fixed place
   # needs a panel, a rotating one needs how far it walks each time.

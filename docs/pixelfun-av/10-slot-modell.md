@@ -36,9 +36,27 @@ Ein Slot besteht aus drei Dingen, und alles, was wir heute haben, fällt darunte
 
 **2 · Auslöser** — was ihn zum Klingen bringt:
 - *Grid* — die Schritte im Raster
-- *Probe-Nulldurchgang* — wenn die Welle ein Panel passiert
+- *Probe* — wenn die Welle ein Panel passiert
 - *gehalten* — klingt dauernd, die Lautstärke wird moduliert
 - später: MIDI-Pad, eine Matrixzeile
+
+Der Probe-Auslöser hat eine eigene Frage darunter: **was** er am Panel misst.
+Drei Größen, drei hörbar verschiedene Musiken aus derselben Welle:
+
+| misst | feuert | Skala |
+|---|---|---|
+| **Helligkeit** `|wert|` | wenn das Panel aufleuchtet | 0…1 |
+| **Tempo** `d|wert|/dt` | auf der Flanke, wo sich das Bild am schnellsten ändert; still, solange ein Panel steht — auch wenn es hell steht | Einheiten pro Sekunde, gut 0…8 |
+| **Formelwert** | am Nulldurchgang, also im Dunkeln zwischen zwei Bändern | −1…+1 |
+
+Helligkeit und Tempo zeigen auf denselben Vorgang aus zwei Richtungen: die eine
+auf den Moment, in dem das Band da ist, die andere auf den Moment, in dem es
+ankommt. Der Formelwert ist die genaueste und die unsichtbarste — er markiert
+die Naht, an der die Farbe kippt.
+
+Weil die drei auf verschiedenen Skalen leben, setzt ein Wechsel der Größe
+Schwelle und Mindeststeilheit auf die Werte, die für die neue Größe etwas
+bedeuten (`Pattern.gate_for/1`). Die alten Reglerstände sagen nichts mehr.
 
 **3 · Ort** — auf welchem Kanal:
 - *festes Panel*
@@ -50,7 +68,7 @@ Damit sind unsere beiden Instrumente keine Sonderfälle mehr:
 
 | | Klang | Auslöser | Ort |
 |---|---|---|---|
-| **Ring-Chase** | pc_ping | Probe-Nulldurchgang | folgt Probe |
+| **Ring-Chase** | pc_ping | Probe (Helligkeit ab 0,55) | folgt Probe |
 | **Drone** | pc_voice | gehalten | alle Panels |
 | **Grid-Zeile** | beliebig | Grid | Panel aus dem Schritt |
 

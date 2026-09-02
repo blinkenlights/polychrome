@@ -194,8 +194,24 @@ Moment eine Zahl zwischen −1 und +1; für das Bild wird sie an jedem Pixel
 ausgewertet, für den Klang nur an ein paar wenigen Stellen — voreingestellt an den
 zwölf Panelmitten. Diese zwölf Zahlen sind unser Abgriff: „wie hell ist die Formel
 gerade bei Panel 7?" Daraus wird entweder ein kontinuierlicher Steuerwert (Lautstärke
-einer Stimme) oder ein Auslöser (immer wenn der Wert von minus nach plus wechselt:
+einer Stimme) oder ein Auslöser (immer wenn der Wert eine Schwelle übersteigt:
 Ton spielen). Bildlich: zwölf Tonabnehmer, in das Lichtfeld gehängt.
+
+*Wie* ein Panel zu einer Zahl wird, ist im Studio unter „Quellen" einstellbar und
+gilt für die ganze Wand — ein Panel ist ja 8×8 Pixel groß, und eine Welle läuft
+darüber hinweg statt auf einem Punkt zu landen:
+
+- **Mittelpixel** — ein Pixel in der Mitte. Am schärfsten, kostet zwölf
+  Auswertungen pro Frame.
+- **Panelmittel** — Mittelwert mit Vorzeichen. Ruhiger; hebt sich genau dort auf,
+  wo eine Farbnaht durch das Panel läuft.
+- **Panelhelligkeit** — mittlere Helligkeit, immer positiv. Am nächsten an dem,
+  was man sieht.
+- **Panelmaximum** — der stärkste Pixel. Reagiert, sobald *irgendwo* etwas hell
+  wird.
+
+Die drei panelweiten Modi werten alle 768 Pixel aus und kosten gemessen 0,23 ms
+pro Frame von 33 ms — die Wahl ist also eine musikalische, keine technische.
 
 **Slot** — eine Klangquelle mit ihrer Ring-Zuordnung. Statt „Spur" wie in einer DAW,
 weil hier zu jedem Klang gehört, *wo* auf dem Ring er erklingt.

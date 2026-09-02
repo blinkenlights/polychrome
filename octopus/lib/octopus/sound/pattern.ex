@@ -33,7 +33,10 @@ defmodule Octopus.Sound.Pattern do
   **value** crossing zero fires exactly when the panel is *dark*, a quarter
   wave away from the bright band the eye is following. That reads as random
   however precise the timing is. `:brightness` crossing a level fires as the
-  band arrives, which is the moment a person sees.
+  band arrives, which is the moment a person sees. `:speed` watches how fast
+  the panel is changing rather than how bright it is — it fires on the steep
+  flank between dark and bright, and stays quiet while a panel sits still,
+  however bright it sits.
 
   The gate settings belong here too: how steep a crossing must be, and how
   soon a panel may fire again, are properties of the trigger and not of the
@@ -43,7 +46,7 @@ defmodule Octopus.Sound.Pattern do
           %{kind: :grid}
           | %{
               kind: :probe,
-              quantity: :brightness | :value,
+              quantity: :brightness | :value | :speed,
               level: float(),
               min_rise: float(),
               min_interval_ms: non_neg_integer()
@@ -263,15 +266,31 @@ defmodule Octopus.Sound.Pattern do
   def probe_quantities do
     [
       {:brightness, "Helligkeit — feuert, wenn das Panel aufleuchtet"},
+      {:speed, "Tempo — feuert, wenn sich das Panel schnell ändert"},
       {:value, "Formelwert — feuert am Nulldurchgang, also im Dunkeln"}
     ]
   end
 
   @doc """
-  The quantity a probe trigger watches, from a raw reading.
+  A level and a steepness gate that mean something for this quantity.
+
+  The three quantities live on different scales — brightness and value are the
+  reading itself in −1…1, speed is how far the reading moves per second, which
+  runs well past 1 — so carrying the old numbers across a change of quantity
+  would silence the slot or open it wide. Switching quantity starts from these.
+  """
+  @spec gate_for(atom()) :: %{level: float(), min_rise: float()}
+  def gate_for(:speed), do: %{level: 1.0, min_rise: 0.2}
+  def gate_for(:brightness), do: %{level: 0.55, min_rise: 0.002}
+  def gate_for(_value), do: %{level: 0.0, min_rise: 0.002}
+
+  @doc """
+  The quantity a probe trigger watches, from a single raw reading.
 
   Brightness is what the wall shows: the picture paints `|value|`, so both
-  halves of a wave are a visible band.
+  halves of a wave are a visible band. `:speed` is deliberately absent — it
+  cannot be read off one frame, and `Octopus.Sound.Trigger.Probe.series/4`
+  measures it from three.
   """
   @spec measure(atom(), float()) :: float()
   def measure(:brightness, value), do: abs(value)
@@ -594,6 +613,7 @@ defmodule Octopus.Sound.Pattern do
   defp trigger_from_map(_other), do: @default_trigger
 
   defp quantity_from_map("brightness"), do: :brightness
+  defp quantity_from_map("speed"), do: :speed
   defp quantity_from_map(_other), do: :value
 
   defp scale_from_map(scale) when is_list(scale) and scale != [], do: scale

@@ -6,7 +6,8 @@ defmodule Octopus.Sound.Trigger.ProbeTest do
 
   describe "crossings on the value" do
     defp value_crossings(previous, current, min_rise) do
-      Probe.crossings(previous, current, :value, 0.0, min_rise)
+      {before, now} = measured(previous, current, :value)
+      Probe.crossings(before, now, 0.0, min_rise)
     end
 
     test "reports panels whose value rose through zero, and how steeply" do
@@ -35,18 +36,80 @@ defmodule Octopus.Sound.Trigger.ProbeTest do
     # What the wall actually shows: the picture paints |value|, so both halves
     # of a wave are a visible band and both should sound.
     test "fires when the panel lights up, on either half of the wave" do
-      assert [{0, _}] = Probe.crossings([0.3], [0.7], :brightness, 0.55, 0.01)
-      assert [{0, _}] = Probe.crossings([-0.3], [-0.7], :brightness, 0.55, 0.01)
+      assert [{0, _}] = brightness_crossings([0.3], [0.7])
+      assert [{0, _}] = brightness_crossings([-0.3], [-0.7])
     end
 
     test "stays quiet while the panel is dark, however fast it moves there" do
       # The value races through zero, but the panel is black the whole time.
-      assert Probe.crossings([-0.2], [0.2], :brightness, 0.55, 0.01) == []
+      assert brightness_crossings([-0.2], [0.2]) == []
     end
 
     test "does not fire again as the band leaves" do
-      assert Probe.crossings([0.7], [0.3], :brightness, 0.55, 0.01) == []
+      assert brightness_crossings([0.7], [0.3]) == []
     end
+
+    defp brightness_crossings(previous, current) do
+      {before, now} = measured(previous, current, :brightness)
+      Probe.crossings(before, now, 0.55, 0.01)
+    end
+  end
+
+  describe "crossings on speed" do
+    # Speed is not a property of a frame but of the step between two, so it
+    # only starts to say something on the third.
+    test "says nothing until three frames have arrived" do
+      assert Probe.series(%{previous: [], before_previous: []}, [0.1], 66, :speed) == {[], []}
+
+      assert Probe.series(
+               %{previous: [0.1], before_previous: [], before_previous_at: nil, previous_at: 33},
+               [0.2],
+               66,
+               :speed
+             ) == {[], []}
+    end
+
+    test "measures per second, so a level means the same at any frame rate" do
+      # The same 0.3 step, seen once over 33 ms and once over 66 ms.
+      {_before, [fast]} = speed([0.0], [0.0], [0.3], 33)
+      {_before, [slow]} = speed([0.0], [0.0], [0.3], 66)
+
+      assert_in_delta fast, 0.3 / 0.033, 0.1
+      assert_in_delta slow, 0.3 / 0.066, 0.1
+    end
+
+    test "fires on the flank, not on a panel that sits still however bright" do
+      # Held at full brightness: no movement, so no crossing.
+      {before, now} = speed([0.9], [0.9], [0.9], 33)
+      assert Probe.crossings(before, now, 1.0, 0.01) == []
+
+      # The same panel racing from dark to bright.
+      {before, now} = speed([0.0], [0.0], [0.9], 33)
+      assert [{0, _}] = Probe.crossings(before, now, 1.0, 0.01)
+    end
+
+    test "does not care which way the picture moves — going dark is a flank too" do
+      {before, now} = speed([0.9], [0.9], [0.0], 33)
+      assert [{0, _}] = Probe.crossings(before, now, 1.0, 0.01)
+    end
+
+    defp speed(before_previous, previous, values, frame_ms) do
+      Probe.series(
+        %{
+          before_previous: before_previous,
+          before_previous_at: 0,
+          previous: previous,
+          previous_at: frame_ms
+        },
+        values,
+        2 * frame_ms,
+        :speed
+      )
+    end
+  end
+
+  defp measured(previous, current, quantity) do
+    Probe.series(%{previous: previous}, current, 0, quantity)
   end
 
   describe "crossing_fraction/2" do

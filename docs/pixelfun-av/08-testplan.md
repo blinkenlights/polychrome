@@ -142,6 +142,10 @@ Dann `http://localhost:4000/studio` öffnen.
 | C5 | ✅ | „Stop" im Foyer bei Pixelfun | Solange danach kein anderes Bild auf der Wand ist, läuft Pixel Fun weiter — „Stop" beendet die *Übernahme*, nicht die App. Sobald etwas anderes auf der Wand ist, sagt die Szenenkarte „Auf der Wand läuft gerade kein Pixel Fun" und der Klang verstummt |
 | C6 | ✅ | Anderes Pixelfun-Preset per Übernahme starten | Probes und Klang folgen sofort dem neuen Preset; das alte klingt **nicht** weiter |
 | C7 | ✅ | Eine Nicht-Pixelfun-App auf die Wand holen (z. B. Fire) | Szenenkarte: „Auf der Wand läuft gerade kein Pixel Fun", alle Pegelmeter auf null |
+| C8 | ⬜ | Mit der Maus über einem Probe-Balken stehen bleiben | Tooltip nennt Panelnummer, Lesart und den aktuellen Wert auf drei Nachkommastellen |
+| C9 | ⬜ | „Quellen" → Lesart auf **Panelhelligkeit** | Alle Balken sind ab sofort positiv, „Messpunkte" in der Lesehilfe sagt „Panelhelligkeit, Helligkeit 0…1" — sofort, ohne Reload |
+| C10 | ⬜ | Lesart auf **Panelmaximum**, Formel `sin(atan2(ny,nx) - t)` | Balken folgen derselben Welle, stehen aber höher als beim Mittelpixel — das Maximum eines Panels ist immer ≥ sein Mittelwert |
+| C11 | ⬜ | Lesart auf **Panelmittel** bei einer feinkörnigen Formel (z. B. `sin(x*8 - t)`) | Deutlich **ruhigere** Balken als beim Mittelpixel: eine Welle, die mehrmals durch ein Panel passt, mittelt sich weg |
 
 ## D · Ring-Chase (Licht → Sound)
 
@@ -169,6 +173,10 @@ und läuft immer rund; der Faktor davor ist die Anzahl Wellen auf dem Ring.
 | D10 | ✅ | Transport auf Stop, Chase an | Klingt trotzdem — das Bild ist die Uhr |
 | D12 | ✅ | BPM ändern, während der Chase läuft | **Das Tempo ändert sich nicht, und das ist so.** Der Chase hängt am Bild, nicht am Transport; BPM steuert Grid und Metronom. Die Szene an den Takt zu binden ist gebaut, aber noch nicht bedienbar — siehe „fehlende Funktionen" |
 | D11 | ✅ | Formel `sin(atan2(ny,nx)*3 - t)`, **Szenenbewegung aus** | **Drei Töne exakt gleichzeitig**, dann die nächsten drei — und drei *verschiedene* Tonhöhen, kein Schweben |
+| D13 | ⬜ | „Auslöser misst" auf **Tempo** | Schwelle springt auf 1.00/s, Mindeststeilheit auf 0.20/s — die alten Reglerstände gälten auf der neuen Skala nichts. Der Chase klingt weiter, aber die Töne sitzen jetzt auf der Flanke statt auf dem hellen Band |
+| D14 | ⬜ | Tempo-Chase, dann Formel `1` (Standbild, volle Helligkeit) | **Stille.** Ein Panel, das hell *steht*, bewegt sich nicht. Zum Vergleich dieselbe Formel mit Auslöser „Helligkeit": dort klingt es einmal beim Umschalten und dann nicht mehr |
+| D15 | ⬜ | Tempo-Chase, Formel `sin(atan2(ny,nx) - t*3)` | Deutlich mehr Töne als bei `t*1`: Tempo misst die Geschwindigkeit selbst, eine dreimal schnellere Welle überschreitet die Schwelle dreimal so leicht |
+| D16 | ⬜ | Zwei Chase-Slots nebeneinander, einer auf Helligkeit, einer auf Tempo | Zwei verschieden platzierte Tonfolgen aus **derselben** Welle — der eine auf dem Band, der andere davor |
 
 ## E · Drone
 
