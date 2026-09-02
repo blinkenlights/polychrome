@@ -113,6 +113,14 @@ defmodule Octopus.Sound.PatternTest do
         |> Pattern.put_step(2, 5, 11)
         |> Pattern.toggle_mute(3)
         |> Pattern.configure_slot(1, %{name: "Kick", synth: "pc_click"})
+        |> Pattern.configure_slot(2, %{
+          trigger: Pattern.probe_trigger(),
+          channel: %{mode: :follow_probe}
+        })
+        |> Pattern.configure_slot(3, %{
+          trigger: %{kind: :held},
+          channel: %{mode: :fixed, panel: 9}
+        })
 
       restored = pattern |> Pattern.to_map() |> Pattern.from_map()
 
@@ -129,6 +137,103 @@ defmodule Octopus.Sound.PatternTest do
     test "broken input falls back to an empty grid rather than crashing the studio" do
       assert Pattern.from_map(nil) |> Pattern.empty?()
       assert Pattern.from_map(%{"nonsense" => true}) |> Pattern.empty?()
+    end
+
+    test "a composition saved before slots had triggers reads as grid slots" do
+      old = %{
+        "steps" => 16,
+        "slots" => [
+          %{
+            "id" => 1,
+            "name" => "Slot 1",
+            "synth" => "pc_ping",
+            "note" => 62,
+            "duration_ms" => 300,
+            "muted" => false,
+            "steps" => %{"0" => %{"panel" => 4, "velocity" => 0.7}}
+          }
+        ]
+      }
+
+      pattern = Pattern.from_map(old)
+
+      assert [slot] = pattern.slots
+      assert slot.trigger == %{kind: :grid}
+      assert slot.channel == %{mode: :step}
+      assert [%{channel: 4}] = Pattern.notes_for(pattern, 0)
+    end
+  end
+
+  describe "triggers and places" do
+    test "a fresh slot is played by the grid, on the step's panel" do
+      slot = Pattern.new() |> Map.fetch!(:slots) |> hd()
+
+      assert slot.trigger == %{kind: :grid}
+      assert slot.channel == %{mode: :step}
+    end
+
+    test "only grid slots answer notes_for/2 — the others have their own owner" do
+      pattern =
+        Pattern.new()
+        |> Pattern.put_step(1, 0, 3)
+        |> Pattern.put_step(2, 0, 5)
+        |> Pattern.configure_slot(2, %{trigger: Pattern.probe_trigger()})
+
+      assert [%{channel: 3}] = Pattern.notes_for(pattern, 0)
+      assert [%{id: 2}] = Pattern.probe_slots(pattern)
+    end
+
+    test "held and probe slots are found even without a single step" do
+      pattern =
+        Pattern.new()
+        |> Pattern.configure_slot(1, %{trigger: %{kind: :held}})
+        |> Pattern.configure_slot(2, %{trigger: Pattern.probe_trigger()})
+
+      assert [%{id: 1}] = Pattern.held_slots(pattern)
+      assert [%{id: 2}] = Pattern.probe_slots(pattern)
+    end
+
+    test "a muted slot is not offered to its trigger" do
+      pattern =
+        Pattern.new()
+        |> Pattern.configure_slot(1, %{trigger: %{kind: :held}})
+        |> Pattern.toggle_mute(1)
+
+      assert Pattern.held_slots(pattern) == []
+    end
+  end
+
+  describe "channels_for/4" do
+    defp slot_with(channel), do: %{channel: channel}
+
+    test "step and follow_probe take the panel they are handed" do
+      assert Pattern.channels_for(slot_with(%{mode: :step}), 7) == [7]
+      assert Pattern.channels_for(slot_with(%{mode: :follow_probe}), 7) == [7]
+    end
+
+    test "fixed ignores it" do
+      assert Pattern.channels_for(slot_with(%{mode: :fixed, panel: 3}), 7) == [3]
+    end
+
+    test "all_panels spreads one trigger across the ring" do
+      assert Pattern.channels_for(slot_with(%{mode: :all_panels}), 7, 0, 4) == [1, 2, 3, 4]
+    end
+
+    test "rotate walks on by one place each time it fires" do
+      slot = slot_with(%{mode: :rotate, step: 1})
+
+      assert Pattern.channels_for(slot, 1, 0, 4) == [1]
+      assert Pattern.channels_for(slot, 1, 1, 4) == [2]
+      assert Pattern.channels_for(slot, 1, 4, 4) == [1]
+    end
+
+    test "a slot on all panels plays a note per panel from one step" do
+      pattern =
+        Pattern.new()
+        |> Pattern.put_step(1, 0, 1)
+        |> Pattern.configure_slot(1, %{channel: %{mode: :all_panels}})
+
+      assert Pattern.notes_for(pattern, 0, 4) |> Enum.map(& &1.channel) == [1, 2, 3, 4]
     end
   end
 
