@@ -79,6 +79,7 @@ defmodule OctopusWeb.StudioLive do
        drone: drone_state(),
        features: %{level: 0.0, onset: 0.0},
        bindings: safe(&Matrix.list/0, []),
+       coupling_tab: :grid,
        matrix_filter: :all,
        new_source: nil,
        new_target: nil
@@ -137,6 +138,10 @@ defmodule OctopusWeb.StudioLive do
   def handle_event("toggle_drone", _params, socket) do
     Drone.enable(not socket.assigns.drone.enabled?)
     {:noreply, assign(socket, drone: drone_state())}
+  end
+
+  def handle_event("coupling_tab", %{"tab" => tab}, socket) when tab in ~w(grid matrix sources) do
+    {:noreply, assign(socket, coupling_tab: String.to_existing_atom(tab))}
   end
 
   def handle_event("matrix_filter", %{"filter" => filter}, socket) do
@@ -356,15 +361,13 @@ defmodule OctopusWeb.StudioLive do
         />
       </div>
 
-      <.grid
+      <.coupling
+        tab={@coupling_tab}
         pattern={@pattern}
         panels={@panels}
         brush={@brush}
         synths={@synths}
         playhead={playhead(@position, @pattern)}
-      />
-
-      <.matrix
         bindings={@bindings}
         filter={@matrix_filter}
         new_source={@new_source || default_source()}
@@ -453,93 +456,88 @@ defmodule OctopusWeb.StudioLive do
 
   defp grid(assigns) do
     ~H"""
-    <div class="card bg-base-200 border border-base-300">
-      <div class="card-body p-3 gap-3">
-        <div class="flex items-center gap-3 flex-wrap">
-          <h2 class="text-sm font-semibold uppercase tracking-wider">Grid</h2>
-          <div class="flex items-center gap-1 flex-wrap">
-            <span class="text-xs opacity-60 mr-1">Panel</span>
-            <button
-              :for={panel <- 1..@panels}
-              class={[
-                "btn btn-xs w-8",
-                panel == @brush && "btn-warning",
-                panel != @brush && "btn-ghost"
-              ]}
-              phx-click="set_brush"
-              phx-value-panel={panel}
-            >
-              {panel}
-            </button>
-          </div>
-          <span class="text-[11px] opacity-60">
-            Klick setzt den Schritt auf das gewählte Panel — nochmal derselbe Klick löscht ihn.
-          </span>
+    <div class="space-y-3">
+      <div class="flex items-center gap-3 flex-wrap">
+        <div class="flex items-center gap-1 flex-wrap">
+          <span class="text-xs opacity-60 mr-1">Panel</span>
+          <button
+            :for={panel <- 1..@panels}
+            class={[
+              "btn btn-xs w-8",
+              panel == @brush && "btn-warning",
+              panel != @brush && "btn-ghost"
+            ]}
+            phx-click="set_brush"
+            phx-value-panel={panel}
+          >
+            {panel}
+          </button>
         </div>
+        <span class="text-[11px] opacity-60">
+          Klick setzt den Schritt auf das gewählte Panel — nochmal derselbe Klick löscht ihn.
+        </span>
+      </div>
 
-        <div class="overflow-x-auto">
-          <table class="border-separate border-spacing-1">
-            <thead>
-              <tr>
-                <th class="w-56"></th>
-                <th
-                  :for={step <- 0..(@pattern.steps - 1)}
-                  class="w-7 text-[10px] font-mono opacity-50"
-                >
-                  {if rem(step, 4) == 0, do: div(step, 4) + 1, else: "·"}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr :for={slot <- @pattern.slots}>
-                <th class="text-left font-normal">
-                  <div class="flex items-center gap-1">
-                    <button
-                      class={[
-                        "btn btn-xs w-7",
-                        slot.muted? && "btn-error",
-                        !slot.muted? && "btn-ghost"
-                      ]}
-                      phx-click="toggle_mute"
-                      phx-value-slot={slot.id}
-                      title="Mute"
-                    >
-                      {slot.id}
-                    </button>
-                    <form phx-change="slot_synth" class="contents">
-                      <input type="hidden" name="slot" value={slot.id} />
-                      <select name="synth" class="select select-bordered select-xs w-28">
-                        <option :for={synth <- @synths} value={synth} selected={synth == slot.synth}>
-                          {synth}
-                        </option>
-                      </select>
-                    </form>
-                    <button
-                      class="btn btn-xs btn-ghost"
-                      phx-click="clear_slot"
-                      phx-value-slot={slot.id}
-                      title="Zeile leeren"
-                    >
-                      ⌫
-                    </button>
-                  </div>
-                </th>
-                <td :for={step <- 0..(@pattern.steps - 1)}>
+      <div class="overflow-x-auto">
+        <table class="border-separate border-spacing-1">
+          <thead>
+            <tr>
+              <th class="w-56"></th>
+              <th
+                :for={step <- 0..(@pattern.steps - 1)}
+                class="w-7 text-[10px] font-mono opacity-50"
+              >
+                {if rem(step, 4) == 0, do: div(step, 4) + 1, else: "·"}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={slot <- @pattern.slots}>
+              <th class="text-left font-normal">
+                <div class="flex items-center gap-1">
                   <button
-                    class={
-                      cell_class(Map.get(slot.steps, step), step == @playhead, rem(step, 4) == 0)
-                    }
-                    phx-click="cell"
+                    class={[
+                      "btn btn-xs w-7",
+                      slot.muted? && "btn-error",
+                      !slot.muted? && "btn-ghost"
+                    ]}
+                    phx-click="toggle_mute"
                     phx-value-slot={slot.id}
-                    phx-value-step={step}
+                    title="Mute"
                   >
-                    {cell_label(Map.get(slot.steps, step))}
+                    {slot.id}
                   </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+                  <form phx-change="slot_synth" class="contents">
+                    <input type="hidden" name="slot" value={slot.id} />
+                    <select name="synth" class="select select-bordered select-xs w-28">
+                      <option :for={synth <- @synths} value={synth} selected={synth == slot.synth}>
+                        {synth}
+                      </option>
+                    </select>
+                  </form>
+                  <button
+                    class="btn btn-xs btn-ghost"
+                    phx-click="clear_slot"
+                    phx-value-slot={slot.id}
+                    title="Zeile leeren"
+                  >
+                    ⌫
+                  </button>
+                </div>
+              </th>
+              <td :for={step <- 0..(@pattern.steps - 1)}>
+                <button
+                  class={cell_class(Map.get(slot.steps, step), step == @playhead, rem(step, 4) == 0)}
+                  phx-click="cell"
+                  phx-value-slot={slot.id}
+                  phx-value-step={step}
+                >
+                  {cell_label(Map.get(slot.steps, step))}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
     """
@@ -857,174 +855,260 @@ defmodule OctopusWeb.StudioLive do
   attr :filter, :atom, required: true
   attr :new_source, :any, required: true
   attr :new_target, :any, required: true
+
+  defp matrix(assigns) do
+    ~H"""
+    <div class="space-y-3">
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="text-[11px] opacity-60">
+          Das Grid sagt, wann etwas klingt — die Matrix, was sich langsam verändert.
+        </span>
+        <div class="join ml-auto">
+          <button
+            :for={
+              {filter, label} <- [
+                {:all, "Alle"},
+                {:sound_to_light, "Sound → Licht"},
+                {:light_to_sound, "Licht → Sound"},
+                {:score, "Partitur → beides"}
+              ]
+            }
+            class={["btn btn-xs join-item", @filter == filter && "btn-active"]}
+            phx-click="matrix_filter"
+            phx-value-filter={filter}
+          >
+            {label}
+          </button>
+        </div>
+      </div>
+
+      <form phx-change="matrix_pick" class="flex items-end gap-2 flex-wrap">
+        <label class="form-control">
+          <span class="label-text text-xs">Quelle</span>
+          <select name="source" class="select select-bordered select-sm">
+            <option
+              :for={{key, source} <- Enum.sort_by(Matrix.sources(), fn {_k, s} -> s.label end)}
+              value={key_to_param(key)}
+              selected={key == @new_source}
+            >
+              {source.label}
+            </option>
+          </select>
+        </label>
+        <span class="pb-2 opacity-50">→</span>
+        <label class="form-control">
+          <span class="label-text text-xs">Ziel</span>
+          <select name="target" class="select select-bordered select-sm">
+            <option
+              :for={{key, target} <- Enum.sort_by(Matrix.targets(), fn {_k, t} -> t.label end)}
+              value={key_to_param(key)}
+              selected={key == @new_target}
+            >
+              {target.label}
+            </option>
+          </select>
+        </label>
+        <button type="button" class="btn btn-sm mb-0" phx-click="matrix_add">＋ Zeile</button>
+      </form>
+
+      <div :if={@bindings == []} class="text-sm opacity-60">
+        Noch keine Kopplung. Zielbild 5 in einer Zeile: „Klang · Onsets" → „Szene ·
+        Sättigung" — dann setzt jeder Anschlag einen Farbakzent.
+      </div>
+
+      <div :if={@bindings != []} class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th class="w-32">Richtung</th>
+              <th>Quelle</th>
+              <th>Ziel</th>
+              <th class="w-56">Betrag</th>
+              <th class="w-28">Kurve</th>
+              <th class="w-20"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              :for={binding <- filtered_bindings(@bindings, @filter)}
+              class={!binding.enabled? && "opacity-40"}
+            >
+              <td>
+                <span
+                  class="inline-flex items-center gap-1"
+                  title={direction_label(binding_direction(binding))}
+                >
+                  <span
+                    :for={{_role, class} <- direction_dots(binding_direction(binding))}
+                    class={["w-2 h-2 rounded-sm inline-block", class]}
+                  />
+                  <span class="text-[10px] opacity-60 ml-1">
+                    {direction_label(binding_direction(binding))}
+                  </span>
+                </span>
+              </td>
+              <td class="text-sm">{source_label(binding.source)}</td>
+              <td class="text-sm">{target_label(binding.target)}</td>
+              <td>
+                <form phx-change="matrix_amount" class="flex items-center gap-2">
+                  <input type="hidden" name="binding" value={binding.id} />
+                  <input
+                    type="range"
+                    name="amount"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={binding.amount}
+                    class="range range-xs flex-1"
+                  />
+                  <span class="font-mono text-xs tabular-nums w-10 text-right">
+                    {:erlang.float_to_binary(binding.amount * 1.0, decimals: 2)}
+                  </span>
+                </form>
+              </td>
+              <td>
+                <form phx-change="matrix_curve">
+                  <input type="hidden" name="binding" value={binding.id} />
+                  <select name="curve" class="select select-bordered select-xs">
+                    <option
+                      :for={curve <- Matrix.curves()}
+                      value={curve}
+                      selected={curve == binding.curve}
+                    >
+                      {curve}
+                    </option>
+                  </select>
+                </form>
+              </td>
+              <td class="text-right">
+                <button
+                  class="btn btn-xs btn-ghost"
+                  phx-click="matrix_toggle"
+                  phx-value-id={binding.id}
+                >
+                  {if binding.enabled?, do: "◼", else: "▶"}
+                </button>
+                <button
+                  class="btn btn-xs btn-ghost"
+                  phx-click="matrix_remove"
+                  phx-value-id={binding.id}
+                >
+                  ×
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    """
+  end
+
+  attr :tab, :atom, required: true
+  attr :pattern, :map, required: true
+  attr :panels, :integer, required: true
+  attr :brush, :integer, required: true
+  attr :synths, :list, required: true
+  attr :playhead, :integer, required: true
+  attr :bindings, :list, required: true
+  attr :filter, :atom, required: true
+  attr :new_source, :any, required: true
+  attr :new_target, :any, required: true
   attr :probes, :list, required: true
   attr :features, :map, required: true
   attr :drone, :map, required: true
   attr :chase, :map, required: true
 
-  defp matrix(assigns) do
+  defp coupling(assigns) do
     ~H"""
     <div class="card bg-base-200 border border-base-300">
       <div class="card-body p-3 gap-3">
-        <div class="flex items-center gap-3 flex-wrap">
-          <h2 class="text-sm font-semibold uppercase tracking-wider">Matrix</h2>
-          <span class="text-[11px] opacity-60">
-            Das Grid sagt, wann etwas klingt — die Matrix, was sich langsam verändert.
-          </span>
-          <div class="join ml-auto">
-            <button
-              :for={
-                {filter, label} <- [
-                  {:all, "Alle"},
-                  {:sound_to_light, "Sound → Licht"},
-                  {:light_to_sound, "Licht → Sound"},
-                  {:score, "Partitur → beides"}
-                ]
-              }
-              class={["btn btn-xs join-item", @filter == filter && "btn-active"]}
-              phx-click="matrix_filter"
-              phx-value-filter={filter}
-            >
-              {label}
-            </button>
-          </div>
+        <div role="tablist" class="tabs tabs-boxed tabs-sm self-start">
+          <button
+            :for={{tab, label} <- [{:grid, "Grid"}, {:matrix, "Matrix"}, {:sources, "Quellen"}]}
+            role="tab"
+            class={["tab", @tab == tab && "tab-active"]}
+            phx-click="coupling_tab"
+            phx-value-tab={tab}
+          >
+            {label}
+          </button>
         </div>
 
-        <form phx-change="matrix_pick" class="flex items-end gap-2 flex-wrap">
-          <label class="form-control">
-            <span class="label-text text-xs">Quelle</span>
-            <select name="source" class="select select-bordered select-sm">
-              <option
-                :for={{key, source} <- Enum.sort_by(Matrix.sources(), fn {_k, s} -> s.label end)}
-                value={key_to_param(key)}
-                selected={key == @new_source}
-              >
-                {source.label}
-              </option>
-            </select>
-          </label>
-          <span class="pb-2 opacity-50">→</span>
-          <label class="form-control">
-            <span class="label-text text-xs">Ziel</span>
-            <select name="target" class="select select-bordered select-sm">
-              <option
-                :for={{key, target} <- Enum.sort_by(Matrix.targets(), fn {_k, t} -> t.label end)}
-                value={key_to_param(key)}
-                selected={key == @new_target}
-              >
-                {target.label}
-              </option>
-            </select>
-          </label>
-          <button type="button" class="btn btn-sm mb-0" phx-click="matrix_add">＋ Zeile</button>
-        </form>
+        <.grid
+          :if={@tab == :grid}
+          pattern={@pattern}
+          panels={@panels}
+          brush={@brush}
+          synths={@synths}
+          playhead={@playhead}
+        />
 
-        <div :if={@bindings == []} class="text-sm opacity-60">
-          Noch keine Kopplung. Zielbild 5 in einer Zeile: „Klang · Onsets" → „Szene ·
-          Sättigung" — dann setzt jeder Anschlag einen Farbakzent.
-        </div>
+        <.matrix
+          :if={@tab == :matrix}
+          bindings={@bindings}
+          filter={@filter}
+          new_source={@new_source}
+          new_target={@new_target}
+        />
 
-        <div :if={@bindings != []} class="overflow-x-auto">
-          <table class="table table-sm">
-            <thead>
-              <tr>
-                <th class="w-32">Richtung</th>
-                <th>Quelle</th>
-                <th>Ziel</th>
-                <th class="w-56">Betrag</th>
-                <th class="w-28">Kurve</th>
-                <th class="w-20"></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                :for={binding <- filtered_bindings(@bindings, @filter)}
-                class={!binding.enabled? && "opacity-40"}
-              >
-                <td>
-                  <span
-                    class="inline-flex items-center gap-1"
-                    title={direction_label(binding_direction(binding))}
-                  >
-                    <span
-                      :for={{_role, class} <- direction_dots(binding_direction(binding))}
-                      class={["w-2 h-2 rounded-sm inline-block", class]}
-                    />
-                    <span class="text-[10px] opacity-60 ml-1">
-                      {direction_label(binding_direction(binding))}
-                    </span>
-                  </span>
-                </td>
-                <td class="text-sm">{source_label(binding.source)}</td>
-                <td class="text-sm">{target_label(binding.target)}</td>
-                <td>
-                  <form phx-change="matrix_amount" class="flex items-center gap-2">
-                    <input type="hidden" name="binding" value={binding.id} />
-                    <input
-                      type="range"
-                      name="amount"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={binding.amount}
-                      class="range range-xs flex-1"
-                    />
-                    <span class="font-mono text-xs tabular-nums w-10 text-right">
-                      {:erlang.float_to_binary(binding.amount * 1.0, decimals: 2)}
-                    </span>
-                  </form>
-                </td>
-                <td>
-                  <form phx-change="matrix_curve">
-                    <input type="hidden" name="binding" value={binding.id} />
-                    <select name="curve" class="select select-bordered select-xs">
-                      <option
-                        :for={curve <- Matrix.curves()}
-                        value={curve}
-                        selected={curve == binding.curve}
-                      >
-                        {curve}
-                      </option>
-                    </select>
-                  </form>
-                </td>
-                <td class="text-right">
-                  <button
-                    class="btn btn-xs btn-ghost"
-                    phx-click="matrix_toggle"
-                    phx-value-id={binding.id}
-                  >
-                    {if binding.enabled?, do: "◼", else: "▶"}
-                  </button>
-                  <button
-                    class="btn btn-xs btn-ghost"
-                    phx-click="matrix_remove"
-                    phx-value-id={binding.id}
-                  >
-                    ×
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="divider my-0 text-xs opacity-60">Quellen — was sich gerade bewegt</div>
-
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <.source_card label="Probes · Mittel" domain={:light} value={probe_mean(@probes)} />
-          <.source_card label="Probes · Maximum" domain={:light} value={probe_max(@probes)} />
-          <.source_card label="Klang · Pegel" domain={:sound} value={@features.level} />
-          <.source_card label="Klang · Onsets" domain={:sound} value={@features.onset} />
-        </div>
-
-        <p class="text-[11px] opacity-60">
-          Licht → Sound läuft außerdem fest über die Instrumente:
-          Drone {if @drone.enabled?, do: "an", else: "aus"} ·
-          Ring-Chase {if @chase.enabled?, do: "an", else: "aus"}.
-          Beide lesen die Probes direkt, deshalb brauchen sie keine Zeile.
-        </p>
+        <.sources
+          :if={@tab == :sources}
+          probes={@probes}
+          features={@features}
+          drone={@drone}
+          chase={@chase}
+        />
       </div>
+    </div>
+    """
+  end
+
+  attr :probes, :list, required: true
+  attr :features, :map, required: true
+  attr :drone, :map, required: true
+  attr :chase, :map, required: true
+
+  defp sources(assigns) do
+    ~H"""
+    <div class="space-y-3">
+      <p class="text-[11px] opacity-60">
+        Was sich von selbst bewegt und deshalb in der Matrix als Quelle taugt.
+      </p>
+
+      <div class="text-xs uppercase tracking-wider font-semibold text-warning">
+        Aus dem Bild
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <.source_card label="Probes · Mittel" domain={:light} value={probe_mean(@probes)} />
+        <.source_card label="Probes · Maximum" domain={:light} value={probe_max(@probes)} />
+      </div>
+
+      <div class="text-xs uppercase tracking-wider font-semibold text-info">
+        Aus dem Klang
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <.source_card label="Klang · Pegel" domain={:sound} value={@features.level} />
+        <.source_card label="Klang · Onsets" domain={:sound} value={@features.onset} />
+      </div>
+
+      <div class="text-xs uppercase tracking-wider font-semibold opacity-60">Neutral</div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div
+          :for={{key, source} <- neutral_sources()}
+          class="bg-base-300/50 rounded-lg p-2 text-[11px] opacity-70"
+        >
+          {source.label}
+          <div class="font-mono opacity-50">{key_to_param(key)}</div>
+        </div>
+      </div>
+
+      <p class="text-[11px] opacity-60">
+        Licht → Sound läuft außerdem fest über die Instrumente:
+        Drone {if @drone.enabled?, do: "an", else: "aus"} ·
+        Ring-Chase {if @chase.enabled?, do: "an", else: "aus"}.
+        Beide lesen die Probes direkt, deshalb brauchen sie keine Zeile.
+      </p>
     </div>
     """
   end
@@ -1229,6 +1313,10 @@ defmodule OctopusWeb.StudioLive do
   defp parse_key(param) do
     known = Map.keys(Matrix.sources()) ++ Map.keys(Matrix.targets())
     Enum.find(known, &(key_to_param(&1) == param))
+  end
+
+  defp neutral_sources do
+    Enum.filter(Matrix.sources(), fn {_key, source} -> source.domain == :score end)
   end
 
   defp default_source, do: {:phase, 8}
