@@ -55,6 +55,7 @@ defmodule Octopus.Sound.Pattern do
           note: integer(),
           duration_ms: pos_integer(),
           muted?: boolean(),
+          gain: float(),
           scale: [integer()],
           trigger: trigger(),
           channel: channel(),
@@ -105,6 +106,7 @@ defmodule Octopus.Sound.Pattern do
             note: Enum.at(@scale, rem(id - 1, length(@scale))),
             duration_ms: 300,
             muted?: false,
+            gain: 0.7,
             scale: @default_scale,
             trigger: @default_trigger,
             channel: @default_channel,
@@ -161,6 +163,7 @@ defmodule Octopus.Sound.Pattern do
       synth: Keyword.get(opts, :synth, "pc_ping"),
       note: Keyword.get(opts, :note, 62),
       duration_ms: Keyword.get(opts, :duration_ms, 400),
+      gain: Keyword.get(opts, :gain, 0.7),
       scale: Keyword.get(opts, :scale, @dorian),
       trigger: @default_probe_trigger,
       channel: %{mode: :follow_probe}
@@ -178,10 +181,23 @@ defmodule Octopus.Sound.Pattern do
       synth: Keyword.get(opts, :synth, "pc_voice"),
       note: Keyword.get(opts, :note, 38),
       duration_ms: Keyword.get(opts, :duration_ms, 0),
+      gain: Keyword.get(opts, :gain, 0.7),
       scale: Keyword.get(opts, :scale, @drone_voicing),
       trigger: %{kind: :held},
       channel: %{mode: :all_panels}
     })
+  end
+
+  @doc """
+  Mutes every slot.
+
+  What panic does to the pattern: the engine is silenced anyway, but a trigger
+  that keeps firing would bring the sound straight back. Muting is reversible,
+  which deleting would not be.
+  """
+  @spec silence(t()) :: t()
+  def silence(%__MODULE__{} = pattern) do
+    %{pattern | slots: Enum.map(pattern.slots, &%{&1 | muted?: true})}
   end
 
   @doc "The first slot with nothing on it, for the one-click presets."
@@ -267,6 +283,14 @@ defmodule Octopus.Sound.Pattern do
     update_slot(pattern, slot_id, &%{&1 | muted?: not &1.muted?})
   end
 
+  @doc "Applies `attrs` to every slot the filter accepts."
+  @spec configure_where(t(), (slot() -> boolean()), map()) :: t()
+  def configure_where(%__MODULE__{} = pattern, filter, attrs) do
+    Enum.reduce(pattern.slots, pattern, fn slot, pattern ->
+      if filter.(slot), do: configure_slot(pattern, slot.id, attrs), else: pattern
+    end)
+  end
+
   @spec configure_slot(t(), pos_integer(), map()) :: t()
   def configure_slot(%__MODULE__{} = pattern, slot_id, attrs) do
     update_slot(pattern, slot_id, fn slot ->
@@ -298,7 +322,7 @@ defmodule Octopus.Sound.Pattern do
       %{
         channel: channel,
         note: pitch_for(slot, channel),
-        velocity: cell.velocity,
+        velocity: cell.velocity * slot.gain,
         duration_ms: slot.duration_ms,
         synth: slot.synth
       }
@@ -340,6 +364,7 @@ defmodule Octopus.Sound.Pattern do
             "note" => slot.note,
             "duration_ms" => slot.duration_ms,
             "muted" => slot.muted?,
+            "gain" => slot.gain,
             "scale" => slot.scale,
             "trigger" => stringify(slot.trigger),
             "channel" => stringify(slot.channel),
@@ -371,6 +396,7 @@ defmodule Octopus.Sound.Pattern do
       note: slot["note"],
       duration_ms: slot["duration_ms"],
       muted?: slot["muted"] == true,
+      gain: slot["gain"] || 0.7,
       scale: scale_from_map(slot["scale"]),
       trigger: trigger_from_map(slot["trigger"]),
       channel: channel_from_map(slot["channel"]),

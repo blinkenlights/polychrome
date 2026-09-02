@@ -13,9 +13,9 @@ defmodule Octopus.Sound.MatrixTest do
       assert Matrix.direction({:feature, :level}, {:scene, :saturation_percent}) ==
                :sound_to_light
 
-      assert Matrix.direction({:probe, :mean}, {:drone, :gain}) == :light_to_sound
+      assert Matrix.direction({:probe, :mean}, {:held, :gain}) == :light_to_sound
       assert Matrix.direction({:phase, 8}, {:scene, :zoom_base}) == :score
-      assert Matrix.direction({:phase, 8}, {:drone, :gain}) == :score
+      assert Matrix.direction({:phase, 8}, {:held, :gain}) == :score
     end
   end
 
@@ -96,20 +96,21 @@ defmodule Octopus.Sound.MatrixTest do
     # that is not a number takes the whole matrix down with it.
     setup do
       start_supervised!({Octopus.Sound.Clock, bpm: 480.0})
-      start_supervised!({Octopus.Sound.RingChase, enabled: false})
+      start_supervised!(Octopus.Sound.Patch)
+      Octopus.Sound.Patch.update(&Octopus.Sound.Pattern.as_chase(&1, 1))
       start_supervised!(Matrix)
       :ok
     end
 
     test "moves a real target and keeps running" do
-      base = Octopus.Sound.RingChase.state().duration_ms
-      Matrix.add({:phase, 4}, {:chase, :duration_ms}, amount: 1.0)
+      base = chase_duration()
+      Matrix.add({:phase, 4}, {:probe, :duration_ms}, amount: 1.0)
       Octopus.Sound.Clock.play()
 
       moved? =
         Enum.any?(1..20, fn _ ->
           Process.sleep(60)
-          Octopus.Sound.RingChase.state().duration_ms != base
+          chase_duration() != base
         end)
 
       assert moved?, "the chase length never moved — the matrix is not writing"
@@ -117,14 +118,21 @@ defmodule Octopus.Sound.MatrixTest do
     end
 
     test "removing a row puts the target back where it was" do
-      base = Octopus.Sound.RingChase.state().duration_ms
-      binding = Matrix.add({:phase, 4}, {:chase, :duration_ms}, amount: 1.0)
+      base = chase_duration()
+      binding = Matrix.add({:phase, 4}, {:probe, :duration_ms}, amount: 1.0)
       Octopus.Sound.Clock.play()
       Process.sleep(250)
 
       Matrix.remove(binding.id)
 
-      assert Octopus.Sound.RingChase.state().duration_ms == base
+      assert chase_duration() == base
+    end
+
+    defp chase_duration do
+      Octopus.Sound.Patch.pattern()
+      |> Octopus.Sound.Pattern.probe_slots()
+      |> hd()
+      |> Map.fetch!(:duration_ms)
     end
 
     test "an unknown source or target is refused rather than stored" do

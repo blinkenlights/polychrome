@@ -7,7 +7,8 @@ defmodule Octopus.Sound.Supervisor do
 
   use Supervisor
 
-  alias Octopus.Sound.{Clock, Drone, Engine, Features, Matrix, Patch, RingChase, Scheduler}
+  alias Octopus.Sound.{Clock, Engine, Features, Matrix, Patch, Scheduler}
+  alias Octopus.Sound.Trigger
 
   def start_link(opts), do: Supervisor.start_link(__MODULE__, opts, name: __MODULE__)
 
@@ -19,9 +20,10 @@ defmodule Octopus.Sound.Supervisor do
       {Engine.module(), Keyword.get(config, :engine_opts, [])},
       {Clock, Keyword.get(config, :clock, [])},
       {Scheduler, Keyword.get(config, :scheduler, [])},
-      {RingChase, Keyword.get(config, :ring_chase, [])},
+      # The patch has to exist before the triggers adopt what is in it.
       {Patch, Keyword.get(config, :patch, [])},
-      {Drone, Keyword.get(config, :drone, [])},
+      {Trigger.Probe, Keyword.get(config, :probe_trigger, [])},
+      {Trigger.Held, Keyword.get(config, :held_trigger, [])},
       {Features, Keyword.get(config, :features, [])},
       {Matrix, Keyword.get(config, :matrix, [])}
     ]

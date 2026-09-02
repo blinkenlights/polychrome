@@ -20,14 +20,12 @@ defmodule OctopusWeb.StudioLive do
   alias Octopus.Sound.{
     Clock,
     Composition,
-    Drone,
     Engine,
     Features,
     Matrix,
     Patch,
     Pattern,
     Probes,
-    RingChase,
     Scheduler
   }
 
@@ -67,7 +65,6 @@ defmodule OctopusWeb.StudioLive do
        position:
          safe(&Clock.position/0, %{bar: 1, beat: 1, step: 1, bpm: 120.0, playing?: false}),
        engine: safe(&Sound.engine/0, nil),
-       chase: chase_state(),
        metronome?: metronome_running?(),
        scene: scene(),
        pattern: safe(&Patch.pattern/0, Pattern.new()),
@@ -76,7 +73,6 @@ defmodule OctopusWeb.StudioLive do
        synths: Pattern.synths(),
        compositions: safe(&Composition.list/0, []),
        composition_name: "",
-       drone: drone_state(),
        features: %{level: 0.0, onset: 0.0},
        bindings: safe(&Matrix.list/0, []),
        coupling_tab: :grid,
@@ -106,8 +102,6 @@ defmodule OctopusWeb.StudioLive do
     {:noreply,
      assign(socket,
        levels: %{},
-       chase: chase_state(),
-       drone: drone_state(),
        metronome?: metronome_running?(),
        position: safe(&Clock.position/0, socket.assigns.position)
      )}
@@ -119,25 +113,40 @@ defmodule OctopusWeb.StudioLive do
     {:noreply, assign(socket, metronome?: on?)}
   end
 
-  def handle_event("toggle_chase", _params, socket) do
-    RingChase.enable(not socket.assigns.chase.enabled?)
-    {:noreply, assign(socket, chase: chase_state())}
+  # The presets fill a slot rather than starting something beside it: what you
+  # hear is then always in the list, and always saved with the composition.
+  def handle_event("add_chase", _params, socket), do: {:noreply, fill_slot(socket, :chase)}
+  def handle_event("add_drone", _params, socket), do: {:noreply, fill_slot(socket, :drone)}
+
+  def handle_event("clear_instrument", %{"slot" => slot}, socket) do
+    slot_id = String.to_integer(slot)
+
+    Patch.update(fn pattern ->
+      pattern
+      |> Pattern.configure_slot(slot_id, %{
+        name: "Slot #{slot_id}",
+        trigger: Pattern.default_trigger(),
+        channel: Pattern.default_channel(),
+        scale: [0]
+      })
+      |> Pattern.clear_slot(slot_id)
+    end)
+
+    {:noreply, socket}
   end
 
-  def handle_event("configure_chase", params, socket) do
-    opts =
-      []
-      |> put_option(params, "synth", &(&1 in @synths and {:ok, &1}))
-      |> put_option(params, "duration_ms", &parse_number/1)
-      |> put_option(params, "min_rise", &parse_number/1)
+  def handle_event("instrument_param", %{"slot" => slot} = params, socket) do
+    slot_id = String.to_integer(slot)
 
-    if opts != [], do: RingChase.configure(opts)
-    {:noreply, assign(socket, chase: chase_state())}
-  end
+    attrs =
+      %{}
+      |> put_attr(params, "synth", &(&1 in @synths and {:ok, &1}))
+      |> put_attr(params, "duration_ms", &parse_number/1)
+      |> put_attr(params, "gain", &parse_number/1)
+      |> put_gate(params)
 
-  def handle_event("toggle_drone", _params, socket) do
-    Drone.enable(not socket.assigns.drone.enabled?)
-    {:noreply, assign(socket, drone: drone_state())}
+    if attrs != %{}, do: Patch.update(&Pattern.configure_slot(&1, slot_id, attrs))
+    {:noreply, socket}
   end
 
   def handle_event("coupling_tab", %{"tab" => tab}, socket) when tab in ~w(grid matrix sources) do
@@ -237,7 +246,7 @@ defmodule OctopusWeb.StudioLive do
     if name == "" do
       {:noreply, put_flash(socket, :error, "Die Komposition braucht einen Namen.")}
     else
-      case Composition.save(name, socket.assigns.pattern, save_opts(socket)) do
+      case Composition.save(name, live_pattern(socket), save_opts(socket)) do
         {:ok, _composition} ->
           {:noreply,
            socket
@@ -251,7 +260,7 @@ defmodule OctopusWeb.StudioLive do
   end
 
   def handle_event("take", _params, socket) do
-    {:ok, composition} = Composition.take(socket.assigns.pattern, save_opts(socket))
+    {:ok, composition} = Composition.take(live_pattern(socket), save_opts(socket))
 
     {:noreply,
      socket
@@ -319,8 +328,7 @@ defmodule OctopusWeb.StudioLive do
     {:noreply,
      socket
      |> assign(levels: decay(socket.assigns.levels))
-     |> assign(scene: scene())
-     |> assign(drone: drone_state())}
+     |> assign(scene: scene())}
   end
 
   def handle_info(_message, socket), do: {:noreply, socket}
@@ -347,14 +355,13 @@ defmodule OctopusWeb.StudioLive do
           probes={@probes}
           levels={@levels}
           preview?={@preview?}
-          chase={@chase}
-          drone={@drone}
+          pattern={@pattern}
           socket={@socket}
         />
 
         <.sound_card
-          chase={@chase}
-          drone={@drone}
+          pattern={@pattern}
+          panels={@panels}
           metronome?={@metronome?}
           synths={@synths}
           scene={@scene}
@@ -374,8 +381,6 @@ defmodule OctopusWeb.StudioLive do
         new_target={@new_target || default_target()}
         probes={@probes}
         features={@features}
-        drone={@drone}
-        chase={@chase}
       />
     </div>
     """
@@ -592,8 +597,7 @@ defmodule OctopusWeb.StudioLive do
   attr :probes, :list, required: true
   attr :levels, :map, required: true
   attr :preview?, :boolean, default: true
-  attr :chase, :map, required: true
-  attr :drone, :map, required: true
+  attr :pattern, :map, required: true
   attr :socket, :map, required: true
 
   defp stage(assigns) do
@@ -635,7 +639,7 @@ defmodule OctopusWeb.StudioLive do
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_240px] gap-3">
-          <.coupling_note chase={@chase} drone={@drone} />
+          <.coupling_note pattern={@pattern} />
           <.ring_view panels={@panels} probes={@probes} levels={@levels} />
         </div>
       </div>
@@ -643,8 +647,7 @@ defmodule OctopusWeb.StudioLive do
     """
   end
 
-  attr :chase, :map, required: true
-  attr :drone, :map, required: true
+  attr :pattern, :map, required: true
 
   defp coupling_note(assigns) do
     ~H"""
@@ -656,7 +659,7 @@ defmodule OctopusWeb.StudioLive do
         Lesehilfe, keine Bedienung: welche Regel gerade Bild und Ton verbindet.
       </p>
       <dl class="text-[11px] font-mono space-y-1">
-        <div :for={{label, value} <- coupling_lines(@chase, @drone)} class="flex gap-2">
+        <div :for={{label, value} <- coupling_lines(@pattern)} class="flex gap-2">
           <dt class="opacity-50 w-10 shrink-0">{label}</dt>
           <dd class="opacity-80">{value}</dd>
         </div>
@@ -746,8 +749,8 @@ defmodule OctopusWeb.StudioLive do
     """
   end
 
-  attr :chase, :map, required: true
-  attr :drone, :map, required: true
+  attr :pattern, :map, required: true
+  attr :panels, :integer, required: true
   attr :metronome?, :boolean, required: true
   attr :synths, :list, required: true
   attr :scene, :map, default: nil
@@ -768,84 +771,98 @@ defmodule OctopusWeb.StudioLive do
           />
         </label>
 
-        <div class="divider my-0" />
-
-        <label class="flex items-center justify-between gap-2 cursor-pointer">
-          <span class="text-sm font-medium">Drone</span>
-          <input
-            type="checkbox"
-            class="toggle toggle-sm toggle-info"
-            checked={@drone.enabled?}
-            phx-click="toggle_drone"
-          />
-        </label>
+        <div class="flex gap-2">
+          <button class="btn btn-xs flex-1" phx-click="add_chase">＋ Ring-Chase</button>
+          <button class="btn btn-xs flex-1" phx-click="add_drone">＋ Drone</button>
+        </div>
         <p class="text-[11px] opacity-60 -mt-1">
-          Eine gehaltene Stimme je Panel, ihre Lautstärke folgt dem Formelwert dort.
-          Der Akkord ändert sich, weil sich das Bild ändert.
+          Beide füllen einen freien Slot. Danach sind sie Slots wie jeder andere —
+          stummschalten, ändern und speichern inbegriffen.
         </p>
 
-        <div class="divider my-0" />
-
-        <label class="flex items-center justify-between gap-2 cursor-pointer">
-          <span class="text-sm font-medium">Ring-Chase</span>
-          <input
-            type="checkbox"
-            class="toggle toggle-sm toggle-info"
-            checked={@chase.enabled?}
-            phx-click="toggle_chase"
-          />
-        </label>
-        <p class="text-[11px] opacity-60 -mt-1">
-          Jedes Panel, dessen Formelwert durch null steigt, klingt auf seinem eigenen
-          Lautsprecher. Braucht keinen Transport — das Bild ist die Uhr.
-        </p>
         <div
           :if={@scene && @scene.moving != []}
           class="text-[11px] rounded bg-warning/15 border border-warning/40 p-2 leading-snug"
         >
           <b>{Enum.join(@scene.moving, ", ")}</b> aktiv. Das dreht den Ring unter der
-          Formel, also wird der Chase schneller und langsamer — er folgt dem Bild.
-          Für gleichmäßiges Tempo im Foyer abschalten.
+          Formel, also wird ein vom Bild ausgelöster Slot schneller und langsamer —
+          er folgt dem Bild. Für gleichmäßiges Tempo im Foyer abschalten.
         </div>
 
-        <form phx-change="configure_chase" class="space-y-2">
-          <label class="form-control">
-            <span class="label-text text-xs">Klang</span>
-            <select name="synth" class="select select-bordered select-sm">
-              <option :for={synth <- @synths} value={synth} selected={synth == @chase.synth}>
+        <div :if={instrument_slots(@pattern) == []} class="text-[11px] opacity-60">
+          Noch kein Instrument. Der Rest der acht Slots wird vom Grid gespielt.
+        </div>
+
+        <div :for={slot <- instrument_slots(@pattern)} class="rounded-lg bg-base-300/40 p-2 space-y-2">
+          <div class="flex items-center gap-2">
+            <span class="font-mono text-[10px] opacity-50">{slot.id}</span>
+            <span class="text-sm font-medium flex-1">{slot.name}</span>
+            <span class="badge badge-xs">{voice_count(slot, @panels)} St.</span>
+            <button
+              class="btn btn-xs btn-ghost"
+              phx-click="clear_instrument"
+              phx-value-slot={slot.id}
+              title="Slot leeren"
+            >
+              ×
+            </button>
+          </div>
+          <div class="text-[10px] uppercase tracking-wider opacity-50">
+            {instrument_kind(slot)} · {place_label(slot)}
+          </div>
+
+          <form phx-change="instrument_param" class="space-y-1.5">
+            <input type="hidden" name="slot" value={slot.id} />
+            <input type="hidden" name="kind" value={slot.trigger.kind} />
+
+            <select name="synth" class="select select-bordered select-xs w-full">
+              <option :for={synth <- @synths} value={synth} selected={synth == slot.synth}>
                 {synth}
               </option>
             </select>
-          </label>
 
-          <label class="form-control">
-            <span class="label-text text-xs">Länge {round(@chase.duration_ms)} ms</span>
-            <input
-              type="range"
-              name="duration_ms"
-              min="40"
-              max="2000"
-              step="20"
-              value={@chase.duration_ms}
-              class="range range-xs"
-            />
-          </label>
+            <label class="block">
+              <span class="text-[10px] opacity-60">Pegel {round(slot.gain * 100)} %</span>
+              <input
+                type="range"
+                name="gain"
+                min="0"
+                max="1.2"
+                step="0.05"
+                value={slot.gain}
+                class="range range-xs"
+              />
+            </label>
 
-          <label class="form-control">
-            <span class="label-text text-xs">
-              Mindeststeilheit {:erlang.float_to_binary(@chase.min_rise * 1.0, decimals: 4)}
-            </span>
-            <input
-              type="range"
-              name="min_rise"
-              min="0.0005"
-              max="0.05"
-              step="0.0005"
-              value={@chase.min_rise}
-              class="range range-xs"
-            />
-          </label>
-        </form>
+            <label :if={slot.trigger.kind == :probe} class="block">
+              <span class="text-[10px] opacity-60">Länge {round(slot.duration_ms)} ms</span>
+              <input
+                type="range"
+                name="duration_ms"
+                min="40"
+                max="2000"
+                step="20"
+                value={slot.duration_ms}
+                class="range range-xs"
+              />
+            </label>
+
+            <label :if={slot.trigger.kind == :probe} class="block">
+              <span class="text-[10px] opacity-60">
+                Mindeststeilheit {:erlang.float_to_binary(slot.trigger.min_rise * 1.0, decimals: 4)}
+              </span>
+              <input
+                type="range"
+                name="min_rise"
+                min="0.0005"
+                max="0.05"
+                step="0.0005"
+                value={slot.trigger.min_rise}
+                class="range range-xs"
+              />
+            </label>
+          </form>
+        </div>
       </div>
     </div>
     """
@@ -1016,8 +1033,6 @@ defmodule OctopusWeb.StudioLive do
   attr :new_target, :any, required: true
   attr :probes, :list, required: true
   attr :features, :map, required: true
-  attr :drone, :map, required: true
-  attr :chase, :map, required: true
 
   defp coupling(assigns) do
     ~H"""
@@ -1056,8 +1071,7 @@ defmodule OctopusWeb.StudioLive do
           :if={@tab == :sources}
           probes={@probes}
           features={@features}
-          drone={@drone}
-          chase={@chase}
+          pattern={@pattern}
         />
       </div>
     </div>
@@ -1066,8 +1080,7 @@ defmodule OctopusWeb.StudioLive do
 
   attr :probes, :list, required: true
   attr :features, :map, required: true
-  attr :drone, :map, required: true
-  attr :chase, :map, required: true
+  attr :pattern, :map, required: true
 
   defp sources(assigns) do
     ~H"""
@@ -1104,10 +1117,10 @@ defmodule OctopusWeb.StudioLive do
       </div>
 
       <p class="text-[11px] opacity-60">
-        Licht → Sound läuft außerdem fest über die Instrumente:
-        Drone {if @drone.enabled?, do: "an", else: "aus"} ·
-        Ring-Chase {if @chase.enabled?, do: "an", else: "aus"}.
-        Beide lesen die Probes direkt, deshalb brauchen sie keine Zeile.
+        Licht → Sound läuft außerdem über die Slots, die nicht am Grid hängen: {length(
+          instrument_slots(@pattern)
+        )} davon. Sie lesen die Probes direkt,
+        deshalb brauchen sie keine Matrixzeile.
       </p>
     </div>
     """
@@ -1262,19 +1275,16 @@ defmodule OctopusWeb.StudioLive do
     "gap: #{Float.round(gap / total * 100, 4)}%"
   end
 
-  defp coupling_lines(chase, drone) do
+  defp coupling_lines(pattern) do
+    targets =
+      pattern
+      |> instrument_slots()
+      |> Enum.reject(& &1.muted?)
+      |> Enum.map(&"#{&1.name} (#{instrument_kind(&1)}, #{place_label(&1)})")
+
     [
       {"von", "Probes 1…#{Installation.num_panels()} · Panelmitten"},
-      {"nach",
-       [
-         chase.enabled? && "Ring-Chase (#{chase.synth}, Kanal folgt Probe)",
-         drone.enabled? && "Drone (eine Stimme je Panel)"
-       ]
-       |> Enum.filter(& &1)
-       |> case do
-         [] -> "— nichts aktiv"
-         targets -> Enum.join(targets, " · ")
-       end},
+      {"nach", if(targets == [], do: "— kein Instrument", else: Enum.join(targets, " · "))},
       {"zeit", "80 ms Vorlauf · interpoliert zwischen zwei Frames"}
     ]
   end
@@ -1346,24 +1356,24 @@ defmodule OctopusWeb.StudioLive do
   defp filtered_bindings(bindings, filter),
     do: Enum.filter(bindings, &(binding_direction(&1) == filter))
 
-  defp drone_state do
-    safe(&Drone.state/0, %{enabled?: false, gain: 0.7, cutoff: 1800, scale: []})
+  defp instrument_slots(pattern) do
+    Enum.filter(pattern.slots, &(&1.trigger.kind != :grid))
   end
 
-  defp chase_state do
-    safe(
-      fn ->
-        state = :sys.get_state(RingChase)
+  defp instrument_kind(%{trigger: %{kind: :probe}}), do: "vom Bild ausgelöst"
+  defp instrument_kind(%{trigger: %{kind: :held}}), do: "gehalten"
+  defp instrument_kind(_slot), do: "Grid"
 
-        %{
-          enabled?: state.enabled?,
-          synth: state.synth,
-          duration_ms: state.duration_ms,
-          min_rise: state.min_rise
-        }
-      end,
-      %{enabled?: false, synth: "pc_ping", duration_ms: 400, min_rise: 0.01}
-    )
+  defp place_label(%{channel: %{mode: :follow_probe}}), do: "folgt Probe"
+  defp place_label(%{channel: %{mode: :all_panels}}), do: "alle Panels"
+  defp place_label(%{channel: %{mode: :fixed, panel: panel}}), do: "Panel #{panel}"
+  defp place_label(%{channel: %{mode: :rotate, step: step}}), do: "rotiert um #{step}"
+  defp place_label(_slot), do: "aus dem Schritt"
+
+  # How many voices a slot occupies — the number the sound column shows so a
+  # place rule that multiplies is visible before it is heard.
+  defp voice_count(slot, panels) do
+    length(Pattern.channels_for(slot, 1, 0, panels))
   end
 
   # The studio shows the picture that is on the wall, not merely one that
@@ -1399,14 +1409,64 @@ defmodule OctopusWeb.StudioLive do
     _ -> nil
   end
 
-  defp put_option(opts, params, key, parser) do
-    with %{^key => raw} <- params,
-         {:ok, value} <- parser.(raw) do
-      Keyword.put(opts, String.to_existing_atom(key), value)
-    else
-      _ -> opts
+  # Saving asks the patch rather than trusting the copy in this socket: an edit
+  # made a moment ago may still be on its way here as a message, and a save
+  # that quietly drops the last change is the worst kind.
+  defp live_pattern(socket) do
+    safe(&Patch.pattern/0, socket.assigns.pattern)
+  end
+
+  defp fill_slot(socket, preset) do
+    pattern = socket.assigns.pattern
+
+    case Pattern.free_slot(pattern) do
+      nil ->
+        put_flash(socket, :error, "Alle acht Slots sind belegt.")
+
+      slot_id ->
+        Patch.update(fn pattern ->
+          case preset do
+            :chase -> Pattern.as_chase(pattern, slot_id)
+            :drone -> Pattern.as_drone(pattern, slot_id)
+          end
+        end)
+
+        socket
     end
   end
+
+  defp put_attr(attrs, params, key, parser) do
+    with %{^key => raw} <- params,
+         {:ok, value} <- parser.(raw) do
+      Map.put(attrs, String.to_existing_atom(key), value)
+    else
+      _ -> attrs
+    end
+  end
+
+  # The steepness gate belongs to the trigger, not to the sound, so it travels
+  # inside the trigger rather than beside it.
+  defp put_gate(attrs, %{"min_rise" => raw, "kind" => "probe"} = params) do
+    case parse_number(raw) do
+      {:ok, min_rise} ->
+        interval =
+          case parse_number(Map.get(params, "min_interval_ms", "")) do
+            {:ok, value} -> round(value)
+            :error -> Pattern.probe_trigger().min_interval_ms
+          end
+
+        Map.put(attrs, :trigger, %{
+          kind: :probe,
+          min_rise: min_rise,
+          min_interval_ms: interval
+        })
+
+      :error ->
+        attrs
+    end
+  end
+
+  defp put_gate(attrs, _params), do: attrs
 
   defp parse_number(raw) do
     case Float.parse(to_string(raw)) do

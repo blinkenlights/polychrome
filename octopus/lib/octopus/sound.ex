@@ -14,7 +14,7 @@ defmodule Octopus.Sound do
   Channels are 1-based and mean panels.
   """
 
-  alias Octopus.Sound.{Clock, Drone, Engine, Patch, RingChase, Scheduler}
+  alias Octopus.Sound.{Clock, Engine, Patch, Pattern, Scheduler}
 
   @doc "Plays one note now, or at `:at_ms` (monotonic, see `Octopus.Sound.Time`)."
   def note(params \\ [])
@@ -43,14 +43,25 @@ defmodule Octopus.Sound do
   defdelegate set_source(source), to: Scheduler
 
   @doc """
-  The ring chase: every panel whose formula value rises through zero sounds a
-  note on its own speaker. Needs a running Pixel Fun; no transport required,
-  because the picture is the clock.
-  """
-  def ring_chase(on?) when is_boolean(on?), do: RingChase.enable(on?)
+  Sets up a ring chase in the first free slot: every panel whose formula value
+  rises through zero sounds a note on its own speaker. Needs a running Pixel
+  Fun; no transport, because the picture is the clock.
 
-  @doc "Adjusts the chase — `:threshold`, `:synth`, `:duration_ms`, `:scale`."
-  defdelegate configure_ring_chase(opts), to: RingChase, as: :configure
+  Returns the slot it filled, or `:full`.
+  """
+  def ring_chase(opts \\ []), do: fill_slot(&Pattern.as_chase/3, opts)
+
+  @doc "Sets up a drone in the first free slot: one held voice per panel."
+  def drone(opts \\ []), do: fill_slot(&Pattern.as_drone/3, opts)
+
+  defp fill_slot(preset, opts) do
+    pattern = Patch.pattern()
+
+    case Pattern.free_slot(pattern) do
+      nil -> :full
+      slot_id -> Patch.update(&preset.(&1, slot_id, opts)) && slot_id
+    end
+  end
 
   @doc "The pattern that is playing."
   defdelegate pattern(), to: Patch
@@ -72,8 +83,7 @@ defmodule Octopus.Sound do
   def panic do
     safely(&Clock.stop/0)
     safely(&Scheduler.clear/0)
-    safely(fn -> RingChase.enable(false) end)
-    safely(fn -> Drone.enable(false) end)
+    safely(fn -> Patch.update(&Pattern.silence/1) end)
     Engine.panic()
   end
 

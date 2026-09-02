@@ -20,7 +20,7 @@ defmodule Octopus.Sound.Matrix do
   use GenServer
 
   alias Octopus.AppSupervisor
-  alias Octopus.Sound.{Clock, Drone, Features, Probes, RingChase, Time, Timeline}
+  alias Octopus.Sound.{Clock, Features, Patch, Pattern, Probes, Time, Timeline}
   alias Phoenix.PubSub
 
   @topic "sound_matrix"
@@ -70,15 +70,15 @@ defmodule Octopus.Sound.Matrix do
       max: 5.0,
       domain: :light
     },
-    {:drone, :gain} => %{
-      label: "Drone · Lautstärke",
+    {:held, :gain} => %{
+      label: "Gehaltene Slots · Lautstärke",
       span: 0.8,
       min: 0.0,
       max: 1.2,
       domain: :sound
     },
-    {:chase, :duration_ms} => %{
-      label: "Ring-Chase · Länge",
+    {:probe, :duration_ms} => %{
+      label: "Probe-Slots · Länge",
       span: 900.0,
       min: 40.0,
       max: 2000.0,
@@ -294,10 +294,18 @@ defmodule Octopus.Sound.Matrix do
     end
   end
 
-  defp apply_target({:drone, :gain}, value), do: safe(fn -> Drone.configure(gain: value) end, :ok)
+  # Targets name a kind of slot rather than an instrument: there can be two
+  # chases now, and a row that moved only one of them would be a puzzle.
+  defp apply_target({:held, :gain}, value),
+    do: configure_slots(&(&1.trigger.kind == :held), %{gain: value})
 
-  defp apply_target({:chase, :duration_ms}, value),
-    do: safe(fn -> RingChase.configure(duration_ms: round(value)) end, :ok)
+  defp apply_target({:probe, :duration_ms}, value),
+    do: configure_slots(&(&1.trigger.kind == :probe), %{duration_ms: round(value)})
+
+  defp configure_slots(filter, attrs) do
+    safe(fn -> Patch.update(&Pattern.configure_where(&1, filter, attrs)) end, :ok)
+    :ok
+  end
 
   defp read_target({:scene, key}) do
     case scene_app_id() do
@@ -306,8 +314,22 @@ defmodule Octopus.Sound.Matrix do
     end
   end
 
-  defp read_target({:drone, :gain}), do: safe(fn -> Drone.state().gain end, nil)
-  defp read_target({:chase, :duration_ms}), do: safe(fn -> RingChase.state().duration_ms end, nil)
+  defp read_target({:held, :gain}), do: first_slot_value(:held, :gain)
+  defp read_target({:probe, :duration_ms}), do: first_slot_value(:probe, :duration_ms)
+
+  defp first_slot_value(kind, key) do
+    safe(
+      fn ->
+        Patch.pattern().slots
+        |> Enum.find(&(&1.trigger.kind == kind))
+        |> case do
+          nil -> nil
+          slot -> Map.get(slot, key)
+        end
+      end,
+      nil
+    )
+  end
 
   # Putting a parameter back where it was is the least surprising thing a
   # removed row can do — otherwise the scene silently keeps the last value.

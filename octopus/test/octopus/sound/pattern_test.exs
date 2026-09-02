@@ -63,9 +63,11 @@ defmodule Octopus.Sound.PatternTest do
 
       assert Pattern.notes_for(pattern, 0) == []
 
-      assert Pattern.notes_for(Pattern.toggle_mute(pattern, 1), 0) == [
-               %{channel: 1, note: 62, velocity: 0.7, duration_ms: 300, synth: "pc_ping"}
-             ]
+      # The step's velocity is scaled by the slot's level.
+      assert [%{channel: 1, note: 62, duration_ms: 300, synth: "pc_ping", velocity: velocity}] =
+               Pattern.notes_for(Pattern.toggle_mute(pattern, 1), 0)
+
+      assert_in_delta velocity, 0.49, 1.0e-6
     end
 
     test "carries the slot's sound, not just its position" do
