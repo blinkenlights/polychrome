@@ -70,7 +70,19 @@ die Parameter, die man **beim Hören** dreht, weil sie direkt den Klang formen:
 Zoom, Rotation, Sättigung, Pattern-Tempo — und die Zeitquelle. Alles andere
 bleibt ein Link.
 
-### A5 · Die Klangspalte ist etwas anderes geworden
+### A5 · Die Klangspalte ist etwas anderes geworden ✅ erledigt
+
+> **Gebaut.** Die Spalte ist jetzt die Liste aller acht Slots mit Auslöser und
+> eigenem Pegel, darunter das Detailfeld für den gewählten. Chase und Drone sind
+> dabei zu Slots geworden — siehe [10-slot-modell.md](10-slot-modell.md). Im Grid
+> behält ein Slot, den das Raster nicht spielt, seine Zeile und zeigt darin, was
+> ihn auslöst, statt sechzehn Zellen, die er nie benutzt.
+>
+> Offen bleibt daraus: **Slot-Typen Sample und Granular** (B2) und die
+> **Ortsregeln im UI** — `:fixed` und `:rotate` gibt es im Modell, aber noch
+> nicht zum Einstellen.
+
+#### Ursprünglicher Befund
 
 **Im Entwurf:** acht nummerierte Slots mit Typ (SYNTH / SAMPLE / GRANULAR /
 LEER), Pegel je Slot, ausgewählter Slot hervorgehoben, darunter ein Detailfeld
@@ -115,13 +127,15 @@ Nach Nutzen sortiert, nicht nach Aufwand.
 5. **AV-Offset.** Eingemessen wird bisher nichts; der Chase klingt konstant
    80 ms nach dem Bild.
 6. **Tap-Tempo und Loop-Länge** im Transport.
-7. **Kompositionen speichern nur das Muster.** Nicht: Matrixzeilen, Chase- und
-   Drone-Einstellungen, Szenenbezug. Beim Laden kommt also nur die halbe Arbeit
-   zurück.
+7. **Kompositionen speichern nur das Muster.** ✅ *Teilweise erledigt:* Chase und
+   Drone sind jetzt Slots und werden mitgespeichert — nach einem Serverneustart
+   kommen sie klingend zurück. Offen bleiben **Matrixzeilen** und der
+   **Szenenbezug**.
 8. **Probes einstellen** — Position, Glättung, Schwelle, Ausgabeart. Die
    Quellen-Karten sind heute nur Anzeige.
-9. **Der Drone fehlt in den Pegelmetern**, weil die auf Anschläge reagieren und
-   gehaltene Stimmen keinen haben.
+9. **Der Drone fehlt in den Pegelmetern über dem Streifen**, weil die auf
+   Anschläge reagieren und gehaltene Stimmen keinen haben. In der Klangspalte hat
+   inzwischen jeder Slot seinen eigenen Pegel.
 10. **M7 komplett** — Freigabe, Warteschlange, Übergänge auf der Taktgrenze.
 11. **Performance-Modus.**
 
