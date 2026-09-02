@@ -15,6 +15,7 @@ Architektur und UI-Spezifikation als gemeinsame Diskussionsgrundlage.
 | [07-hardware-prototyp.md](07-hardware-prototyp.md) | Audio-Hardware für den Schreibtisch |
 | [08-testplan.md](08-testplan.md) | Manuelle Testfälle zum Abhaken |
 | [09-luecken.md](09-luecken.md) | Was zwischen Entwurf und gebautem Studio noch fehlt |
+| [10-slot-modell.md](10-slot-modell.md) | Denkpapier: was ein Slot ist, und wo Chase und Drone hingehören |
 | [studio-entwurf.html](studio-entwurf.html) | Der UI-Entwurf zum Anschauen — im Browser öffnen |
 
 ## Kurzfassung
