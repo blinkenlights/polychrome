@@ -24,9 +24,13 @@ defmodule Octopus.Layout do
   # `circularize?` is how a layout says it wants to stay a straight strip even
   # on a ring installation — the studio needs the panels side by side, where
   # the ring view answers a different question.
+  #
+  # `fill?` lifts the simulator's "never enlarge" rule. The development view is
+  # capped at 1:1 so a small installation is not blown up across a monitor; a
+  # layout meant to fill a box in a page has to say so.
   defstruct @keys ++
               [:panel_centers, :panel_rotations, :panel_pixel_count, :panel_info] ++
-              [circularize?: true]
+              [circularize?: true, fill?: false]
 
   @typedoc """
   Position of a pixel in the image, or — for circular ring layouts — a
@@ -91,7 +95,8 @@ defmodule Octopus.Layout do
           panelCenters: layout.panel_centers && Enum.map(layout.panel_centers, &Tuple.to_list/1),
           panelRotations: layout.panel_rotations,
           panelPixelCount: layout.panel_pixel_count,
-          panelInfo: layout.panel_info
+          panelInfo: layout.panel_info,
+          fill: layout.fill?
         },
         encoder
       )

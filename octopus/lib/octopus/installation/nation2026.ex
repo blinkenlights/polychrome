@@ -74,7 +74,8 @@ defmodule Octopus.Installation.Nation2026 do
       [
         name: "Streifen (abgewickelt)",
         mode: "strip",
-        pixel_size: {8, 8}
+        pixel_size: {8, 8},
+        panel_gap: 1
       ],
       [
         name: "Nation 2026",

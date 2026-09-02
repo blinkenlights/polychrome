@@ -251,7 +251,10 @@ defmodule Octopus.Installation do
                             ],
                             offset_x: [type: :non_neg_integer, required: false],
                             offset_y: [type: :non_neg_integer, required: false],
-                            spacing: [type: :non_neg_integer, required: false]
+                            spacing: [type: :non_neg_integer, required: false],
+                            # Narrows the gap between panels for this layout
+                            # only; see generate_generic_layout/7.
+                            panel_gap: [type: :non_neg_integer, required: false]
                           ]}}
                     ]
                   )
@@ -321,6 +324,12 @@ defmodule Octopus.Installation do
       ) do
     # Default pixel size for generic mode
     {pixel_width, pixel_height} = Keyword.get(layout_opts, :pixel_size, {10, 10})
+
+    # A layout may narrow the gap between panels. The installation's real gap
+    # is what the ring looks like; an unrolled studio strip wants the picture,
+    # and with an 8 px panel next to an 18 px gap two thirds of the width would
+    # be nothing at all.
+    panel_gap = Keyword.get(layout_opts, :panel_gap, panel_gap)
 
     # Layout dimensions must match frame data structure:
     # Frame data is structured as num_panels * panel_width * panel_height pixels
@@ -465,7 +474,8 @@ defmodule Octopus.Installation do
                 layout_opts,
                 :linear
               )
-              | circularize?: false
+              | circularize?: false,
+                fill?: true
             }
 
           "image" ->

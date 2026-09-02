@@ -340,6 +340,8 @@ defmodule OctopusWeb.StudioLive do
           probes={@probes}
           levels={@levels}
           preview?={@preview?}
+          chase={@chase}
+          drone={@drone}
           socket={@socket}
         />
 
@@ -593,49 +595,71 @@ defmodule OctopusWeb.StudioLive do
   attr :probes, :list, required: true
   attr :levels, :map, required: true
   attr :preview?, :boolean, default: true
+  attr :chase, :map, required: true
+  attr :drone, :map, required: true
   attr :socket, :map, required: true
 
   defp stage(assigns) do
     ~H"""
     <div class="card bg-base-200 border border-base-300">
       <div class="card-body p-3 gap-3">
-        <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_240px] gap-3">
-          <div :if={@preview?} class="h-64 rounded-lg overflow-hidden bg-black">
-            {live_render(@socket, PixelsLive,
-              id: "studio-preview",
-              session: %{"embedded" => true, "view" => "Streifen (abgewickelt)"}
-            )}
-          </div>
-          <.ring_view panels={@panels} probes={@probes} levels={@levels} />
+        <div
+          :if={@preview?}
+          class="studio-strip rounded-lg overflow-hidden bg-black"
+          style={strip_aspect()}
+        >
+          {live_render(@socket, PixelsLive,
+            id: "studio-preview",
+            session: %{"embedded" => true, "view" => "Streifen (abgewickelt)"}
+          )}
         </div>
 
-        <div>
-          <div class="text-xs uppercase tracking-wider opacity-60 mb-1">
-            Probes — Formelwert je Panel
-          </div>
-          <div class="grid gap-1" style={"grid-template-columns: repeat(#{@panels}, minmax(0, 1fr))"}>
-            <div :for={index <- 0..(@panels - 1)} class="flex flex-col items-center gap-1">
-              <div class="w-full h-10 bg-base-300 rounded relative overflow-hidden">
-                <div class="absolute inset-x-0 top-1/2 h-px bg-base-content/20" />
-                <div
-                  class="absolute left-0 right-0 bg-warning"
-                  style={probe_bar_style(Enum.at(@probes, index))}
-                />
-              </div>
-              <div class="w-full h-2.5 bg-base-300 rounded overflow-hidden">
-                <div
-                  class="h-full bg-info transition-[width] duration-75"
-                  style={"width: #{round(Map.get(@levels, index + 1, 0.0) * 100)}%"}
-                />
-              </div>
-              <span class="text-[10px] font-mono opacity-50">{index + 1}</span>
+        <div class="flex" style={strip_gap()}>
+          <div :for={index <- 0..(@panels - 1)} class="flex-1 flex flex-col items-center gap-0.5">
+            <div class="w-full h-3 bg-base-300 rounded-b overflow-hidden">
+              <div
+                class="h-full bg-info transition-[width] duration-75"
+                style={"width: #{round(Map.get(@levels, index + 1, 0.0) * 100)}%"}
+              />
             </div>
-          </div>
-          <div class="text-[11px] opacity-50 mt-1">
-            Balken: Formelwert −1…+1 · Linie darunter: Pegel des Lautsprechers an diesem Panel
+            <div class="w-full h-9 bg-base-300 rounded relative overflow-hidden">
+              <div class="absolute inset-x-0 top-1/2 h-px bg-base-content/20" />
+              <div
+                class="absolute left-0 right-0 bg-warning"
+                style={probe_bar_style(Enum.at(@probes, index))}
+              />
+            </div>
+            <span class="text-[10px] font-mono opacity-50">{index + 1}</span>
           </div>
         </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_240px] gap-3">
+          <.coupling_note chase={@chase} drone={@drone} />
+          <.ring_view panels={@panels} probes={@probes} levels={@levels} />
+        </div>
       </div>
+    </div>
+    """
+  end
+
+  attr :chase, :map, required: true
+  attr :drone, :map, required: true
+
+  defp coupling_note(assigns) do
+    ~H"""
+    <div class="rounded-lg bg-base-300/40 p-3 text-sm space-y-2">
+      <div class="text-xs uppercase tracking-wider font-semibold text-info">
+        Was gerade koppelt
+      </div>
+      <p class="text-[12px] opacity-70 leading-snug">
+        Lesehilfe, keine Bedienung: welche Regel gerade Bild und Ton verbindet.
+      </p>
+      <dl class="text-[11px] font-mono space-y-1">
+        <div :for={{label, value} <- coupling_lines(@chase, @drone)} class="flex gap-2">
+          <dt class="opacity-50 w-10 shrink-0">{label}</dt>
+          <dd class="opacity-80">{value}</dd>
+        </div>
+      </dl>
     </div>
     """
   end
@@ -1126,6 +1150,45 @@ defmodule OctopusWeb.StudioLive do
   defp format_value(nil), do: "—"
   defp format_value(value) when is_float(value), do: :erlang.float_to_binary(value, decimals: 1)
   defp format_value(value), do: to_string(value)
+
+  # The strip is drawn from the installation's own layout, so the rows beneath
+  # it have to use that geometry too: twelve panels of eight units with a gap
+  # of one between them. Then a meter sits under its panel and not near it.
+  @strip_panel_units 8
+  @strip_gap_units 1
+
+  defp strip_geometry do
+    panels = Installation.num_panels()
+    total = panels * @strip_panel_units + (panels - 1) * @strip_gap_units
+    {total, @strip_panel_units, @strip_gap_units}
+  end
+
+  defp strip_aspect do
+    {total, _panel, _gap} = strip_geometry()
+    "aspect-ratio: #{total} / #{Installation.panel_height()}"
+  end
+
+  defp strip_gap do
+    {total, _panel, gap} = strip_geometry()
+    "gap: #{Float.round(gap / total * 100, 4)}%"
+  end
+
+  defp coupling_lines(chase, drone) do
+    [
+      {"von", "Probes 1…#{Installation.num_panels()} · Panelmitten"},
+      {"nach",
+       [
+         chase.enabled? && "Ring-Chase (#{chase.synth}, Kanal folgt Probe)",
+         drone.enabled? && "Drone (eine Stimme je Panel)"
+       ]
+       |> Enum.filter(& &1)
+       |> case do
+         [] -> "— nichts aktiv"
+         targets -> Enum.join(targets, " · ")
+       end},
+      {"zeit", "80 ms Vorlauf · interpoliert zwischen zwei Frames"}
+    ]
+  end
 
   # Panel 1 at the top, then clockwise — the same order the strip reads in.
   defp ring_positions(panels) do

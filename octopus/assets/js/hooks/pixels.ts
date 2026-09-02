@@ -24,6 +24,9 @@ interface Layout {
   // instead of absolute image coordinates.
   panelCenters?: [number, number][] | null;
   panelRotations?: number[] | null;
+  // A layout that is meant to fill its box (the studio strip) rather than be
+  // capped at 1:1 like the development view.
+  fill?: boolean | null;
   // Set on every layout, for the hover tooltip.
   panelPixelCount?: number | null;
   panelInfo?: PanelInfo[] | null;
@@ -324,18 +327,16 @@ class PixelsHook extends Hook {
       const isGenericLayout =
         !layout.backgroundImage || layout.backgroundImage === "";
 
-      const scale = isGenericLayout
-        ? Math.min(
-            1.0,
-            Math.min(
-              canvas.width / layout.imageSize[0],
-              canvas.height / layout.imageSize[1]
-            )
-          )
-        : Math.min(
-            canvas.width / layout.imageSize[0],
-            canvas.height / layout.imageSize[1]
-          );
+      const fitScale = Math.min(
+        canvas.width / layout.imageSize[0],
+        canvas.height / layout.imageSize[1]
+      );
+
+      // Generic development views are never enlarged past 1:1, so a small
+      // installation is not blown up across a monitor. A layout that exists to
+      // fill a box in a page asks for the plain fit instead.
+      const scale =
+        isGenericLayout && !layout.fill ? Math.min(1.0, fitScale) : fitScale;
 
       const offsetX = canvas.width / 2 - (layout.imageSize[0] / 2) * scale;
       const offsetY = canvas.height / 2 - (layout.imageSize[1] / 2) * scale;

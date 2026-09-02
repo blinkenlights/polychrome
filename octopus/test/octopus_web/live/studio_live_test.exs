@@ -24,15 +24,16 @@ defmodule OctopusWeb.StudioLiveTest do
     assert html =~ "kein Klang"
   end
 
-  test "shows one probe column per panel", %{conn: conn} do
+  test "shows one column per panel, under the strip", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/studio")
-
-    columns = view |> render() |> then(&Regex.scan(~r/Balken: Formelwert/, &1))
-    assert length(columns) == 1
+    html = render(view)
 
     for panel <- 1..Installation.num_panels() do
-      assert render(view) =~ ">#{panel}</span>"
+      assert html =~ ">#{panel}</span>"
     end
+
+    # Meter and probe bar share the panel's column, so they line up with it.
+    assert html =~ "bg-info transition-[width]"
   end
 
   test "picks up probe readings from a rendering scene", %{conn: conn} do
