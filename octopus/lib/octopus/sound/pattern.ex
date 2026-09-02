@@ -71,7 +71,12 @@ defmodule Octopus.Sound.Pattern do
   @default_velocity 0.7
   # D dorian again, so slots stacked on top of each other still agree.
   @scale [62, 65, 69, 72, 64, 67, 71, 74]
-  @synths ["pc_ping", "pc_pluck", "pc_click", "pc_drone", "pc_voice"]
+  # A one-shot sound ends by itself; a held one has a gate and only stops when
+  # it is let go. Offering a held sound to a slot that fires it as a note is how
+  # you get a tone nothing can switch off but panic.
+  @one_shot_synths ["pc_ping", "pc_pluck", "pc_click", "pc_drone"]
+  @held_synths ["pc_voice", "pc_drone"]
+  @synths @one_shot_synths ++ ["pc_voice"]
 
   # A slot sounds one pitch — its root — unless its place spreads it around the
   # ring. Then the scale says what the panels sound: offsets from the root,
@@ -117,6 +122,23 @@ defmodule Octopus.Sound.Pattern do
   end
 
   def synths, do: @synths
+
+  @doc "Sounds that make sense for a trigger — see `@one_shot_synths`."
+  @spec synths_for(atom()) :: [String.t()]
+  def synths_for(:held), do: @held_synths
+  def synths_for(_kind), do: @one_shot_synths
+
+  @doc """
+  A slot's sound, corrected if its trigger cannot use it.
+
+  Changing a slot from held to triggered would otherwise leave a gated sound
+  behind that nothing closes.
+  """
+  @spec valid_synth(map()) :: String.t()
+  def valid_synth(%{synth: synth, trigger: %{kind: kind}}) do
+    allowed = synths_for(kind)
+    if synth in allowed, do: synth, else: hd(allowed)
+  end
 
   def dorian, do: @dorian
   def drone_voicing, do: @drone_voicing
@@ -294,7 +316,9 @@ defmodule Octopus.Sound.Pattern do
   @spec configure_slot(t(), pos_integer(), map()) :: t()
   def configure_slot(%__MODULE__{} = pattern, slot_id, attrs) do
     update_slot(pattern, slot_id, fn slot ->
-      Enum.reduce(attrs, slot, fn {key, value}, slot -> Map.replace(slot, key, value) end)
+      slot
+      |> then(&Enum.reduce(attrs, &1, fn {key, value}, slot -> Map.replace(slot, key, value) end))
+      |> then(&%{&1 | synth: valid_synth(&1)})
     end)
   end
 

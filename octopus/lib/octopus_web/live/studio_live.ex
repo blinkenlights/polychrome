@@ -146,7 +146,7 @@ defmodule OctopusWeb.StudioLive do
 
     attrs =
       %{}
-      |> put_attr(params, "synth", &(&1 in @synths and {:ok, &1}))
+      |> put_attr(params, "synth", &synth_option(params, &1))
       |> put_attr(params, "duration_ms", &parse_number/1)
       |> put_attr(params, "gain", &parse_number/1)
       |> put_gate(params)
@@ -531,7 +531,11 @@ defmodule OctopusWeb.StudioLive do
                   <form phx-change="slot_synth" class="contents">
                     <input type="hidden" name="slot" value={slot.id} />
                     <select name="synth" class="select select-bordered select-xs w-28">
-                      <option :for={synth <- @synths} value={synth} selected={synth == slot.synth}>
+                      <option
+                        :for={synth <- Pattern.synths_for(:grid)}
+                        value={synth}
+                        selected={synth == slot.synth}
+                      >
                         {synth}
                       </option>
                     </select>
@@ -899,7 +903,11 @@ defmodule OctopusWeb.StudioLive do
         <input type="hidden" name="kind" value={@slot.trigger.kind} />
 
         <select name="synth" class="select select-bordered select-xs w-full">
-          <option :for={synth <- @synths} value={synth} selected={synth == @slot.synth}>
+          <option
+            :for={synth <- Pattern.synths_for(@slot.trigger.kind)}
+            value={synth}
+            selected={synth == @slot.synth}
+          >
             {synth}
           </option>
         </select>
@@ -917,7 +925,8 @@ defmodule OctopusWeb.StudioLive do
           />
         </label>
 
-        <label class="block">
+        <%!-- A held slot plays until it is let go; a length would mean nothing. --%>
+        <label :if={@slot.trigger.kind != :held} class="block">
           <span class="text-[10px] opacity-60">Länge {round(@slot.duration_ms)} ms</span>
           <input
             type="range"
@@ -1527,6 +1536,19 @@ defmodule OctopusWeb.StudioLive do
 
         socket
     end
+  end
+
+  # A held sound on a slot that fires notes never stops, so the choice is
+  # checked against the trigger and not only against the list of sounds.
+  defp synth_option(params, synth) do
+    kind =
+      case params["kind"] do
+        "held" -> :held
+        "probe" -> :probe
+        _ -> :grid
+      end
+
+    if synth in Pattern.synths_for(kind), do: {:ok, synth}, else: :error
   end
 
   defp put_attr(attrs, params, key, parser) do

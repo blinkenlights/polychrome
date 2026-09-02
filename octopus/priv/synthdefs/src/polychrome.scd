@@ -47,10 +47,14 @@ SynthDef(\pc_drone, { |out = 0, freq = 110, amp = 0.2, dur = 8|
 // Sustained voice with a gate: started once, then steered by /n_set and let go
 // with gate 0. The amp lag is what makes a picture drive a voice without
 // zipper noise — probe values arrive at 30 fps, the ear wants a slope.
-SynthDef(\pc_voice, { |out = 0, freq = 220, amp = 0, cutoff = 2000, gate = 1|
+SynthDef(\pc_voice, { |out = 0, freq = 220, amp = 0, cutoff = 2000, gate = 1, dur = 0|
     var env = EnvGen.kr(Env.asr(1.5, 1, 2.5), gate, doneAction: 2);
     var sig = Saw.ar(freq) + Saw.ar(freq * 1.004) + SinOsc.ar(freq / 2, 0, 0.4);
     var filtered = RLPF.ar(sig, Lag.kr(cutoff, 0.5).clip(60, 12000), 0.5);
+    // A held voice is let go with gate 0. Fired as a one-shot it would never
+    // get one and would sing until the next panic, so a positive dur frees the
+    // node on its own: the safety net for a sustaining synth used as a note.
+    EnvGen.kr(Env.new([1, 1, 0], [dur, 0]), dur > 0, doneAction: 2);
     Out.ar(out, filtered * Lag.kr(amp, 0.25) * env * 0.25);
 }).writeDefFile(dir);
 
