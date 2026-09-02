@@ -123,6 +123,23 @@ defmodule Octopus.Sound.Pattern do
 
   def synths, do: @synths
 
+  @doc """
+  The place rules a slot can be given, with what each means.
+
+  Kept here rather than in the page so the studio and anything else naming
+  them agree on the list.
+  """
+  @spec channel_modes() :: [{atom(), String.t()}]
+  def channel_modes do
+    [
+      {:step, "aus dem Schritt"},
+      {:fixed, "festes Panel"},
+      {:follow_probe, "folgt Probe"},
+      {:all_panels, "alle Panels"},
+      {:rotate, "rotiert"}
+    ]
+  end
+
   @doc "Sounds that make sense for a trigger — see `@one_shot_synths`."
   @spec synths_for(atom()) :: [String.t()]
   def synths_for(:held), do: @held_synths
@@ -209,6 +226,21 @@ defmodule Octopus.Sound.Pattern do
       channel: %{mode: :all_panels}
     })
   end
+
+  @doc "Mutes or unmutes every slot at once."
+  @spec mute_all(t(), boolean()) :: t()
+  def mute_all(%__MODULE__{} = pattern, muted?) do
+    %{pattern | slots: Enum.map(pattern.slots, &%{&1 | muted?: muted?})}
+  end
+
+  @doc """
+  True when every slot is muted.
+
+  Empty slots count: the studio's one button has to read the truth of what it
+  did, and skipping them made it say "Alle stumm" on an already silent patch.
+  """
+  @spec all_muted?(t()) :: boolean()
+  def all_muted?(%__MODULE__{slots: slots}), do: Enum.all?(slots, & &1.muted?)
 
   @doc """
   Mutes every slot.

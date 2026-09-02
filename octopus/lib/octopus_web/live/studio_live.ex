@@ -120,6 +120,13 @@ defmodule OctopusWeb.StudioLive do
   def handle_event("add_chase", _params, socket), do: {:noreply, fill_slot(socket, :chase)}
   def handle_event("add_drone", _params, socket), do: {:noreply, fill_slot(socket, :drone)}
 
+  def handle_event("mute_all", _params, socket) do
+    all_muted? = Pattern.all_muted?(socket.assigns.pattern)
+    Patch.update(&Pattern.mute_all(&1, not all_muted?))
+
+    {:noreply, socket}
+  end
+
   def handle_event("select_slot", %{"slot" => slot}, socket) do
     {:noreply, assign(socket, selected_slot: String.to_integer(slot))}
   end
@@ -150,6 +157,7 @@ defmodule OctopusWeb.StudioLive do
       |> put_attr(params, "duration_ms", &parse_number/1)
       |> put_attr(params, "gain", &parse_number/1)
       |> put_gate(params)
+      |> put_place(params)
 
     if attrs != %{}, do: Patch.update(&Pattern.configure_slot(&1, slot_id, attrs))
     {:noreply, socket}
@@ -364,14 +372,32 @@ defmodule OctopusWeb.StudioLive do
       <div class="grid grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)_300px] gap-3 items-start">
         <.scene_card scene={@scene} />
 
-        <.stage
-          panels={@panels}
-          probes={@probes}
-          levels={@levels}
-          preview?={@preview?}
-          pattern={@pattern}
-          socket={@socket}
-        />
+        <div class="space-y-3 min-w-0">
+          <.stage
+            panels={@panels}
+            probes={@probes}
+            levels={@levels}
+            preview?={@preview?}
+            pattern={@pattern}
+            bindings={@bindings}
+            socket={@socket}
+          />
+
+          <.coupling
+            tab={@coupling_tab}
+            pattern={@pattern}
+            panels={@panels}
+            brush={@brush}
+            synths={@synths}
+            playhead={playhead(@position, @pattern)}
+            bindings={@bindings}
+            filter={@matrix_filter}
+            new_source={@new_source || default_source()}
+            new_target={@new_target || default_target()}
+            probes={@probes}
+            features={@features}
+          />
+        </div>
 
         <.sound_card
           pattern={@pattern}
@@ -383,21 +409,6 @@ defmodule OctopusWeb.StudioLive do
           selected_slot={@selected_slot}
         />
       </div>
-
-      <.coupling
-        tab={@coupling_tab}
-        pattern={@pattern}
-        panels={@panels}
-        brush={@brush}
-        synths={@synths}
-        playhead={playhead(@position, @pattern)}
-        bindings={@bindings}
-        filter={@matrix_filter}
-        new_source={@new_source || default_source()}
-        new_target={@new_target || default_target()}
-        probes={@probes}
-        features={@features}
-      />
     </div>
     """
   end
@@ -635,6 +646,7 @@ defmodule OctopusWeb.StudioLive do
   attr :levels, :map, required: true
   attr :preview?, :boolean, default: true
   attr :pattern, :map, required: true
+  attr :bindings, :list, required: true
   attr :socket, :map, required: true
 
   defp stage(assigns) do
@@ -676,7 +688,7 @@ defmodule OctopusWeb.StudioLive do
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_240px] gap-3">
-          <.coupling_note pattern={@pattern} />
+          <.coupling_note pattern={@pattern} bindings={@bindings} />
           <.ring_view panels={@panels} probes={@probes} levels={@levels} />
         </div>
       </div>
@@ -685,6 +697,7 @@ defmodule OctopusWeb.StudioLive do
   end
 
   attr :pattern, :map, required: true
+  attr :bindings, :list, required: true
 
   defp coupling_note(assigns) do
     ~H"""
@@ -696,8 +709,8 @@ defmodule OctopusWeb.StudioLive do
         Lesehilfe, keine Bedienung: welche Regel gerade Bild und Ton verbindet.
       </p>
       <dl class="text-[11px] font-mono space-y-1">
-        <div :for={{label, value} <- coupling_lines(@pattern)} class="flex gap-2">
-          <dt class="opacity-50 w-10 shrink-0">{label}</dt>
+        <div :for={{label, value} <- coupling_lines(@pattern, @bindings)} class="flex gap-2">
+          <dt class="opacity-50 w-24 shrink-0">{label}</dt>
           <dd class="opacity-80">{value}</dd>
         </div>
       </dl>
@@ -800,6 +813,13 @@ defmodule OctopusWeb.StudioLive do
       <div class="card-body p-3 gap-3">
         <div class="flex items-center gap-2">
           <h2 class="text-sm font-semibold uppercase tracking-wider text-info flex-1">Klang</h2>
+          <button
+            class={["btn btn-xs", Pattern.all_muted?(@pattern) && "btn-warning"]}
+            phx-click="mute_all"
+            title="Alle Slots stumm / wieder hörbar"
+          >
+            {if Pattern.all_muted?(@pattern), do: "Alle an", else: "Alle stumm"}
+          </button>
           <label class="flex items-center gap-1.5 cursor-pointer text-[11px] opacity-70">
             Metronom
             <input
@@ -876,21 +896,19 @@ defmodule OctopusWeb.StudioLive do
         </span>
         <span class="badge badge-xs">{voice_count(@slot, @panels)} St.</span>
         <button
-          class="btn btn-xs btn-ghost"
+          class={["btn btn-xs", @slot.muted? && "btn-warning", !@slot.muted? && "btn-ghost"]}
           phx-click="toggle_mute"
           phx-value-slot={@slot.id}
-          title="Stumm"
         >
-          {if @slot.muted?, do: "M", else: "m"}
+          {if @slot.muted?, do: "stumm", else: "hörbar"}
         </button>
         <button
-          :if={@slot.trigger.kind != :grid}
           class="btn btn-xs btn-ghost"
           phx-click="clear_instrument"
           phx-value-slot={@slot.id}
-          title="Slot leeren"
+          title="Slot auf leer zurücksetzen"
         >
-          ×
+          leeren
         </button>
       </div>
 
@@ -911,6 +929,47 @@ defmodule OctopusWeb.StudioLive do
             {synth}
           </option>
         </select>
+
+        <label class="block">
+          <span class="text-[10px] opacity-60">Ort</span>
+          <select name="mode" class="select select-bordered select-xs w-full">
+            <option
+              :for={{mode, label} <- Pattern.channel_modes()}
+              value={mode}
+              selected={mode == @slot.channel.mode}
+            >
+              {label}
+            </option>
+          </select>
+        </label>
+
+        <label :if={@slot.channel.mode == :fixed} class="block">
+          <span class="text-[10px] opacity-60">Panel {@slot.channel.panel}</span>
+          <input
+            type="range"
+            name="panel"
+            min="1"
+            max={@panels}
+            step="1"
+            value={@slot.channel.panel}
+            class="range range-xs"
+          />
+        </label>
+
+        <label :if={@slot.channel.mode == :rotate} class="block">
+          <span class="text-[10px] opacity-60">
+            Weiter um {@slot.channel.step} Panel je Auslösung
+          </span>
+          <input
+            type="range"
+            name="rotate_step"
+            min="1"
+            max={max(@panels - 1, 1)}
+            step="1"
+            value={@slot.channel.step}
+            class="range range-xs"
+          />
+        </label>
 
         <label class="block">
           <span class="text-[10px] opacity-60">Pegel {round(@slot.gain * 100)} %</span>
@@ -1365,17 +1424,29 @@ defmodule OctopusWeb.StudioLive do
     "gap: #{Float.round(gap / total * 100, 4)}%"
   end
 
-  defp coupling_lines(pattern) do
-    targets =
+  # Everything that connects picture and sound right now — the slots the
+  # picture sets off *and* the matrix rows. Listing only the slots would say
+  # "nichts aktiv" while a matrix row is quietly moving the scene.
+  defp coupling_lines(pattern, bindings) do
+    instruments =
       pattern
       |> instrument_slots()
       |> Enum.reject(& &1.muted?)
       |> Enum.map(&"#{&1.name} (#{instrument_kind(&1)}, #{place_label(&1)})")
 
+    rows =
+      bindings
+      |> Enum.filter(& &1.enabled?)
+      |> Enum.map(fn binding ->
+        "#{source_label(binding.source)} → #{target_label(binding.target)}"
+      end)
+
     [
-      {"von", "Probes 1…#{Installation.num_panels()} · Panelmitten"},
-      {"nach", if(targets == [], do: "— kein Instrument", else: Enum.join(targets, " · "))},
-      {"zeit", "80 ms Vorlauf · interpoliert zwischen zwei Frames"}
+      {"Bild → Klang",
+       if(instruments == [], do: "— kein Instrument am Bild", else: Enum.join(instruments, " · "))},
+      {"Matrix", if(rows == [], do: "— keine Zeile", else: Enum.join(rows, " · "))},
+      {"Messpunkte", "Probes 1…#{Installation.num_panels()} · Panelmitten, Formelwert −1…+1"},
+      {"Zeit", "80 ms Vorlauf · Nulldurchgang zwischen zwei Frames interpoliert"}
     ]
   end
 
@@ -1583,6 +1654,31 @@ defmodule OctopusWeb.StudioLive do
   end
 
   defp put_gate(attrs, _params), do: attrs
+
+  # The place rule and its one extra number travel together: a fixed place
+  # needs a panel, a rotating one needs how far it walks each time.
+  defp put_place(attrs, %{"mode" => mode} = params) do
+    known = Enum.map(Pattern.channel_modes(), fn {mode, _label} -> to_string(mode) end)
+
+    if mode in known do
+      Map.put(attrs, :channel, place(String.to_existing_atom(mode), params))
+    else
+      attrs
+    end
+  end
+
+  defp put_place(attrs, _params), do: attrs
+
+  defp place(:fixed, params), do: %{mode: :fixed, panel: number(params["panel"], 1)}
+  defp place(:rotate, params), do: %{mode: :rotate, step: number(params["rotate_step"], 1)}
+  defp place(mode, _params), do: %{mode: mode}
+
+  defp number(raw, fallback) do
+    case parse_number(raw || "") do
+      {:ok, value} -> max(round(value), 1)
+      :error -> fallback
+    end
+  end
 
   defp parse_number(raw) do
     case Float.parse(to_string(raw)) do
