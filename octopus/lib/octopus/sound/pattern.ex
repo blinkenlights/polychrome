@@ -55,6 +55,7 @@ defmodule Octopus.Sound.Pattern do
           note: integer(),
           duration_ms: pos_integer(),
           muted?: boolean(),
+          scale: [integer()],
           trigger: trigger(),
           channel: channel(),
           steps: %{non_neg_integer() => %{panel: pos_integer(), velocity: float()}}
@@ -70,6 +71,17 @@ defmodule Octopus.Sound.Pattern do
   # D dorian again, so slots stacked on top of each other still agree.
   @scale [62, 65, 69, 72, 64, 67, 71, 74]
   @synths ["pc_ping", "pc_pluck", "pc_click", "pc_drone", "pc_voice"]
+
+  # A slot sounds one pitch — its root — unless its place spreads it around the
+  # ring. Then the scale says what the panels sound: offsets from the root,
+  # wrapping into the next octave when the ring is longer than the scale. That
+  # is what makes a drone a chord and a chase a rising line, and it is the same
+  # mechanism for both.
+  @default_scale [0]
+  @dorian [0, 2, 3, 5, 7, 9, 10]
+  # A wide voicing, low to high — one drone voice per panel of a twelve panel
+  # ring without two panels landing on the same pitch.
+  @drone_voicing [0, 7, 12, 15, 19, 22, 24, 27, 31, 34, 36, 39]
 
   @default_trigger %{kind: :grid}
   @default_channel %{mode: :step}
@@ -93,6 +105,7 @@ defmodule Octopus.Sound.Pattern do
             note: Enum.at(@scale, rem(id - 1, length(@scale))),
             duration_ms: 300,
             muted?: false,
+            scale: @default_scale,
             trigger: @default_trigger,
             channel: @default_channel,
             steps: %{}
@@ -103,9 +116,86 @@ defmodule Octopus.Sound.Pattern do
 
   def synths, do: @synths
 
+  def dorian, do: @dorian
+  def drone_voicing, do: @drone_voicing
+
+  @doc """
+  Pitch a slot sounds on a given panel.
+
+  With the default single-step scale every panel gets the root, which is what a
+  slot placed by hand wants. A scale with more steps turns the ring into a
+  voicing, rising by an octave whenever it runs out — so no two panels of a
+  twelve panel ring share a pitch.
+  """
+  @spec pitch_for(slot(), pos_integer()) :: integer()
+  def pitch_for(%{note: root, scale: [_single]}, _panel), do: root
+
+  def pitch_for(%{note: root, scale: scale}, panel) when is_list(scale) and scale != [] do
+    index = panel - 1
+    size = length(scale)
+
+    # Rising by an octave past the end of the scale keeps two panels of a ring
+    # from landing on the same pitch. A scale of one step is the monophonic
+    # case — there the whole point is that every panel sounds the same.
+    root + Enum.at(scale, Integer.mod(index, size)) + 12 * div(index, size)
+  end
+
+  def pitch_for(%{note: root}, _panel), do: root
+
   def default_trigger, do: @default_trigger
   def default_channel, do: @default_channel
   def probe_trigger, do: @default_probe_trigger
+
+  @doc """
+  Turns a slot into a ring chase: set off by the picture, sounding where the
+  wave is, rising through the scale around the ring.
+
+  This is the one-click path from `docs/pixelfun-av/10-slot-modell.md` — it
+  fills a slot rather than starting something beside it, so what you hear is
+  always in the list and always saved.
+  """
+  @spec as_chase(t(), pos_integer(), keyword()) :: t()
+  def as_chase(%__MODULE__{} = pattern, slot_id, opts \\ []) do
+    configure_slot(pattern, slot_id, %{
+      name: Keyword.get(opts, :name, "Chase"),
+      synth: Keyword.get(opts, :synth, "pc_ping"),
+      note: Keyword.get(opts, :note, 62),
+      duration_ms: Keyword.get(opts, :duration_ms, 400),
+      scale: Keyword.get(opts, :scale, @dorian),
+      trigger: @default_probe_trigger,
+      channel: %{mode: :follow_probe}
+    })
+  end
+
+  @doc """
+  Turns a slot into a drone: one held voice per panel, its loudness following
+  the formula there, the panels together forming a chord.
+  """
+  @spec as_drone(t(), pos_integer(), keyword()) :: t()
+  def as_drone(%__MODULE__{} = pattern, slot_id, opts \\ []) do
+    configure_slot(pattern, slot_id, %{
+      name: Keyword.get(opts, :name, "Drone"),
+      synth: Keyword.get(opts, :synth, "pc_voice"),
+      note: Keyword.get(opts, :note, 38),
+      duration_ms: Keyword.get(opts, :duration_ms, 0),
+      scale: Keyword.get(opts, :scale, @drone_voicing),
+      trigger: %{kind: :held},
+      channel: %{mode: :all_panels}
+    })
+  end
+
+  @doc "The first slot with nothing on it, for the one-click presets."
+  @spec free_slot(t()) :: pos_integer() | nil
+  def free_slot(%__MODULE__{slots: slots}) do
+    case Enum.find(slots, &empty_slot?/1) do
+      nil -> nil
+      slot -> slot.id
+    end
+  end
+
+  @doc "A slot nobody has given anything to do."
+  @spec empty_slot?(slot()) :: boolean()
+  def empty_slot?(slot), do: slot.trigger.kind == :grid and slot.steps == %{}
 
   @doc "Slots the grid plays — the only ones `notes_for/2` answers with."
   @spec grid_slots(t()) :: [slot()]
@@ -207,7 +297,7 @@ defmodule Octopus.Sound.Pattern do
         channel <- channels_for(slot, cell.panel, absolute_step, panels) do
       %{
         channel: channel,
-        note: slot.note,
+        note: pitch_for(slot, channel),
         velocity: cell.velocity,
         duration_ms: slot.duration_ms,
         synth: slot.synth
@@ -250,6 +340,7 @@ defmodule Octopus.Sound.Pattern do
             "note" => slot.note,
             "duration_ms" => slot.duration_ms,
             "muted" => slot.muted?,
+            "scale" => slot.scale,
             "trigger" => stringify(slot.trigger),
             "channel" => stringify(slot.channel),
             "steps" =>
@@ -280,6 +371,7 @@ defmodule Octopus.Sound.Pattern do
       note: slot["note"],
       duration_ms: slot["duration_ms"],
       muted?: slot["muted"] == true,
+      scale: scale_from_map(slot["scale"]),
       trigger: trigger_from_map(slot["trigger"]),
       channel: channel_from_map(slot["channel"]),
       steps:
@@ -323,6 +415,9 @@ defmodule Octopus.Sound.Pattern do
   end
 
   defp trigger_from_map(_other), do: @default_trigger
+
+  defp scale_from_map(scale) when is_list(scale) and scale != [], do: scale
+  defp scale_from_map(_other), do: @default_scale
 
   defp channel_from_map(%{"mode" => mode} = channel) when is_map_key(@channel_modes, mode) do
     case Map.fetch!(@channel_modes, mode) do

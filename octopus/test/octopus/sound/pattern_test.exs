@@ -237,6 +237,72 @@ defmodule Octopus.Sound.PatternTest do
     end
   end
 
+  describe "pitch_for/2" do
+    test "a plain slot sounds its root wherever it is placed" do
+      slot = Pattern.new() |> Map.fetch!(:slots) |> hd()
+
+      assert Pattern.pitch_for(slot, 1) == slot.note
+      assert Pattern.pitch_for(slot, 7) == slot.note
+    end
+
+    test "a scale turns the ring into a voicing" do
+      slot = %{note: 62, scale: [0, 2, 3]}
+
+      assert Pattern.pitch_for(slot, 1) == 62
+      assert Pattern.pitch_for(slot, 2) == 64
+      assert Pattern.pitch_for(slot, 3) == 65
+      # Past the end of the scale it rises by an octave rather than repeating.
+      assert Pattern.pitch_for(slot, 4) == 74
+    end
+
+    test "twelve panels get twelve pitches with the drone voicing" do
+      slot = %{note: 38, scale: Pattern.drone_voicing()}
+      pitches = Enum.map(1..12, &Pattern.pitch_for(slot, &1))
+
+      assert length(Enum.uniq(pitches)) == 12
+    end
+  end
+
+  describe "presets" do
+    test "as_chase makes a slot the picture sets off, where the wave is" do
+      pattern = Pattern.new() |> Pattern.as_chase(1)
+      slot = hd(pattern.slots)
+
+      assert slot.trigger.kind == :probe
+      assert slot.channel == %{mode: :follow_probe}
+      assert [^slot] = Pattern.probe_slots(pattern)
+      # It stays out of the grid's way.
+      assert Pattern.notes_for(pattern, 0) == []
+    end
+
+    test "as_drone makes a held slot on every panel" do
+      pattern = Pattern.new() |> Pattern.as_drone(2)
+      slot = Enum.at(pattern.slots, 1)
+
+      assert slot.trigger == %{kind: :held}
+      assert slot.channel == %{mode: :all_panels}
+      assert Pattern.channels_for(slot, 1, 0, 12) == Enum.to_list(1..12)
+      assert [^slot] = Pattern.held_slots(pattern)
+    end
+
+    test "two chases side by side — the thing that was impossible before" do
+      pattern =
+        Pattern.new()
+        |> Pattern.as_chase(1, synth: "pc_ping", note: 62)
+        |> Pattern.as_chase(2, synth: "pc_pluck", note: 38, duration_ms: 1500)
+
+      assert [first, second] = Pattern.probe_slots(pattern)
+      assert first.synth == "pc_ping"
+      assert second.synth == "pc_pluck"
+    end
+
+    test "free_slot finds the first one with nothing to do" do
+      pattern = Pattern.new() |> Pattern.as_chase(1) |> Pattern.put_step(2, 0, 1)
+
+      assert Pattern.free_slot(pattern) == 3
+    end
+  end
+
   describe "max_panel/1" do
     test "reports the highest panel in use" do
       pattern =
