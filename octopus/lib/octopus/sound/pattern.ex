@@ -320,6 +320,7 @@ defmodule Octopus.Sound.Pattern do
         cell != nil,
         channel <- channels_for(slot, cell.panel, absolute_step, panels) do
       %{
+        slot: slot.id,
         channel: channel,
         note: pitch_for(slot, channel),
         velocity: cell.velocity * slot.gain,

@@ -62,6 +62,8 @@ defmodule OctopusWeb.StudioLive do
        # would keep the throttle below its own threshold forever.
        probes_at: System.monotonic_time(:millisecond) - @probe_interval_ms,
        levels: %{},
+       slot_levels: %{},
+       selected_slot: 1,
        position:
          safe(&Clock.position/0, %{bar: 1, beat: 1, step: 1, bpm: 120.0, playing?: false}),
        engine: safe(&Sound.engine/0, nil),
@@ -117,6 +119,10 @@ defmodule OctopusWeb.StudioLive do
   # hear is then always in the list, and always saved with the composition.
   def handle_event("add_chase", _params, socket), do: {:noreply, fill_slot(socket, :chase)}
   def handle_event("add_drone", _params, socket), do: {:noreply, fill_slot(socket, :drone)}
+
+  def handle_event("select_slot", %{"slot" => slot}, socket) do
+    {:noreply, assign(socket, selected_slot: String.to_integer(slot))}
+  end
 
   def handle_event("clear_instrument", %{"slot" => slot}, socket) do
     slot_id = String.to_integer(slot)
@@ -307,9 +313,16 @@ defmodule OctopusWeb.StudioLive do
     end
   end
 
-  def handle_info({:sound_note, %{channel: channel, velocity: velocity}}, socket) do
+  def handle_info({:sound_note, %{channel: channel, velocity: velocity} = note}, socket) do
     levels = Map.update(socket.assigns.levels, channel, velocity, &max(&1, velocity))
-    {:noreply, assign(socket, levels: levels)}
+
+    slot_levels =
+      case note[:slot] do
+        nil -> socket.assigns.slot_levels
+        slot -> Map.update(socket.assigns.slot_levels, slot, velocity, &max(&1, velocity))
+      end
+
+    {:noreply, assign(socket, levels: levels, slot_levels: slot_levels)}
   end
 
   def handle_info({:sound_patch, %{pattern: pattern, slot: slot}}, socket) do
@@ -328,6 +341,7 @@ defmodule OctopusWeb.StudioLive do
     {:noreply,
      socket
      |> assign(levels: decay(socket.assigns.levels))
+     |> assign(slot_levels: decay(socket.assigns.slot_levels))
      |> assign(scene: scene())}
   end
 
@@ -365,6 +379,8 @@ defmodule OctopusWeb.StudioLive do
           metronome?={@metronome?}
           synths={@synths}
           scene={@scene}
+          slot_levels={@slot_levels}
+          selected_slot={@selected_slot}
         />
       </div>
 
@@ -530,16 +546,33 @@ defmodule OctopusWeb.StudioLive do
                   </button>
                 </div>
               </th>
-              <td :for={step <- 0..(@pattern.steps - 1)}>
-                <button
-                  class={cell_class(Map.get(slot.steps, step), step == @playhead, rem(step, 4) == 0)}
-                  phx-click="cell"
-                  phx-value-slot={slot.id}
-                  phx-value-step={step}
-                >
-                  {cell_label(Map.get(slot.steps, step))}
-                </button>
-              </td>
+              <%= if slot.trigger.kind == :grid do %>
+                <td :for={step <- 0..(@pattern.steps - 1)}>
+                  <button
+                    class={
+                      cell_class(Map.get(slot.steps, step), step == @playhead, rem(step, 4) == 0)
+                    }
+                    phx-click="cell"
+                    phx-value-slot={slot.id}
+                    phx-value-step={step}
+                  >
+                    {cell_label(Map.get(slot.steps, step))}
+                  </button>
+                </td>
+              <% else %>
+                <%!-- A slot the grid does not play has no steps to show, but it
+                      is still one of the eight — so it keeps its row and says
+                      what sets it off instead. --%>
+                <td colspan={@pattern.steps}>
+                  <div class={[
+                    "h-[22px] rounded flex items-center px-2 text-[10px] uppercase tracking-wider",
+                    slot.trigger.kind == :held && "bg-info/25 text-info",
+                    slot.trigger.kind == :probe && "bg-warning/25 text-warning"
+                  ]}>
+                    {instrument_kind(slot)} · {place_label(slot)}
+                  </div>
+                </td>
+              <% end %>
             </tr>
           </tbody>
         </table>
@@ -754,116 +787,164 @@ defmodule OctopusWeb.StudioLive do
   attr :metronome?, :boolean, required: true
   attr :synths, :list, required: true
   attr :scene, :map, default: nil
+  attr :slot_levels, :map, required: true
+  attr :selected_slot, :integer, required: true
 
   defp sound_card(assigns) do
     ~H"""
     <div class="card bg-base-200 border border-base-300">
       <div class="card-body p-3 gap-3">
-        <h2 class="text-sm font-semibold uppercase tracking-wider text-info">Klang</h2>
-
-        <label class="flex items-center justify-between gap-2 cursor-pointer">
-          <span class="text-sm">Metronom</span>
-          <input
-            type="checkbox"
-            class="toggle toggle-sm"
-            checked={@metronome?}
-            phx-click="toggle_metronome"
-          />
-        </label>
+        <div class="flex items-center gap-2">
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-info flex-1">Klang</h2>
+          <label class="flex items-center gap-1.5 cursor-pointer text-[11px] opacity-70">
+            Metronom
+            <input
+              type="checkbox"
+              class="toggle toggle-xs"
+              checked={@metronome?}
+              phx-click="toggle_metronome"
+            />
+          </label>
+        </div>
 
         <div class="flex gap-2">
           <button class="btn btn-xs flex-1" phx-click="add_chase">＋ Ring-Chase</button>
           <button class="btn btn-xs flex-1" phx-click="add_drone">＋ Drone</button>
         </div>
-        <p class="text-[11px] opacity-60 -mt-1">
-          Beide füllen einen freien Slot. Danach sind sie Slots wie jeder andere —
-          stummschalten, ändern und speichern inbegriffen.
-        </p>
 
         <div
           :if={@scene && @scene.moving != []}
           class="text-[11px] rounded bg-warning/15 border border-warning/40 p-2 leading-snug"
         >
           <b>{Enum.join(@scene.moving, ", ")}</b> aktiv. Das dreht den Ring unter der
-          Formel, also wird ein vom Bild ausgelöster Slot schneller und langsamer —
-          er folgt dem Bild. Für gleichmäßiges Tempo im Foyer abschalten.
+          Formel, also wird ein vom Bild ausgelöster Slot schneller und langsamer.
+          Für gleichmäßiges Tempo im Foyer abschalten.
         </div>
 
-        <div :if={instrument_slots(@pattern) == []} class="text-[11px] opacity-60">
-          Noch kein Instrument. Der Rest der acht Slots wird vom Grid gespielt.
+        <div class="space-y-1">
+          <button
+            :for={slot <- @pattern.slots}
+            class={[
+              "w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left",
+              slot.id == @selected_slot && "bg-base-300 ring-1 ring-info/40",
+              slot.id != @selected_slot && "hover:bg-base-300/50",
+              slot.muted? && "opacity-40"
+            ]}
+            phx-click="select_slot"
+            phx-value-slot={slot.id}
+          >
+            <span class="font-mono text-[10px] opacity-40 w-3">{slot.id}</span>
+            <span class="text-sm flex-1 truncate">{slot_title(slot)}</span>
+            <span class="text-[9px] uppercase tracking-wider opacity-50">
+              {slot_kind_label(slot)}
+            </span>
+            <span class="w-8 h-1 bg-base-100 rounded overflow-hidden shrink-0">
+              <span
+                class="block h-full bg-info"
+                style={"width: #{round(Map.get(@slot_levels, slot.id, 0.0) * 100)}%"}
+              />
+            </span>
+          </button>
         </div>
 
-        <div :for={slot <- instrument_slots(@pattern)} class="rounded-lg bg-base-300/40 p-2 space-y-2">
-          <div class="flex items-center gap-2">
-            <span class="font-mono text-[10px] opacity-50">{slot.id}</span>
-            <span class="text-sm font-medium flex-1">{slot.name}</span>
-            <span class="badge badge-xs">{voice_count(slot, @panels)} St.</span>
-            <button
-              class="btn btn-xs btn-ghost"
-              phx-click="clear_instrument"
-              phx-value-slot={slot.id}
-              title="Slot leeren"
-            >
-              ×
-            </button>
-          </div>
-          <div class="text-[10px] uppercase tracking-wider opacity-50">
-            {instrument_kind(slot)} · {place_label(slot)}
-          </div>
-
-          <form phx-change="instrument_param" class="space-y-1.5">
-            <input type="hidden" name="slot" value={slot.id} />
-            <input type="hidden" name="kind" value={slot.trigger.kind} />
-
-            <select name="synth" class="select select-bordered select-xs w-full">
-              <option :for={synth <- @synths} value={synth} selected={synth == slot.synth}>
-                {synth}
-              </option>
-            </select>
-
-            <label class="block">
-              <span class="text-[10px] opacity-60">Pegel {round(slot.gain * 100)} %</span>
-              <input
-                type="range"
-                name="gain"
-                min="0"
-                max="1.2"
-                step="0.05"
-                value={slot.gain}
-                class="range range-xs"
-              />
-            </label>
-
-            <label :if={slot.trigger.kind == :probe} class="block">
-              <span class="text-[10px] opacity-60">Länge {round(slot.duration_ms)} ms</span>
-              <input
-                type="range"
-                name="duration_ms"
-                min="40"
-                max="2000"
-                step="20"
-                value={slot.duration_ms}
-                class="range range-xs"
-              />
-            </label>
-
-            <label :if={slot.trigger.kind == :probe} class="block">
-              <span class="text-[10px] opacity-60">
-                Mindeststeilheit {:erlang.float_to_binary(slot.trigger.min_rise * 1.0, decimals: 4)}
-              </span>
-              <input
-                type="range"
-                name="min_rise"
-                min="0.0005"
-                max="0.05"
-                step="0.0005"
-                value={slot.trigger.min_rise}
-                class="range range-xs"
-              />
-            </label>
-          </form>
-        </div>
+        <.slot_detail
+          slot={Enum.find(@pattern.slots, &(&1.id == @selected_slot))}
+          panels={@panels}
+          synths={@synths}
+        />
       </div>
+    </div>
+    """
+  end
+
+  attr :slot, :map, default: nil
+  attr :panels, :integer, required: true
+  attr :synths, :list, required: true
+
+  defp slot_detail(%{slot: nil} = assigns), do: ~H""
+
+  defp slot_detail(assigns) do
+    ~H"""
+    <div class="rounded-lg bg-base-300/40 p-2 space-y-2">
+      <div class="flex items-center gap-2">
+        <span class="text-[10px] uppercase tracking-wider opacity-60 flex-1">
+          Slot {@slot.id} · {slot_title(@slot)}
+        </span>
+        <span class="badge badge-xs">{voice_count(@slot, @panels)} St.</span>
+        <button
+          class="btn btn-xs btn-ghost"
+          phx-click="toggle_mute"
+          phx-value-slot={@slot.id}
+          title="Stumm"
+        >
+          {if @slot.muted?, do: "M", else: "m"}
+        </button>
+        <button
+          :if={@slot.trigger.kind != :grid}
+          class="btn btn-xs btn-ghost"
+          phx-click="clear_instrument"
+          phx-value-slot={@slot.id}
+          title="Slot leeren"
+        >
+          ×
+        </button>
+      </div>
+
+      <div class="text-[10px] uppercase tracking-wider opacity-50">
+        {instrument_kind(@slot)} · {place_label(@slot)}
+      </div>
+
+      <form phx-change="instrument_param" class="space-y-1.5">
+        <input type="hidden" name="slot" value={@slot.id} />
+        <input type="hidden" name="kind" value={@slot.trigger.kind} />
+
+        <select name="synth" class="select select-bordered select-xs w-full">
+          <option :for={synth <- @synths} value={synth} selected={synth == @slot.synth}>
+            {synth}
+          </option>
+        </select>
+
+        <label class="block">
+          <span class="text-[10px] opacity-60">Pegel {round(@slot.gain * 100)} %</span>
+          <input
+            type="range"
+            name="gain"
+            min="0"
+            max="1.2"
+            step="0.05"
+            value={@slot.gain}
+            class="range range-xs"
+          />
+        </label>
+
+        <label class="block">
+          <span class="text-[10px] opacity-60">Länge {round(@slot.duration_ms)} ms</span>
+          <input
+            type="range"
+            name="duration_ms"
+            min="40"
+            max="4000"
+            step="20"
+            value={@slot.duration_ms}
+            class="range range-xs"
+          />
+        </label>
+
+        <label :if={@slot.trigger.kind == :probe} class="block">
+          <span class="text-[10px] opacity-60">
+            Mindeststeilheit {:erlang.float_to_binary(@slot.trigger.min_rise * 1.0, decimals: 4)}
+          </span>
+          <input
+            type="range"
+            name="min_rise"
+            min="0.0005"
+            max="0.05"
+            step="0.0005"
+            value={@slot.trigger.min_rise}
+            class="range range-xs"
+          />
+        </label>
+      </form>
     </div>
     """
   end
@@ -1358,6 +1439,19 @@ defmodule OctopusWeb.StudioLive do
 
   defp instrument_slots(pattern) do
     Enum.filter(pattern.slots, &(&1.trigger.kind != :grid))
+  end
+
+  defp slot_title(slot) do
+    if Pattern.empty_slot?(slot), do: "—", else: slot.name
+  end
+
+  defp slot_kind_label(slot) do
+    cond do
+      Pattern.empty_slot?(slot) -> "leer"
+      slot.trigger.kind == :probe -> "Bild"
+      slot.trigger.kind == :held -> "gehalten"
+      true -> "Grid"
+    end
   end
 
   defp instrument_kind(%{trigger: %{kind: :probe}}), do: "vom Bild ausgelöst"

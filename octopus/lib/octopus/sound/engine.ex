@@ -48,6 +48,9 @@ defmodule Octopus.Sound.Engine do
   @callback panic() :: :ok
 
   @default_note %{
+    # Which slot a note came from, so meters and the studio can tell them
+    # apart. Nil for notes played by hand from IEx.
+    slot: nil,
     channel: 1,
     note: 69,
     velocity: 0.8,

@@ -140,6 +140,7 @@ defmodule Octopus.Sound.Trigger.Probe do
 
       for channel <- Pattern.channels_for(slot, panel, count, panels) do
         Engine.note(%{
+          slot: slot.id,
           channel: channel,
           note: Pattern.pitch_for(slot, channel),
           velocity: velocity(rise, slot.gain),
