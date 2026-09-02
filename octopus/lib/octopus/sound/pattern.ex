@@ -24,14 +24,30 @@ defmodule Octopus.Sound.Pattern do
   @typedoc """
   What makes a slot sound.
 
-  `:grid` follows the steps, `:probe` fires when the formula rises through zero
-  at a panel, `:held` sounds continuously with its loudness modulated. Probe
-  triggers carry their own gate settings — the steepness a crossing needs is a
-  property of the trigger, not of the sound.
+  `:grid` follows the steps, `:held` sounds continuously with its loudness
+  modulated, and `:probe` fires when a measured quantity at a panel rises
+  through a level.
+
+  Which quantity matters more than it looks. Pixel Fun paints a panel with
+  brightness `|value|` — black at zero, brightest at ±1 — so a trigger on the
+  **value** crossing zero fires exactly when the panel is *dark*, a quarter
+  wave away from the bright band the eye is following. That reads as random
+  however precise the timing is. `:brightness` crossing a level fires as the
+  band arrives, which is the moment a person sees.
+
+  The gate settings belong here too: how steep a crossing must be, and how
+  soon a panel may fire again, are properties of the trigger and not of the
+  sound.
   """
   @type trigger ::
           %{kind: :grid}
-          | %{kind: :probe, min_rise: float(), min_interval_ms: non_neg_integer()}
+          | %{
+              kind: :probe,
+              quantity: :brightness | :value,
+              level: float(),
+              min_rise: float(),
+              min_interval_ms: non_neg_integer()
+            }
           | %{kind: :held}
 
   @typedoc """
@@ -93,7 +109,16 @@ defmodule Octopus.Sound.Pattern do
   @default_channel %{mode: :step}
   # Same numbers the ring chase used when it was an instrument of its own, so a
   # slot set up as a chase behaves exactly as before.
-  @default_probe_trigger %{kind: :probe, min_rise: 0.002, min_interval_ms: 60}
+  # Brightness at a bit over half: high enough that only a real band sets it
+  # off, low enough that it fires as the band arrives rather than at its peak,
+  # where a note would already feel late.
+  @default_probe_trigger %{
+    kind: :probe,
+    quantity: :brightness,
+    level: 0.55,
+    min_rise: 0.002,
+    min_interval_ms: 60
+  }
 
   @spec new(keyword()) :: t()
   def new(opts \\ []) do
@@ -157,6 +182,52 @@ defmodule Octopus.Sound.Pattern do
     if synth in allowed, do: synth, else: hd(allowed)
   end
 
+  @doc """
+  Named pitch sets a slot can be given.
+
+  A "scale" here is simply an ordered list of semitone offsets from the root,
+  which is general enough to hold a mode, a pentatonic, or a wide voicing that
+  is no scale at all. Naming them is convenience; the mechanism underneath is
+  the list.
+  """
+  @spec scales() :: [{String.t(), [integer()]}]
+  def scales do
+    [
+      {"Einzelton", [0]},
+      {"Ionisch (Dur)", [0, 2, 4, 5, 7, 9, 11]},
+      {"Dorisch", @dorian},
+      {"Phrygisch", [0, 1, 3, 5, 7, 8, 10]},
+      {"Lydisch", [0, 2, 4, 6, 7, 9, 11]},
+      {"Mixolydisch", [0, 2, 4, 5, 7, 9, 10]},
+      {"Äolisch (Moll)", [0, 2, 3, 5, 7, 8, 10]},
+      {"Lokrisch", [0, 1, 3, 5, 6, 8, 10]},
+      {"Dur-Pentatonik", [0, 2, 4, 7, 9]},
+      {"Moll-Pentatonik", [0, 3, 5, 7, 10]},
+      {"Blues", [0, 3, 5, 6, 7, 10]},
+      {"Harmonisch Moll", [0, 2, 3, 5, 7, 8, 11]},
+      {"Ganzton", [0, 2, 4, 6, 8, 10]},
+      {"Chromatisch", Enum.to_list(0..11)},
+      {"Quarten (weit)", [0, 5, 10, 15, 20, 25]},
+      {"Drone-Lage (weit)", @drone_voicing}
+    ]
+  end
+
+  @doc ~S(The name of a pitch set, or "eigene" when it matches none of them.)
+  @spec scale_name([integer()]) :: String.t()
+  def scale_name(scale) do
+    Enum.find_value(scales(), "eigene", fn {name, offsets} ->
+      if offsets == scale, do: name
+    end)
+  end
+
+  @note_names ~w(C C♯ D D♯ E F F♯ G G♯ A A♯ H)
+
+  @doc "MIDI note as a name with its octave, for the studio."
+  @spec note_name(integer()) :: String.t()
+  def note_name(note) do
+    "#{Enum.at(@note_names, Integer.mod(note, 12))}#{div(note, 12) - 1}"
+  end
+
   def dorian, do: @dorian
   def drone_voicing, do: @drone_voicing
 
@@ -187,6 +258,25 @@ defmodule Octopus.Sound.Pattern do
   def default_channel, do: @default_channel
   def probe_trigger, do: @default_probe_trigger
 
+  @doc "What a probe trigger can watch, and what a person sees of it."
+  @spec probe_quantities() :: [{atom(), String.t()}]
+  def probe_quantities do
+    [
+      {:brightness, "Helligkeit — feuert, wenn das Panel aufleuchtet"},
+      {:value, "Formelwert — feuert am Nulldurchgang, also im Dunkeln"}
+    ]
+  end
+
+  @doc """
+  The quantity a probe trigger watches, from a raw reading.
+
+  Brightness is what the wall shows: the picture paints `|value|`, so both
+  halves of a wave are a visible band.
+  """
+  @spec measure(atom(), float()) :: float()
+  def measure(:brightness, value), do: abs(value)
+  def measure(_quantity, value), do: value
+
   @doc """
   Turns a slot into a ring chase: set off by the picture, sounding where the
   wave is, rising through the scale around the ring.
@@ -204,7 +294,7 @@ defmodule Octopus.Sound.Pattern do
       duration_ms: Keyword.get(opts, :duration_ms, 400),
       gain: Keyword.get(opts, :gain, 0.7),
       scale: Keyword.get(opts, :scale, @dorian),
-      trigger: @default_probe_trigger,
+      trigger: Map.merge(@default_probe_trigger, Map.new(Keyword.get(opts, :trigger, []))),
       channel: %{mode: :follow_probe}
     })
   end
@@ -486,8 +576,12 @@ defmodule Octopus.Sound.Pattern do
   defp trigger_from_map(%{"kind" => kind} = trigger) when is_map_key(@trigger_kinds, kind) do
     case Map.fetch!(@trigger_kinds, kind) do
       :probe ->
+        # A composition saved before the trigger could choose what to watch
+        # kept firing on the value crossing zero, so that is what it reads as.
         %{
           kind: :probe,
+          quantity: quantity_from_map(trigger["quantity"]),
+          level: trigger["level"] || 0.0,
           min_rise: trigger["min_rise"] || @default_probe_trigger.min_rise,
           min_interval_ms: trigger["min_interval_ms"] || @default_probe_trigger.min_interval_ms
         }
@@ -498,6 +592,9 @@ defmodule Octopus.Sound.Pattern do
   end
 
   defp trigger_from_map(_other), do: @default_trigger
+
+  defp quantity_from_map("brightness"), do: :brightness
+  defp quantity_from_map(_other), do: :value
 
   defp scale_from_map(scale) when is_list(scale) and scale != [], do: scale
   defp scale_from_map(_other), do: @default_scale

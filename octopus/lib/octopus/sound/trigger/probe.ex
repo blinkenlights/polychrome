@@ -1,17 +1,24 @@
 defmodule Octopus.Sound.Trigger.Probe do
   @moduledoc """
-  Slots the picture sets off: a note whenever the formula rises through zero.
+  Slots the picture sets off: a note whenever what is measured at a panel
+  rises through a level.
 
   A wave running around the ring passes each panel in turn, and each passing
   sounds the slot on the speaker under it. You hear the picture travel, at the
   same speed and in the same direction, because both come from one function.
 
-  Two things this had to learn the hard way. The gate is the **steepness** of
-  the crossing, not the value at it — the value at a crossing is always near
-  zero, so a height threshold silences everything at 30 fps. And the crossing
-  time is interpolated between the two frames it was seen in and the note
-  scheduled a constant step ahead: firing on arrival puts a frame of jitter
-  straight into the rhythm.
+  Three things this had to learn the hard way. **What** is measured decides
+  whether a person perceives the coupling at all: the picture paints
+  brightness `|value|`, so firing on the value crossing zero puts every note
+  in the dark gap between two bright bands — precise, and indistinguishable
+  from random to someone sitting in front of it. Brightness rising through a
+  level fires as the band arrives.
+
+  The gate is the **steepness** of the crossing, not the height at it — at a
+  crossing the measured quantity is by definition at the level, so a height
+  test says nothing. And the crossing time is interpolated between the two
+  frames it was seen in and the note scheduled a constant step ahead: firing
+  on arrival puts a frame of jitter straight into the rhythm.
 
   Several slots can listen at once, each with its own sound, gate and place —
   a deep pulse and a shimmer over it, from the same wave.
@@ -37,21 +44,25 @@ defmodule Octopus.Sound.Trigger.Probe do
   def set_latency(ms) when is_integer(ms), do: GenServer.call(__MODULE__, {:latency, ms})
 
   @doc """
-  Panels whose value rose through zero between two frames, with how steeply.
+  Panels where the measured quantity rose through `level`, with how steeply.
 
-  Rising edges only: a falling edge is the same wave leaving, and sounding it
+  Rising edges only: a falling edge is the same band leaving, and sounding it
   would double every pass. Returns `{panel_index, rise}` pairs, because the
   steepness is also what the note is played with.
   """
-  @spec crossings([float()], [float()], float()) :: [{non_neg_integer(), float()}]
-  def crossings(previous, current, min_rise) do
+  @spec crossings([float()], [float()], atom(), float(), float()) ::
+          [{non_neg_integer(), float()}]
+  def crossings(previous, current, quantity, level, min_rise) do
     previous
     |> Enum.zip(current)
     |> Enum.with_index()
-    |> Enum.filter(fn {{before, now}, _index} ->
-      before <= 0.0 and now > 0.0 and now - before >= min_rise
+    |> Enum.map(fn {{before, now}, index} ->
+      {index, Pattern.measure(quantity, before), Pattern.measure(quantity, now)}
     end)
-    |> Enum.map(fn {{before, now}, index} -> {index, now - before} end)
+    |> Enum.filter(fn {_index, before, now} ->
+      before <= level and now > level and now - before >= min_rise
+    end)
+    |> Enum.map(fn {index, before, now} -> {index, now - before} end)
   end
 
   @doc """
@@ -119,7 +130,12 @@ defmodule Octopus.Sound.Trigger.Probe do
 
     Enum.reduce(state.slots, state, fn slot, state ->
       state.previous
-      |> crossings(values, slot.trigger.min_rise)
+      |> crossings(
+        values,
+        slot.trigger.quantity,
+        slot.trigger.level,
+        slot.trigger.min_rise
+      )
       |> Enum.reduce(state, fn {index, rise}, state ->
         play(state, slot, index, rise, values, at_ms, panels)
       end)
@@ -134,8 +150,12 @@ defmodule Octopus.Sound.Trigger.Probe do
       state
     else
       panel = index + 1
-      before = Enum.at(state.previous, index)
-      now = Enum.at(values, index)
+      quantity = slot.trigger.quantity
+      level = slot.trigger.level
+      # The interpolation works on the same quantity the crossing was found
+      # in, shifted so the level sits at zero.
+      before = Pattern.measure(quantity, Enum.at(state.previous, index)) - level
+      now = Pattern.measure(quantity, Enum.at(values, index)) - level
       count = Map.get(state.fired, {:count, slot.id}, 0)
 
       for channel <- Pattern.channels_for(slot, panel, count, panels) do

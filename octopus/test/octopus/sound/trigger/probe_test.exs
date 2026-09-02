@@ -4,26 +4,48 @@ defmodule Octopus.Sound.Trigger.ProbeTest do
   alias Octopus.Sound.{Engine, Patch, Pattern, Time}
   alias Octopus.Sound.Trigger.Probe
 
-  describe "crossings/3" do
+  describe "crossings on the value" do
+    defp value_crossings(previous, current, min_rise) do
+      Probe.crossings(previous, current, :value, 0.0, min_rise)
+    end
+
     test "reports panels whose value rose through zero, and how steeply" do
-      assert [{0, rise}] = Probe.crossings([-0.5, 0.4, -0.9], [0.6, 0.7, -0.2], 0.01)
+      assert [{0, rise}] = value_crossings([-0.5, 0.4, -0.9], [0.6, 0.7, -0.2], 0.01)
       assert_in_delta rise, 1.1, 1.0e-6
     end
 
     test "ignores falling edges — that is the same wave leaving" do
-      assert Probe.crossings([0.6, 0.2], [-0.4, -0.1], 0.01) == []
+      assert value_crossings([0.6, 0.2], [-0.4, -0.1], 0.01) == []
     end
 
     test "a crossing is gated on steepness, not on height" do
-      # The value at a crossing is always near zero; a slow wave barely moves
-      # between two frames, a fast one moves a lot.
-      assert Probe.crossings([-0.001], [0.001], 0.01) == []
-      assert [{0, _}] = Probe.crossings([-0.03], [0.03], 0.01)
+      # At a crossing the quantity is by definition at the level, so a slow
+      # wave barely moves between two frames and a fast one moves a lot.
+      assert value_crossings([-0.001], [0.001], 0.01) == []
+      assert [{0, _}] = value_crossings([-0.03], [0.03], 0.01)
     end
 
     test "treats an exact zero as below the crossing, not on it" do
-      assert [{0, _}] = Probe.crossings([0.0], [0.9], 0.01)
-      assert Probe.crossings([-0.9], [0.0], 0.01) == []
+      assert [{0, _}] = value_crossings([0.0], [0.9], 0.01)
+      assert value_crossings([-0.9], [0.0], 0.01) == []
+    end
+  end
+
+  describe "crossings on brightness" do
+    # What the wall actually shows: the picture paints |value|, so both halves
+    # of a wave are a visible band and both should sound.
+    test "fires when the panel lights up, on either half of the wave" do
+      assert [{0, _}] = Probe.crossings([0.3], [0.7], :brightness, 0.55, 0.01)
+      assert [{0, _}] = Probe.crossings([-0.3], [-0.7], :brightness, 0.55, 0.01)
+    end
+
+    test "stays quiet while the panel is dark, however fast it moves there" do
+      # The value races through zero, but the panel is black the whole time.
+      assert Probe.crossings([-0.2], [0.2], :brightness, 0.55, 0.01) == []
+    end
+
+    test "does not fire again as the band leaves" do
+      assert Probe.crossings([0.7], [0.3], :brightness, 0.55, 0.01) == []
     end
   end
 
@@ -54,7 +76,9 @@ defmodule Octopus.Sound.Trigger.ProbeTest do
 
       start_supervised!(Patch)
       probe = start_supervised!({Probe, latency_ms: 0})
-      Patch.update(&Pattern.as_chase(&1, 1))
+      # The tests below feed values directly, so they watch the value crossing
+      # zero rather than brightness.
+      Patch.update(&Pattern.as_chase(&1, 1, trigger: [quantity: :value, level: 0.0]))
       _ = :sys.get_state(probe)
 
       %{probe: probe}
@@ -103,7 +127,14 @@ defmodule Octopus.Sound.Trigger.ProbeTest do
     end
 
     test "two chases sound side by side — impossible before slots", %{probe: probe} do
-      Patch.update(&Pattern.as_chase(&1, 2, synth: "pc_pluck", note: 38))
+      Patch.update(
+        &Pattern.as_chase(&1, 2,
+          synth: "pc_pluck",
+          note: 38,
+          trigger: [quantity: :value, level: 0.0]
+        )
+      )
+
       _ = :sys.get_state(probe)
 
       reading(probe, [-0.5])
@@ -122,7 +153,13 @@ defmodule Octopus.Sound.Trigger.ProbeTest do
       Patch.update(
         &Pattern.configure_slot(&1, 2, %{
           synth: "pc_pluck",
-          trigger: %{kind: :probe, min_rise: 0.9, min_interval_ms: 0},
+          trigger: %{
+            kind: :probe,
+            quantity: :value,
+            level: 0.0,
+            min_rise: 0.9,
+            min_interval_ms: 0
+          },
           channel: %{mode: :follow_probe}
         })
       )

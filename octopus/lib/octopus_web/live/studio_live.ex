@@ -156,6 +156,8 @@ defmodule OctopusWeb.StudioLive do
       |> put_attr(params, "synth", &synth_option(params, &1))
       |> put_attr(params, "duration_ms", &parse_number/1)
       |> put_attr(params, "gain", &parse_number/1)
+      |> put_attr(params, "note", &parse_integer/1)
+      |> put_scale(params)
       |> put_gate(params)
       |> put_place(params)
 
@@ -551,11 +553,12 @@ defmodule OctopusWeb.StudioLive do
                       </option>
                     </select>
                   </form>
+                  <%!-- One place to empty a slot, whatever it had become. --%>
                   <button
                     class="btn btn-xs btn-ghost"
-                    phx-click="clear_slot"
+                    phx-click="clear_instrument"
                     phx-value-slot={slot.id}
-                    title="Zeile leeren"
+                    title="Slot leeren"
                   >
                     ⌫
                   </button>
@@ -813,13 +816,6 @@ defmodule OctopusWeb.StudioLive do
       <div class="card-body p-3 gap-3">
         <div class="flex items-center gap-2">
           <h2 class="text-sm font-semibold uppercase tracking-wider text-info flex-1">Klang</h2>
-          <button
-            class={["btn btn-xs", Pattern.all_muted?(@pattern) && "btn-warning"]}
-            phx-click="mute_all"
-            title="Alle Slots stumm / wieder hörbar"
-          >
-            {if Pattern.all_muted?(@pattern), do: "Alle an", else: "Alle stumm"}
-          </button>
           <label class="flex items-center gap-1.5 cursor-pointer text-[11px] opacity-70">
             Metronom
             <input
@@ -843,6 +839,16 @@ defmodule OctopusWeb.StudioLive do
           <b>{Enum.join(@scene.moving, ", ")}</b> aktiv. Das dreht den Ring unter der
           Formel, also wird ein vom Bild ausgelöster Slot schneller und langsamer.
           Für gleichmäßiges Tempo im Foyer abschalten.
+        </div>
+
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] uppercase tracking-wider opacity-50 flex-1">Slots</span>
+          <button
+            class={["btn btn-xs", Pattern.all_muted?(@pattern) && "btn-warning"]}
+            phx-click="mute_all"
+          >
+            {if Pattern.all_muted?(@pattern), do: "Alle an", else: "Alle stumm"}
+          </button>
         </div>
 
         <div class="space-y-1">
@@ -895,21 +901,6 @@ defmodule OctopusWeb.StudioLive do
           Slot {@slot.id} · {slot_title(@slot)}
         </span>
         <span class="badge badge-xs">{voice_count(@slot, @panels)} St.</span>
-        <button
-          class={["btn btn-xs", @slot.muted? && "btn-warning", !@slot.muted? && "btn-ghost"]}
-          phx-click="toggle_mute"
-          phx-value-slot={@slot.id}
-        >
-          {if @slot.muted?, do: "stumm", else: "hörbar"}
-        </button>
-        <button
-          class="btn btn-xs btn-ghost"
-          phx-click="clear_instrument"
-          phx-value-slot={@slot.id}
-          title="Slot auf leer zurücksetzen"
-        >
-          leeren
-        </button>
       </div>
 
       <div class="text-[10px] uppercase tracking-wider opacity-50">
@@ -994,6 +985,64 @@ defmodule OctopusWeb.StudioLive do
             max="4000"
             step="20"
             value={@slot.duration_ms}
+            class="range range-xs"
+          />
+        </label>
+
+        <label :if={@slot.trigger.kind == :probe} class="block">
+          <span class="text-[10px] opacity-60">Auslöser misst</span>
+          <select name="quantity" class="select select-bordered select-xs w-full">
+            <option
+              :for={{quantity, label} <- Pattern.probe_quantities()}
+              value={quantity}
+              selected={quantity == @slot.trigger.quantity}
+            >
+              {label}
+            </option>
+          </select>
+        </label>
+
+        <label :if={@slot.trigger.kind == :probe} class="block">
+          <span class="text-[10px] opacity-60">
+            Schwelle {:erlang.float_to_binary(@slot.trigger.level * 1.0, decimals: 2)}
+          </span>
+          <input
+            type="range"
+            name="level"
+            min={if @slot.trigger.quantity == :brightness, do: "0", else: "-0.9"}
+            max="0.9"
+            step="0.05"
+            value={@slot.trigger.level}
+            class="range range-xs"
+          />
+        </label>
+
+        <label class="block">
+          <span class="text-[10px] opacity-60">
+            Tonvorrat · {Pattern.scale_name(@slot.scale)}
+          </span>
+          <select name="scale" class="select select-bordered select-xs w-full">
+            <option
+              :for={{name, offsets} <- Pattern.scales()}
+              value={name}
+              selected={offsets == @slot.scale}
+            >
+              {name}
+            </option>
+          </select>
+        </label>
+
+        <label class="block">
+          <span class="text-[10px] opacity-60">
+            Grundton {Pattern.note_name(@slot.note)}
+          </span>
+          <input
+            type="range"
+            name="note"
+            min="24"
+            max="96"
+            step="1"
+            value={@slot.note}
             class="range range-xs"
           />
         </label>
@@ -1634,18 +1683,16 @@ defmodule OctopusWeb.StudioLive do
   # The steepness gate belongs to the trigger, not to the sound, so it travels
   # inside the trigger rather than beside it.
   defp put_gate(attrs, %{"min_rise" => raw, "kind" => "probe"} = params) do
+    defaults = Pattern.probe_trigger()
+
     case parse_number(raw) do
       {:ok, min_rise} ->
-        interval =
-          case parse_number(Map.get(params, "min_interval_ms", "")) do
-            {:ok, value} -> round(value)
-            :error -> Pattern.probe_trigger().min_interval_ms
-          end
-
         Map.put(attrs, :trigger, %{
           kind: :probe,
+          quantity: quantity(params["quantity"], defaults.quantity),
+          level: number_or(params["level"], defaults.level),
           min_rise: min_rise,
-          min_interval_ms: interval
+          min_interval_ms: round(number_or(params["min_interval_ms"], defaults.min_interval_ms))
         })
 
       :error ->
@@ -1657,6 +1704,36 @@ defmodule OctopusWeb.StudioLive do
 
   # The place rule and its one extra number travel together: a fixed place
   # needs a panel, a rotating one needs how far it walks each time.
+  defp quantity(raw, fallback) do
+    Enum.find_value(Pattern.probe_quantities(), fallback, fn {quantity, _label} ->
+      if to_string(quantity) == raw, do: quantity
+    end)
+  end
+
+  defp number_or(raw, fallback) do
+    case parse_number(raw || "") do
+      {:ok, value} -> value
+      :error -> fallback
+    end
+  end
+
+  # Scales travel by name, so no atom or list ever comes from the page.
+  defp put_scale(attrs, %{"scale" => name}) do
+    case Enum.find(Pattern.scales(), fn {scale_name, _offsets} -> scale_name == name end) do
+      {_name, offsets} -> Map.put(attrs, :scale, offsets)
+      nil -> attrs
+    end
+  end
+
+  defp put_scale(attrs, _params), do: attrs
+
+  defp parse_integer(raw) do
+    case Integer.parse(to_string(raw)) do
+      {value, _} -> {:ok, value}
+      :error -> :error
+    end
+  end
+
   defp put_place(attrs, %{"mode" => mode} = params) do
     known = Enum.map(Pattern.channel_modes(), fn {mode, _label} -> to_string(mode) end)
 
