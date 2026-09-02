@@ -334,7 +334,9 @@ defmodule OctopusWeb.StudioLive do
         patch_slot={@patch_slot}
       />
 
-      <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-3">
+      <div class="grid grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)_300px] gap-3 items-start">
+        <.scene_card scene={@scene} />
+
         <.stage
           panels={@panels}
           probes={@probes}
@@ -345,16 +347,13 @@ defmodule OctopusWeb.StudioLive do
           socket={@socket}
         />
 
-        <div class="space-y-3">
-          <.scene_card scene={@scene} />
-          <.sound_card
-            chase={@chase}
-            drone={@drone}
-            metronome?={@metronome?}
-            synths={@synths}
-            scene={@scene}
-          />
-        </div>
+        <.sound_card
+          chase={@chase}
+          drone={@drone}
+          metronome?={@metronome?}
+          synths={@synths}
+          scene={@scene}
+        />
       </div>
 
       <.grid
@@ -726,7 +725,9 @@ defmodule OctopusWeb.StudioLive do
 
         <%= if @scene do %>
           <div class="text-sm">{@scene.name}</div>
-          <code class="text-xs bg-base-300 rounded p-2 block break-all">{@scene.program}</code>
+          <code class="text-[11px] leading-snug bg-base-300 rounded p-2 block break-all">
+            {@scene.program}
+          </code>
           <div class="grid grid-cols-3 gap-2 text-[11px]">
             <div :for={{label, value} <- @scene.values} class="bg-base-300/50 rounded p-1.5">
               <div class="opacity-60">{label}</div>
