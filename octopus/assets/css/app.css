@@ -125,14 +125,3 @@
     padding-top: 0;
     padding-bottom: 0;
 }
-
-/* The studio embeds the simulator as a bare strip: no toolbar, no padding, so
-   the level meters underneath line up with the panels above them. */
-.studio-strip .sim-embedded-canvas {
-    padding: 0 !important;
-}
-
-.studio-strip .sim-embedded-root > .absolute,
-.studio-strip .sim-embedded-root > :last-child:not(.sim-embedded-canvas) {
-    display: none;
-}

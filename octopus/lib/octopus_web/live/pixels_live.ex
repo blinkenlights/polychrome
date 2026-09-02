@@ -91,6 +91,10 @@ defmodule OctopusWeb.PixelsLive do
 
   def mount(_params, session, socket) do
     embedded = session["embedded"] in [true, "true"]
+    # An embedder that only wants the picture — the studio strip — asks for it
+    # here rather than hiding the controls with CSS from outside, which breaks
+    # the moment the stylesheet is a version behind.
+    chrome = session["chrome"] not in [false, "false"]
     views = get_views()
 
     # An embedder can ask for a named view — the studio wants the unrolled
@@ -152,6 +156,7 @@ defmodule OctopusWeb.PixelsLive do
        id: socket.id,
        id_prefix: @id_prefix,
        embedded: embedded,
+       chrome: chrome,
        pixel_layout: views[default_view],
        view: default_view,
        default_view: default_view,
@@ -184,7 +189,7 @@ defmodule OctopusWeb.PixelsLive do
       phx-window-keydown="keydown"
       phx-window-keyup="keyup"
     >
-      <div class="absolute top-2 left-2 z-10">
+      <div :if={@chrome} class="absolute top-2 left-2 z-10">
         <.panel_status_boxes
           visible={@panel_status_visible}
           sending_enabled={@sending_to_panels}
@@ -193,7 +198,7 @@ defmodule OctopusWeb.PixelsLive do
         />
       </div>
 
-      <div class="absolute top-2 left-1/2 -translate-x-1/2 z-10">
+      <div :if={@chrome} class="absolute top-2 left-1/2 -translate-x-1/2 z-10">
         <div class="join">
           <button
             phx-click="channel-mode"
@@ -230,7 +235,7 @@ defmodule OctopusWeb.PixelsLive do
         </div>
       </div>
 
-      <div class="absolute top-2 right-2 flex flex-col items-end gap-1.5 z-10">
+      <div :if={@chrome} class="absolute top-2 right-2 flex flex-col items-end gap-1.5 z-10">
         <form id="view-form" phx-change="view-changed">
           <select
             id="view-select"
@@ -256,7 +261,10 @@ defmodule OctopusWeb.PixelsLive do
       </div>
 
       <%= if @embedded do %>
-        <div class="sim-embedded-canvas flex-1 min-h-0 w-full flex items-center justify-center px-4 pt-14">
+        <div class={[
+          "sim-embedded-canvas flex-1 min-h-0 w-full flex items-center justify-center",
+          @chrome && "px-4 pt-14"
+        ]}>
           <canvas
             id={"#{@id_prefix}-#{@id}"}
             phx-hook="Pixels"
@@ -266,6 +274,7 @@ defmodule OctopusWeb.PixelsLive do
           />
         </div>
         <.button_panel
+          :if={@chrome}
           sim_button_specs={@sim_button_specs}
           pressed_buttons={@pressed_buttons}
           class="shrink-0 pb-3 pt-1"

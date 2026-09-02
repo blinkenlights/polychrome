@@ -325,7 +325,7 @@ defmodule OctopusWeb.StudioLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="p-3 space-y-3 max-w-[1400px] mx-auto">
+    <div class="p-3 space-y-3 max-w-[1800px] mx-auto">
       <.transport position={@position} engine={@engine} />
 
       <.library
@@ -610,7 +610,11 @@ defmodule OctopusWeb.StudioLive do
         >
           {live_render(@socket, PixelsLive,
             id: "studio-preview",
-            session: %{"embedded" => true, "view" => "Streifen (abgewickelt)"}
+            session: %{
+              "embedded" => true,
+              "chrome" => false,
+              "view" => "Streifen (abgewickelt)"
+            }
           )}
         </div>
 
