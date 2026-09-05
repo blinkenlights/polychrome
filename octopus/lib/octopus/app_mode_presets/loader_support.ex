@@ -3,7 +3,7 @@ defmodule Octopus.AppModePresets.LoaderSupport do
 
   alias Octopus.Apps.PixelFun.Program
 
-  @formula_app_keys ~w(pixelfun pixelfun3d)
+  @formula_app_keys ~w(pixelfun)
 
   def load_file(path, app_key) do
     path

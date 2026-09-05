@@ -197,15 +197,15 @@ defmodule OctopusWeb.ManagerLive do
     {:noreply, socket}
   end
 
+  # The params component is rendered once, nested inside
+  # InstallationConsoleComponent's player block (see its :global_params slot).
   def handle_info({:param_updated, key, value}, socket)
       when key in [:speed, :brightness, :auto_brightness] do
-    for id <- ["global-params-desktop", "global-params-mobile"] do
-      send_update(OctopusWeb.GlobalParamsComponent,
-        id: id,
-        param_key: key,
-        param_value: value
-      )
-    end
+    send_update(OctopusWeb.GlobalParamsComponent,
+      id: "global-params",
+      param_key: key,
+      param_value: value
+    )
 
     {:noreply, socket}
   end

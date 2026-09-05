@@ -9,7 +9,7 @@
 #
 # Two Octopus instances run from the same image, differentiated by env vars:
 #   polychrome-woodstock  — Installation Woodstock, Boot App Fire, port 4000
-#   polychrome-pixie      — Installation Pixie, Boot App PixelFun3d (Seegras), port 4001
+#   polychrome-pixie      — Installation Pixie, Boot App PixelFun (Seegras), port 4001
 #
 # Caddy exposes both via HTTPS on the same hostname but different ports:
 #   https://gravity.crested-frog.ts.net       → Pixie (port 4001)
@@ -71,8 +71,8 @@ services:
     environment:
       PORT: "4001"
       INSTALLATION_MODULE: Octopus.Installation.Pixie
-      BOOT_APP: PixelFun3d
-      BOOT_APP_MODE: seegras
+      BOOT_APP: PixelFun
+      BOOT_APP_MODE: pixelfun:seegras
       DATABASE_PATH: /data/pixie.db
       PHX_URL_PORT: "443"
       PHX_URL_SCHEME: https

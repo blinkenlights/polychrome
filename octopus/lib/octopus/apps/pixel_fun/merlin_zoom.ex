@@ -1,4 +1,4 @@
-defmodule Octopus.Apps.PixelFun3D.MerlinZoom do
+defmodule Octopus.Apps.PixelFun.MerlinZoom do
   @moduledoc """
   Great-circle angle remapping on the unit sphere.
 

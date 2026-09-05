@@ -7,7 +7,7 @@ defmodule OctopusWeb.PixelFunConfigComponent do
   alias Octopus.InstallationTransport
 
   @known_idents ~w(
-    x y t i l m h pi PI tau Tau
+    x y nx ny nz t i l m h pi PI tau Tau
     rand random abs sqrt exp log hypot sin cos tan asin acos atan atan2
     asinh acosh atanh sinh cosh tanh floor ceil round fract noise
   )
@@ -52,22 +52,21 @@ defmodule OctopusWeb.PixelFunConfigComponent do
 
   def render(assigns) do
     ~H"""
-    <div data-theme="dark" class="pf-root rounded-xl space-y-4">
+    <div class="pf-root rounded-xl space-y-4">
       <style>
         .pf-root{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif}
         .pf-mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,monospace}
       </style>
 
       <div class="flex flex-wrap items-center gap-3">
-        <.link navigate={~p"/"} class="btn btn-ghost btn-sm">← Console</.link>
         <h2 class="text-lg font-semibold flex-1">{@editor_name}</h2>
         <.live_badge :if={@live_preset} />
         <span :if={@queue_position} class="badge badge-outline badge-sm">Nr. {@queue_position}</span>
         <span
           :if={@dirty}
-          class="badge gap-1 border-[#fcb700] text-[#fcb700] bg-transparent"
+          class="badge gap-1 border-warning text-warning bg-transparent"
         >
-          <span class="w-2 h-2 rounded-full bg-[#fcb700]" /> Unsaved edits
+          <span class="w-2 h-2 rounded-full bg-warning" /> Unsaved edits
         </span>
       </div>
 
@@ -94,6 +93,7 @@ defmodule OctopusWeb.PixelFunConfigComponent do
       </div>
 
       <.scene_editor {assigns} />
+
     </div>
     """
   end
@@ -107,7 +107,7 @@ defmodule OctopusWeb.PixelFunConfigComponent do
             <label class="label" for={"#{@app_id}-program"}>
               <span class="label-text font-semibold">Formula</span>
             </label>
-            <div class="pf-mono text-[11px] opacity-60 mb-1">x y t i · l m h (audio) · pi tau</div>
+            <div class="pf-mono text-[11px] opacity-60 mb-1">x y nx ny nz · t i · l m h (audio) · pi tau</div>
             <input
               type="text"
               name="program"
@@ -116,18 +116,18 @@ defmodule OctopusWeb.PixelFunConfigComponent do
               value={@config[:program]}
               class={[
                 "input input-bordered w-full pf-mono text-sm",
-                !@formula_valid && "border-[#ff6266] focus:border-[#ff6266]"
+                !@formula_valid && "border-error focus:border-error"
               ]}
             />
-            <p :if={@formula_valid} class="text-xs mt-1 text-[#00d390]">
+            <p :if={@formula_valid} class="text-xs mt-1 text-success">
               ✓ Valid — updating the wall as you type
             </p>
-            <p :if={!@formula_valid} class="text-xs mt-1 text-[#ff6266]">
+            <p :if={!@formula_valid} class="text-xs mt-1 text-error">
               ✕ Can't read this — '{@formula_error}' isn't a function. The wall keeps the last valid formula.
             </p>
           </div>
 
-          <div :for={{key, {name, type, opts}} <- scene_entries(@config_schema)}>
+          <div :for={{key, {name, type, opts}} <- scene_entries(@config_schema, @config)}>
             <div class="flex items-center justify-between">
               <label class="label-text font-semibold" for={"#{@app_id}-#{key}"}>{name}</label>
               <span :if={type != :select} class="pf-mono text-sm opacity-80">{format_slider(@config[key])}</span>
@@ -164,7 +164,7 @@ defmodule OctopusWeb.PixelFunConfigComponent do
 
   defp live_badge(assigns) do
     ~H"""
-    <span class="badge badge-sm bg-[#00d390] text-black border-0 font-semibold">LIVE</span>
+    <span class="badge badge-sm badge-success font-semibold">LIVE</span>
     """
   end
 
@@ -230,9 +230,8 @@ defmodule OctopusWeb.PixelFunConfigComponent do
       nil ->
         {:noreply, socket}
 
-      preset ->
-        config = ScenePresets.to_config(preset)
-        AppSupervisor.update_config(socket.assigns.app_id, config)
+      _preset ->
+        PixelFun.apply_mode(socket.assigns.app_id, id)
 
         {:noreply,
          socket
@@ -355,9 +354,16 @@ defmodule OctopusWeb.PixelFunConfigComponent do
     keys != [] and Enum.all?(keys, &MapSet.member?(tweakable_keys, &1))
   end
 
-  defp scene_entries(config_schema) do
-    Enum.reject(config_schema, fn {key, {_name, type, _opts}} ->
+  defp scene_entries(config_schema, config) do
+    config_schema
+    |> Enum.reject(fn {key, {_name, type, _opts}} ->
       key == :program or type == :internal
+    end)
+    |> Enum.filter(fn {_key, {_name, _type, opts}} ->
+      case Map.get(opts, :visible_when) do
+        nil -> true
+        {dep_key, allowed} -> Map.get(config, dep_key) in allowed
+      end
     end)
   end
 
@@ -400,4 +406,5 @@ defmodule OctopusWeb.PixelFunConfigComponent do
         |> Kernel.||("?")
     end
   end
+
 end

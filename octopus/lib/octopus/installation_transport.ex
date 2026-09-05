@@ -730,7 +730,7 @@ defmodule Octopus.InstallationTransport do
   end
 
   # Discard is a hard reset: re-apply the live mode so the app fully reinitializes
-  # to the stored preset (e.g. PixelFun3D resets integrated yaw/roll/zoom + wanderers
+  # to the stored preset (e.g. PixelFun resets integrated yaw/roll/zoom + wanderers
   # via reset_orientation_from_scene), not just the config overrides.
   defp reapply_now_playing_mode(%State{live_entry: %{app: app, mode_id: mode_id}} = state) do
     case resolve_now_playing_app_id(state) do

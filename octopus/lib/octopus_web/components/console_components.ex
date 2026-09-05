@@ -1295,6 +1295,7 @@ defmodule OctopusWeb.ConsoleComponents do
 
   defp group_now_playing_controls(control_tweakables, all_visible) do
     by_key = Map.new(all_visible, &{&1.key, &1})
+    parent_keys = MapSet.new(control_tweakables, & &1.key)
 
     companion_keys =
       control_tweakables
@@ -1314,7 +1315,12 @@ defmodule OctopusWeb.ConsoleComponents do
 
     rows =
       control_tweakables
-      |> Enum.reject(&(&1.key in companion_keys or &1.key in nested_keys))
+      |> Enum.reject(fn t ->
+        # Paired Auto toggles belong beside their slider — never as a lone row.
+        # Also drop orphans whose parent slider isn't in this control set.
+        t.key in companion_keys or t.key in nested_keys or
+          orphan_companion?(t, parent_keys)
+      end)
       |> Enum.map(fn
         %{type: :slider} = spec ->
           auto_spec =
@@ -1367,6 +1373,12 @@ defmodule OctopusWeb.ConsoleComponents do
   end
 
   defp nested_auto_subcontrol?(_), do: false
+
+  defp orphan_companion?(%{companion_of: parent}, parent_keys) when is_atom(parent) do
+    not MapSet.member?(parent_keys, parent)
+  end
+
+  defp orphan_companion?(_, _), do: false
 
   defp row_dom_id({:slider, spec, _, _}), do: spec.key
   defp row_dom_id({:control, spec}), do: spec.key

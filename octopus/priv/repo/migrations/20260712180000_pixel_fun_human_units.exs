@@ -13,9 +13,10 @@ defmodule Octopus.Repo.Migrations.PixelFunHumanUnits do
 
     rows =
       Octopus.Repo.all(
-        from p in "app_mode_presets",
+        from(p in "app_mode_presets",
           where: p.app in ["pixelfun3d", "Octopus.Apps.PixelFun3D"],
           select: {p.id, p.config}
+        )
       )
 
     Enum.each(rows, fn {id, config} ->
@@ -28,7 +29,7 @@ defmodule Octopus.Repo.Migrations.PixelFunHumanUnits do
 
       migrated =
         config
-        |> Octopus.Apps.PixelFun3D.migrate_legacy_config()
+        |> Octopus.Apps.PixelFun.migrate_legacy_config()
         |> encode_config()
 
       Octopus.Repo.update_all(
@@ -57,7 +58,9 @@ defmodule Octopus.Repo.Migrations.PixelFunHumanUnits do
     |> Jason.encode!()
   end
 
-  defp stringify_nested(%{} = map), do: Map.new(map, fn {k, v} -> {to_string(k), stringify_nested(v)} end)
+  defp stringify_nested(%{} = map),
+    do: Map.new(map, fn {k, v} -> {to_string(k), stringify_nested(v)} end)
+
   defp stringify_nested(list) when is_list(list), do: Enum.map(list, &stringify_nested/1)
   defp stringify_nested(v), do: v
 

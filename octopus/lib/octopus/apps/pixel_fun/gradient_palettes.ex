@@ -1,4 +1,4 @@
-defmodule Octopus.Apps.PixelFun3D.GradientPalettes do
+defmodule Octopus.Apps.PixelFun.GradientPalettes do
   @moduledoc false
 
   alias Octopus.Installation
