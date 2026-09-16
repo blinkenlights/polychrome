@@ -75,6 +75,9 @@ defmodule Octopus.Sound.Engine.SuperCollider do
       port: port,
       channels: channels,
       mapping: Keyword.get(config, :mapping, :direct),
+      # Audio device by name, e.g. a loopback device feeding a spatial renderer.
+      # `nil` leaves the choice to scsynth: the system default.
+      device: Keyword.get(config, :device),
       socket: nil,
       os_port: nil,
       defs_loaded?: false,
@@ -299,14 +302,17 @@ defmodule Octopus.Sound.Engine.SuperCollider do
     :gen_udp.send(socket, host, port, packet)
   end
 
-  defp start_server(%{port: port, channels: channels}) do
+  defp start_server(%{port: port, channels: channels, device: device}) do
     case scsynth_path() do
       nil ->
         Logger.error("[sound] scsynth not found — start it yourself or install SuperCollider")
         nil
 
       path ->
-        args = ["-u", to_string(port), "-i", "0", "-o", to_string(channels)] ++ plugin_args()
+        args =
+          ["-u", to_string(port), "-i", "0", "-o", to_string(channels)] ++
+            device_args(device) ++ plugin_args()
+
         Logger.info("[sound] starting scsynth: #{path} #{Enum.join(args, " ")}")
 
         Port.open({:spawn_executable, path}, [
@@ -317,6 +323,9 @@ defmodule Octopus.Sound.Engine.SuperCollider do
         ])
     end
   end
+
+  defp device_args(nil), do: []
+  defp device_args(device), do: ["-H", device]
 
   defp plugin_args do
     case existing(Path.join(@macos_bundle, "Resources/plugins")) do

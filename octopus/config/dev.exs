@@ -91,8 +91,25 @@ config :octopus, :env, :dev
 
 # Sound: SuperCollider started as a port of the engine process, stereo out.
 # `mix sound.synthdefs` has to have run once.
-config :octopus, Octopus.Sound,
-  enabled: true,
-  engine: Octopus.Sound.Engine.SuperCollider,
-  channels: 2,
-  super_collider: [auto_start: true, port: 57_110, mapping: :fold]
+#
+# SOUND_SPATIAL=1 sends one channel per panel into BlackHole 16ch instead, for
+# the binaural ring in `ear/`. A scsynth that is already running is adopted
+# as it is, so quit it first when switching.
+if System.get_env("SOUND_SPATIAL") in ["1", "true"] do
+  config :octopus, Octopus.Sound,
+    enabled: true,
+    engine: Octopus.Sound.Engine.SuperCollider,
+    channels: 12,
+    super_collider: [
+      auto_start: true,
+      port: 57_110,
+      mapping: :direct,
+      device: System.get_env("SOUND_DEVICE", "BlackHole 16ch")
+    ]
+else
+  config :octopus, Octopus.Sound,
+    enabled: true,
+    engine: Octopus.Sound.Engine.SuperCollider,
+    channels: 2,
+    super_collider: [auto_start: true, port: 57_110, mapping: :fold]
+end

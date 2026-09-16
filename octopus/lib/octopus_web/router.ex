@@ -45,6 +45,12 @@ defmodule OctopusWeb.Router do
     end
   end
 
+  scope "/api", OctopusWeb do
+    pipe_through :api
+
+    get "/sound/speakers", SoundSpeakersController, :index
+  end
+
   import Phoenix.LiveDashboard.Router
 
   scope "/dev" do
