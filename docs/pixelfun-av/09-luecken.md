@@ -125,7 +125,9 @@ Nach Nutzen sortiert, nicht nach Aufwand.
 4. **Master-Gain und Limiter.** Es gibt keinen Master. Für eine Installation,
    die stundenlang allein läuft, ist das die wichtigste fehlende Sicherung.
 5. **AV-Offset.** Eingemessen wird bisher nichts; der Chase klingt konstant
-   80 ms nach dem Bild.
+   80 ms nach dem Bild. Wer über [`ear/`](../../ear/README.md) hört, hat
+   noch etwa 50 ms Ringpuffer mehr. Das ist ein Offset des Schreibtischs,
+   nicht der Installation, und darf nicht mit eingemessen werden.
 6. **Tap-Tempo und Loop-Länge** im Transport.
 7. **Kompositionen speichern nur das Muster.** ✅ *Teilweise erledigt:* Chase und
    Drone sind jetzt Slots und werden mitgespeichert — nach einem Serverneustart

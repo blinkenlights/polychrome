@@ -14,6 +14,20 @@ Arbeit auf Stereo herunterrechnet; SuperCollider startet ohnehin einfach mit `-o
 **Damit sollten M0 bis M3 aus dem [Fahrplan](06-fahrplan.md) gebaut werden.** Erst
 wenn das steht, lohnt Hardware — dann weiß man auch, was man wirklich braucht.
 
+### Stufe 0½ — der virtuelle Ring über Kopfhörer
+
+Auch ohne Lautsprecher lässt sich der Kreis hören. scsynth spielt mit
+`SOUND_SPATIAL=1` zwölf Kanäle in das Loopback-Gerät BlackHole 16ch. Die
+Swift-App [`ear/`](../../ear/README.md) setzt jeden Kanal an die Stelle seines
+Panels und rendert das Ganze binaural, mit HRTF über `AVAudioEnvironmentNode`.
+In einer Draufsicht geht und dreht man sich durch den Ring. Die Positionen
+liefert octopus unter `/api/sound/speakers`.
+
+Für Richtung und Bewegung reicht das gut: Man hört, ob ein Chase um den Kopf
+läuft und woher ein Drone kommt. Wie der Ring im Freien wirklich klingt,
+verrät es nicht, denn HRTF ist nicht der eigene Kopf und der Hall ist ein Preset.
+Dazu kommen etwa 50 ms Puffer zwischen den beiden Audio-Clocks.
+
 ## Stufe 1 — vier Kanäle (die empfohlene Prototyp-Stufe)
 
 Vier Kanäle sind die Schwelle, ab der Räumlichkeit entsteht: vier kleine Lautsprecher
