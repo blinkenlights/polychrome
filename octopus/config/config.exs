@@ -36,6 +36,27 @@ config :octopus, :firmware_broadcaster_remote_port, 1337
 # Used by Octopus.Osc.Server - Open Sound Control for audio/visual applications
 config :octopus, :osc_server_port, 8000
 
+# =============================================================================
+# RECORDING
+# =============================================================================
+
+# Records the frames the mixer sends to the LED panels into an append-only file
+# that can be converted to video. Disabled by default so it has zero overhead
+# and can never influence the running installation unless explicitly enabled.
+config :octopus, Octopus.Recording,
+  enabled: false,
+  output_dir: "recordings",
+  max_queue: 600,
+  # Where an auto-started/default recording is written:
+  #   {:file, []}                              -> local file (default)
+  #   {:remote, host: "10.0.0.5", port: 7000}  -> stream to a TCP server
+  sink: {:file, []},
+  # gzip the recording stream (built-in :zlib, no native deps). File targets
+  # gain a .gz suffix; encoders read .gz transparently. Lower gzip_level is
+  # cheaper on constrained CPUs (e.g. Raspberry Pi).
+  compress: false,
+  gzip_level: 6
+
 # Network addresses are now configured in Installation modules
 # See lib/octopus/installation/*.ex files
 

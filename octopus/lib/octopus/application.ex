@@ -50,6 +50,7 @@ defmodule Octopus.Application do
         Octopus.KioskModeManager,
         Octopus.ButtonServer,
         Octopus.Sunlight,
+        Octopus.Recording.Supervisor,
 
         # WebApp
         {Finch, name: Octopus.Finch},
